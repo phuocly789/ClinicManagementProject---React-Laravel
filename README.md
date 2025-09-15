@@ -9,7 +9,7 @@ Dự án xây dựng một hệ thống phần mềm dựa trên web (web-based)
 
 ---
 ## Người thực hiện 
-> Lý Minh Phước
+> Lý Minh Phước  
 > Lê Xuân Vũ
 ---
 
