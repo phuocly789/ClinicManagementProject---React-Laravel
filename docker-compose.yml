@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # Backend: Laravel với PHP built-in server
+  backend:
+    build:
+      context: ./clinic-management-backend
+      dockerfile: ../Dockerfile.backend
+    container_name: laravel-app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./clinic-management-backend:/var/www/html  # Mount code Laravel
+      - ./clinic-management-backend/.env:/var/www/html/.env  # Mount .env (cẩn thận bảo mật!)
+    environment:
+      - DB_CONNECTION=pgsql
+      - DB_HOST=aws-1-ap-southeast-1.pooler.supabase.com
+      - DB_PORT=5432
+      - DB_DATABASE=postgres
+      - DB_USERNAME=postgres.rkoffuqhgnhzkacarfgi
+      - DB_PASSWORD=lmp@123
+      - DB_SSLMODE=require
+      # Thêm các env khác từ .env nếu cần (như APP_KEY, etc.)
+    ports:
+      - "8000:8000"  # Expose port cho php artisan serve
+    networks:
+      - app-network
+    command: php artisan serve --host=0.0.0.0 --port=8000  # Chạy built-in server
+
+  # Frontend: React dev server
+  frontend:
+    build:
+      context: ./clinic-management-frontend
+      dockerfile: ../Dockerfile.frontend
+    container_name: react-app
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./clinic-management-frontend:/app  # Mount code React
+      - /app/node_modules  # Không mount node_modules để tránh conflict
+    ports:
+      - "3000:5173"  # Vite default port là 5173
+    environment:
+      - CHOKIDAR_USEPOLLING=true  # Để hot reload hoạt động tốt với volume
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+    networks:
+      - app-network
+    stdin_open: true  # Để attach terminal nếu cần
+    tty: true
+
+networks:
+  app-network:
+    driver: bridge

@@ -1,0 +1,16 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY ./package*.json ./
+
+# Install deps
+RUN npm install
+
+# Copy toàn bộ code từ context (thay vì ./clinic-management-frontend)
+COPY . .
+
+EXPOSE 5173
+
+CMD ["npm", "run", "dev"]
