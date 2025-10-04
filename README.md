@@ -10,7 +10,10 @@ Dự án xây dựng một hệ thống phần mềm dựa trên web (web-based)
 ---
 ## Người thực hiện 
 > Lý Minh Phước  
-> Lê Xuân Vũ
+> Lê Xuân Vũ  
+> Nguyễn Hoàng Phi  
+> Nguyễn Văn Thuật  
+> Ngô Thanh Đô  
 ---
 
 ## 🎯 Mục tiêu dự án
