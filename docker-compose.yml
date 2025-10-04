@@ -10,7 +10,8 @@ services:
     restart: unless-stopped
     working_dir: /var/www/html
     volumes:
-      - ./clinic-management-backend:/var/www/html  # Mount code Laravel
+      - ./clinic-management-backend:/var/www/html  # Mount code Laravel (override hầu hết)
+      - /var/www/html/vendor  # Anonymous volume: Giữ vendor từ image, không bị override
       - ./clinic-management-backend/.env:/var/www/html/.env  # Mount .env (cẩn thận bảo mật!)
     environment:
       - DB_CONNECTION=pgsql
@@ -27,7 +28,7 @@ services:
       - app-network
     command: php artisan serve --host=0.0.0.0 --port=8000  # Chạy built-in server
 
-  # Frontend: React dev server
+  # Frontend: React dev server (giữ nguyên)
   frontend:
     build:
       context: ./clinic-management-frontend
