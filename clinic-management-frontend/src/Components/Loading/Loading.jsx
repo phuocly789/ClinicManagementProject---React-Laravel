@@ -3,8 +3,8 @@ import loadingAnimation from "../../../assets/lottie/loading.json";
 
 const Loading = () => {
   return (
-    <div className="fixed inset-0 bg-white bg-opacity-40 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="w-64 h-64">
+    <div className="position-fixed top-0 start-0 w-100 h-100 bg-light bg-opacity-50 d-flex align-items-center justify-content-center z-50">
+      <div className="w-25 h-25 rounded shadow">
         <Lottie animationData={loadingAnimation} loop={true} />
       </div>
     </div>
