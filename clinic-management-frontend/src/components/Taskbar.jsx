@@ -6,8 +6,8 @@ const AdminSidebar = () => {
     <div
       className="d-flex flex-column text-white vh-100"
       style={{
-        width: '250px',
-        position: 'fixed',
+        width: '350px',
+        position: 'relative',
         top: 0,
         left: 0,
         background: 'linear-gradient(to bottom, #003087, #0056b3)',
@@ -17,8 +17,8 @@ const AdminSidebar = () => {
     >
       <div className="text-center mb-4">
         <h4 className="fw-bold">Admin Panel</h4>
-        <p className="mb-1">Xin chào, Admin</p>
-        <p>Xin chào Admin</p>
+        <p className="mb-1">Xin chào,</p>
+        <p>Admin</p>
       </div>
       <Nav className="flex-column">
         <Nav.Link href="#" className="text-white py-2 px-3 mb-2 rounded-0" style={{ background: 'rgba(255, 255, 255, 0)', transition: 'background 0.3s' }}
