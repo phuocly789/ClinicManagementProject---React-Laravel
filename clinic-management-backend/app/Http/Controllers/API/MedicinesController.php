@@ -1,12 +1,13 @@
 <?php
 namespace App\Http\Controllers\API;
+
 use App\Http\Controllers\Controller;
 use App\Models\Medicine;
 use Illuminate\Http\Request;
-// use OpenApi\Annotations as OA;
+use Illuminate\Support\Facades\Validator;
+
 class MedicinesController extends Controller
 {
-
     public function index(Request $request)
     {
         $perPage = $request->get('per_page', 10); // Mặc định 10 items/page, có thể override qua query param
@@ -18,5 +19,96 @@ class MedicinesController extends Controller
     public function ping()
     {
         return response()->json(['message' => 'pong']);
+    }
+
+    public function store(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'MedicineName' => 'required|string|max:100',
+            'MedicineType' => 'required|string|max:50',
+            'Unit' => 'required|string|max:20',
+            'Price' => 'required|numeric|min:0|max:9999999999999999.99',
+            'StockQuantity' => 'required|integer|min:0',
+            'Description' => 'nullable|string|max:500',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Dữ liệu đầu vào không hợp lệ',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $medicine = Medicine::create($request->only([
+            'MedicineName',
+            'MedicineType',
+            'Unit',
+            'Price',
+            'StockQuantity',
+            'Description'
+        ]));
+
+        return response()->json([
+            'message' => 'Thêm thuốc thành công',
+            'data' => $medicine
+        ], 201);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $medicine = Medicine::find($id);
+
+        if (!$medicine) {
+            return response()->json([
+                'message' => 'Không tìm thấy thuốc'
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'MedicineName' => 'required|string|max:100',
+            'MedicineType' => 'required|string|max:50',
+            'Unit' => 'required|string|max:20',
+            'Price' => 'required|numeric|min:0|max:9999999999999999.99',
+            'StockQuantity' => 'required|integer|min:0',
+            'Description' => 'nullable|string|max:500',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Dữ liệu đầu vào không hợp lệ',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $medicine->update($request->only([
+            'MedicineName',
+            'MedicineType',
+            'Unit',
+            'Price',
+            'StockQuantity',
+            'Description'
+        ]));
+
+        return response()->json([
+            'message' => 'Cập nhật thuốc thành công',
+            'data' => $medicine
+        ]);
+    }
+
+    public function destroy($id)
+    {
+        $medicine = Medicine::find($id);
+
+        if (!$medicine) {
+            return response()->json([
+                'message' => 'Không tìm thấy thuốc'
+            ], 404);
+        }
+
+        $medicine->delete();
+
+        return response()->json([
+            'message' => 'Xóa thuốc thành công'
+        ]);
     }
 }

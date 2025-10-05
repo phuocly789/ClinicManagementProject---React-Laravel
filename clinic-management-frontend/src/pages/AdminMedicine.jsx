@@ -2,18 +2,21 @@ import { React, useState, useEffect, useCallback, useRef } from 'react';
 import { Table, Button, Spinner } from 'react-bootstrap';
 import Taskbar from '../Components/Taskbar';
 import Pagination from '../Components/Pagination/Pagination';
-const API_BASE_URL = 'http://localhost:8000';
+import ConfirmDeleteModal from '../Components/CustomToast/DeleteConfirmModal';
+
+const API_BASE_URL = 'http://localhost:8000/api';
 
 const AdminMedicine = () => {
     const [medicines, setMedicines] = useState([]);
     const [currentPage, setCurrentPage] = useState(0);
     const [pageCount, setPageCount] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
-    const cache = useRef(new Map()); // Cache dữ liệu theo page
-    const debounceRef = useRef(null); // Debounce API calls
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [medicineToDelete, setMedicineToDelete] = useState(null);
+    const cache = useRef(new Map());
+    const debounceRef = useRef(null);
 
     const fetchMedicines = useCallback(async (page = 1) => {
-        // Kiểm tra cache
         if (cache.current.has(page)) {
             const { data, last_page } = cache.current.get(page);
             setMedicines(data);
@@ -22,13 +25,18 @@ const AdminMedicine = () => {
             return;
         }
 
-        // Debounce fetch
         if (debounceRef.current) clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(async () => {
             try {
                 setIsLoading(true);
-                const response = await fetch(`${API_BASE_URL}/medicines?page=${page}`);
-                if (!response.ok) throw new Error('Failed to fetch');
+                const response = await fetch(`${API_BASE_URL}/medicines?page=${page}`, {
+                    headers: {
+                        'Accept': 'application/json',
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
                 const paginator = await response.json();
                 cache.current.set(page, { data: paginator.data, last_page: paginator.last_page });
                 setMedicines(paginator.data);
@@ -36,17 +44,65 @@ const AdminMedicine = () => {
                 setCurrentPage(page - 1);
             } catch (error) {
                 console.error('Error fetching medicines:', error);
-                // Có thể thêm toast notification
+                alert(`Lỗi khi tải danh sách thuốc: ${error.message}`);
             } finally {
                 setIsLoading(false);
             }
-        }, 300); // Debounce 300ms
+        }, 300);
     }, []);
+
+    const getCsrfToken = async () => {
+        await fetch('http://localhost:8000/sanctum/csrf-cookie', {
+            method: 'GET',
+            credentials: 'include',
+        });
+    };
+
+    const handleDelete = useCallback(async (medicineId) => {
+        try {
+            setIsLoading(true);
+            await getCsrfToken(); // Lấy CSRF token trước khi gửi DELETE
+            const response = await fetch(`${API_BASE_URL}/medicines/${medicineId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'include', // Gửi cookie chứa CSRF token
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            const result = await response.json();
+            alert(result.message);
+
+            cache.current.delete(currentPage + 1);
+            await fetchMedicines(currentPage + 1);
+        } catch (error) {
+            console.error('Error deleting medicine:', error);
+            alert(`Lỗi khi xóa thuốc: ${error.message}`);
+        } finally {
+            setIsLoading(false);
+            setShowDeleteModal(false);
+            setMedicineToDelete(null);
+        }
+    }, [currentPage, fetchMedicines]);
+
+    const handleShowDeleteModal = (medicineId) => {
+        setMedicineToDelete(medicineId);
+        setShowDeleteModal(true);
+    };
+
+    const handleCancelDelete = () => {
+        setShowDeleteModal(false);
+        setMedicineToDelete(null);
+    };
 
     useEffect(() => {
         fetchMedicines(1);
         return () => {
-            if (debounceRef.current) clearTimeout(debounceRef.current); // Cleanup
+            if (debounceRef.current) clearTimeout(debounceRef.current);
         };
     }, [fetchMedicines]);
 
@@ -109,7 +165,15 @@ const AdminMedicine = () => {
                                             <td>
                                                 <span><a className="text-success" href="#">Sửa</a></span>
                                                 <span className="px-1">/</span>
-                                                <span><a className="text-danger" href="#">Xóa</a></span>
+                                                <span>
+                                                    <a
+                                                        className="text-danger"
+                                                        href="#"
+                                                        onClick={() => handleShowDeleteModal(medicine.MedicineId)}
+                                                    >
+                                                        Xóa
+                                                    </a>
+                                                </span>
                                             </td>
                                         </tr>
                                     ))
@@ -123,10 +187,17 @@ const AdminMedicine = () => {
                             pageCount={pageCount}
                             onPageChange={handlePageChange}
                             currentPage={currentPage}
-                            isLoading={isLoading} // Truyền isLoading để disable nút khi đang fetch
+                            isLoading={isLoading}
                         />
                     )}
                 </div>
+                <ConfirmDeleteModal
+                    isOpen={showDeleteModal}
+                    title="Xác nhận xóa"
+                    message="Bạn có chắc chắn muốn xóa thuốc này?"
+                    onConfirm={() => handleDelete(medicineToDelete)}
+                    onCancel={handleCancelDelete}
+                />
             </div>
         </div>
     );

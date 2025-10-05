@@ -2,32 +2,39 @@ import React from "react";
 
 export default function ConfirmDeleteModal({
   isOpen,
-  title = "Xác nhận xoá",
-  message = "Bạn có chắc chắn muốn xoá mục này?",
+  title = "Xác nhận xóa",
+  message = "Bạn có chắc chắn muốn xóa mục này?",
   onConfirm,
   onCancel,
 }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-lg shadow-lg p-6 w-[400px]">
-        <h2 className="text-lg font-semibold mb-2">{title}</h2>
-        <p className="text-gray-600 mb-4">{message}</p>
-
-        <div className="flex justify-end gap-3">
-          <button
-            className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
-            onClick={onCancel}
-          >
-            Hủy
-          </button>
-          <button
-            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-            onClick={onConfirm}
-          >
-            Xóa
-          </button>
+    <div className={`modal ${isOpen ? 'show d-block' : ''}`} tabIndex="-1" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+      <div className="modal-dialog modal-dialog-centered">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h5 className="modal-title">{title}</h5>
+          </div>
+          <div className="modal-body">
+            <p className="text-muted">{message}</p>
+          </div>
+          <div className="modal-footer">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onCancel}
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={onConfirm}
+            >
+              Xóa
+            </button>
+          </div>
         </div>
       </div>
     </div>
