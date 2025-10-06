@@ -1,8 +1,9 @@
-import { React, useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Table, Button, Spinner } from 'react-bootstrap';
 import Taskbar from '../Components/Taskbar';
 import Pagination from '../Components/Pagination/Pagination';
 import ConfirmDeleteModal from '../Components/CustomToast/DeleteConfirmModal';
+import CustomToast from '../Components/CustomToast/CustomToast';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -13,8 +14,17 @@ const AdminMedicine = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [medicineToDelete, setMedicineToDelete] = useState(null);
+    const [toast, setToast] = useState({ show: false, type: 'info', message: '' });
     const cache = useRef(new Map());
     const debounceRef = useRef(null);
+
+    const showToast = (type, message) => {
+        setToast({ show: true, type, message });
+    };
+
+    const hideToast = () => {
+        setToast({ show: false, type: 'info', message: '' });
+    };
 
     const fetchMedicines = useCallback(async (page = 1) => {
         if (cache.current.has(page)) {
@@ -44,7 +54,7 @@ const AdminMedicine = () => {
                 setCurrentPage(page - 1);
             } catch (error) {
                 console.error('Error fetching medicines:', error);
-                alert(`Lỗi khi tải danh sách thuốc: ${error.message}`);
+                showToast('error', `Lỗi khi tải danh sách thuốc: ${error.message}`);
             } finally {
                 setIsLoading(false);
             }
@@ -52,36 +62,48 @@ const AdminMedicine = () => {
     }, []);
 
     const getCsrfToken = async () => {
-        await fetch('http://localhost:8000/sanctum/csrf-cookie', {
-            method: 'GET',
-            credentials: 'include',
-        });
+        try {
+            const response = await fetch('http://localhost:8000/sanctum/csrf-cookie', {
+                method: 'GET',
+                credentials: 'include',
+            });
+            if (!response.ok) {
+                throw new Error(`Failed to fetch CSRF token: ${response.status}`);
+            }
+        } catch (error) {
+            console.error('Error fetching CSRF token:', error);
+            throw error;
+        }
     };
 
     const handleDelete = useCallback(async (medicineId) => {
         try {
             setIsLoading(true);
-            await getCsrfToken(); // Lấy CSRF token trước khi gửi DELETE
+            await getCsrfToken();
             const response = await fetch(`${API_BASE_URL}/medicines/${medicineId}`, {
                 method: 'DELETE',
                 headers: {
                     'Accept': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
+                    'X-XSRF-TOKEN': document.cookie
+                        .split('; ')
+                        .find(row => row.startsWith('XSRF-TOKEN='))
+                        ?.split('=')[1] || '',
                 },
-                credentials: 'include', // Gửi cookie chứa CSRF token
+                credentials: 'include',
             });
 
             if (!response.ok) {
                 throw new Error(`HTTP error! Status: ${response.status}`);
             }
             const result = await response.json();
-            alert(result.message);
+            showToast('success', result.message);
 
             cache.current.delete(currentPage + 1);
             await fetchMedicines(currentPage + 1);
         } catch (error) {
             console.error('Error deleting medicine:', error);
-            alert(`Lỗi khi xóa thuốc: ${error.message}`);
+            showToast('error', `Lỗi khi xóa thuốc: ${error.message}`);
         } finally {
             setIsLoading(false);
             setShowDeleteModal(false);
@@ -198,6 +220,13 @@ const AdminMedicine = () => {
                     onConfirm={() => handleDelete(medicineToDelete)}
                     onCancel={handleCancelDelete}
                 />
+                {toast.show && (
+                    <CustomToast
+                        type={toast.type}
+                        message={toast.message}
+                        onClose={hideToast}
+                    />
+                )}
             </div>
         </div>
     );

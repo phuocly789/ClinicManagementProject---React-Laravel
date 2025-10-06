@@ -1,23 +1,24 @@
 import React, { useEffect } from "react";
 import { CheckCircle, XCircle, Info, AlertTriangle, X } from "lucide-react";
+import { Modal, Button } from "react-bootstrap";
 import "./CustomToast.css";
 
 const typeConfig = {
   success: {
-    icon: <CheckCircle className="w-10 h-10 text-green-500" />,
-    bg: "bg-green-50 text-green-700",
+    icon: <CheckCircle className="w-10 h-10 text-success" />,
+    bg: "bg-light text-success border-success",
   },
   error: {
-    icon: <XCircle className="w-10 h-10 text-red-500" />,
-    bg: "bg-red-50 text-red-700",
+    icon: <XCircle className="w-10 h-10 text-danger" />,
+    bg: "bg-light text-danger border-danger",
   },
   info: {
-    icon: <Info className="w-10 h-10 text-blue-500" />,
-    bg: "bg-blue-50 text-blue-700",
+    icon: <Info className="w-10 h-10 text-info" />,
+    bg: "bg-light text-info border-info",
   },
   warning: {
-    icon: <AlertTriangle className="w-10 h-10 text-yellow-500" />,
-    bg: "bg-yellow-50 text-yellow-700",
+    icon: <AlertTriangle className="w-10 h-10 text-warning" />,
+    bg: "bg-light text-warning border-warning",
   },
 };
 
@@ -25,28 +26,33 @@ export default function CustomToast({ type = "success", message, onClose }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 2500);
     return () => clearTimeout(timer);
-  }, []);
+  }, [onClose]);
 
   const { icon, bg } = typeConfig[type] || typeConfig.info;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm toast-fade"
+    <Modal
+      show={true}
+      onHide={onClose}
+      centered
+      backdrop="static"
+      className="custom-toast"
       onClick={onClose}
     >
-      <div
-        className={`max-w-md w-full mx-auto px-6 py-5 rounded-xl shadow-xl ${bg} flex flex-col items-center text-center gap-3 toast-popup relative`}
-      >
-        <button
+      <Modal.Body className={`p-4 rounded ${bg} border text-center`}>
+        <Button
+          variant="link"
+          className="position-absolute top-0 end-0 p-2 text-secondary"
           onClick={onClose}
-          className="absolute top-2 right-2 text-gray-400 hover:text-black"
         >
           <X className="w-5 h-5" />
-        </button>
-        {icon}
-        <h2 className="text-lg font-semibold">{message}</h2>
-        <p className="text-sm opacity-80">Click anywhere to close</p>
-      </div>
-    </div>
+        </Button>
+        <div className="d-flex flex-column align-items-center gap-3">
+          {icon}
+          <h2 className="mb-0">{message}</h2>
+          <p className="mb-0 text-muted">Nhấn bất kỳ đâu để đóng</p>
+        </div>
+      </Modal.Body>
+    </Modal>
   );
 }
