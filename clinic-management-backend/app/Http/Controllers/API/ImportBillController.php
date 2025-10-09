@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\API;
 
 use App\Models\ImportBill;
 use App\Models\Supplier;
@@ -10,21 +10,27 @@ use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
+use App\Http\Controllers\Controller;
 
 class ImportBillController extends Controller
 {
     /**
      * Display a listing of the import bills.
      */
-    public function index()
+    public function index(Request $request)
     {
+        $perPage = 10; // 10 phiếu nhập mỗi trang
         $importBills = ImportBill::with(['supplier', 'user', 'import_details'])
             ->orderBy('ImportDate', 'desc')
-            ->get();
+            ->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
-            'data' => $importBills
+            'data' => $importBills->items(),
+            'current_page' => $importBills->currentPage(),
+            'last_page' => $importBills->lastPage(),
+            'per_page' => $importBills->perPage(),
+            'total' => $importBills->total(),
         ], 200);
     }
 
