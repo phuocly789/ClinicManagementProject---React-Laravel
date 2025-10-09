@@ -7,19 +7,20 @@ import CustomToast from '../Components/CustomToast/CustomToast';
 
 const API_BASE_URL = 'http://localhost:8000';
 
-// Mảng tĩnh cho Nhà Cung Cấp (Static supplier list for demo purposes)
-const suppliers = [
-  'Công ty Dược ABC',
-  'Công ty Dược XYZ',
-  'Công ty Dược 123',
-  'Công ty Dược DEF',
-];
+// Load html2pdf.js for PDF export
+const loadHtml2Pdf = () => {
+  const script = document.createElement('script');
+  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+  script.async = true;
+  document.body.appendChild(script);
+  return script;
+};
 
 // Regex kiểm tra ký tự đặc biệt và ngôn ngữ code
 const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
 const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class|import|export|\$\w+)/i;
 
-const InventoryList = ({ inventories, isLoading, formatVND, handleShowDeleteModal, handleShowEditForm, pageCount, currentPage, handlePageChange }) => {
+const InventoryList = ({ inventories, isLoading, formatVND, handleShowDeleteModal, handleShowDetail, handleShowEditForm, pageCount, currentPage, handlePageChange, suppliers }) => {
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-3">
@@ -56,9 +57,17 @@ const InventoryList = ({ inventories, isLoading, formatVND, handleShowDeleteModa
             ) : (
               inventories.map((inventory) => (
                 <tr key={inventory.id}>
-                  <td>{inventory.id}</td>
-                  <td>{inventory.supplier}</td>
-                  <td>{inventory.date}</td>
+                  <td>
+                    <a
+                      className="text-primary"
+                      href="#"
+                      onClick={() => handleShowDetail(inventory.id)}
+                    >
+                      {inventory.id}
+                    </a>
+                  </td>
+                  <td>{suppliers.find(s => s.SupplierId === inventory.supplierId)?.name || 'N/A'}</td>
+                  <td>{new Date(inventory.date).toLocaleDateString('vi-VN')}</td>
                   <td>{formatVND(inventory.total)}</td>
                   <td>{inventory.note}</td>
                   <td>
@@ -129,13 +138,13 @@ const InventoryDetailList = ({ details, isLoading, formatVND }) => {
                 </td>
               </tr>
             ) : (
-              details.map((detail, index) => (
-                <tr key={index}>
-                  <td>{detail.id}</td>
-                  <td>{detail.medicine}</td>
+              details.map((detail) => (
+                <tr key={detail.id}>
+                  <td>{detail.importId}</td>
+                  <td>{detail.medicineName}</td>
                   <td>{detail.quantity}</td>
                   <td>{formatVND(detail.price)}</td>
-                  <td>{formatVND(detail.total)}</td>
+                  <td>{formatVND(detail.subTotal)}</td>
                 </tr>
               ))
             )}
@@ -146,9 +155,9 @@ const InventoryDetailList = ({ details, isLoading, formatVND }) => {
   );
 };
 
-const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading }) => {
+const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading, suppliers }) => {
   const [errors, setErrors] = useState({
-    supplier: '',
+    supplierId: '',
     date: '',
     total: '',
     note: '',
@@ -156,20 +165,20 @@ const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading })
 
   const validateForm = (formData) => {
     const newErrors = {
-      supplier: '',
+      supplierId: '',
       date: '',
       total: '',
       note: '',
     };
     let isValid = true;
 
-    // Validate Supplier
-    const supplier = formData.get('supplier')?.trim();
-    if (!supplier) {
-      newErrors.supplier = 'Vui lòng chọn nhà cung cấp';
+    // Validate SupplierId
+    const supplierId = formData.get('supplierId')?.trim();
+    if (!supplierId) {
+      newErrors.supplierId = 'Vui lòng chọn nhà cung cấp';
       isValid = false;
-    } else if (!suppliers.includes(supplier)) {
-      newErrors.supplier = 'Nhà cung cấp không hợp lệ';
+    } else if (!suppliers.some(s => s.SupplierId === parseInt(supplierId))) {
+      newErrors.supplierId = 'Nhà cung cấp không hợp lệ';
       isValid = false;
     }
 
@@ -231,18 +240,18 @@ const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading })
             <Form.Group className="mb-3">
               <Form.Label>Nhà Cung Cấp</Form.Label>
               <Form.Select
-                name="supplier"
-                defaultValue={isEditMode ? inventory?.supplier : ''}
-                isInvalid={!!errors.supplier}
+                name="supplierId"
+                defaultValue={isEditMode ? inventory?.supplierId : ''}
+                isInvalid={!!errors.supplierId}
               >
                 <option value="" disabled>Chọn nhà cung cấp</option>
                 {suppliers.map((supplier) => (
-                  <option key={supplier} value={supplier}>
-                    {supplier}
+                  <option key={supplier.SupplierId} value={supplier.SupplierId}>
+                    {supplier.name}
                   </option>
                 ))}
               </Form.Select>
-              <Form.Text className="text-danger">{errors.supplier}</Form.Text>
+              <Form.Text className="text-danger">{errors.supplierId}</Form.Text>
             </Form.Group>
           </Col>
           <Col md={6}>
@@ -300,19 +309,154 @@ const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading })
   );
 };
 
+const InventoryDetail = ({ inventory, details, supplier, isLoading, formatVND, onBack }) => {
+  const printableAreaRef = useRef(null);
+
+  const printPage = () => {
+    window.print();
+  };
+
+  const exportPDF = () => {
+    const element = printableAreaRef.current;
+    const opt = {
+      margin: 0.5,
+      filename: `PhieuNhapKho_${inventory.id}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+    };
+    window.html2pdf().set(opt).from(element).save();
+  };
+
+  const styles = {
+    dashboardContainer: { display: 'flex' },
+    mainContent: { flexGrow: 1, padding: '30px', backgroundColor: '#f8f9fa' },
+    header: { marginBottom: '30px' },
+    card: { backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px', marginBottom: '20px' },
+    infoSection: { marginBottom: '20px' },
+    infoSectionH3: { marginBottom: '10px' },
+    infoItem: { marginBottom: '5px' },
+    table: { width: '100%', borderCollapse: 'collapse', marginTop: '20px' },
+    thTd: { border: '1px solid #ddd', padding: '12px', textAlign: 'left' },
+    th: { backgroundColor: '#f2f2f2' },
+    buttonContainer: { marginTop: '20px' },
+    button: { padding: '8px 15px', borderRadius: '4px', border: 'none', cursor: 'pointer', color: 'white', marginRight: '10px' },
+    btnPrint: { backgroundColor: '#00448D' },
+    btnPrintHover: { backgroundColor: '#003366' },
+    btnExportPdf: { backgroundColor: '#28a745' },
+    btnExportPdfHover: { backgroundColor: '#218838' },
+    btnBack: { backgroundColor: '#6c757d' },
+    btnBackHover: { backgroundColor: '#5a6268' },
+    printHeader: { display: 'none', textAlign: 'center', marginBottom: '20px' },
+    printHeaderH1: { fontSize: '24px', color: '#00448D' },
+    '@media print': {
+      mainContent: { padding: 0 },
+      card: { boxShadow: 'none', border: 'none', padding: '10px' },
+      printHeader: { display: 'block' },
+      infoSection: { fontSize: '12px' },
+      table: { fontSize: '12px' },
+      infoItem: { marginBottom: '8px' },
+      thTd: { padding: '8px' },
+      buttonContainer: { display: 'none' }
+    }
+  };
+
+  return (
+    <div style={styles.mainContent}>
+      <header style={styles.header}>
+        <h1>Chi Tiết Phiếu Nhập Kho</h1>
+      </header>
+      <section ref={printableAreaRef} style={styles.card}>
+        <div style={styles.printHeader}>
+          <h1 style={styles.printHeaderH1}>Phiếu Nhập Kho</h1>
+          <p>Phòng Khám XYZ</p>
+        </div>
+        <div style={styles.infoSection}>
+          <h3 style={styles.infoSectionH3}>Thông Tin Nhà Cung Cấp</h3>
+          <div style={styles.infoItem}><strong>Tên Nhà Cung Cấp:</strong> {supplier?.name || 'N/A'}</div>
+          <div style={styles.infoItem}><strong>Email:</strong> {supplier?.email || 'N/A'}</div>
+          <div style={styles.infoItem}><strong>Số Điện Thoại:</strong> {supplier?.phone || 'N/A'}</div>
+          <div style={styles.infoItem}><strong>Địa Chỉ:</strong> {supplier?.address || 'N/A'}</div>
+          <div style={styles.infoItem}><strong>Mô Tả:</strong> {supplier?.description || 'N/A'}</div>
+        </div>
+        <div style={styles.infoSection}>
+          <h3 style={styles.infoSectionH3}>Thông Tin Phiếu</h3>
+          <div style={styles.infoItem}><strong>Mã Phiếu:</strong> {inventory?.id || 'N/A'}</div>
+          <div style={styles.infoItem}><strong>Ngày Nhập:</strong> {inventory?.date ? new Date(inventory.date).toLocaleDateString('vi-VN') : 'N/A'}</div>
+          <div style={styles.infoItem}><strong>Tổng Tiền:</strong> {formatVND(inventory?.total)}</div>
+          <div style={styles.infoItem}><strong>Ghi Chú:</strong> {inventory?.note || 'N/A'}</div>
+        </div>
+        <h3>Danh Sách Thuốc Đã Nhập</h3>
+        <Table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>Tên Thuốc</th>
+              <th style={styles.th}>Số Lượng</th>
+              <th style={styles.th}>Giá Nhập</th>
+              <th style={styles.th}>Thành Tiền</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              <tr>
+                <td colSpan="4" style={styles.thTd} className="text-center">
+                  <Spinner animation="border" variant="primary" />
+                </td>
+              </tr>
+            ) : details.length === 0 ? (
+              <tr>
+                <td colSpan="4" style={styles.thTd} className="text-center">
+                  Trống
+                </td>
+              </tr>
+            ) : (
+              details.map((detail) => (
+                <tr key={detail.id}>
+                  <td style={styles.thTd}>{detail.medicineName}</td>
+                  <td style={styles.thTd}>{detail.quantity}</td>
+                  <td style={styles.thTd}>{formatVND(detail.price)}</td>
+                  <td style={styles.thTd}>{formatVND(detail.subTotal)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </Table>
+      </section>
+      <div style={styles.buttonContainer}>
+        <Button style={{ ...styles.button, ...styles.btnPrint }} onMouseOver={e => e.target.style.backgroundColor = styles.btnPrintHover.backgroundColor} onMouseOut={e => e.target.style.backgroundColor = styles.btnPrint.backgroundColor} onClick={printPage}>
+          In
+        </Button>
+        <Button style={{ ...styles.button, ...styles.btnExportPdf }} onMouseOver={e => e.target.style.backgroundColor = styles.btnExportPdfHover.backgroundColor} onMouseOut={e => e.target.style.backgroundColor = styles.btnExportPdf.backgroundColor} onClick={exportPDF}>
+          Xuất PDF
+        </Button>
+        <Button style={{ ...styles.button, ...styles.btnBack }} onMouseOver={e => e.target.style.backgroundColor = styles.btnBackHover.backgroundColor} onMouseOut={e => e.target.style.backgroundColor = styles.btnBack.backgroundColor} onClick={onBack}>
+          Quay Lại
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 const AdminInventory = () => {
   const [inventories, setInventories] = useState([]);
   const [details, setDetails] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [pageCount, setPageCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [inventoryToDelete, setInventoryToDelete] = useState(null);
   const [toast, setToast] = useState({ show: false, type: 'info', message: '' });
-  const [currentView, setCurrentView] = useState('list'); // list, add, edit
+  const [currentView, setCurrentView] = useState('list'); // list, add, edit, detail
   const [editInventory, setEditInventory] = useState(null);
+  const [selectedInventory, setSelectedInventory] = useState(null);
   const cache = useRef(new Map());
   const debounceRef = useRef(null);
+
+  useEffect(() => {
+    const script = loadHtml2Pdf();
+    return () => script.remove();
+  }, []);
 
   const showToast = (type, message) => {
     setToast({ show: true, type, message });
@@ -321,6 +465,28 @@ const AdminInventory = () => {
   const hideToast = () => {
     setToast({ show: false, type: 'info', message: '' });
   };
+
+  const fetchSuppliers = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(`${API_BASE_URL}/api/suppliers`, {
+        headers: {
+          'Accept': 'application/json',
+        },
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      const data = await response.json();
+      setSuppliers(data.data || []);
+    } catch (error) {
+      console.error('Error fetching suppliers:', error);
+      showToast('error', `Lỗi khi tải danh sách nhà cung cấp: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   const fetchInventories = useCallback(async (page = 1) => {
     if (cache.current.has(page)) {
@@ -335,7 +501,7 @@ const AdminInventory = () => {
     debounceRef.current = setTimeout(async () => {
       try {
         setIsLoading(true);
-        const response = await fetch(`${API_BASE_URL}/api/inventories?page=${page}`, {
+        const response = await fetch(`${API_BASE_URL}/api/import-bills?page=${page}`, {
           headers: {
             'Accept': 'application/json',
           },
@@ -345,8 +511,15 @@ const AdminInventory = () => {
           throw new Error(`HTTP error! Status: ${response.status}`);
         }
         const paginator = await response.json();
-        cache.current.set(page, { data: paginator.data, last_page: paginator.last_page });
-        setInventories(paginator.data);
+        const mappedData = paginator.data.map(item => ({
+          id: item.ImportId,
+          supplierId: item.SupplierId,
+          date: item.ImportDate,
+          total: item.TotalAmount,
+          note: item.Notes || '',
+        }));
+        cache.current.set(page, { data: mappedData, last_page: paginator.last_page });
+        setInventories(mappedData);
         setPageCount(paginator.last_page);
         setCurrentPage(page - 1);
       } catch (error) {
@@ -358,10 +531,10 @@ const AdminInventory = () => {
     }, 300);
   }, []);
 
-  const fetchInventoryDetails = useCallback(async () => {
+  const fetchInventoryDetails = useCallback(async (importId) => {
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/inventory-details`, {
+      const response = await fetch(`${API_BASE_URL}/api/import-bills/${importId}`, {
         headers: {
           'Accept': 'application/json',
         },
@@ -371,7 +544,26 @@ const AdminInventory = () => {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
       const data = await response.json();
-      setDetails(data);
+      const mappedInventory = {
+        id: data.data.ImportId,
+        supplierId: data.data.SupplierId,
+        date: data.data.ImportDate,
+        total: data.data.TotalAmount,
+        note: data.data.Notes || '',
+      };
+      const mappedDetails = (data.data.import_details || []).map(detail => ({
+        id: detail.ImportDetailId,
+        importId: detail.ImportId,
+        medicineName: detail.medicine?.name || 'N/A',
+        quantity: detail.Quantity,
+        price: detail.ImportPrice,
+        subTotal: detail.SubTotal,
+      }));
+      setSelectedInventory({
+        inventory: mappedInventory,
+        supplier: data.data.supplier || {},
+        details: mappedDetails
+      });
     } catch (error) {
       console.error('Error fetching inventory details:', error);
       showToast('error', `Lỗi khi tải chi tiết phiếu nhập: ${error.message}`);
@@ -413,7 +605,7 @@ const AdminInventory = () => {
       try {
         setIsLoading(true);
         const token = await getCsrfToken();
-        const response = await fetch(`${API_BASE_URL}/api/inventories/${inventoryId}`, {
+        const response = await fetch(`${API_BASE_URL}/api/import-bills/${inventoryId}`, {
           method: 'DELETE',
           headers: {
             'Accept': 'application/json',
@@ -455,16 +647,31 @@ const AdminInventory = () => {
 
   const handleShowEditForm = (inventory) => {
     setEditInventory(inventory);
-    setCurrentView(inventory ? 'edit' : 'add');
+    setCurrentView('edit');
+    if (inventory) {
+      fetchInventoryDetails(inventory.id);
+    }
+  };
+
+  const handleShowDetail = (inventoryId) => {
+    setCurrentView('detail');
+    fetchInventoryDetails(inventoryId);
   };
 
   const handleCancelForm = () => {
     try {
       setCurrentView('list');
       setEditInventory(null);
+      setDetails([]);
     } catch (error) {
       showToast('error', 'Hủy thất bại');
     }
+  };
+
+  const handleBack = () => {
+    setCurrentView('list');
+    setSelectedInventory(null);
+    setDetails([]);
   };
 
   const handleAddInventory = async (e) => {
@@ -473,13 +680,13 @@ const AdminInventory = () => {
       const token = await getCsrfToken();
       const formData = new FormData(e.target);
       const data = {
-        supplier: formData.get('supplier'),
-        date: formData.get('date'),
-        total: parseFloat(formData.get('total')),
-        note: formData.get('note') || '',
+        SupplierId: parseInt(formData.get('supplierId')),
+        ImportDate: formData.get('date'),
+        TotalAmount: parseFloat(formData.get('total')),
+        Notes: formData.get('note') || '',
       };
 
-      const response = await fetch(`${API_BASE_URL}/api/inventories`, {
+      const response = await fetch(`${API_BASE_URL}/api/import-bills`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -519,13 +726,13 @@ const AdminInventory = () => {
       const token = await getCsrfToken();
       const formData = new FormData(e.target);
       const data = {
-        supplier: formData.get('supplier'),
-        date: formData.get('date'),
-        total: parseFloat(formData.get('total')),
-        note: formData.get('note') || '',
+        SupplierId: parseInt(formData.get('supplierId')),
+        ImportDate: formData.get('date'),
+        TotalAmount: parseFloat(formData.get('total')),
+        Notes: formData.get('note') || '',
       };
 
-      const response = await fetch(`${API_BASE_URL}/api/inventories/${editInventory.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/import-bills/${editInventory.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -562,13 +769,13 @@ const AdminInventory = () => {
 
   useEffect(() => {
     if (currentView === 'list') {
+      fetchSuppliers();
       fetchInventories(1);
-      fetchInventoryDetails();
     }
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [currentView, fetchInventories, fetchInventoryDetails]);
+  }, [currentView, fetchInventories, fetchSuppliers]);
 
   const handlePageChange = ({ selected }) => {
     const nextPage = selected + 1;
@@ -580,9 +787,9 @@ const AdminInventory = () => {
   };
 
   return (
-    <div className="d-flex">
+    <div style={{ display: 'flex', fontFamily: "'Segoe UI', sans-serif", margin: 0, backgroundColor: '#f8f9fa' }}>
       <Taskbar />
-      <div className="position-relative w-100 flex-grow-1 ms-5 p-5">
+      <div style={{ position: 'relative', width: '100%', flexGrow: 1, marginLeft: '5px', padding: '30px' }}>
         <h1 className="mb-4">Quản Lý Kho</h1>
         {currentView === 'list' && (
           <>
@@ -591,10 +798,12 @@ const AdminInventory = () => {
               isLoading={isLoading}
               formatVND={formatVND}
               handleShowDeleteModal={handleShowDeleteModal}
+              handleShowDetail={handleShowDetail}
               handleShowEditForm={handleShowEditForm}
               pageCount={pageCount}
               currentPage={currentPage}
               handlePageChange={handlePageChange}
+              suppliers={suppliers}
             />
             <InventoryDetailList details={details} isLoading={isLoading} formatVND={formatVND} />
           </>
@@ -605,6 +814,7 @@ const AdminInventory = () => {
             onSubmit={handleAddInventory}
             onCancel={handleCancelForm}
             isLoading={isLoading}
+            suppliers={suppliers}
           />
         )}
         {currentView === 'edit' && (
@@ -614,6 +824,17 @@ const AdminInventory = () => {
             onSubmit={handleEditInventory}
             onCancel={handleCancelForm}
             isLoading={isLoading}
+            suppliers={suppliers}
+          />
+        )}
+        {currentView === 'detail' && selectedInventory && (
+          <InventoryDetail
+            inventory={selectedInventory.inventory}
+            details={selectedInventory.details}
+            supplier={selectedInventory.supplier}
+            isLoading={isLoading}
+            formatVND={formatVND}
+            onBack={handleBack}
           />
         )}
         <ConfirmDeleteModal

@@ -10,8 +10,8 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/quan-ly-thuoc" element={<AdminMedicine />} />
-        <Route path="/quan-ly-kho" element={<AdminInventory />} />
+        <Route path="/admin/medicine" element={<AdminMedicine />} />
+        <Route path="/admin/inventory" element={<AdminInventory />} />
         <Route path="/" element={<AdminMedicine />} /> {/* Trang mặc định */}
       </Routes>
     </BrowserRouter>
