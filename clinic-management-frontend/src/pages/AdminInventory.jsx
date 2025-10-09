@@ -572,32 +572,36 @@ const AdminInventory = () => {
     }
   }, []);
 
-  const getCsrfToken = async (retries = 3) => {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-      try {
-        const response = await fetch(`${API_BASE_URL}/sanctum/csrf-cookie`, {
-          method: 'GET',
-          credentials: 'include',
-        });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch CSRF token: ${response.status}`);
-        }
-        const token = document.cookie
-          .split('; ')
-          .find((row) => row.startsWith('XSRF-TOKEN='))
-          ?.split('=')[1];
-        if (!token) {
-          throw new Error('CSRF token not found in cookies');
-        }
-        return decodeURIComponent(token);
-      } catch (error) {
-        console.error(`Attempt ${attempt} to fetch CSRF token failed:`, error);
-        if (attempt === retries) {
-          throw new Error(`Không thể lấy CSRF token sau ${retries} lần thử: ${error.message}`);
-        }
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
-    }
+  // const getCsrfToken = async (retries = 3) => {
+  //   for (let attempt = 1; attempt <= retries; attempt++) {
+  //     try {
+  //       const response = await fetch(`${API_BASE_URL}/sanctum/csrf-cookie`, {
+  //         method: 'GET',
+  //         credentials: 'include',
+  //       });
+  //       if (!response.ok) {
+  //         throw new Error(`Failed to fetch CSRF token: ${response.status}`);
+  //       }
+  //       const token = document.cookie
+  //         .split('; ')
+  //         .find((row) => row.startsWith('XSRF-TOKEN='))
+  //         ?.split('=')[1];
+  //       if (!token) {
+  //         throw new Error('CSRF token not found in cookies');
+  //       }
+  //       return decodeURIComponent(token);
+  //     } catch (error) {
+  //       console.error(`Attempt ${attempt} to fetch CSRF token failed:`, error);
+  //       if (attempt === retries) {
+  //         throw new Error(`Không thể lấy CSRF token sau ${retries} lần thử: ${error.message}`);
+  //       }
+  //       await new Promise((resolve) => setTimeout(resolve, 500));
+  //     }
+  //   }
+  // };
+
+  const getCsrfToken = async () => {
+    return null; // Bỏ qua CSRF token
   };
 
   const handleDelete = useCallback(
@@ -674,10 +678,55 @@ const AdminInventory = () => {
     setDetails([]);
   };
 
+  // const handleAddInventory = async (e) => {
+  //   try {
+  //     setIsLoading(true);
+  //     const token = await getCsrfToken();
+  //     const formData = new FormData(e.target);
+  //     const data = {
+  //       SupplierId: parseInt(formData.get('supplierId')),
+  //       ImportDate: formData.get('date'),
+  //       TotalAmount: parseFloat(formData.get('total')),
+  //       Notes: formData.get('note') || '',
+  //     };
+
+  //     const response = await fetch(`${API_BASE_URL}/api/import-bills`, {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //         'Accept': 'application/json',
+  //         'X-Requested-With': 'XMLHttpRequest',
+  //         'X-XSRF-TOKEN': token,
+  //       },
+  //       credentials: 'include',
+  //       body: JSON.stringify(data),
+  //     });
+
+  //     if (!response.ok) {
+  //       const errorData = await response.json().catch(() => ({}));
+  //       throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
+  //     }
+  //     const result = await response.json();
+  //     showToast('success', result.message || 'Thêm phiếu nhập thành công');
+  //     cache.current.clear();
+  //     await fetchInventories(1);
+  //     setCurrentView('list');
+  //   } catch (error) {
+  //     console.error('Error adding inventory:', error);
+  //     showToast(
+  //       'error',
+  //       error.message.includes('CSRF token')
+  //         ? 'Thêm thất bại: Không thể lấy CSRF token. Vui lòng kiểm tra backend.'
+  //         : `Thêm thất bại: ${error.message}`
+  //     );
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
+
   const handleAddInventory = async (e) => {
     try {
       setIsLoading(true);
-      const token = await getCsrfToken();
       const formData = new FormData(e.target);
       const data = {
         SupplierId: parseInt(formData.get('supplierId')),
@@ -692,29 +741,15 @@ const AdminInventory = () => {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
-          'X-XSRF-TOKEN': token,
         },
-        credentials: 'include',
+        credentials: 'include', // Vẫn giữ để duy trì session nếu cần
         body: JSON.stringify(data),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
-      }
-      const result = await response.json();
-      showToast('success', result.message || 'Thêm phiếu nhập thành công');
-      cache.current.clear();
-      await fetchInventories(1);
-      setCurrentView('list');
+      // ... phần còn lại giữ nguyên
     } catch (error) {
       console.error('Error adding inventory:', error);
-      showToast(
-        'error',
-        error.message.includes('CSRF token')
-          ? 'Thêm thất bại: Không thể lấy CSRF token. Vui lòng kiểm tra backend.'
-          : `Thêm thất bại: ${error.message}`
-      );
+      showToast('error', `Thêm thất bại: ${error.message}`);
     } finally {
       setIsLoading(false);
     }

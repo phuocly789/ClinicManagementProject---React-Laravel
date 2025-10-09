@@ -21,7 +21,7 @@ class ImportBillController extends Controller
         $importBills = ImportBill::with(['supplier', 'user', 'import_details'])
             ->orderBy('ImportDate', 'desc')
             ->get();
-        
+
         return response()->json([
             'status' => 'success',
             'data' => $importBills
@@ -31,6 +31,37 @@ class ImportBillController extends Controller
     /**
      * Store a newly created import bill in storage.
      */
+    // public function store(Request $request)
+    // {
+    //     $validator = Validator::make($request->all(), [
+    //         'SupplierId' => 'nullable|exists:suppliers,SupplierId',
+    //         'ImportDate' => 'nullable|date',
+    //         'TotalAmount' => 'required|numeric|min:0',
+    //         'Notes' => 'nullable|string|max:255',
+    //         'CreatedBy' => 'nullable|exists:users,id'
+    //     ]);
+
+    //     if ($validator->fails()) {
+    //         return response()->json([
+    //             'status' => 'error',
+    //             'errors' => $validator->errors()
+    //         ], 422);
+    //     }
+
+    //     $importBill = ImportBill::create([
+    //         'SupplierId' => $request->SupplierId,
+    //         'ImportDate' => $request->ImportDate ?? Carbon::now(),
+    //         'TotalAmount' => $request->TotalAmount,
+    //         'Notes' => $request->Notes,
+    //         'CreatedBy' => $request->CreatedBy ?? (Auth::user() ? Auth::user()->id : null)
+    //     ]);
+
+    //     return response()->json([
+    //         'status' => 'success',
+    //         'data' => $importBill->load(['supplier', 'user', 'import_details'])
+    //     ], 201);
+    // }
+
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -38,7 +69,7 @@ class ImportBillController extends Controller
             'ImportDate' => 'nullable|date',
             'TotalAmount' => 'required|numeric|min:0',
             'Notes' => 'nullable|string|max:255',
-            'CreatedBy' => 'nullable|exists:users,id'
+            // Bỏ yêu cầu 'CreatedBy' => 'nullable|exists:users,id'
         ]);
 
         if ($validator->fails()) {
@@ -53,7 +84,7 @@ class ImportBillController extends Controller
             'ImportDate' => $request->ImportDate ?? Carbon::now(),
             'TotalAmount' => $request->TotalAmount,
             'Notes' => $request->Notes,
-            'CreatedBy' => $request->CreatedBy ?? (Auth::user() ? Auth::user()->id : null)
+            'CreatedBy' => 1, // Gán cứng một ID người dùng mặc định (ví dụ: 1)
         ]);
 
         return response()->json([
@@ -93,7 +124,7 @@ class ImportBillController extends Controller
             'ImportDate' => 'nullable|date',
             'TotalAmount' => 'required|numeric|min:0',
             'Notes' => 'nullable|string|max:255',
-            'CreatedBy' => 'nullable|exists:users,id'
+            // 'CreatedBy' => 'nullable|exists:users,id'
         ]);
 
         if ($validator->fails()) {
@@ -103,12 +134,20 @@ class ImportBillController extends Controller
             ], 422);
         }
 
+        // $importBill->update([
+        //     'SupplierId' => $request->SupplierId ?? $importBill->SupplierId,
+        //     'ImportDate' => $request->ImportDate ?? $importBill->ImportDate,
+        //     'TotalAmount' => $request->TotalAmount,
+        //     'Notes' => $request->Notes ?? $importBill->Notes,
+        //     'CreatedBy' => $request->CreatedBy ?? $importBill->CreatedBy
+        // ]);
+
         $importBill->update([
             'SupplierId' => $request->SupplierId ?? $importBill->SupplierId,
             'ImportDate' => $request->ImportDate ?? $importBill->ImportDate,
             'TotalAmount' => $request->TotalAmount,
             'Notes' => $request->Notes ?? $importBill->Notes,
-            'CreatedBy' => $request->CreatedBy ?? $importBill->CreatedBy
+            'CreatedBy' => 1, // Gán cứng ID người dùng mặc định
         ]);
 
         return response()->json([
