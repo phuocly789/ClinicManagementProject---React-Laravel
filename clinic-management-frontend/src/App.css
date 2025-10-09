@@ -49,7 +49,55 @@ ul.d-flex {
 ul {
   margin: 0;
 }
+
 a {
   color: #61dafb;
 }
-/* New styles for clinic management frontend */
+
+.admin-layout {
+  display: flex;
+  font-family: 'Segoe UI', sans-serif;
+  background-color: #f8f9fa;
+  min-height: 100vh;
+}
+
+.admin-content {
+  flex-grow: 1;
+  padding: 2rem;
+  margin-left: 250px;
+}
+
+.table-responsive {
+  transition: opacity 0.3s ease;
+}
+
+.table-loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Print styles */
+@media print {
+  .admin-layout {
+    display: block;
+  }
+  
+  .admin-content {
+    margin-left: 0;
+    padding: 0;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Hover effects */
+.btn-hover {
+  transition: all 0.3s ease;
+}
+
+.btn-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}

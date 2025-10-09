@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\MedicinesController;
 use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\ImportBillController;
+use App\Http\Controllers\API\SuppliersController;
 
 /*
 |--------------------------------------------------------------------------
@@ -31,3 +32,9 @@ Route::post('/import-bills', [ImportBillController::class, 'store']);
 Route::put('/import-bills/{id}', [ImportBillController::class, 'update']);
 Route::delete('/import-bills/{id}', [ImportBillController::class, 'destroy']);
 Route::get('/import-bills/{id}', [ImportBillController::class, 'show']);
+
+Route::get('/suppliers', [SuppliersController::class, 'index']);
+Route::post('/suppliers', [SuppliersController::class, 'store']);
+Route::put('/suppliers/{id}', [SuppliersController::class, 'update']);
+Route::delete('/suppliers/{id}', [SuppliersController::class, 'destroy']);
+Route::get('/suppliers/{id}', [SuppliersController::class, 'show']);

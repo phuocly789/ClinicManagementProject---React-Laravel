@@ -58,15 +58,15 @@ const InventoryList = ({ inventories, isLoading, formatVND, handleShowDeleteModa
               inventories.map((inventory) => (
                 <tr key={inventory.id}>
                   <td>
-                    <a
+                    <span
+                      style={{ cursor: 'pointer' }}
                       className="text-primary"
-                      href="#"
                       onClick={() => handleShowDetail(inventory.id)}
                     >
                       {inventory.id}
-                    </a>
+                    </span>
                   </td>
-                  <td>{suppliers.find(s => s.SupplierId === inventory.supplierId)?.name || 'N/A'}</td>
+                  <td>{suppliers.find(s => s.SupplierId === inventory.supplierId)?.SupplierName || 'N/A'}</td>
                   <td>{new Date(inventory.date).toLocaleDateString('vi-VN')}</td>
                   <td>{formatVND(inventory.total)}</td>
                   <td>{inventory.note}</td>
@@ -247,7 +247,7 @@ const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading, s
                 <option value="" disabled>Chọn nhà cung cấp</option>
                 {suppliers.map((supplier) => (
                   <option key={supplier.SupplierId} value={supplier.SupplierId}>
-                    {supplier.name}
+                    {supplier.SupplierName}
                   </option>
                 ))}
               </Form.Select>
@@ -364,7 +364,7 @@ const InventoryDetail = ({ inventory, details, supplier, isLoading, formatVND, o
   return (
     <div style={styles.mainContent}>
       <header style={styles.header}>
-        <h1>Chi Tiết Phiếu Nhập Kho</h1>
+        <h3>Chi Tiết Phiếu Nhập Kho</h3>
       </header>
       <section ref={printableAreaRef} style={styles.card}>
         <div style={styles.printHeader}>
@@ -373,11 +373,11 @@ const InventoryDetail = ({ inventory, details, supplier, isLoading, formatVND, o
         </div>
         <div style={styles.infoSection}>
           <h3 style={styles.infoSectionH3}>Thông Tin Nhà Cung Cấp</h3>
-          <div style={styles.infoItem}><strong>Tên Nhà Cung Cấp:</strong> {supplier?.name || 'N/A'}</div>
-          <div style={styles.infoItem}><strong>Email:</strong> {supplier?.email || 'N/A'}</div>
-          <div style={styles.infoItem}><strong>Số Điện Thoại:</strong> {supplier?.phone || 'N/A'}</div>
-          <div style={styles.infoItem}><strong>Địa Chỉ:</strong> {supplier?.address || 'N/A'}</div>
-          <div style={styles.infoItem}><strong>Mô Tả:</strong> {supplier?.description || 'N/A'}</div>
+          <div style={styles.infoItem}><strong>Tên Nhà Cung Cấp:</strong> {supplier?.SupplierName || 'N/A'}</div>
+          <div style={styles.infoItem}><strong>Email:</strong> {supplier?.ContactEmail || 'N/A'}</div>
+          <div style={styles.infoItem}><strong>Số Điện Thoại:</strong> {supplier?.ContactPhone || 'N/A'}</div>
+          <div style={styles.infoItem}><strong>Địa Chỉ:</strong> {supplier?.Address || 'N/A'}</div>
+          <div style={styles.infoItem}><strong>Mô Tả:</strong> {supplier?.Description || 'N/A'}</div>
         </div>
         <div style={styles.infoSection}>
           <h3 style={styles.infoSectionH3}>Thông Tin Phiếu</h3>
@@ -479,6 +479,7 @@ const AdminInventory = () => {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
       const data = await response.json();
+      console.log('Suppliers data:', data.data);
       setSuppliers(data.data || []);
     } catch (error) {
       console.error('Error fetching suppliers:', error);
@@ -518,6 +519,7 @@ const AdminInventory = () => {
           total: item.TotalAmount,
           note: item.Notes || '',
         }));
+        console.log('Inventories data:', mappedData);
         cache.current.set(page, { data: mappedData, last_page: paginator.last_page });
         setInventories(mappedData);
         setPageCount(paginator.last_page);
@@ -554,14 +556,22 @@ const AdminInventory = () => {
       const mappedDetails = (data.data.import_details || []).map(detail => ({
         id: detail.ImportDetailId,
         importId: detail.ImportId,
-        medicineName: detail.medicine?.name || 'N/A',
+        medicineName: detail.medicine?.MedicineName || 'N/A',
         quantity: detail.Quantity,
         price: detail.ImportPrice,
         subTotal: detail.SubTotal,
       }));
+      const mappedSupplier = data.data.supplier ? {
+        SupplierId: data.data.supplier.SupplierId,
+        SupplierName: data.data.supplier.SupplierName,
+        ContactEmail: data.data.supplier.ContactEmail,
+        ContactPhone: data.data.supplier.ContactPhone,
+        Address: data.data.supplier.Address,
+        Description: data.data.supplier.Description
+      } : {};
       setSelectedInventory({
         inventory: mappedInventory,
-        supplier: data.data.supplier || {},
+        supplier: mappedSupplier,
         details: mappedDetails
       });
     } catch (error) {
@@ -572,36 +582,32 @@ const AdminInventory = () => {
     }
   }, []);
 
-  // const getCsrfToken = async (retries = 3) => {
-  //   for (let attempt = 1; attempt <= retries; attempt++) {
-  //     try {
-  //       const response = await fetch(`${API_BASE_URL}/sanctum/csrf-cookie`, {
-  //         method: 'GET',
-  //         credentials: 'include',
-  //       });
-  //       if (!response.ok) {
-  //         throw new Error(`Failed to fetch CSRF token: ${response.status}`);
-  //       }
-  //       const token = document.cookie
-  //         .split('; ')
-  //         .find((row) => row.startsWith('XSRF-TOKEN='))
-  //         ?.split('=')[1];
-  //       if (!token) {
-  //         throw new Error('CSRF token not found in cookies');
-  //       }
-  //       return decodeURIComponent(token);
-  //     } catch (error) {
-  //       console.error(`Attempt ${attempt} to fetch CSRF token failed:`, error);
-  //       if (attempt === retries) {
-  //         throw new Error(`Không thể lấy CSRF token sau ${retries} lần thử: ${error.message}`);
-  //       }
-  //       await new Promise((resolve) => setTimeout(resolve, 500));
-  //     }
-  //   }
-  // };
-
-  const getCsrfToken = async () => {
-    return null; // Bỏ qua CSRF token
+  const getCsrfToken = async (retries = 3) => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/sanctum/csrf-cookie`, {
+          method: 'GET',
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch CSRF token: ${response.status}`);
+        }
+        const token = document.cookie
+          .split('; ')
+          .find((row) => row.startsWith('XSRF-TOKEN='))
+          ?.split('=')[1];
+        if (!token) {
+          throw new Error('CSRF token not found in cookies');
+        }
+        return decodeURIComponent(token);
+      } catch (error) {
+        console.error(`Attempt ${attempt} to fetch CSRF token failed:`, error);
+        if (attempt === retries) {
+          throw new Error(`Không thể lấy CSRF token sau ${retries} lần thử: ${error.message}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
   };
 
   const handleDelete = useCallback(
@@ -678,55 +684,10 @@ const AdminInventory = () => {
     setDetails([]);
   };
 
-  // const handleAddInventory = async (e) => {
-  //   try {
-  //     setIsLoading(true);
-  //     const token = await getCsrfToken();
-  //     const formData = new FormData(e.target);
-  //     const data = {
-  //       SupplierId: parseInt(formData.get('supplierId')),
-  //       ImportDate: formData.get('date'),
-  //       TotalAmount: parseFloat(formData.get('total')),
-  //       Notes: formData.get('note') || '',
-  //     };
-
-  //     const response = await fetch(`${API_BASE_URL}/api/import-bills`, {
-  //       method: 'POST',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //         'Accept': 'application/json',
-  //         'X-Requested-With': 'XMLHttpRequest',
-  //         'X-XSRF-TOKEN': token,
-  //       },
-  //       credentials: 'include',
-  //       body: JSON.stringify(data),
-  //     });
-
-  //     if (!response.ok) {
-  //       const errorData = await response.json().catch(() => ({}));
-  //       throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
-  //     }
-  //     const result = await response.json();
-  //     showToast('success', result.message || 'Thêm phiếu nhập thành công');
-  //     cache.current.clear();
-  //     await fetchInventories(1);
-  //     setCurrentView('list');
-  //   } catch (error) {
-  //     console.error('Error adding inventory:', error);
-  //     showToast(
-  //       'error',
-  //       error.message.includes('CSRF token')
-  //         ? 'Thêm thất bại: Không thể lấy CSRF token. Vui lòng kiểm tra backend.'
-  //         : `Thêm thất bại: ${error.message}`
-  //     );
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
-
   const handleAddInventory = async (e) => {
     try {
       setIsLoading(true);
+      const token = await getCsrfToken();
       const formData = new FormData(e.target);
       const data = {
         SupplierId: parseInt(formData.get('supplierId')),
@@ -741,15 +702,29 @@ const AdminInventory = () => {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
+          'X-XSRF-TOKEN': token,
         },
-        credentials: 'include', // Vẫn giữ để duy trì session nếu cần
+        credentials: 'include',
         body: JSON.stringify(data),
       });
 
-      // ... phần còn lại giữ nguyên
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
+      }
+      const result = await response.json();
+      showToast('success', result.message || 'Thêm phiếu nhập thành công');
+      cache.current.clear();
+      await fetchInventories(1);
+      setCurrentView('list');
     } catch (error) {
       console.error('Error adding inventory:', error);
-      showToast('error', `Thêm thất bại: ${error.message}`);
+      showToast(
+        'error',
+        error.message.includes('CSRF token')
+          ? 'Thêm thất bại: Không thể lấy CSRF token. Vui lòng kiểm tra backend.'
+          : `Thêm thất bại: ${error.message}`
+      );
     } finally {
       setIsLoading(false);
     }
@@ -825,7 +800,7 @@ const AdminInventory = () => {
     <div style={{ display: 'flex', fontFamily: "'Segoe UI', sans-serif", margin: 0, backgroundColor: '#f8f9fa' }}>
       <Taskbar />
       <div style={{ position: 'relative', width: '100%', flexGrow: 1, marginLeft: '5px', padding: '30px' }}>
-        <h1 className="mb-4">Quản Lý Kho</h1>
+        <h1 className="mb-1">Quản Lý Kho</h1>
         {currentView === 'list' && (
           <>
             <InventoryList
@@ -840,7 +815,6 @@ const AdminInventory = () => {
               handlePageChange={handlePageChange}
               suppliers={suppliers}
             />
-            <InventoryDetailList details={details} isLoading={isLoading} formatVND={formatVND} />
           </>
         )}
         {currentView === 'add' && (
