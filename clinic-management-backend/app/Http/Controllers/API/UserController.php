@@ -7,10 +7,14 @@ use Illuminate\Http\Request;
 class UserController extends Controller
 {
 
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(User::all());
+        $perPage = $request->input('per_page', 5); // hoặc bất kỳ số mặc định nào
+        $users = User::orderBy('UserId', 'asc')->paginate($perPage);
+
+        return response()->json($users);
     }
+
 
     public function ping()
     {

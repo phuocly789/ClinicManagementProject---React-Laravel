@@ -5,6 +5,7 @@ import viteLogo from '/vite.svg';
 import './App.css';
 import AdminMedicine from './pages/AdminMedicine';
 import AdminInventory from './pages/AdminInventory';
+import UserManagement from './pages/user/UserManagement.jsx';
 
 function App() {
   return (
@@ -13,6 +14,8 @@ function App() {
         <Route path="/admin/medicine" element={<AdminMedicine />} />
         <Route path="/admin/inventory" element={<AdminInventory />} />
         <Route path="/" element={<AdminMedicine />} /> {/* Trang mặc định */}
+         <Route path="/admin/users" element={<UserManagement />} />
+
       </Routes>
     </BrowserRouter>
   );
