@@ -8,11 +8,21 @@
   animation: popup 0.4s ease-out;
 }
 
+.custom-toast .modal-dialog {
+  max-width: 400px;
+}
+
+.custom-toast .modal-content {
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
 @keyframes fadeIn {
   0% {
     opacity: 0;
     backdrop-filter: blur(0px);
   }
+
   100% {
     opacity: 1;
     backdrop-filter: blur(4px);
@@ -24,6 +34,7 @@
     transform: scale(0.9) translateY(20px);
     opacity: 0;
   }
+
   100% {
     transform: scale(1) translateY(0);
     opacity: 1;
