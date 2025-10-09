@@ -5,7 +5,7 @@ import viteLogo from '/vite.svg';
 import './App.css';
 import AdminMedicine from './pages/AdminMedicine';
 import AdminInventory from './pages/AdminInventory';
-
+import DoctorDashboard from './pages/DoctorDashboard';
 function App() {
   return (
     <BrowserRouter>
@@ -13,6 +13,7 @@ function App() {
         <Route path="/quan-ly-thuoc" element={<AdminMedicine />} />
         <Route path="/quan-ly-kho" element={<AdminInventory />} />
         <Route path="/" element={<AdminMedicine />} /> {/* Trang mặc định */}
+        <Route path="/doctor" element={<DoctorDashboard />} />
       </Routes>
     </BrowserRouter>
   );

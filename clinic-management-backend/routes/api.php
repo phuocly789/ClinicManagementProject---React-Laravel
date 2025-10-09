@@ -4,7 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\MedicinesController;
 use App\Http\Controllers\API\UserController;
-
+use App\Http\Controllers\API\Doctor\AppointmentsController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -24,3 +24,8 @@ Route::get('/medicines/ping', [MedicinesController::class, 'ping']);
 Route::post('/medicines', [MedicinesController::class, 'store']);
 Route::put('/medicines/{id}', [MedicinesController::class, 'update']);
 Route::delete('/medicines/{id}', [MedicinesController::class, 'destroy']);
+
+
+
+Route::get('today-patients', [AppointmentsController::class, 'todayPatients']);
+Route::apiResource('appointments', AppointmentsController::class); // CRUD /doctor/appointments
