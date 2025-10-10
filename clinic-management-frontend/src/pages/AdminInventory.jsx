@@ -20,12 +20,12 @@ const loadHtml2Pdf = () => {
 const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
 const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class|import|export|\$\w+)/i;
 
-const InventoryList = ({ inventories, isLoading, formatVND, handleShowDeleteModal, handleShowDetail, handleShowEditForm, pageCount, currentPage, handlePageChange, suppliers }) => {
+const InventoryList = ({ inventories, isLoading, formatVND, handleShowDeleteModal, handleShowDetail, handleShowAddInventory, handleShowEditForm, pageCount, currentPage, handlePageChange, suppliers }) => {
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h3>Danh Sách Phiếu Nhập Kho</h3>
-        <Button variant="primary" onClick={() => handleShowEditForm(null)}>
+        <Button variant="primary" onClick={handleShowAddInventory}>
           + Thêm Phiếu Nhập
         </Button>
       </div>
@@ -109,66 +109,28 @@ const InventoryList = ({ inventories, isLoading, formatVND, handleShowDeleteModa
   );
 };
 
-const InventoryDetailList = ({ details, isLoading, formatVND }) => {
-  return (
-    <div>
-      <h3>Chi Tiết Phiếu Nhập</h3>
-      <div className="table-responsive" style={{ transition: 'opacity 0.3s ease' }}>
-        <Table striped bordered hover responsive className={isLoading ? 'opacity-50' : ''}>
-          <thead>
-            <tr>
-              <th>Mã Phiếu</th>
-              <th>Tên Thuốc</th>
-              <th>Số Lượng</th>
-              <th>Giá Nhập</th>
-              <th>Thành Tiền</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan="5" className="text-center">
-                  <Spinner animation="border" variant="primary" />
-                </td>
-              </tr>
-            ) : details.length === 0 ? (
-              <tr>
-                <td colSpan="5" className="text-center">
-                  Trống
-                </td>
-              </tr>
-            ) : (
-              details.map((detail) => (
-                <tr key={detail.id}>
-                  <td>{detail.importId}</td>
-                  <td>{detail.medicineName}</td>
-                  <td>{detail.quantity}</td>
-                  <td>{formatVND(detail.price)}</td>
-                  <td>{formatVND(detail.subTotal)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </Table>
-      </div>
-    </div>
+const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading, suppliers, medicines }) => {
+  const [items, setItems] = useState(
+    isEditMode && inventory?.details
+      ? inventory.details.map(detail => ({
+          medicineId: detail.medicineId || '',
+          quantity: detail.quantity || 0,
+          importPrice: detail.price || 0,
+          subTotal: detail.subTotal || 0,
+        }))
+      : [{ medicineId: '', quantity: 0, importPrice: 0, subTotal: 0 }]
   );
-};
-
-const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading, suppliers }) => {
   const [errors, setErrors] = useState({
     supplierId: '',
     date: '',
-    total: '',
-    note: '',
+    items: [],
   });
 
-  const validateForm = (formData) => {
+  const validateForm = (formData, items) => {
     const newErrors = {
       supplierId: '',
       date: '',
-      total: '',
-      note: '',
+      items: items.map(() => ({ medicineId: '', quantity: '', importPrice: '' })),
     };
     let isValid = true;
 
@@ -196,26 +158,32 @@ const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading, s
       }
     }
 
-    // Validate Total
-    const total = formData.get('total') ? parseFloat(formData.get('total')) : null;
-    if (total === null || isNaN(total)) {
-      newErrors.total = 'Vui lòng nhập tổng tiền';
-      isValid = false;
-    } else if (total < 0) {
-      newErrors.total = 'Tổng tiền không thể âm';
-      isValid = false;
-    } else if (total.toString().replace('.', '').length > 18) {
-      newErrors.total = 'Tổng tiền không được vượt quá 18 chữ số';
-      isValid = false;
-    }
+    // Validate Items
+    items.forEach((item, index) => {
+      if (!item.medicineId) {
+        newErrors.items[index].medicineId = 'Vui lòng chọn thuốc';
+        isValid = false;
+      } else if (!medicines.some(m => m.MedicineId === parseInt(item.medicineId))) {
+        newErrors.items[index].medicineId = 'Thuốc không hợp lệ';
+        isValid = false;
+      }
+      if (!item.quantity || item.quantity <= 0) {
+        newErrors.items[index].quantity = 'Số lượng phải lớn hơn 0';
+        isValid = false;
+      }
+      if (!item.importPrice || item.importPrice <= 0) {
+        newErrors.items[index].importPrice = 'Giá nhập phải lớn hơn 0';
+        isValid = false;
+      }
+    });
 
     // Validate Note
     const note = formData.get('note')?.trim();
-    if (note && note.length > 500) {
-      newErrors.note = 'Ghi chú không được vượt quá 500 ký tự';
+    if (note && note.length > 255) {
+      newErrors.note = 'Ghi chú không được vượt quá 255 ký tự';
       isValid = false;
     } else if (note && (specialCharRegex.test(note) || codePatternRegex.test(note))) {
-      newErrors.note = 'Vui lòng không nhập ký tự đặc biệt hoặc ngôn ngữ code';
+      newErrors.note = 'Ghi chú không được chứa ký tự đặc biệt hoặc mã lập trình';
       isValid = false;
     }
 
@@ -223,22 +191,42 @@ const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading, s
     return isValid;
   };
 
+  const handleAddItem = () => {
+    setItems([...items, { medicineId: '', quantity: 0, importPrice: 0, subTotal: 0 }]);
+  };
+
+  const handleItemChange = (index, field, value) => {
+    const newItems = [...items];
+    newItems[index][field] = value;
+    if (field === 'quantity' || field === 'importPrice') {
+      newItems[index].subTotal = newItems[index].quantity * newItems[index].importPrice;
+    }
+    setItems(newItems);
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    if (validateForm(formData)) {
-      onSubmit(e);
+    if (validateForm(formData, items)) {
+      const totalAmount = items.reduce((sum, item) => sum + item.subTotal, 0);
+      onSubmit(e, items, totalAmount);
     }
   };
 
+  const styles = {
+    itemGroup: { border: '1px solid #ddd', padding: '10px', marginBottom: '10px', borderRadius: '4px' },
+    btnAddItem: { backgroundColor: '#28a745', color: 'white', padding: '8px 15px', borderRadius: '4px', border: 'none', cursor: 'pointer' },
+    btnAddItemHover: { backgroundColor: '#218838' },
+  };
+  console.log(medicines);
   return (
-    <div>
-      <h3>{isEditMode ? 'Sửa Phiếu Nhập' : 'Thêm Phiếu Nhập'}</h3>
+    <div className="card" style={{ backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px', marginBottom: '20px' }}>
+      <h2>{isEditMode ? 'Sửa Phiếu Nhập' : 'Thêm Phiếu Nhập'}</h2>
       <Form onSubmit={handleSubmit}>
         <Row>
           <Col md={6}>
             <Form.Group className="mb-3">
-              <Form.Label>Nhà Cung Cấp</Form.Label>
+              <Form.Label>Nhà Cung Cấp <span className="text-danger">*</span></Form.Label>
               <Form.Select
                 name="supplierId"
                 defaultValue={isEditMode ? inventory?.supplierId : ''}
@@ -251,57 +239,123 @@ const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading, s
                   </option>
                 ))}
               </Form.Select>
-              <Form.Text className="text-danger">{errors.supplierId}</Form.Text>
+              <Form.Control.Feedback type="invalid">{errors.supplierId}</Form.Control.Feedback>
             </Form.Group>
           </Col>
           <Col md={6}>
             <Form.Group className="mb-3">
-              <Form.Label>Ngày Nhập</Form.Label>
+              <Form.Label>Ngày Nhập <span className="text-danger">*</span></Form.Label>
               <Form.Control
                 type="date"
                 name="date"
                 defaultValue={isEditMode ? inventory?.date : ''}
                 isInvalid={!!errors.date}
+                max={new Date().toISOString().split('T')[0]}
               />
-              <Form.Text className="text-danger">{errors.date}</Form.Text>
+              <Form.Control.Feedback type="invalid">{errors.date}</Form.Control.Feedback>
             </Form.Group>
           </Col>
         </Row>
         <Row>
-          <Col md={6}>
-            <Form.Group className="mb-3">
-              <Form.Label>Tổng Tiền (VNĐ)</Form.Label>
-              <Form.Control
-                type="number"
-                name="total"
-                defaultValue={isEditMode ? inventory?.total : ''}
-                placeholder="Nhập tổng tiền"
-                step="0.01"
-                isInvalid={!!errors.total}
-              />
-              <Form.Text className="text-danger">{errors.total}</Form.Text>
-            </Form.Group>
-          </Col>
-          <Col md={6}>
+          <Col md={12}>
             <Form.Group className="mb-3">
               <Form.Label>Ghi Chú</Form.Label>
               <Form.Control
                 as="textarea"
                 name="note"
                 defaultValue={isEditMode ? inventory?.note : ''}
-                placeholder="Nhập ghi chú (tùy chọn)"
+                placeholder="Nhập ghi chú (tùy chọn, tối đa 255 ký tự)"
+                rows={4}
                 isInvalid={!!errors.note}
               />
-              <Form.Text className="text-danger">{errors.note}</Form.Text>
+              <Form.Control.Feedback type="invalid">{errors.note}</Form.Control.Feedback>
             </Form.Group>
           </Col>
         </Row>
-        <div className="d-flex justify-content-end gap-2">
-          <Button variant="secondary" onClick={onCancel} disabled={isLoading}>
+        <h3>Chi Tiết Nhập Kho</h3>
+        {items.map((item, index) => (
+          <div key={index} style={styles.itemGroup}>
+            <Row>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Tên Thuốc <span className="text-danger">*</span></Form.Label>
+                  <Form.Select
+                    name={`medicineId[${index}]`}
+                    value={item.medicineId}
+                    onChange={(e) => handleItemChange(index, 'medicineId', e.target.value)}
+                    isInvalid={!!errors.items[index].medicineId}
+                  >
+                    <option value="" disabled>Chọn thuốc</option>
+                    {medicines.map((medicine) => (
+                      <option key={medicine.MedicineId} value={medicine.MedicineId}>
+                        {medicine.MedicineName}
+                      </option>
+                    ))}
+                  </Form.Select>
+                  <Form.Control.Feedback type="invalid">{errors.items[index].medicineId}</Form.Control.Feedback>
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Số Lượng <span className="text-danger">*</span></Form.Label>
+                  <Form.Control
+                    type="number"
+                    name={`quantity[${index}]`}
+                    value={item.quantity}
+                    onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value) || 0)}
+                    min="0"
+                    isInvalid={!!errors.items[index].quantity}
+                  />
+                  <Form.Control.Feedback type="invalid">{errors.items[index].quantity}</Form.Control.Feedback>
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Giá Nhập (VNĐ) <span className="text-danger">*</span></Form.Label>
+                  <Form.Control
+                    type="number"
+                    name={`importPrice[${index}]`}
+                    value={item.importPrice}
+                    onChange={(e) => handleItemChange(index, 'importPrice', parseFloat(e.target.value) || 0)}
+                    step="0.01"
+                    min="0"
+                    isInvalid={!!errors.items[index].importPrice}
+                  />
+                  <Form.Control.Feedback type="invalid">{errors.items[index].importPrice}</Form.Control.Feedback>
+                </Form.Group>
+              </Col>
+            </Row>
+          </div>
+        ))}
+        <Button
+          style={styles.btnAddItem}
+          onMouseOver={(e) => (e.target.style.backgroundColor = styles.btnAddItemHover.backgroundColor)}
+          onMouseOut={(e) => (e.target.style.backgroundColor = styles.btnAddItem.backgroundColor)}
+          onClick={handleAddItem}
+          disabled={isLoading}
+        >
+          + Thêm Mục
+        </Button>
+        <div className="d-flex justify-content-end gap-2 mt-3">
+          <Button
+            variant="secondary"
+            onClick={onCancel}
+            disabled={isLoading}
+            style={{ backgroundColor: '#6c757d', border: 'none' }}
+            onMouseOver={(e) => (e.target.style.backgroundColor = '#5a6268')}
+            onMouseOut={(e) => (e.target.style.backgroundColor = '#6c757d')}
+          >
             Hủy
           </Button>
-          <Button variant="primary" type="submit" disabled={isLoading}>
-            {isLoading ? <Spinner size="sm" /> : isEditMode ? 'Lưu' : 'Thêm'}
+          <Button
+            variant="primary"
+            type="submit"
+            disabled={isLoading}
+            style={{ backgroundColor: '#00448D', border: 'none' }}
+            onMouseOver={(e) => (e.target.style.backgroundColor = '#003366')}
+            onMouseOut={(e) => (e.target.style.backgroundColor = '#00448D')}
+          >
+            {isLoading ? <Spinner size="sm" /> : isEditMode ? 'Lưu' : 'Thêm Phiếu Nhập'}
           </Button>
         </div>
       </Form>
@@ -377,7 +431,7 @@ const InventoryDetail = ({ inventory, details, supplier, isLoading, formatVND, o
           <div style={styles.infoItem}><strong>Email:</strong> {supplier?.ContactEmail || 'N/A'}</div>
           <div style={styles.infoItem}><strong>Số Điện Thoại:</strong> {supplier?.ContactPhone || 'N/A'}</div>
           <div style={styles.infoItem}><strong>Địa Chỉ:</strong> {supplier?.Address || 'N/A'}</div>
-          <div style={styles.infoItem}><strong>Mô Tả:</strong> {supplier?.Description || 'N/A'}</div>
+          <div style={styles.infoItem}><strong>Mô Tả:</strong> {supplier?.Description || 'Không có'}</div>
         </div>
         <div style={styles.infoSection}>
           <h3 style={styles.infoSectionH3}>Thông Tin Phiếu</h3>
@@ -441,6 +495,7 @@ const AdminInventory = () => {
   const [inventories, setInventories] = useState([]);
   const [details, setDetails] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
+  const [medicines, setMedicines] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [pageCount, setPageCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -470,20 +525,33 @@ const AdminInventory = () => {
     try {
       setIsLoading(true);
       const response = await fetch(`${API_BASE_URL}/api/suppliers`, {
-        headers: {
-          'Accept': 'application/json',
-        },
+        headers: { 'Accept': 'application/json' },
         credentials: 'include',
       });
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
       const data = await response.json();
-      console.log('Suppliers data:', data.data);
       setSuppliers(data.data || []);
     } catch (error) {
       console.error('Error fetching suppliers:', error);
       showToast('error', `Lỗi khi tải danh sách nhà cung cấp: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const fetchMedicines = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(`${API_BASE_URL}/api/medicines`, {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+      const data = await response.json();
+      setMedicines(data.data || []);
+    } catch (error) {
+      console.error('Error fetching medicines:', error);
+      showToast('error', `Lỗi khi tải danh sách thuốc: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -503,14 +571,10 @@ const AdminInventory = () => {
       try {
         setIsLoading(true);
         const response = await fetch(`${API_BASE_URL}/api/import-bills?page=${page}`, {
-          headers: {
-            'Accept': 'application/json',
-          },
+          headers: { 'Accept': 'application/json' },
           credentials: 'include',
         });
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
         const paginator = await response.json();
         const mappedData = paginator.data.map(item => ({
           id: item.ImportId,
@@ -519,7 +583,6 @@ const AdminInventory = () => {
           total: item.TotalAmount,
           note: item.Notes || '',
         }));
-        console.log('Inventories data:', mappedData);
         cache.current.set(page, { data: mappedData, last_page: paginator.last_page });
         setInventories(mappedData);
         setPageCount(paginator.last_page);
@@ -537,14 +600,10 @@ const AdminInventory = () => {
     try {
       setIsLoading(true);
       const response = await fetch(`${API_BASE_URL}/api/import-bills/${importId}`, {
-        headers: {
-          'Accept': 'application/json',
-        },
+        headers: { 'Accept': 'application/json' },
         credentials: 'include',
       });
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
       const data = await response.json();
       const mappedInventory = {
         id: data.data.ImportId,
@@ -552,10 +611,12 @@ const AdminInventory = () => {
         date: data.data.ImportDate,
         total: data.data.TotalAmount,
         note: data.data.Notes || '',
+        details: data.data.import_details || [],
       };
       const mappedDetails = (data.data.import_details || []).map(detail => ({
         id: detail.ImportDetailId,
         importId: detail.ImportId,
+        medicineId: detail.MedicineId,
         medicineName: detail.medicine?.MedicineName || 'N/A',
         quantity: detail.Quantity,
         price: detail.ImportPrice,
@@ -574,6 +635,7 @@ const AdminInventory = () => {
         supplier: mappedSupplier,
         details: mappedDetails
       });
+      setDetails(mappedDetails);
     } catch (error) {
       console.error('Error fetching inventory details:', error);
       showToast('error', `Lỗi khi tải chi tiết phiếu nhập: ${error.message}`);
@@ -589,22 +651,16 @@ const AdminInventory = () => {
           method: 'GET',
           credentials: 'include',
         });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch CSRF token: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`Failed to fetch CSRF token: ${response.status}`);
         const token = document.cookie
           .split('; ')
           .find((row) => row.startsWith('XSRF-TOKEN='))
           ?.split('=')[1];
-        if (!token) {
-          throw new Error('CSRF token not found in cookies');
-        }
+        if (!token) throw new Error('CSRF token not found in cookies');
         return decodeURIComponent(token);
       } catch (error) {
         console.error(`Attempt ${attempt} to fetch CSRF token failed:`, error);
-        if (attempt === retries) {
-          throw new Error(`Không thể lấy CSRF token sau ${retries} lần thử: ${error.message}`);
-        }
+        if (attempt === retries) throw new Error(`Không thể lấy CSRF token sau ${retries} lần thử: ${error.message}`);
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
     }
@@ -624,7 +680,6 @@ const AdminInventory = () => {
           },
           credentials: 'include',
         });
-
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
@@ -655,12 +710,27 @@ const AdminInventory = () => {
     setInventoryToDelete(null);
   };
 
+  const handleShowAddInventory = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      // Đảm bảo dữ liệu nhà cung cấp và thuốc đã được tải
+      if (suppliers.length === 0) await fetchSuppliers();
+      if (medicines.length === 0) await fetchMedicines();
+      setEditInventory(null);
+      setDetails([]);
+      setCurrentView('add');
+    } catch (error) {
+      console.error('Error preparing add inventory form:', error);
+      showToast('error', `Lỗi khi hiển thị form thêm phiếu nhập: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchSuppliers, fetchMedicines, suppliers, medicines]);
+
   const handleShowEditForm = (inventory) => {
     setEditInventory(inventory);
     setCurrentView('edit');
-    if (inventory) {
-      fetchInventoryDetails(inventory.id);
-    }
+    if (inventory) fetchInventoryDetails(inventory.id);
   };
 
   const handleShowDetail = (inventoryId) => {
@@ -669,13 +739,9 @@ const AdminInventory = () => {
   };
 
   const handleCancelForm = () => {
-    try {
-      setCurrentView('list');
-      setEditInventory(null);
-      setDetails([]);
-    } catch (error) {
-      showToast('error', 'Hủy thất bại');
-    }
+    setCurrentView('list');
+    setEditInventory(null);
+    setDetails([]);
   };
 
   const handleBack = () => {
@@ -684,7 +750,7 @@ const AdminInventory = () => {
     setDetails([]);
   };
 
-  const handleAddInventory = async (e) => {
+  const handleAddInventory = async (e, items, totalAmount) => {
     try {
       setIsLoading(true);
       const token = await getCsrfToken();
@@ -692,8 +758,14 @@ const AdminInventory = () => {
       const data = {
         SupplierId: parseInt(formData.get('supplierId')),
         ImportDate: formData.get('date'),
-        TotalAmount: parseFloat(formData.get('total')),
-        Notes: formData.get('note') || '',
+        TotalAmount: totalAmount,
+        Notes: formData.get('note')?.trim() || null,
+        import_details: items.map(item => ({
+          MedicineId: parseInt(item.medicineId),
+          Quantity: parseInt(item.quantity),
+          ImportPrice: parseFloat(item.importPrice),
+          SubTotal: parseFloat(item.subTotal),
+        })),
       };
 
       const response = await fetch(`${API_BASE_URL}/api/import-bills`, {
@@ -710,8 +782,12 @@ const AdminInventory = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
+        const errorMessage = errorData.errors
+          ? Object.values(errorData.errors).flat().join(', ')
+          : errorData.message || `Lỗi HTTP! Status: ${response.status}`;
+        throw new Error(errorMessage);
       }
+
       const result = await response.json();
       showToast('success', result.message || 'Thêm phiếu nhập thành công');
       cache.current.clear();
@@ -730,7 +806,7 @@ const AdminInventory = () => {
     }
   };
 
-  const handleEditInventory = async (e) => {
+  const handleEditInventory = async (e, items, totalAmount) => {
     try {
       setIsLoading(true);
       const token = await getCsrfToken();
@@ -738,8 +814,14 @@ const AdminInventory = () => {
       const data = {
         SupplierId: parseInt(formData.get('supplierId')),
         ImportDate: formData.get('date'),
-        TotalAmount: parseFloat(formData.get('total')),
-        Notes: formData.get('note') || '',
+        TotalAmount: totalAmount,
+        Notes: formData.get('note')?.trim() || null,
+        import_details: items.map(item => ({
+          MedicineId: parseInt(item.medicineId),
+          Quantity: parseInt(item.quantity),
+          ImportPrice: parseFloat(item.importPrice),
+          SubTotal: parseFloat(item.subTotal),
+        })),
       };
 
       const response = await fetch(`${API_BASE_URL}/api/import-bills/${editInventory.id}`, {
@@ -756,8 +838,12 @@ const AdminInventory = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
+        const errorMessage = errorData.errors
+          ? Object.values(errorData.errors).flat().join(', ')
+          : errorData.message || `Lỗi HTTP! Status: ${response.status}`;
+        throw new Error(errorMessage);
       }
+
       const result = await response.json();
       showToast('success', result.message || 'Sửa phiếu nhập thành công');
       cache.current.clear();
@@ -779,13 +865,14 @@ const AdminInventory = () => {
 
   useEffect(() => {
     if (currentView === 'list') {
-      fetchSuppliers();
       fetchInventories(1);
+      fetchSuppliers();
+      fetchMedicines();
     }
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [currentView, fetchInventories, fetchSuppliers]);
+  }, [currentView, fetchInventories, fetchSuppliers, fetchMedicines]);
 
   const handlePageChange = ({ selected }) => {
     const nextPage = selected + 1;
@@ -800,7 +887,7 @@ const AdminInventory = () => {
     <div style={{ display: 'flex', fontFamily: "'Segoe UI', sans-serif", margin: 0, backgroundColor: '#f8f9fa' }}>
       <Taskbar />
       <div style={{ position: 'relative', width: '100%', flexGrow: 1, marginLeft: '5px', padding: '30px' }}>
-        <h1 className="mb-1">Quản Lý Kho</h1>
+        <h1 className="mb-4">Quản Lý Kho</h1>
         {currentView === 'list' && (
           <>
             <InventoryList
@@ -809,6 +896,7 @@ const AdminInventory = () => {
               formatVND={formatVND}
               handleShowDeleteModal={handleShowDeleteModal}
               handleShowDetail={handleShowDetail}
+              handleShowAddInventory={handleShowAddInventory}
               handleShowEditForm={handleShowEditForm}
               pageCount={pageCount}
               currentPage={currentPage}
@@ -824,6 +912,7 @@ const AdminInventory = () => {
             onCancel={handleCancelForm}
             isLoading={isLoading}
             suppliers={suppliers}
+            medicines={medicines}
           />
         )}
         {currentView === 'edit' && (
@@ -834,6 +923,7 @@ const AdminInventory = () => {
             onCancel={handleCancelForm}
             isLoading={isLoading}
             suppliers={suppliers}
+            medicines={medicines}
           />
         )}
         {currentView === 'detail' && selectedInventory && (

@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
 
 class ImportBillController extends Controller
@@ -35,39 +36,8 @@ class ImportBillController extends Controller
     }
 
     /**
-     * Store a newly created import bill in storage.
+     * Store a newly created import bill with details in storage.
      */
-    // public function store(Request $request)
-    // {
-    //     $validator = Validator::make($request->all(), [
-    //         'SupplierId' => 'nullable|exists:suppliers,SupplierId',
-    //         'ImportDate' => 'nullable|date',
-    //         'TotalAmount' => 'required|numeric|min:0',
-    //         'Notes' => 'nullable|string|max:255',
-    //         'CreatedBy' => 'nullable|exists:users,id'
-    //     ]);
-
-    //     if ($validator->fails()) {
-    //         return response()->json([
-    //             'status' => 'error',
-    //             'errors' => $validator->errors()
-    //         ], 422);
-    //     }
-
-    //     $importBill = ImportBill::create([
-    //         'SupplierId' => $request->SupplierId,
-    //         'ImportDate' => $request->ImportDate ?? Carbon::now(),
-    //         'TotalAmount' => $request->TotalAmount,
-    //         'Notes' => $request->Notes,
-    //         'CreatedBy' => $request->CreatedBy ?? (Auth::user() ? Auth::user()->id : null)
-    //     ]);
-
-    //     return response()->json([
-    //         'status' => 'success',
-    //         'data' => $importBill->load(['supplier', 'user', 'import_details'])
-    //     ], 201);
-    // }
-
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -75,28 +45,88 @@ class ImportBillController extends Controller
             'ImportDate' => 'nullable|date',
             'TotalAmount' => 'required|numeric|min:0',
             'Notes' => 'nullable|string|max:255',
-            // Bỏ yêu cầu 'CreatedBy' => 'nullable|exists:users,id'
+            'import_details' => 'required|array|min:1',
+            'import_details.*.MedicineId' => 'required|exists:medicines,MedicineId',
+            'import_details.*.Quantity' => 'required|integer|min:1',
+            'import_details.*.ImportPrice' => 'required|numeric|min:0',
+            'import_details.*.SubTotal' => 'required|numeric|min:0',
+        ], [
+            'SupplierId.exists' => 'Nhà cung cấp không tồn tại.',
+            'ImportDate.date' => 'Ngày nhập không hợp lệ.',
+            'TotalAmount.required' => 'Tổng tiền là bắt buộc.',
+            'TotalAmount.numeric' => 'Tổng tiền phải là số.',
+            'TotalAmount.min' => 'Tổng tiền không được nhỏ hơn 0.',
+            'Notes.max' => 'Ghi chú không được vượt quá 255 ký tự.',
+            'import_details.required' => 'Phải có ít nhất một mục chi tiết nhập kho.',
+            'import_details.*.MedicineId.required' => 'Vui lòng chọn thuốc cho mục #{index}.',
+            'import_details.*.MedicineId.exists' => 'Thuốc không hợp lệ ở mục #{index}.',
+            'import_details.*.Quantity.required' => 'Số lượng là bắt buộc ở mục #{index}.',
+            'import_details.*.Quantity.integer' => 'Số lượng phải là số nguyên ở mục #{index}.',
+            'import_details.*.Quantity.min' => 'Số lượng phải lớn hơn 0 ở mục #{index}.',
+            'import_details.*.ImportPrice.required' => 'Giá nhập là bắt buộc ở mục #{index}.',
+            'import_details.*.ImportPrice.numeric' => 'Giá nhập phải là số ở mục #{index}.',
+            'import_details.*.ImportPrice.min' => 'Giá nhập không được nhỏ hơn 0 ở mục #{index}.',
+            'import_details.*.SubTotal.required' => 'Thành tiền là bắt buộc ở mục #{index}.',
+            'import_details.*.SubTotal.numeric' => 'Thành tiền phải là số ở mục #{index}.',
+            'import_details.*.SubTotal.min' => 'Thành tiền không được nhỏ hơn 0 ở mục #{index}.',
         ]);
 
         if ($validator->fails()) {
+            $errors = $validator->errors()->toArray();
+            foreach ($errors as $key => $error) {
+                if (preg_match('/import_details\.(\d+)\./', $key, $matches)) {
+                    $index = $matches[1] + 1;
+                    $errors[$key] = array_map(fn($msg) => str_replace('#{index}', $index, $msg), $error);
+                }
+            }
             return response()->json([
                 'status' => 'error',
-                'errors' => $validator->errors()
+                'errors' => $errors
             ], 422);
         }
 
-        $importBill = ImportBill::create([
-            'SupplierId' => $request->SupplierId,
-            'ImportDate' => $request->ImportDate ?? Carbon::now(),
-            'TotalAmount' => $request->TotalAmount,
-            'Notes' => $request->Notes,
-            'CreatedBy' => 1, // Gán cứng một ID người dùng mặc định (ví dụ: 1)
-        ]);
+        $totalAmount = array_sum(array_column($request->import_details, 'SubTotal'));
+        if (abs($totalAmount - $request->TotalAmount) > 0.01) {
+            return response()->json([
+                'status' => 'error',
+                'errors' => ['TotalAmount' => 'Tổng tiền không khớp với tổng thành tiền của các mục.']
+            ], 422);
+        }
 
-        return response()->json([
-            'status' => 'success',
-            'data' => $importBill->load(['supplier', 'user', 'import_details'])
-        ], 201);
+        try {
+            $importBill = DB::transaction(function () use ($request) {
+                $importBill = ImportBill::create([
+                    'SupplierId' => $request->SupplierId,
+                    'ImportDate' => $request->ImportDate ?? Carbon::now()->toDateString(),
+                    'TotalAmount' => $request->TotalAmount,
+                    'Notes' => $request->Notes,
+                    'CreatedBy' => Auth::check() ? Auth::user()->id : 1,
+                ]);
+
+                foreach ($request->import_details as $detail) {
+                    ImportDetail::create([
+                        'ImportId' => $importBill->ImportId,
+                        'MedicineId' => $detail['MedicineId'],
+                        'Quantity' => $detail['Quantity'],
+                        'ImportPrice' => $detail['ImportPrice'],
+                        'SubTotal' => $detail['SubTotal'],
+                    ]);
+                }
+
+                return $importBill;
+            });
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Thêm phiếu nhập thành công',
+                'data' => $importBill->load(['supplier', 'user', 'import_details'])
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Lỗi khi thêm phiếu nhập: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -130,36 +160,89 @@ class ImportBillController extends Controller
             'ImportDate' => 'nullable|date',
             'TotalAmount' => 'required|numeric|min:0',
             'Notes' => 'nullable|string|max:255',
-            // 'CreatedBy' => 'nullable|exists:users,id'
+            'import_details' => 'required|array|min:1',
+            'import_details.*.MedicineId' => 'required|exists:medicines,MedicineId',
+            'import_details.*.Quantity' => 'required|integer|min:1',
+            'import_details.*.ImportPrice' => 'required|numeric|min:0',
+            'import_details.*.SubTotal' => 'required|numeric|min:0',
+        ], [
+            'SupplierId.exists' => 'Nhà cung cấp không tồn tại.',
+            'ImportDate.date' => 'Ngày nhập không hợp lệ.',
+            'TotalAmount.required' => 'Tổng tiền là bắt buộc.',
+            'TotalAmount.numeric' => 'Tổng tiền phải là số.',
+            'TotalAmount.min' => 'Tổng tiền không được nhỏ hơn 0.',
+            'Notes.max' => 'Ghi chú không được vượt quá 255 ký tự.',
+            'import_details.required' => 'Phải có ít nhất một mục chi tiết nhập kho.',
+            'import_details.*.MedicineId.required' => 'Vui lòng chọn thuốc cho mục #{index}.',
+            'import_details.*.MedicineId.exists' => 'Thuốc không hợp lệ ở mục #{index}.',
+            'import_details.*.Quantity.required' => 'Số lượng là bắt buộc ở mục #{index}.',
+            'import_details.*.Quantity.integer' => 'Số lượng phải là số nguyên ở mục #{index}.',
+            'import_details.*.Quantity.min' => 'Số lượng phải lớn hơn 0 ở mục #{index}.',
+            'import_details.*.ImportPrice.required' => 'Giá nhập là bắt buộc ở mục #{index}.',
+            'import_details.*.ImportPrice.numeric' => 'Giá nhập phải là số ở mục #{index}.',
+            'import_details.*.ImportPrice.min' => 'Giá nhập không được nhỏ hơn 0 ở mục #{index}.',
+            'import_details.*.SubTotal.required' => 'Thành tiền là bắt buộc ở mục #{index}.',
+            'import_details.*.SubTotal.numeric' => 'Thành tiền phải là số ở mục #{index}.',
+            'import_details.*.SubTotal.min' => 'Thành tiền không được nhỏ hơn 0 ở mục #{index}.',
         ]);
 
         if ($validator->fails()) {
+            $errors = $validator->errors()->toArray();
+            foreach ($errors as $key => $error) {
+                if (preg_match('/import_details\.(\d+)\./', $key, $matches)) {
+                    $index = $matches[1] + 1;
+                    $errors[$key] = array_map(fn($msg) => str_replace('#{index}', $index, $msg), $error);
+                }
+            }
             return response()->json([
                 'status' => 'error',
-                'errors' => $validator->errors()
+                'errors' => $errors
             ], 422);
         }
 
-        // $importBill->update([
-        //     'SupplierId' => $request->SupplierId ?? $importBill->SupplierId,
-        //     'ImportDate' => $request->ImportDate ?? $importBill->ImportDate,
-        //     'TotalAmount' => $request->TotalAmount,
-        //     'Notes' => $request->Notes ?? $importBill->Notes,
-        //     'CreatedBy' => $request->CreatedBy ?? $importBill->CreatedBy
-        // ]);
+        $totalAmount = array_sum(array_column($request->import_details, 'SubTotal'));
+        if (abs($totalAmount - $request->TotalAmount) > 0.01) {
+            return response()->json([
+                'status' => 'error',
+                'errors' => ['TotalAmount' => 'Tổng tiền không khớp với tổng thành tiền của các mục.']
+            ], 422);
+        }
 
-        $importBill->update([
-            'SupplierId' => $request->SupplierId ?? $importBill->SupplierId,
-            'ImportDate' => $request->ImportDate ?? $importBill->ImportDate,
-            'TotalAmount' => $request->TotalAmount,
-            'Notes' => $request->Notes ?? $importBill->Notes,
-            'CreatedBy' => 1, // Gán cứng ID người dùng mặc định
-        ]);
+        try {
+            $importBill = DB::transaction(function () use ($request, $importBill) {
+                $importBill->update([
+                    'SupplierId' => $request->SupplierId ?? $importBill->SupplierId,
+                    'ImportDate' => $request->ImportDate ?? $importBill->ImportDate,
+                    'TotalAmount' => $request->TotalAmount,
+                    'Notes' => $request->Notes ?? $importBill->Notes,
+                    'CreatedBy' => Auth::check() ? Auth::user()->id : 1,
+                ]);
 
-        return response()->json([
-            'status' => 'success',
-            'data' => $importBill->load(['supplier', 'user', 'import_details'])
-        ], 200);
+                $importBill->import_details()->delete();
+                foreach ($request->import_details as $detail) {
+                    ImportDetail::create([
+                        'ImportId' => $importBill->ImportId,
+                        'MedicineId' => $detail['MedicineId'],
+                        'Quantity' => $detail['Quantity'],
+                        'ImportPrice' => $detail['ImportPrice'],
+                        'SubTotal' => $detail['SubTotal'],
+                    ]);
+                }
+
+                return $importBill;
+            });
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Cập nhật phiếu nhập thành công',
+                'data' => $importBill->load(['supplier', 'user', 'import_details'])
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Lỗi khi cập nhật phiếu nhập: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -172,7 +255,7 @@ class ImportBillController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Import bill deleted successfully'
+            'message' => 'Xóa phiếu nhập thành công'
         ], 200);
     }
 }
