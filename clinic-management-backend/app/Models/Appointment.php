@@ -51,7 +51,7 @@ class Appointment extends Model
 		'ScheduleId' => 'int',
 		'RecordId' => 'int',
 		'AppointmentDate' => 'datetime',
-		'AppointmentTime' => 'time without time zone',
+		'AppointmentTime' => 'string',
 		'FollowUpDate' => 'datetime',
 		'CreatedAt' => 'datetime',
 		'CreatedBy' => 'int'
@@ -114,4 +114,10 @@ class Appointment extends Model
 	{
 		return $this->hasMany(Prescription::class, 'AppointmentId');
 	}
+
+	public function patient()
+	{
+		return $this->belongsTo(User::class, 'PatientId', 'UserId');
+	}
+
 }

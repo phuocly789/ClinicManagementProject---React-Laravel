@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\MedicinesController;
 use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\Doctor\AppointmentsController;
+use App\Http\Controllers\API\Doctor\ExaminationController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -27,5 +28,15 @@ Route::delete('/medicines/{id}', [MedicinesController::class, 'destroy']);
 
 
 
-Route::get('today-patients', [AppointmentsController::class, 'todayPatients']);
-Route::apiResource('appointments', AppointmentsController::class); // CRUD /doctor/appointments
+// ✅ Nhóm route cho Bác sĩ
+Route::prefix('doctor')->group(function () {
+    // Lấy danh sách bệnh nhân hôm nay (Today Section)
+    Route::get('/today-patients', [AppointmentsController::class, 'todayPatients']);
+    Route::apiResource('appointments', AppointmentsController::class);
+
+    // ExaminationController
+    Route::get('/examination/today', [ExaminationController::class, 'todayPatients']);
+    Route::get('/examination/{appointmentId}', [ExaminationController::class, 'show']);
+    Route::post('/examination/complete/{appointmentId}', [ExaminationController::class, 'complete']);
+});
+

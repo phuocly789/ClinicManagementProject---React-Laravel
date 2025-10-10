@@ -16,33 +16,78 @@ class AppointmentsController extends Controller
      */
     public function todayPatients()
     {
-        $today = now()->format('Y-m-d'); // Ngày hôm nay: 2025-10-09
-        $staffId = Auth::id(); // ID bác sĩ hiện tại (từ Sanctum token)
+        $today = now()->format('Y-m-d');
 
-        $appointments = Appointment::where('StaffId', $staffId)
+        $appointments = Appointment::with('patient')
             ->whereDate('AppointmentDate', $today)
-            ->with('patient') // Load relation patient để lấy name, age, etc.
-            ->orderBy('AppointmentTime') // Sắp xếp theo giờ
             ->get()
             ->map(function ($appointment) {
                 $patient = $appointment->patient;
-                $status = $appointment->Status ?? 'waiting'; // Đảm bảo có status
+
+                // Mapping trạng thái
+                $statusRaw = $appointment->Status ?? 'waiting';
+                switch ($statusRaw) {
+                    case 'waiting':
+                        $status = 'Đang chờ';
+                        break;
+                    case 'in-progress':
+                        $status = 'Đang khám';
+                        break;
+                    case 'done':
+                        $status = 'Đã khám';
+                        break;
+                    default:
+                        $status = ucfirst($statusRaw);
+                        break;
+                }
+
+                // Format giờ
+                $time = $appointment->AppointmentTime instanceof \Carbon\Carbon
+                    ? $appointment->AppointmentTime->format('H:i')
+                    : (is_string($appointment->AppointmentTime) ? substr($appointment->AppointmentTime, 0, 5) : '00:00');
+
+                // Tính tuổi
+                $age = !empty($patient?->DateOfBirth) ? \Carbon\Carbon::parse($patient->DateOfBirth)->age : 0;
 
                 return [
-                    'id' => $appointment->AppointmentId, // PK của Appointment
-                    'time' => $appointment->AppointmentTime->format('H:i'), // Format '09:30'
-                    'name' => $patient?->name ?? 'N/A', // Tên bệnh nhân
-                    'status' => $status, // waiting, in-progress, done
-                    'age' => $patient?->age ?? 0,
-                    'gender' => $patient?->gender ?? 'N/A',
-                    'phone' => $patient?->phone ?? 'N/A',
-                    'patient_id' => $patient?->id ?? null, // ID bệnh nhân cho prescriptions/history
-                    'notes' => $appointment->notes ?? '', // Nếu model có field notes
+                    'id' => $appointment->AppointmentId,
+                    'date' => $appointment->AppointmentDate,
+                    'time' => $time,
+                    'name' => $patient?->FullName ?? 'N/A',
+                    'status' => $status,
+                    'age' => $age,
+                    'gender' => $patient?->Gender ?? 'N/A',
+                    'phone' => $patient?->Phone ?? 'N/A',
+                    'patient_id' => $patient?->UserId ?? null,
+                    'notes' => $appointment->notes ?? '',
                 ];
-            });
+            })
+            // Lọc chỉ 3 trạng thái
+            ->filter(function ($appointment) {
+                return in_array($appointment['status'], ['Đang chờ', 'Đang khám', 'Đã khám']);
+            })
+            // Sắp xếp theo priority status và giờ
+            ->sort(function ($a, $b) {
+                $priority = ['Đang chờ' => 1, 'Đang khám' => 2, 'Đã khám' => 3];
 
-        return response()->json($appointments); // Trả JSON cho React
+                $pa = $priority[$a['status']] ?? 99;
+                $pb = $priority[$b['status']] ?? 99;
+
+                if ($pa !== $pb) {  
+                    return $pa <=> $pb; // Status ưu tiên trước
+                }
+
+                // Cùng status → so giờ tăng dần
+                return strtotime($a['time']) <=> strtotime($b['time']);
+            })
+            ->values(); // Reset index
+
+        return response()->json($appointments);
     }
+
+
+
+
 
     // Các method CRUD cơ bản (từ --api flag), customize nếu cần
     public function index(Request $request)

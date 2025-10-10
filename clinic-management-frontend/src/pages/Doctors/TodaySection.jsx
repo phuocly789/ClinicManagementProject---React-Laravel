@@ -1,5 +1,4 @@
-// import { editableInputTypes } from "@testing-library/user-event/dist/utils";
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   Card,
   ListGroup,
@@ -12,12 +11,17 @@ import {
   Toast,
   ToastContainer,
   Modal,
+  Spinner,
 } from "react-bootstrap";
-import PrescriptionModalContent from './PrescriptionModalContent'; // Giả sử đường dẫn đến component modal
+// import Swal from 'sweetalert2';
+import PrescriptionModalContent from './PrescriptionModalContent';
+
+const API_BASE_URL = 'http://localhost:8000';
 
 const TodaySection = ({
   currentSection = "today",
   prescriptionRows = [],
+  setPrescriptionRows = () => { },
   removePrescription = () => { },
   editPrescription = () => { },
   symptoms = "",
@@ -26,18 +30,24 @@ const TodaySection = ({
   setDiagnosis = () => { },
   tests = { test1: false, test2: false, test3: true },
   setTests = () => { },
-  openPrescriptionModal = () => { }, // Giữ prop cũ nếu cần, nhưng giờ dùng internal modal
-  handleExaminationSubmit = (e) => e.preventDefault(),
+  requestedTests = {},
+  setRequestedTests = () => { },
+  openPrescriptionModal = () => { },
   handleTempSave = () => { },
   selectedTodayPatient = null,
   setSelectedTodayPatient = () => { },
 }) => {
-  const [requestedTests, setRequestedTests] = useState({});
+  const [todayPatients, setTodayPatients] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState({ show: false, message: "", variant: "" });
   const [showModal, setShowModal] = useState(false);
   const [defaultData, setDefaultData] = useState(null);
   const [editIndex, setEditIndex] = useState(null);
   const printRef = useRef(null);
+  const cache = useRef(new Map());
+  const debounceRef = useRef(null);
+
+  const isFormDisabled = selectedTodayPatient && selectedTodayPatient?.status === 'Đang khám' ? false : true;
 
   const testLabels = {
     test1: "Xét nghiệm công thức máu",
@@ -45,29 +55,36 @@ const TodaySection = ({
     test3: "Nội soi tai mũi họng"
   };
 
-  const todayPatients = [
-    { time: "09:30", name: "Nguyễn Văn An", status: "done", age: 35, gender: "Nam", phone: "0912345678" },
-    { time: "09:45", name: "Trần Thị Mỹ Linh", status: "in-progress", active: true, age: 28, gender: "Nữ", phone: "0987654321" },
-    { time: "10:00", name: "Phạm Hùng Dũng", status: "waiting", age: 40, gender: "Nam", phone: "0934567890" },
-    { time: "10:15", name: "Lê Văn Tú", status: "waiting", age: 25, gender: "Nam", phone: "0901234567" },
-    { time: "10:30", name: "Hoàng Thị Mai", status: "waiting", age: 32, gender: "Nữ", phone: "0971234567" },
-  ];
-
   const getStatusVariant = (status) => {
-    switch (status) {
+    if (!status) return "secondary";
+
+    // Hỗ trợ cả tiếng Việt và tiếng Anh
+    switch (status.toLowerCase()) {
       case "done":
-        return "secondary";
+      case "đã khám":
+        return "success"; // Màu xanh
+
       case "in-progress":
-        return "info";
+      case "đang khám":
+        return "info"; // Màu xanh dương nhạt
+
       case "waiting":
-        return "warning";
+      case "đang chờ":
+      case "chờ khám":
+        return "warning"; // Màu vàng
+
       default:
-        return "secondary";
+        return "secondary"; // Màu xám
     }
   };
 
   const getStatusText = (status) => {
-    switch (status) {
+    if (!status) return "";
+    // Nếu backend gửi tiếng Việt thì hiển thị nguyên văn
+    if (["Đã khám", "Đang khám", "Đang chờ"].includes(status)) return status;
+
+    // Nếu backend gửi mã tiếng Anh thì map sang tiếng Việt
+    switch (status.toLowerCase()) {
       case "done":
         return "Đã khám";
       case "in-progress":
@@ -75,12 +92,158 @@ const TodaySection = ({
       case "waiting":
         return "Đang chờ";
       default:
-        return "";
+        return status;
     }
+  };
+
+  // ✅ Filter chỉ 3 trạng thái ở frontend
+  const filterValidStatuses = (patients) => {
+    const validStatuses = ["Đã khám", "Đang khám", "Đang chờ"];
+    return patients.filter(patient => validStatuses.includes(getStatusText(patient.status)));
   };
 
   const handleTestChange = (key) => (e) => {
     setTests({ ...tests, [key]: e.target.checked });
+  };
+
+  // Fetch todayPatients từ API (tương tự AdminMedicine)
+  const fetchTodayPatients = useCallback(async () => {
+    if (cache.current.has('today-patients')) {
+      const data = cache.current.get('today-patients');
+      setTodayPatients(filterValidStatuses(data)); // ✅ Filter sau khi lấy data
+      return;
+    }
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch(`${API_BASE_URL}/api/doctor/today-patients`, {
+          headers: {
+            'Accept': 'application/json',
+          },
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        const data = await response.json();
+        const filteredData = filterValidStatuses(data); // ✅ Filter chỉ 3 trạng thái
+        cache.current.set('today-patients', data); // Cache data gốc
+        setTodayPatients(filteredData);
+      } catch (error) {
+        console.error('Error fetching today patients:', error);
+        setToast({
+          show: true,
+          message: `Lỗi khi tải danh sách bệnh nhân: ${error.message}`,
+          variant: "danger",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }, 300);
+  }, []);
+
+  // Load data khi component mount
+  useEffect(() => {
+    fetchTodayPatients();
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [fetchTodayPatients]);
+
+  // ✅ Hàm tìm bệnh nhân tiếp theo gần nhất (trạng thái "Đang chờ", thời gian gần nhất sau bệnh nhân hiện tại)
+  const findNextPatient = useCallback((currentPatientId, patients) => {
+    if (!currentPatientId || !patients.length) return null;
+
+    // Parse thời gian để so sánh (giả sử time là string 'HH:MM')
+    const parseTime = (timeStr) => {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return hours * 60 + minutes;
+    };
+
+    const currentTime = parseTime(patients.find(p => p.id === currentPatientId)?.time || '00:00');
+
+    // Lọc bệnh nhân "Đang chờ", thời gian > currentTime, sắp xếp theo thời gian asc
+    const waitingPatientsAfter = patients
+      .filter(p => getStatusText(p.status) === 'Đang chờ' && parseTime(p.time) > currentTime)
+      .sort((a, b) => parseTime(a.time) - parseTime(b.time));
+
+    return waitingPatientsAfter[0] || null; // Trả về bệnh nhân đầu tiên (gần nhất)
+  }, []);
+
+  // ✅ Implement handleExaminationSubmit: Submit dữ liệu, update status, chọn next patient
+  const handleExaminationSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedTodayPatient) {
+      setToast({ show: true, message: "⚠️ Chưa chọn bệnh nhân.", variant: "warning" });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const submitData = {
+        symptoms,
+        diagnosis,
+        tests: { ...tests }, // Các tests được chọn
+        prescriptions: [...prescriptionRows], // Danh sách thuốc
+        status: 'done', // Update status thành done
+      };
+
+      const response = await fetch(`${API_BASE_URL}/api/doctor/submit-examination/${selectedTodayPatient.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(submitData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Submit thành công:', result);
+
+      // Reset form sau submit
+      setSymptoms('');
+      setDiagnosis('');
+      setTests({ test1: false, test2: false, test3: false });
+      setRequestedTests({});
+      setPrescriptionRows([]);
+
+      // Refetch todayPatients để cập nhật status mới
+      await fetchTodayPatients();
+
+      // Tìm và chọn bệnh nhân tiếp theo
+      const nextPatient = findNextPatient(selectedTodayPatient.id, todayPatients);
+      if (nextPatient) {
+        setSelectedTodayPatient(nextPatient);
+        setToast({
+          show: true,
+          message: `✅ Hoàn tất khám cho ${selectedTodayPatient.name}. Đã chuyển sang bệnh nhân tiếp theo: ${nextPatient.name}.`,
+          variant: "success",
+        });
+      } else {
+        setSelectedTodayPatient(null);
+        setToast({
+          show: true,
+          message: `✅ Hoàn tất khám cho ${selectedTodayPatient.name}. Không còn bệnh nhân chờ khám hôm nay.`,
+          variant: "success",
+        });
+      }
+    } catch (error) {
+      console.error('Error submitting examination:', error);
+      setToast({
+        show: true,
+        message: `Lỗi khi hoàn tất khám: ${error.message}`,
+        variant: "danger",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // ✅ Nút yêu cầu dịch vụ
@@ -114,7 +277,7 @@ const TodaySection = ({
         label={label}
         checked={tests[key]}
         onChange={handleTestChange(key)}
-        disabled={!selectedTodayPatient}
+        disabled={isFormDisabled}
       />
       {requestedTests[key] && (
         <Badge bg="success" pill className="ms-2">
@@ -154,7 +317,7 @@ const TodaySection = ({
     setShowModal(true);
   };
 
-  // Mở modal sửa thuốc (tái tạo form với dữ liệu cũ, không confirm ở đây nữa)
+  // Mở modal sửa thuốc
   const handleEdit = (index) => {
     const medicineToEdit = prescriptionRows[index];
     setDefaultData(medicineToEdit);
@@ -165,7 +328,6 @@ const TodaySection = ({
   // Xử lý submit từ modal (thêm hoặc sửa)
   const handleModalSubmit = (submittedData) => {
     if (editIndex !== null) {
-      // Chế độ sửa: Gọi editPrescription với data mới và index
       editPrescription(submittedData, editIndex);
       setToast({
         show: true,
@@ -173,10 +335,7 @@ const TodaySection = ({
         variant: "success",
       });
     } else {
-      // Chế độ thêm mới: Gọi prop để thêm (giả sử prop xử lý add)
-      // Nếu không có prop add, bạn có thể thêm logic ở đây nếu prescriptionRows là state
-      // Ví dụ: setPrescriptionRows([...prescriptionRows, submittedData]);
-      openPrescriptionModal(submittedData); // Hoặc gọi prop khác nếu có
+      setPrescriptionRows([...prescriptionRows, submittedData]);
       setToast({
         show: true,
         message: `✅ Đã thêm thuốc "${submittedData.medicine}".`,
@@ -184,9 +343,11 @@ const TodaySection = ({
       });
     }
     setShowModal(false);
+    setDefaultData(null);
+    setEditIndex(null);
   };
 
-  // Xử lý close modal (confirm nếu có thay đổi sẽ được xử lý trong PrescriptionModalContent)
+  // Xử lý close modal
   const handleModalClose = () => {
     setShowModal(false);
     setDefaultData(null);
@@ -235,8 +396,8 @@ const TodaySection = ({
           </thead>
           <tbody>
             ${selectedTests.length > 0
-              ? selectedTests
-                  .map((test, i) => `
+          ? selectedTests
+            .map((test, i) => `
                     <tr>
                       <td style="text-align:center;">${i + 1}</td>
                       <td>${test}</td>
@@ -244,9 +405,9 @@ const TodaySection = ({
                       <td></td>
                     </tr>
                   `)
-                  .join('')
-              : '<tr><td colspan="4" style="text-align:center;">Không có dịch vụ nào được chọn</td></tr>'
-            }
+            .join('')
+          : '<tr><td colspan="4" style="text-align:center;">Không có dịch vụ nào được chọn</td></tr>'
+        }
           </tbody>
         </table>
       `;
@@ -270,8 +431,8 @@ const TodaySection = ({
           </thead>
           <tbody>
             ${prescriptionRows.length > 0
-              ? prescriptionRows
-                  .map((row, i) => `
+          ? prescriptionRows
+            .map((row, i) => `
                     <tr>
                       <td style="text-align:center;">${i + 1}</td>
                       <td>${row.medicine}</td>
@@ -279,9 +440,9 @@ const TodaySection = ({
                       <td>${row.dosage}</td>
                     </tr>
                   `)
-                  .join('')
-              : '<tr><td colspan="4" style="text-align:center;">Không có thuốc nào được kê</td></tr>'
-            }
+            .join('')
+          : '<tr><td colspan="4" style="text-align:center;">Không có thuốc nào được kê</td></tr>'
+        }
           </tbody>
         </table>
       `;
@@ -432,59 +593,63 @@ const TodaySection = ({
     }, 1000);
   };
 
+  // Render danh sách bệnh nhân từ API (đã filter ở state)
+  const renderPatientList = () => (
+    <ListGroup variant="flush" className="patient-list">
+      {isLoading ? (
+        <ListGroup.Item className="text-center">
+          <Spinner animation="border" size="sm" />
+          <p className="mt-2 text-muted">Đang tải danh sách bệnh nhân...</p>
+        </ListGroup.Item>
+      ) : todayPatients.length === 0 ? (
+        <ListGroup.Item className="text-center text-muted">
+          Không có lịch hẹn hôm nay
+        </ListGroup.Item>
+      ) : (
+        todayPatients.map((patient, index) => (
+          <ListGroup.Item
+            key={patient.id || index}
+            action
+            active={selectedTodayPatient?.id === patient.id}
+            onClick={() => setSelectedTodayPatient(selectedTodayPatient?.id === patient.id ? null : patient)}
+            className={getStatusVariant(patient.status)}
+          >
+            <div className="d-flex w-100 justify-content-between align-items-center">
+              <div>
+                <h6 className="mb-1">{patient.time} - {patient.name}</h6>
+                <small>{patient.age} tuổi, {patient.gender} | {patient.phone}</small>
+              </div>
+              <Badge bg={getStatusVariant(patient.status)}>
+                {getStatusText(patient.status)}
+              </Badge>
+            </div>
+          </ListGroup.Item>
+        ))
+      )}
+    </ListGroup>
+  );
+
   return (
     <>
       <style>{`
         @media print {
-          body * {
-            visibility: hidden;
-          }
-          #print-content, #print-content * {
-            visibility: visible;
-          }
-          #print-content {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            display: block !important;
-          }
-          .no-print {
-            display: none !important;
-          }
+          body * { visibility: hidden; }
+          #print-content, #print-content * { visibility: visible; }
+          #print-content { position: absolute; left: 0; top: 0; width: 100%; display: block !important; }
+          .no-print { display: none !important; }
         }
       `}</style>
-      <div
-        className={`section ${currentSection === "today" ? "active" : ""}`}
-        id="today"
-      >
+      <div className={`section ${currentSection === "today" ? "active" : ""}`} id="today">
         <Row>
-          {/* Danh sách bệnh nhân */}
+          {/* Danh sách bệnh nhân từ API */}
           <Col md={4}>
             <Card className="h-100 shadow-sm">
               <Card.Header className="bg-primary text-white text-start">
-                <h5 className="mb-0">Danh sách khám (23-09-2025)</h5>
+                <h5 className="mb-0">Danh sách khám ({new Date().toLocaleDateString('vi-VN')})</h5>
               </Card.Header>
-              <ListGroup variant="flush" className="patient-list">
-                {todayPatients.map((patient, index) => (
-                  <ListGroup.Item
-                    key={index}
-                    action
-                    className={`patient-item ${selectedTodayPatient?.name === patient.name ? "active" : ""
-                      }`}
-                    onClick={() => setSelectedTodayPatient(patient)}
-                  >
-                    <div className="d-flex w-100 justify-content-between align-items-center">
-                      <h6 className="mb-0 text-start">
-                        <strong>{patient.time}</strong> - {patient.name}
-                      </h6>
-                      <Badge bg={getStatusVariant(patient.status)}>
-                        {getStatusText(patient.status)}
-                      </Badge>
-                    </div>
-                  </ListGroup.Item>
-                ))}
-              </ListGroup>
+              <Card.Body className="p-0">
+                {renderPatientList()}
+              </Card.Body>
             </Card>
           </Col>
 
@@ -528,7 +693,7 @@ const TodaySection = ({
                               rows={3}
                               value={symptoms}
                               onChange={(e) => setSymptoms(e.target.value)}
-                              disabled={!selectedTodayPatient}
+                              disabled={isFormDisabled}
                             />
                           </Form.Group>
                           <Form.Group className="mb-3 text-start">
@@ -537,12 +702,13 @@ const TodaySection = ({
                               type="text"
                               value={diagnosis}
                               onChange={(e) => setDiagnosis(e.target.value)}
-                              disabled={!selectedTodayPatient}
+                              disabled={isFormDisabled}
                             />
                           </Form.Group>
                         </Card.Body>
                       </Card>
                     </Col>
+
 
                     {/* 2. Chỉ định dịch vụ */}
                     <Col md={12}>
@@ -552,9 +718,7 @@ const TodaySection = ({
                         </Card.Header>
                         <Card.Body className="text-start">
                           <Form.Group className="mb-3">
-                            {renderService("Xét nghiệm công thức máu", "test1")}
-                            {renderService("Chụp X-quang phổi", "test2")}
-                            {renderService("Nội soi tai mũi họng", "test3")}
+                            {Object.entries(testLabels).map(([key, label]) => renderService(label, key))}
                           </Form.Group>
 
                           <div className="text-end">
@@ -562,7 +726,7 @@ const TodaySection = ({
                               variant="outline-primary"
                               size="sm"
                               onClick={handleRequestService}
-                              disabled={!selectedTodayPatient}
+                              disabled={isFormDisabled || Object.values(tests).every(v => !v)}
                               className="no-print"
                             >
                               🧾 Yêu cầu thực hiện dịch vụ đã chọn
@@ -614,17 +778,16 @@ const TodaySection = ({
                                       variant="outline-danger"
                                       size="sm"
                                       onClick={() => handleRemoveWithConfirm(index)}
-                                      disabled={!selectedTodayPatient}
+                                      disabled={isFormDisabled}
                                     >
                                       Xóa
                                     </Button>
-
                                     <Button
                                       variant="outline-secondary"
                                       size="sm"
                                       className="ms-2"
                                       onClick={() => handleEdit(index)}
-                                      disabled={!selectedTodayPatient}
+                                      disabled={isFormDisabled}
                                     >
                                       Sửa
                                     </Button>
@@ -637,7 +800,7 @@ const TodaySection = ({
                             variant="link"
                             onClick={handleOpenAddModal}
                             className="text-decoration-none fw-bold"
-                            disabled={!selectedTodayPatient}
+                            disabled={isFormDisabled}
                           >
                             + Thêm thuốc vào đơn
                           </Button>
@@ -650,16 +813,17 @@ const TodaySection = ({
                     <Button
                       variant="success"
                       type="submit"
-                      disabled={!selectedTodayPatient}
+                      disabled={isFormDisabled || isLoading}
                       className="no-print"
                     >
+                      {isLoading ? <Spinner animation="border" size="sm" /> : null}
                       Hoàn Tất & Lưu Hồ Sơ
                     </Button>
                     <Button
                       variant="secondary"
                       type="button"
                       onClick={handleTempSave}
-                      disabled={!selectedTodayPatient}
+                      disabled={isFormDisabled}
                       className="no-print"
                     >
                       Tạm Lưu
