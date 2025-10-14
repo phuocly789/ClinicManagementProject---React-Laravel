@@ -7,6 +7,7 @@ import AdminMedicine from "./pages/AdminMedicine";
 import AdminInventory from "./pages/AdminInventory";
 import { path } from "./utils/constant";
 import LoginPage from "./pages/auth/Login/Login";
+import UserManagement from './pages/user/UserManagement.jsx';
 function App() {
   return (
     <BrowserRouter>
