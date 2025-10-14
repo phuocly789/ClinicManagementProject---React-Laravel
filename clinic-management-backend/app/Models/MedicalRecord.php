@@ -23,9 +23,9 @@ use Illuminate\Database\Eloquent\Model;
  * 
  * @property Patient|null $patient
  * @property User|null $user
- * @property Collection|Appointment[] $appointments
  * @property Collection|Queue[] $queues
  * @property Collection|Diagnosis[] $diagnoses
+ * @property Collection|Appointment[] $appointments
  * @property Collection|Prescription[] $prescriptions
  *
  * @package App\Models
@@ -63,11 +63,6 @@ class MedicalRecord extends Model
 		return $this->belongsTo(User::class, 'CreatedBy');
 	}
 
-	public function appointments()
-	{
-		return $this->hasMany(Appointment::class, 'RecordId');
-	}
-
 	public function queues()
 	{
 		return $this->hasMany(Queue::class, 'RecordId');
@@ -76,6 +71,11 @@ class MedicalRecord extends Model
 	public function diagnoses()
 	{
 		return $this->hasMany(Diagnosis::class, 'RecordId');
+	}
+
+	public function appointments()
+	{
+		return $this->hasMany(Appointment::class, 'RecordId');
 	}
 
 	public function prescriptions()
