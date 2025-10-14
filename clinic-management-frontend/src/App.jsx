@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import reactLogo from './assets/react.svg';
-import viteLogo from '/vite.svg';
-import './App.css';
-import AdminMedicine from './pages/AdminMedicine';
-import AdminInventory from './pages/AdminInventory';
-
+import { useState } from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import reactLogo from "./assets/react.svg";
+import viteLogo from "/vite.svg";
+import "./App.css";
+import AdminMedicine from "./pages/AdminMedicine";
+import AdminInventory from "./pages/AdminInventory";
+import { path } from "./utils/constant";
+import LoginPage from "./pages/auth/Login/Login";
 function App() {
   return (
     <BrowserRouter>
@@ -13,6 +14,8 @@ function App() {
         <Route path="/admin/medicine" element={<AdminMedicine />} />
         <Route path="/admin/inventory" element={<AdminInventory />} />
         <Route path="/" element={<AdminMedicine />} /> {/* Trang mặc định */}
+        <Route path={path.LOGIN} element={<LoginPage />} />{" "}
+        {/* Trang mặc định */}
       </Routes>
     </BrowserRouter>
   );
