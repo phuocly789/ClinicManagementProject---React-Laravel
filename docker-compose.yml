@@ -13,11 +13,12 @@ services:
       - ./clinic-management-backend:/var/www/html  # Mount code Laravel (override hầu hết)
       - ./clinic-management-backend/.env:/var/www/html/.env  # Mount .env (cẩn thận bảo mật!)
     environment:
+    # postgresql://postgres.teswvvsewnjpelnvmeze:[YOUR-PASSWORD]@aws-1-us-east-2.pooler.supabase.com:5432/postgres
       - DB_CONNECTION=pgsql
-      - DB_HOST=aws-1-ap-southeast-1.pooler.supabase.com
+      - DB_HOST=aws-1-us-east-2.pooler.supabase.com
       - DB_PORT=5432
       - DB_DATABASE=postgres
-      - DB_USERNAME=postgres.rkoffuqhgnhzkacarfgi
+      - DB_USERNAME=postgres.teswvvsewnjpelnvmeze
       - DB_PASSWORD=lmp@123
       - DB_SSLMODE=require
       # Thêm các env khác từ .env nếu cần (như APP_KEY, etc.)
