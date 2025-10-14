@@ -1,169 +1,178 @@
-body {
-  font-family: Arial, sans-serif;
-  margin: 0;
-  padding: 0;
-}
-
-.sidebar {
-  width: 250px;
-  height: 100vh;
-  background-color: #6372d6;
-  color: white;
-  position: fixed;
-  padding-top: 20px;
-}
-
-.sidebar a {
-  padding: 15px 20px;
-  text-decoration: none;
-  color: white;
-  display: block;
-}
-
-.sidebar a:hover {
-  background-color: #002766;
-}
-
 .content {
-  margin-left: 250px;
-  padding: 20px;
+  padding: 20px 30px;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 20px;
+h1 {
+  color: #007bff;
+  margin-bottom: 25px;
 }
 
-th,
-td {
-  padding: 12px;
-  border-bottom: 1px solid #ddd;
-  text-align: left;
+.search-container {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
 }
 
-th {
-  background-color: #f2f2f2;
+.search-container input {
+  flex: 1;
+  margin-right: 10px;
+  padding: 10px 14px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
 }
 
 .add-btn {
   background-color: #007bff;
   color: white;
-  padding: 10px 20px;
   border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
   cursor: pointer;
-  margin-top: 10px;
-  float: right;
 }
 
-.edit-btn,
-.delete-btn,
-.disable-btn {
-  padding: 5px 10px;
-  border: none;
-  cursor: pointer;
-  border-radius: 5px;
-  color: white;
-}
-
-.edit-btn {
-  background-color: #ffc107;
-}
-
-.edit-btn:hover {
-  background-color: #e0a800;
-}
-
-.delete-btn {
-  background-color: #dc3545;
-}
-
-.delete-btn:hover {
-  background-color: #c82333;
-}
-
-.disable-btn {
-  background-color: #6c757d;
-}
-
-.disable-btn:hover {
-  background-color: #5a6268;
-}
-
-.status {
-  padding: 5px 10px;
+.filter-section {
+  background: #f8f9fa;
   border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 25px;
 }
 
-.active {
-  background-color: #28a745;
-  color: white;
-}
-
-.inactive {
-  background-color: #dc3545;
-  color: white;
-}
-
-.action-buttons {
+.filter-row {
   display: flex;
-  gap: 5px;
+  gap: 20px;
 }
+
+.filter-group {
+  flex: 1;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 25px;
+}
+
+table th, table td {
+  border: 1px solid #ddd;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+table th {
+  background-color: #007bff;
+  color: white;
+}
+
+.status.active {
+  color: green;
+  font-weight: bold;
+}
+
+.status.inactive {
+  color: red;
+  font-weight: bold;
+}
+
+.action-buttons button {
+  margin: 0 4px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.edit-btn { background: #ffc107; }
+.disable-btn { background: #17a2b8; color: white; }
+.delete-btn { background: #dc3545; color: white; }
+.detail-btn { background: #6c757d; color: white; }
 
 .modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.4);
   display: flex;
   align-items: center;
   justify-content: center;
-  position: fixed;
-  z-index: 1000;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
 }
 
 .modal-content {
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  max-width: 400px;
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-content.small {
+  width: 350px;
   text-align: center;
 }
 
-.modal button {
-  margin: 10px;
-  padding: 8px 15px;
-  border: none;
-  cursor: pointer;
-  border-radius: 5px;
+.modal-content.detail {
+  width: 500px;
 }
 
-.confirm-btn {
-  background-color: #dc3545;
+.modal-header {
+  background: linear-gradient(90deg, #007bff, #0099ff);
+  color: white;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  text-align: center;
+  font-weight: bold;
+}
+
+label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+input, select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.form-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.save-btn {
+  background: #007bff;
   color: white;
 }
 
 .cancel-btn {
-  background-color: #6c757d;
+  background: #6c757d;
   color: white;
 }
-
-.pagination {
-  margin-top: 20px;
-  text-align: center;
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 20px;
+  background: #f9fafb;
+  padding: 15px;
+  border-radius: 10px;
+  margin-top: 10px;
 }
 
-.pagination button {
-  margin: 0 4px;
-  padding: 6px 12px;
-  background-color: #eee;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
+.detail-grid p {
+  font-size: 15px;
+  color: #1e293b;
+  margin: 0;
+  padding: 4px 0;
 }
 
-.pagination .active {
-  background-color: #007bff;
-  color: white;
+.detail-grid strong {
+  color: #334155;
 }
