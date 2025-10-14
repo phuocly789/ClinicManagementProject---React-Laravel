@@ -4,6 +4,7 @@ import Taskbar from '../Components/Taskbar';
 import Pagination from '../Components/Pagination/Pagination';
 import ConfirmDeleteModal from '../Components/CustomToast/DeleteConfirmModal';
 import CustomToast from '../Components/CustomToast/CustomToast';
+import { Pencil, PencilIcon, ServerCrash, Trash } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -82,7 +83,8 @@ const MedicineList = ({ medicines, isLoading, formatVND, handleShowDeleteModal, 
                         href="#"
                         onClick={() => handleShowEditForm(medicine)}
                       >
-                        Sửa
+                        <PencilIcon />
+
                       </a>
                     </span>
                     <span className="px-1">/</span>
@@ -92,7 +94,7 @@ const MedicineList = ({ medicines, isLoading, formatVND, handleShowDeleteModal, 
                         href="#"
                         onClick={() => handleShowDeleteModal(medicine.MedicineId)}
                       >
-                        Xóa
+                        <Trash />
                       </a>
                     </span>
                   </td>
@@ -506,8 +508,8 @@ const AdminMedicine = () => {
       setCurrentView('list');
     } catch (error) {
       console.error('Error adding medicine:', error);
-      showToast('error', error.message.includes('CSRF token') 
-        ? 'Thêm thất bại: Không thể lấy CSRF token. Vui lòng kiểm tra backend.' 
+      showToast('error', error.message.includes('CSRF token')
+        ? 'Thêm thất bại: Không thể lấy CSRF token. Vui lòng kiểm tra backend.'
         : `Thêm thất bại: ${error.message}`);
     } finally {
       setIsLoading(false);
@@ -552,8 +554,8 @@ const AdminMedicine = () => {
       setEditMedicine(null);
     } catch (error) {
       console.error('Error editing medicine:', error);
-      showToast('error', error.message.includes('CSRF token') 
-        ? 'Sửa thất bại: Không thể lấy CSRF token. Vui lòng kiểm tra backend.' 
+      showToast('error', error.message.includes('CSRF token')
+        ? 'Sửa thất bại: Không thể lấy CSRF token. Vui lòng kiểm tra backend.'
         : `Sửa thất bại: ${error.message}`);
     } finally {
       setIsLoading(false);
@@ -581,7 +583,7 @@ const AdminMedicine = () => {
   return (
     <div className="d-flex">
       <Taskbar />
-      <div className="position-relative w-100 flex-grow-1 ms-5 p-5">
+      <div className="position-relative w-100 flex-grow-1 ms-5 p-4">
         <h1 className="mb-4">Quản Lý Thuốc</h1>
         {currentView === 'list' && (
           <MedicineList
