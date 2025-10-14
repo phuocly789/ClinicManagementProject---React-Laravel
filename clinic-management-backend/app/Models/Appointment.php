@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property Carbon|null $FollowUpDate
  * @property Carbon|null $CreatedAt
  * @property int|null $CreatedBy
+ * @property string|null $Notes
  * 
  * @property User|null $user
  * @property StaffSchedule|null $staff_schedule
@@ -67,7 +68,8 @@ class Appointment extends Model
 		'Status',
 		'FollowUpDate',
 		'CreatedAt',
-		'CreatedBy'
+		'CreatedBy',
+		'Notes'
 	];
 
 	public function user()

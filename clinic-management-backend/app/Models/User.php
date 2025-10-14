@@ -30,12 +30,12 @@ use Illuminate\Database\Eloquent\Model;
  * @property Patient|null $patient
  * @property MedicalStaff|null $medical_staff
  * @property Collection|Role[] $roles
- * @property Collection|Appointment[] $appointments
  * @property Collection|Queue[] $queues
  * @property Collection|Diagnosis[] $diagnoses
  * @property Collection|StaffSchedule[] $staff_schedules
- * @property Collection|ImportBill[] $import_bills
+ * @property Collection|Appointment[] $appointments
  * @property Collection|ServiceOrder[] $service_orders
+ * @property Collection|ImportBill[] $import_bills
  * @property Collection|Invoice[] $invoices
  * @property Collection|Notification[] $notifications
  * @property Collection|Prescription[] $prescriptions
@@ -92,11 +92,6 @@ class User extends Model
 					->withPivot('AssignedAt');
 	}
 
-	public function appointments()
-	{
-		return $this->hasMany(Appointment::class, 'CreatedBy');
-	}
-
 	public function queues()
 	{
 		return $this->hasMany(Queue::class, 'CreatedBy');
@@ -112,14 +107,19 @@ class User extends Model
 		return $this->hasMany(StaffSchedule::class, 'StaffId');
 	}
 
-	public function import_bills()
+	public function appointments()
 	{
-		return $this->hasMany(ImportBill::class, 'CreatedBy');
+		return $this->hasMany(Appointment::class, 'CreatedBy');
 	}
 
 	public function service_orders()
 	{
 		return $this->hasMany(ServiceOrder::class, 'AssignedStaffId');
+	}
+
+	public function import_bills()
+	{
+		return $this->hasMany(ImportBill::class, 'CreatedBy');
 	}
 
 	public function invoices()
