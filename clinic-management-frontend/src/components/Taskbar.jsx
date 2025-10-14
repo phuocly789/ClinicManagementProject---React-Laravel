@@ -31,6 +31,11 @@ const AdminSidebar = () => {
           onMouseLeave={(e) => (e.target.style.background = 'rgba(255, 255, 255, 0)')}>
           Quản Lý Người Dùng
         </Nav.Link>
+        <Nav.Link to="/admin/doctor" className="text-white py-2 px-3 mb-2 rounded-0" style={{ background: 'rgba(255, 255, 255, 0)', transition: 'background 0.3s' }}
+          onMouseEnter={(e) => (e.target.style.background = 'rgba(255, 255, 255, 0.2)')}
+          onMouseLeave={(e) => (e.target.style.background = 'rgba(255, 255, 255, 0)')}>
+          Quản Lý Bác Sĩ
+        </Nav.Link>
         <Nav.Link href="#" className="text-white py-2 px-3 mb-2 rounded-0" style={{ background: 'rgba(255, 255, 255, 0)', transition: 'background 0.3s' }}
           onMouseEnter={(e) => (e.target.style.background = 'rgba(255, 255, 255, 0.2)')}
           onMouseLeave={(e) => (e.target.style.background = 'rgba(255, 255, 255, 0)')}>
