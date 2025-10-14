@@ -84,10 +84,10 @@ class AppointmentsController extends Controller
 
         return response()->json($appointments);
     }
-
-
-
-
+    /**
+     * Các method CRUD cơ bản cho Appointment.
+     * Chỉ bác sĩ (StaffId) mới được thao tác với lịch hẹn của mình.
+     */
 
     // Các method CRUD cơ bản (từ --api flag), customize nếu cần
     public function index(Request $request)

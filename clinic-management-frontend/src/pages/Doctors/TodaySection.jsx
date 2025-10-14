@@ -47,6 +47,45 @@ const TodaySection = ({
   const cache = useRef(new Map());
   const debounceRef = useRef(null);
 
+  // 🧠 Fake AI Gợi ý thuốc dựa trên chẩn đoán
+  const [aiSuggestions, setAiSuggestions] = useState([]);
+  const [aiLoading, setAiLoading] = useState(false); // Thêm loading state
+
+  useEffect(() => {
+    if (!diagnosis || diagnosis.length < 3) {
+      setAiSuggestions([]);
+      return;
+    }
+
+    setAiLoading(true); // Bắt đầu loading
+    const timeout = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/doctor/ai/medicine-suggestion?diagnosis=${encodeURIComponent(diagnosis)}`); // Sửa route
+        if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setAiSuggestions(data);
+        } else {
+          throw new Error("Dữ liệu từ API không phải mảng JSON");
+        }
+      } catch (err) {
+        console.error("AI suggestion error:", err);
+        setToast({
+          show: true,
+          message: `Lỗi gợi ý thuốc: ${err.message}`,
+          variant: "danger",
+        });
+        setAiSuggestions([]);
+      } finally {
+        setAiLoading(false); // Kết thúc loading
+      }
+    }, 800);
+
+    return () => clearTimeout(timeout);
+  }, [diagnosis]);
+
+
+
   const isFormDisabled = selectedTodayPatient && selectedTodayPatient?.status === 'Đang khám' ? false : true;
 
   const testLabels = {
@@ -190,7 +229,7 @@ const TodaySection = ({
         status: 'done', // Update status thành done
       };
 
-      const response = await fetch(`${API_BASE_URL}/api/doctor/submit-examination/${selectedTodayPatient.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/doctor/examinations/${selectedTodayPatient.id}/complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -704,6 +743,48 @@ const TodaySection = ({
                               onChange={(e) => setDiagnosis(e.target.value)}
                               disabled={isFormDisabled}
                             />
+                            {aiLoading && (
+                              <div className="text-center mt-2">
+                                <Spinner animation="border" size="sm" /> Đang tải gợi ý...
+                              </div>
+                            )}
+                            {aiSuggestions.length > 0 && (
+                              <div className="ai-suggestions">
+                                <h6>🧠 Gợi ý thuốc phù hợp:</h6>
+                                <ul className="mb-0">
+                                  {aiSuggestions.map((item, i) => (
+                                    <li key={i}>
+                                      <div className="medicine-info">
+                                        <b>{item.MedicineName}</b> — <i>{item.Reason}</i>
+                                      </div>
+                                      <Button
+                                        variant="outline-success"
+                                        size="sm"
+                                        className="ms-2"
+                                        onClick={() => {
+                                          const existingItem = prescriptionRows.find(row => row.medicine === item.MedicineName);
+                                          if (existingItem) {
+                                            // Nếu thuốc đã tồn tại, tăng quantity
+                                            const updatedRows = prescriptionRows.map(row =>
+                                              row.medicine === item.MedicineName
+                                                ? { ...row, quantity: row.quantity + 1 }
+                                                : row
+                                            );
+                                            setPrescriptionRows(updatedRows);
+                                          } else {
+                                            // Nếu chưa tồn tại, thêm hàng mới với quantity = 1
+                                            setPrescriptionRows(prev => [...prev, { medicine: item.MedicineName, quantity: 1, dosage: '' }]);
+                                          }
+                                          setToast({ show: true, message: `✅ Đã thêm "${item.MedicineName}" vào toa thuốc.`, variant: "success" });
+                                        }}
+                                      >
+                                        + Thêm
+                                      </Button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                           </Form.Group>
                         </Card.Body>
                       </Card>

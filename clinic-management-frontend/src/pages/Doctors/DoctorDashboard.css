@@ -283,3 +283,63 @@ button.btn-link:hover {
 .schedule-list .list-group-item small {
   font-size: 0.85rem;
 }
+
+/* Thêm vào trong <style> */
+.ai-suggestions {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: #f8f9fa;
+  padding: 12px;
+  margin-top: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.ai-suggestions h6 {
+  color: #2c3e50;
+  font-size: 16px;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.ai-suggestions ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.ai-suggestions li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background-color: #ffffff;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.ai-suggestions li:hover {
+  background-color: #ecf0f1;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.ai-suggestions .medicine-info {
+  flex-grow: 1;
+}
+
+.ai-suggestions .medicine-info b {
+  color: #27ae60;
+  margin-right: 8px;
+}
+
+.ai-suggestions .medicine-info i {
+  color: #7f8c8d;
+  font-size: 14px;
+}
+
+.ai-suggestions .btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  height: auto;
+}
