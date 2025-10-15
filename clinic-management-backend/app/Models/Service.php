@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Model;
  * 
  * @property int $ServiceId
  * @property string $ServiceName
- * @property string $ServiceType
+ * @property USER-DEFINED|null $ServiceType
  * @property float $Price
  * @property string|null $Description
  * 
@@ -32,6 +32,7 @@ class Service extends Model
 
 	protected $casts = [
 		'ServiceId' => 'int',
+		'ServiceType' => 'USER-DEFINED',
 		'Price' => 'float'
 	];
 
