@@ -7,12 +7,14 @@ use App\Http\Controllers\API\MedicinesController;
 use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\ImportBillController;
 use App\Http\Controllers\API\SuppliersController;
-
+// Controllers for Doctor
 use App\Http\Controllers\API\Doctor\AppointmentsController;
 use App\Http\Controllers\API\Doctor\ExaminationController;
 use App\Http\Controllers\API\Doctor\DiagnosisSuggestionController;
 use App\Http\Controllers\API\Doctor\DoctorMedicineSearchController;
-use App\Http\Controllers\API\Doctor\AIMedicineSuggestionController;
+use App\Http\Controllers\API\Doctor\AISuggestionController;
+use App\Http\Controllers\API\Doctor\ServiceController;
+//----------------------------------------------Hết-------------------------------
 
 
 Route::get('/users', [UserController::class, 'index']);
@@ -44,10 +46,15 @@ Route::prefix('doctor')->group(function () {
     Route::apiResource('appointments', AppointmentsController::class);
 
     // Gợi ý chẩn đoán & thuốc
+    //Gợi ý lấy từ lịch sử bệnh trước đó
     Route::get('/diagnoses/suggestions', [DiagnosisSuggestionController::class, 'suggestions']);
+    // Tìm kiếm thuốc theo tên, loại
     Route::get('/medicines/search', [DoctorMedicineSearchController::class, 'search']);
-    // Route::get('/medicines/ai-suggest', [DoctorMedicineSearchController::class, 'suggestByAI']);
-    Route::get('/ai/medicine-suggestion', [AIMedicineSuggestionController::class, 'suggest']);
+    // Gợi ý thuốc & dịch vụ từ AI
+    Route::get('/ai/suggestion', [AISuggestionController::class, 'suggest']);
+    // Lấy danh sách dịch vụ
+    Route::get('/services', [ServiceController::class, 'index']);
+
 
 
     // Khám bệnh
