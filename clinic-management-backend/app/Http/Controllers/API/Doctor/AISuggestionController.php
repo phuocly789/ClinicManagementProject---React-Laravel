@@ -8,38 +8,50 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
-class AIMedicineSuggestionController extends Controller
+class AISuggestionController extends Controller
 {
     public function suggest(Request $request)
     {
         $diagnosis = trim($request->query('diagnosis', ''));
+        $type = trim($request->query('type', 'medicine')); // 'medicine' hoặc 'service'
+
         if (strlen($diagnosis) < 3) {
             return response()->json(['error' => 'Thiếu thông tin chẩn đoán'], 400);
         }
 
-        // Lấy danh sách thuốc từ DB với giới hạn nhỏ hơn
-        $medicines = DB::table('Medicines')
-            ->select('MedicineName', 'MedicineType', 'Unit', 'Price', 'StockQuantity', 'Description')
-            ->limit(10)
-            ->get();
-
-        if ($medicines->isEmpty()) {
-            return response()->json(['error' => 'Không tìm thấy thuốc trong database'], 500);
+        // Lấy danh sách dữ liệu dựa trên loại
+        $items = [];
+        $itemList = '';
+        if ($type === 'medicine') {
+            $items = DB::table('Medicines')
+                ->select('MedicineName', 'MedicineType', 'Unit', 'Price', 'StockQuantity', 'Description')
+                ->limit(10)
+                ->get();
+            $itemList = $items->map(fn($m) => "{$m->MedicineName} ({$m->MedicineType})")->implode(', ');
+            Log::debug('Medicines list: ' . $itemList);
+        } elseif ($type === 'service') {
+            $items = DB::table('Services')
+                ->select('ServiceId', 'ServiceName', 'ServiceType', 'Price', 'Description')
+                ->limit(10)
+                ->get();
+            $itemList = $items->map(fn($s) => "{$s->ServiceName} ({$s->ServiceType})")->implode(', ');
+            Log::debug('Services list: ' . $itemList);
         }
 
-        $medicinesList = $medicines->map(fn($m) => "{$m->MedicineName} ({$m->MedicineType})")->implode(', ');
-        Log::debug('Medicines list: ' . $medicinesList);
+        if ($items->isEmpty()) {
+            return response()->json(['error' => 'Không tìm thấy ' . ($type === 'medicine' ? 'thuốc' : 'dịch vụ') . ' trong database'], 500);
+        }
 
-        // Prompt được cải thiện: Yêu cầu JSON thuần túy, không thêm text giải thích
+        // Prompt động dựa trên loại
         $prompt = "
         Bạn là bác sĩ chuyên khoa nội tổng quát.
-        Dựa trên chẩn đoán: '{$diagnosis}', hãy chọn những thuốc phù hợp nhất từ danh sách sau:
-        {$medicinesList}
+        Dựa trên chẩn đoán: '{$diagnosis}', hãy chọn những " . ($type === 'medicine' ? 'thuốc' : 'dịch vụ cận lâm sàng') . " phù hợp nhất từ danh sách sau:
+        {$itemList}
         Chỉ trả về JSON thuần túy với định dạng:
         [
-          { 'MedicineName': '...', 'Reason': '...' }
+          { 'MedicineName': '...', 'Reason': '...' } " . ($type === 'service' ? ", 'ServiceId': '...' " : '') . "
         ]
-        Không thêm bất kỳ text nào ngoài JSON, chỉ chọn thuốc có trong danh sách, không bịa thêm.
+        Không thêm bất kỳ text nào ngoài JSON, chỉ chọn " . ($type === 'medicine' ? 'thuốc' : 'dịch vụ') . " có trong danh sách, không bịa thêm.
         ";
 
         $apiKey = env('GOOGLE_API_KEY');
@@ -74,12 +86,11 @@ class AIMedicineSuggestionController extends Controller
             }
 
             $text = $data['candidates'][0]['content']['parts'][0]['text'];
-            Log::debug('Raw response from Gemini: ' . $text); // Log để debug
+            Log::debug('Raw response from Gemini: ' . $text);
 
-            // Trích xuất JSON từ chuỗi (nếu có ```json
             $jsonString = $text;
             if (preg_match('/```json\s*([\s\S]*?)\s*```/', $text, $matches)) {
-                $jsonString = trim($matches[1]); // Lấy nội dung trong ```json ... ```
+                $jsonString = trim($matches[1]);
             }
 
             $json = json_decode($jsonString, true);
@@ -88,7 +99,7 @@ class AIMedicineSuggestionController extends Controller
                     'error' => 'Gemini trả về định dạng không hợp lệ',
                     'raw' => $text,
                     'json_error' => json_last_error_msg(),
-                    'extracted_json' => $jsonString, // Hiển thị JSON đã trích xuất để debug
+                    'extracted_json' => $jsonString,
                 ], 500);
             }
 

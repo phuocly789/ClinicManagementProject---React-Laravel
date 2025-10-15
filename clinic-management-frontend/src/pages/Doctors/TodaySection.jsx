@@ -47,29 +47,33 @@ const TodaySection = ({
   const cache = useRef(new Map());
   const debounceRef = useRef(null);
 
-  // 🧠 Fake AI Gợi ý thuốc dựa trên chẩn đoán
+  // 🧠 AI Gợi ý thuốc và dịch vụ dựa trên chẩn đoán
   const [aiSuggestions, setAiSuggestions] = useState([]);
-  const [aiLoading, setAiLoading] = useState(false); // Thêm loading state
+  const [serviceSuggestions, setServiceSuggestions] = useState([]);
+  const [aiLoading, setAiLoading] = useState(false); // Loading cho thuốc
+  const [serviceLoading, setServiceLoading] = useState(false); // Loading cho dịch vụ
 
   useEffect(() => {
     if (!diagnosis || diagnosis.length < 3) {
       setAiSuggestions([]);
+      setServiceSuggestions([]);
       return;
     }
 
-    setAiLoading(true); // Bắt đầu loading
-    const timeout = setTimeout(async () => {
+    // Gợi ý thuốc
+    setAiLoading(true);
+    const timeoutMedicine = setTimeout(async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/doctor/ai/medicine-suggestion?diagnosis=${encodeURIComponent(diagnosis)}`); // Sửa route
+        const res = await fetch(`${API_BASE_URL}/api/doctor/ai/suggestion?diagnosis=${encodeURIComponent(diagnosis)}&type=medicine`);
         if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
         const data = await res.json();
         if (Array.isArray(data)) {
           setAiSuggestions(data);
         } else {
-          throw new Error("Dữ liệu từ API không phải mảng JSON");
+          throw new Error("Dữ liệu gợi ý thuốc không phải mảng JSON");
         }
       } catch (err) {
-        console.error("AI suggestion error:", err);
+        console.error("AI suggestion error (medicine):", err);
         setToast({
           show: true,
           message: `Lỗi gợi ý thuốc: ${err.message}`,
@@ -77,11 +81,39 @@ const TodaySection = ({
         });
         setAiSuggestions([]);
       } finally {
-        setAiLoading(false); // Kết thúc loading
+        setAiLoading(false);
       }
     }, 800);
 
-    return () => clearTimeout(timeout);
+    // Gợi ý dịch vụ
+    setServiceLoading(true);
+    const timeoutService = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/doctor/ai/suggestion?diagnosis=${encodeURIComponent(diagnosis)}&type=service`);
+        if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setServiceSuggestions(data);
+        } else {
+          throw new Error("Dữ liệu gợi ý dịch vụ không phải mảng JSON");
+        }
+      } catch (err) {
+        console.error("Service suggestion error:", err);
+        setToast({
+          show: true,
+          message: `Lỗi gợi ý dịch vụ: ${err.message}`,
+          variant: "danger",
+        });
+        setServiceSuggestions([]);
+      } finally {
+        setServiceLoading(false);
+      }
+    }, 800);
+
+    return () => {
+      clearTimeout(timeoutMedicine);
+      clearTimeout(timeoutService);
+    };
   }, [diagnosis]);
 
 
@@ -799,6 +831,43 @@ const TodaySection = ({
                         </Card.Header>
                         <Card.Body className="text-start">
                           <Form.Group className="mb-3">
+                            {serviceSuggestions.length > 0 && (
+                              <div className="ai-suggestions mb-3">
+                                <h6>🩺 Gợi ý dịch vụ phù hợp:</h6>
+                                <ul className="mb-0">
+                                  {serviceSuggestions.map((service, i) => (
+                                    <li key={i}>
+                                      <div className="medicine-info">
+                                        <b>{service.ServiceName}</b> — <i>{service.Reason || "Đề xuất dựa trên chẩn đoán"}</i>
+                                      </div>
+                                      <Button
+                                        variant="outline-primary"
+                                        size="sm"
+                                        className="ms-2"
+                                        onClick={() => {
+                                          const serviceKey = Object.keys(testLabels).find(key => testLabels[key] === service.ServiceName);
+                                          if (serviceKey) {
+                                            setTests(prev => ({ ...prev, [serviceKey]: !prev[serviceKey] })); // Toggle checkbox
+                                            setToast({
+                                              show: true,
+                                              message: `✅ Đã ${!tests[serviceKey] ? 'chọn' : 'bỏ chọn'} dịch vụ "${service.ServiceName}".`,
+                                              variant: "success",
+                                            });
+                                          }
+                                        }}
+                                      >
+                                        {tests[Object.keys(testLabels).find(key => testLabels[key] === service.ServiceName)] ? "✓ Đã chọn" : "+ Chọn"}
+                                      </Button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {serviceLoading && (
+                              <div className="text-center mt-2">
+                                <Spinner animation="border" size="sm" /> Đang tải gợi ý dịch vụ...
+                              </div>
+                            )}
                             {Object.entries(testLabels).map(([key, label]) => renderService(label, key))}
                           </Form.Group>
 
