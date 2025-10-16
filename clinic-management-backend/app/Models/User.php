@@ -49,7 +49,7 @@ class User extends Model
 	protected $casts = [
 		'UserId' => 'int',
 		'Gender' => 'string',
-		'DateOfBirth' => 'date',
+		'DateOfBirth' => 'datetime',
 		'CreatedAt' => 'datetime',
 		'MustChangePassword' => 'bool',
 		'CodeExpired' => 'datetime',
