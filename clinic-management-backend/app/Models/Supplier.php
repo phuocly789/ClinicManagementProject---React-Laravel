@@ -11,14 +11,14 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Class Supplier
- * 
+ *
  * @property int $SupplierId
  * @property string $SupplierName
  * @property string|null $ContactEmail
  * @property string|null $ContactPhone
  * @property string|null $Address
  * @property string|null $Description
- * 
+ *
  * @property Collection|ImportBill[] $import_bills
  *
  * @package App\Models
@@ -27,7 +27,7 @@ class Supplier extends Model
 {
 	protected $table = 'Suppliers';
 	protected $primaryKey = 'SupplierId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [

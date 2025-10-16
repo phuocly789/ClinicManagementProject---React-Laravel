@@ -26,7 +26,7 @@ const AdminSidebar = () => {
           onMouseLeave={(e) => (e.target.style.background = 'rgba(255, 255, 255, 0)')}>
           Dashboard (Thống kê)
         </Nav.Link>
-        <Nav.Link href="#" className="text-white py-2 px-3 mb-2 rounded-0" style={{ background: 'rgba(255, 255, 255, 0)', transition: 'background 0.3s' }}
+        <Nav.Link href="/admin/users" className="text-white py-2 px-3 mb-2 rounded-0" style={{ background: 'rgba(255, 255, 255, 0)', transition: 'background 0.3s' }}
           onMouseEnter={(e) => (e.target.style.background = 'rgba(255, 255, 255, 0.2)')}
           onMouseLeave={(e) => (e.target.style.background = 'rgba(255, 255, 255, 0)')}>
           Quản Lý Người Dùng
@@ -41,11 +41,11 @@ const AdminSidebar = () => {
           onMouseLeave={(e) => (e.target.style.background = 'rgba(255, 255, 255, 0)')}>
           Quản Lý Dịch Vụ
         </Nav.Link>
-        <Nav.Link href="#" className="text-white py-2 px-3 mb-2 rounded-0" style={{ background: '#0056b3', transition: 'background 0.3s' }}
+        <Nav.Link href="/admin/medicine" className="text-white py-2 px-3 mb-2 rounded-0" style={{ background: '#0056b3', transition: 'background 0.3s' }}
           onMouseLeave={(e) => (e.target.style.background = '#0056b3')}>
           Quản Lý Thuốc
         </Nav.Link>
-        <Nav.Link href="#" className="text-white py-2 px-3 mb-2 rounded-0" style={{ background: 'rgba(255, 255, 255, 0)', transition: 'background 0.3s' }}
+        <Nav.Link href="/admin/inventory" className="text-white py-2 px-3 mb-2 rounded-0" style={{ background: 'rgba(255, 255, 255, 0)', transition: 'background 0.3s' }}
           onMouseEnter={(e) => (e.target.style.background = 'rgba(255, 255, 255, 0.2)')}
           onMouseLeave={(e) => (e.target.style.background = 'rgba(255, 255, 255, 0)')}>
           Quản Lý Kho
