@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Container, Modal, Button, Toast, ToastContainer, Spinner } from 'react-bootstrap';
-import Sidebar from '../Components/Sidebar';
-import TodaySection from './Doctors/TodaySection';
-import ScheduleSection from './Doctors/ScheduleSection';
-import HistorySection from './Doctors/HistorySection';
-import EventModalContent from './Doctors/EventModal';
-import PrescriptionModalContent from './Doctors/PrescriptionModalContent';
-import '../pages/Doctors/DoctorDashboard.css';
+
+import TodaySection from './TodaySection';
+import ScheduleSection from './ScheduleSection';
+import HistorySection from './HistorySection';
+import EventModalContent from './EventModal';
+import PrescriptionModalContent from './PrescriptionModalContent';
+import './DoctorDashboard.css';
+import DoctorSidebar from '../../Components/Sidebar/DoctorSidebar';
 
 const API_BASE_URL = 'http://localhost:8000'; // Backend Laravel
 
@@ -196,7 +197,7 @@ const DoctorDashboard = () => {
 
   return (
     <div className="d-flex min-vh-100 bg-light">
-      <Sidebar currentSection={currentSection} switchSection={switchSection} />
+      <DoctorSidebar currentSection={currentSection} switchSection={switchSection} />
       <div className="flex-grow-1 p-4" style={{ marginLeft: '250px' }}>
         <Container fluid>
           <div className="alert alert-success mb-4 tab-container">
