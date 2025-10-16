@@ -12,14 +12,14 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Class User
- * 
+ *
  * @property int $UserId
  * @property string $Username
  * @property string $PasswordHash
  * @property string $FullName
  * @property string $Email
  * @property string|null $Phone
- * @property USER-DEFINED|null $Gender
+ * @property string|null $Gender
  * @property string|null $Address
  * @property Carbon|null $DateOfBirth
  * @property Carbon|null $CreatedAt
@@ -27,7 +27,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $CodeId
  * @property Carbon|null $CodeExpired
  * @property bool|null $IsActive
- * 
+ *
  * @property Collection|Role[] $roles
  * @property MedicalStaff|null $medical_staff
  * @property Collection|MedicalRecord[] $medical_records
@@ -48,7 +48,7 @@ class User extends Model
 
 	protected $casts = [
 		'UserId' => 'int',
-		'Gender' => 'USER-DEFINED',
+		'Gender' => 'string',
 		'DateOfBirth' => 'datetime',
 		'CreatedAt' => 'datetime',
 		'MustChangePassword' => 'bool',
