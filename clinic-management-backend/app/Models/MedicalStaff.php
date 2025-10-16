@@ -11,13 +11,13 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Class MedicalStaff
- * 
+ *
  * @property int $StaffId
- * @property USER-DEFINED|null $StaffType
+ * @property string|null $StaffType
  * @property string|null $Specialty
  * @property string|null $LicenseNumber
  * @property string|null $Bio
- * 
+ *
  * @property User $user
  * @property Collection|StaffSchedule[] $staff_schedules
  * @property Collection|Diagnosis[] $diagnoses
@@ -36,7 +36,7 @@ class MedicalStaff extends Model
 
 	protected $casts = [
 		'StaffId' => 'int',
-		'StaffType' => 'USER-DEFINED'
+		'StaffType' => 'string'
 	];
 
 	protected $fillable = [
