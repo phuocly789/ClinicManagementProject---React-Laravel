@@ -43,7 +43,7 @@ class User extends Model
 {
 	protected $table = 'Users';
 	protected $primaryKey = 'UserId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [

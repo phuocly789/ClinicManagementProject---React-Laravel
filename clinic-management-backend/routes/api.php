@@ -20,12 +20,13 @@ use App\Http\Controllers\API\Doctor\ServiceController;
 Route::get('/users', [UserController::class, 'index']);
 Route::get('/ping', [UserController::class, 'ping']);
 
+//check tồn kho
+Route::get('/medicines/low-stock',[MedicinesController::class, 'checkLowStock']);
 Route::get('/medicines', [MedicinesController::class, 'index']);
 Route::get('/medicines/ping', [MedicinesController::class, 'ping']);
 Route::post('/medicines', [MedicinesController::class, 'store']);
 Route::put('/medicines/{id}', [MedicinesController::class, 'update']);
 Route::delete('/medicines/{id}', [MedicinesController::class, 'destroy']);
-
 
 Route::get('/import-bills', [ImportBillController::class, 'index']);
 Route::post('/import-bills', [ImportBillController::class, 'store']);
