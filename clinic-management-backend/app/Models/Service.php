@@ -11,13 +11,13 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Class Service
- * 
+ *
  * @property int $ServiceId
  * @property string $ServiceName
- * @property USER-DEFINED|null $ServiceType
+ * @property string|null $ServiceType
  * @property float $Price
  * @property string|null $Description
- * 
+ *
  * @property Collection|ServiceOrder[] $service_orders
  * @property Collection|InvoiceDetail[] $invoice_details
  *
@@ -32,7 +32,7 @@ class Service extends Model
 
 	protected $casts = [
 		'ServiceId' => 'int',
-		'ServiceType' => 'USER-DEFINED',
+		'ServiceType' => 'string',
 		'Price' => 'float'
 	];
 

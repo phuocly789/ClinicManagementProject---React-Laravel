@@ -11,15 +11,15 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Class Medicine
- * 
+ *
  * @property int $MedicineId
  * @property string $MedicineName
  * @property string|null $MedicineType
- * @property USER-DEFINED|null $Unit
+ * @property string|null $Unit
  * @property float $Price
  * @property int $StockQuantity
  * @property string|null $Description
- * 
+ *
  * @property Collection|PrescriptionDetail[] $prescription_details
  * @property Collection|InvoiceDetail[] $invoice_details
  * @property Collection|ImportDetail[] $import_details
@@ -35,7 +35,7 @@ class Medicine extends Model
 
 	protected $casts = [
 		'MedicineId' => 'int',
-		'Unit' => 'USER-DEFINED',
+		'Unit' => 'string',
 		'Price' => 'float',
 		'StockQuantity' => 'int'
 	];
