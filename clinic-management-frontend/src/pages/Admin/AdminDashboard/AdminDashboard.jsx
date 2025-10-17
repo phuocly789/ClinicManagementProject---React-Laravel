@@ -1,76 +1,166 @@
 import './AdminDashboard.css';
 import { useEffect, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 import AdminSidebar from '../../../Components/Sidebar/AdminSidebar';
 import instance from '../../../axios';
-// import Loading from '../../../Components/Loading/Loading';
-import CustomToast from '../../../Components/CustomToast/CustomToast';
 import Loading from '../../../Components/Loading/Loading';
-Chart.register(...registerables);
+import CustomToast from '../../../Components/CustomToast/CustomToast';
+import NProgress from 'nprogress';
+import 'nprogress/nprogress.css';
+Chart.register(...registerables, ChartDataLabels);
 
 const AdminDashboard = () => {
-    const [stats, setStats] = useState({
-        totalRevenue: 125000000,
-        completedAppointments: 120,
-        pendingInvoices: 8,
-        totalAppointments: 150,
-    });
-
-    const [lowStockMedicines, setLowStockMedicines] = useState([]);
+    const [stats, setStats] = useState(null);
+    const [totalRevenue, setTotalRevenue] = useState(null);
+    const [lowStockMedicines, setLowStockMedicines] = useState(null);
     const [loading, setLoading] = useState(true);
     const [toast, setToast] = useState(null);
-
+    const [startDate, setStartDate] = useState(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+    const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
     useEffect(() => {
-        const fetchLowStockMedicines = async () => {
+        const fetchData = async () => {
+            setLoading(true);
+            NProgress.start();
             try {
-                const response = await instance.get('/medicines/low-stock');
-                setLowStockMedicines(response.data);
-                // setToast({ type: "success", message: "Tải dữ liệu thành công" })
+                NProgress.set(0.4);
+                const [lowStockResponse, statsResponse, revenueResponse] = await Promise.all([
+                    instance.get('/medicines/low-stock?threshold=200').catch(error => ({
+                        data: { success: false, message: error.message || 'Lỗi khi tải danh sách thuốc!' }
+                    })),
+                    instance.get('/report-revenue/dashboard?startDate=${startDate}&endDate=${endDate}').catch(error => ({
+                        data: { success: false, message: error.message || 'Lỗi khi tải thống kê dashboard!' }
+                    })),
+                    instance.get(`/report-revenue/revenue?startDate=${startDate}&endDate=${endDate}`).catch(error => ({
+                        data: { success: false, message: error.message || 'Lỗi khi tải dữ liệu doanh thu!' }
+                    })),
+                ]);
+                NProgress.set(0.8);
+
+                // Xử lý từng phản hồi riêng lẻ
+
+                setLowStockMedicines(lowStockResponse.data);
+
+
+                if (statsResponse.success) {
+                    setStats(statsResponse.data);
+                } else {
+                    setStats(null);
+                    setToast({ type: 'error', message: statsResponse.message || 'Lỗi khi tải thống kê dashboard!' });
+                }
+
+                if (revenueResponse.success) {
+                    setTotalRevenue(revenueResponse.data);
+                } else {
+                    setTotalRevenue(null);
+                    setToast({ type: 'error', message: revenueResponse.message || 'Lỗi khi tải dữ liệu doanh thu!' });
+                }
             } catch (error) {
-                console.error("Lỗi khi tải thuốc:", error);
-                setToast({ type: "error", message: "Không thể tải danh sách thuốc!" });
+                console.error('Lỗi khi tải dữ liệu:', error);
+                setToast({ type: 'error', message: error.message || 'Không thể tải dữ liệu!' });
             } finally {
                 setLoading(false);
+                NProgress.done();
             }
         };
-        fetchLowStockMedicines();
-    }, []);
 
-
+        fetchData();
+    }, [startDate, endDate]);
 
     useEffect(() => {
-        const ctx = document.getElementById("revenueChart");
+        const ctx = document.getElementById('revenueChart');
         if (!ctx) return;
 
         const chart = new Chart(ctx, {
-            type: 'line',
+            type: 'bar',
             data: {
-                labels: ["10/10", "11/10", "12/10", "13/10", "14/10", "15/10", "16/10"],
+                labels: totalRevenue?.byDate?.map(item => new Date(item.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })) || [
+                    '10/10', '11/10', '12/10', '13/10', '14/10', '15/10', '16/10'
+                ],
                 datasets: [
                     {
-                        label: "Doanh thu (VND)",
-                        data: [15000000, 18000000, 12000000, 25000000, 20000000, 30000000, 28000000],
-                        borderColor: "#007bff",
-                        backgroundColor: "rgba(0,123,255,0.1)",
-                        fill: true,
-                        tension: 0.3
+                        label: 'Doanh thu (VNĐ)',
+                        data: totalRevenue?.byDate?.map(item => item.revenue) || [
+                            15000000, 18000000, 12000000, 25000000, 20000000, 30000000, 28000000
+                        ],
+                        backgroundColor: 'rgba(23, 162, 184, 0.6)',
+                        borderColor: 'rgba(23, 162, 184, 1)',
+                        borderWidth: 1
                     }
                 ]
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Ngày',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Doanh thu (VNĐ)',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        ticks: {
+                            callback: function (value) {
+                                return new Intl.NumberFormat('vi-VN').format(value);
+                            }
+                        }
+                    }
+                },
                 plugins: {
                     legend: { display: false },
-                },
-                scales: {
-                    y: { beginAtZero: true }
+                    datalabels: {
+                        anchor: 'end',
+                        align: 'top',
+                        formatter: function (value) {
+                            return new Intl.NumberFormat('vi-VN').format(value);
+                        },
+                        font: {
+                            weight: 'bold',
+                            size: 12
+                        },
+                        color: '#000'
+                    }
                 }
             }
         });
 
         return () => chart.destroy();
-    }, []);
+    }, [totalRevenue]);
+
+    const handleFilter = async () => {
+        setLoading(true);
+        NProgress.start();
+        try {
+            NProgress.set(0.4);
+            const revenueResponse = await instance.get(`/report-revenue/revenue?startDate=${startDate}&endDate=${endDate}`);
+            NProgress.set(0.8);
+            if (!revenueResponse.success) {
+                throw new Error(revenueResponse.message || 'Lỗi khi tải dữ liệu doanh thu!');
+            }
+            setTotalRevenue(revenueResponse.data);
+        } catch (error) {
+            console.error('Lỗi khi tải dữ liệu biểu đồ:', error);
+            setToast({ type: 'error', message: error.message || 'Không thể tải dữ liệu biểu đồ!' });
+        } finally {
+            setLoading(false);
+            NProgress.done();
+        }
+    };
 
     return (
         <div style={{ display: 'flex', margin: 0, backgroundColor: '#f8f9fa' }}>
@@ -78,108 +168,117 @@ const AdminDashboard = () => {
             <div className="dashboard-container" style={{ position: 'relative', width: '100%', flexGrow: 1, marginLeft: '5px', padding: '30px' }}>
                 <header className="dashboard-header">
                     <h1>Dashboard Tổng Quan</h1>
-                    <div className='date-range-picker'>
+                    <div className="date-range-picker">
                         <label htmlFor="startDate">Từ Ngày:</label>
-                        <input type="date" />
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                        />
                         <label htmlFor="endDate">Đến Ngày:</label>
-                        <input type="date" />
-                        <button className='btn-success' disabled={setLoading}>Lọc</button>
+                        <input
+                            type="date"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                        />
+                        <button className="btn-success" disabled={loading} onClick={handleFilter}>
+                            Lọc
+                        </button>
                     </div>
-                
                 </header>
-<hr />
-                <div className="stat-cards">
-                    <div className="stat-card bg-primary">
-                        <i className="fa-solid fa-sack-dollar"></i>
-                        <div>
-                            <h5>Doanh Thu</h5>
-                            <p>{stats.totalRevenue.toLocaleString()} VND</p>
+                <hr />
+                {loading ? (
+                    <Loading isLoading={loading} />
+                ) : (
+                    <>
+                        <div className="stat-cards">
+                            <div className="stat-card bg-primary">
+                                <i className="fa-solid fa-sack-dollar"></i>
+                                <div>
+                                    <h5>Doanh Thu</h5>
+                                    <p>
+                                        {totalRevenue?.totalRevenue
+                                            ? totalRevenue.totalRevenue.toLocaleString('vi-VN') + ' VND'
+                                            : '0 VND'}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="stat-card bg-success">
+                                <i className="fa-solid fa-user-check"></i>
+                                <div>
+                                    <h5>Đã Khám</h5>
+                                    <p>{stats?.completedAppointmentsToday || 0}</p>
+                                </div>
+                            </div>
+                            <div className="stat-card bg-danger">
+                                <i className="fa-solid fa-file-invoice-dollar"></i>
+                                <div>
+                                    <h5>Hóa Đơn Chờ</h5>
+                                    <p>{stats?.pendingInvoicesCount || 0}</p>
+                                </div>
+                            </div>
+                            <div className="stat-card bg-info">
+                                <i className="fa-solid fa-calendar-check"></i>
+                                <div>
+                                    <h5>Lịch Hẹn Hôm Nay</h5>
+                                    <p>{stats?.totalAppointmentsToday || 0}</p>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-
-                    <div className="stat-card bg-success">
-                        <i className="fa-solid fa-user-check"></i>
-                        <div>
-                            <h5>Đã Khám</h5>
-                            <p>{stats.completedAppointments}</p>
-                        </div>
-                    </div>
-
-                    <div className="stat-card bg-danger">
-                        <i className="fa-solid fa-file-invoice-dollar"></i>
-                        <div>
-                            <h5>Hóa Đơn Chờ</h5>
-                            <p>{stats.pendingInvoices}</p>
-                        </div>
-                    </div>
-
-                    <div className="stat-card bg-info">
-                        <i className="fa-solid fa-calendar-check"></i>
-                        <div>
-                            <h5>Lịch Hẹn</h5>
-                            <p>{stats.totalAppointments}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="dashboard-row">
-                    <div className="chart-container card">
-                        <div class="card-header">
-                            <h3>Biểu Đồ Doanh Thu</h3>
-                        </div>
-                        <canvas id="revenueChart"></canvas>
-                    </div>
-
-                    <div className="inventory-container card">
-                        <div class="card-header">
-                            <h3>Cảnh Báo Tồn Kho (Dưới 100)</h3>
-                        </div>
-                        <div class="card-body">
-                            {(lowStockMedicines == null) &&
-                                <p>Đang tải...</p>
-                            }
-                            <table className="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Tên Thuốc</th>
-                                        <th class="text-end">Số Lượng</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {loading && <tr><Loading  isLoading={loading}/></tr>}
-                                    {!loading && (
-                                        lowStockMedicines.length === 0 ? (
+                        <div className="dashboard-row">
+                            <div className="chart-container card">
+                                <div className="card-header">
+                                    <h3>Biểu Đồ Doanh Thu</h3>
+                                </div>
+                                <canvas id="revenueChart"></canvas>
+                            </div>
+                            <div className="inventory-container card">
+                                <div className="card-header">
+                                    <h3>Cảnh Báo Tồn Kho (Dưới 200)</h3>
+                                </div>
+                                <div className="card-body">
+                                    <table className="table table-striped">
+                                        <thead>
                                             <tr>
-                                                <td colSpan="2" className="text-center text-muted">
-                                                    Không có thuốc nào sắp hết hàng.
-                                                </td>
+                                                <th>Tên Thuốc</th>
+                                                <th className="text-end">Số Lượng</th>
                                             </tr>
-                                        ) : (
-                                            lowStockMedicines.map((med) => (
-                                                <tr key={med.MedicineId}>
-                                                    <td>{med.MedicineName}</td>
-                                                    <td className={`text-end ${med.StockQuantity < 200 ? "text-danger" : ""}`}>
-                                                        {med.StockQuantity} {med.Unit}
+                                        </thead>
+                                        <tbody>
+                                            {lowStockMedicines?.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan="2" className="text-center text-muted">
+                                                        Không có thuốc nào sắp hết hàng.
                                                     </td>
                                                 </tr>
-                                            ))
-                                        )
-                                    )}
-
-                                </tbody>
-                            </table>
+                                            ) : (
+                                                lowStockMedicines?.map((med) => (
+                                                    <tr key={med.MedicineId}>
+                                                        <td>{med.MedicineName}</td>
+                                                        <td
+                                                            className={`text-end ${med.StockQuantity < 200 ? 'text-danger fw-bold' : ''}`}
+                                                        >
+                                                            {med.StockQuantity} {med.Unit}
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
+                    </>
+                )}
                 {toast && (
                     <CustomToast
                         type={toast.type}
                         message={toast.message}
-                        onClose={() => setToast(null)} />
+                        onClose={() => setToast(null)}
+                    />
                 )}
             </div>
         </div>
-
     );
 };
 
