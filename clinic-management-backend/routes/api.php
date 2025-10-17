@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\API\ReportRevenueController;
 use Dba\Connection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -39,6 +40,11 @@ Route::post('/suppliers', [SuppliersController::class, 'store']);
 Route::put('/suppliers/{id}', [SuppliersController::class, 'update']);
 Route::delete('/suppliers/{id}', [SuppliersController::class, 'destroy']);
 Route::get('/suppliers/{id}', [SuppliersController::class, 'show']);
+
+//admin-revenue
+Route::get('/report-revenue/dashboard', [ReportRevenueController::class, 'getDashboardStatistics']);
+Route::get('/report-revenue/revenue', [ReportRevenueController::class, 'getRevenueStatistics']);
+
 
 // Nhóm route cho Bác sĩ
 Route::prefix('doctor')->group(function () {
