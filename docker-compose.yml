@@ -10,9 +10,7 @@ services:
     restart: unless-stopped
     working_dir: /var/www/html
     volumes:
-      - ./clinic-management-backend/.env:/var/www/html/.env  # Mount .env (cẩn thận bảo mật!)
-      - ./clinic-management-backend/storage:/var/www/html/storage  # Chỉ mount thư mục storage
-      - ./clinic-management-backend/public:/var/www/html/public  # Chỉ mount thư mục public
+      - ./clinic-management-backend:/var/www/html
     environment:
     # postgresql://postgres.teswvvsewnjpelnvmeze:[YOUR-PASSWORD]@aws-1-us-east-2.pooler.supabase.com:5432/postgres
       - DB_CONNECTION=pgsql
