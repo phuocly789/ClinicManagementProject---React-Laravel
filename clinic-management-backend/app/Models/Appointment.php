@@ -53,7 +53,7 @@ class Appointment extends Model
 		'ScheduleId' => 'int',
 		'RecordId' => 'int',
 		'AppointmentDate' => 'datetime',
-		'AppointmentTime' => 'time without time zone',
+		'AppointmentTime' => 'string',
 		'FollowUpDate' => 'datetime',
 		'CreatedAt' => 'datetime',
 		'CreatedBy' => 'int'

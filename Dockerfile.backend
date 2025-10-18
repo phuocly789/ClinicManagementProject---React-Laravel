@@ -20,15 +20,15 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www/html
 
 # Copy toàn bộ code từ context
-COPY . /var/www/html/
+COPY . /var/www/html
 
 # Install Composer deps
-RUN rm -rf vendor && composer install --no-dev --optimize-autoloader
+RUN composer install --no-dev --optimize-autoloader
 
 
 # Permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage
 
-# Expose port cho built-in server
+# Expose port cho built-in servers
 EXPOSE 8000
