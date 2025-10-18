@@ -22,7 +22,7 @@
     const [currentPage, setCurrentPage] = useState(0); //  State cho pagination
     const itemsPerPage = 8; //  4 hàng mỗi trang
 
-    //  Tự fetch services on mount
+    //  Tự fetch services on mounts
     useEffect(() => {
       const fetchServices = async () => {
         try {
