@@ -16,7 +16,7 @@ use Laravel\Passport\HasApiTokens;
 
 /**
  * Class User
- * 
+ *
  * @property int $UserId
  * @property string $Username
  * @property string $PasswordHash
@@ -27,22 +27,19 @@ use Laravel\Passport\HasApiTokens;
  * @property string|null $Address
  * @property Carbon|null $DateOfBirth
  * @property Carbon|null $CreatedAt
- * @property bool|null $IsActive
  * @property bool $MustChangePassword
- * 
- * @property Collection|MedicalRecord[] $medical_records
- * @property Patient|null $patient
- * @property MedicalStaff|null $medical_staff
+ * @property string|null $CodeId
+ * @property Carbon|null $CodeExpired
+ * @property bool|null $IsActive
+ *
  * @property Collection|Role[] $roles
- * @property Collection|Queue[] $queues
- * @property Collection|Diagnosis[] $diagnoses
- * @property Collection|StaffSchedule[] $staff_schedules
- * @property Collection|Appointment[] $appointments
- * @property Collection|ServiceOrder[] $service_orders
- * @property Collection|ImportBill[] $import_bills
- * @property Collection|Invoice[] $invoices
+ * @property MedicalStaff|null $medical_staff
+ * @property Collection|MedicalRecord[] $medical_records
  * @property Collection|Notification[] $notifications
- * @property Collection|Prescription[] $prescriptions
+ * @property Collection|Appointment[] $appointments
+ * @property Collection|Queue[] $queues
+ * @property Patient|null $patient
+ * @property Collection|ImportBill[] $import_bills
  *
  * @package App\Models
  */
@@ -51,15 +48,17 @@ class User extends Authenticatable
 	use HasApiTokens, Notifiable;
 	protected $table = 'Users';
 	protected $primaryKey = 'UserId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [
 		'UserId' => 'int',
+		'Gender' => 'string',
 		'DateOfBirth' => 'datetime',
 		'CreatedAt' => 'datetime',
-		'IsActive' => 'bool',
-		'MustChangePassword' => 'bool'
+		'MustChangePassword' => 'bool',
+		'CodeExpired' => 'datetime',
+		'IsActive' => 'bool'
 	];
 
 	protected $fillable = [
@@ -72,24 +71,11 @@ class User extends Authenticatable
 		'Address',
 		'DateOfBirth',
 		'CreatedAt',
-		'IsActive',
-		'MustChangePassword'
+		'MustChangePassword',
+		'CodeId',
+		'CodeExpired',
+		'IsActive'
 	];
-
-	public function medical_records()
-	{
-		return $this->hasMany(MedicalRecord::class, 'CreatedBy');
-	}
-
-	public function patient()
-	{
-		return $this->hasOne(Patient::class, 'PatientId');
-	}
-
-	public function medical_staff()
-	{
-		return $this->hasOne(MedicalStaff::class, 'StaffId');
-	}
 
 	public function roles()
 	{
@@ -97,39 +83,14 @@ class User extends Authenticatable
 			->withPivot('AssignedAt');
 	}
 
-	public function queues()
+	public function medical_staff()
 	{
-		return $this->hasMany(Queue::class, 'CreatedBy');
+		return $this->hasOne(MedicalStaff::class, 'StaffId');
 	}
 
-	public function diagnoses()
+	public function medical_records()
 	{
-		return $this->hasMany(Diagnosis::class, 'StaffId');
-	}
-
-	public function staff_schedules()
-	{
-		return $this->hasMany(StaffSchedule::class, 'StaffId');
-	}
-
-	public function appointments()
-	{
-		return $this->hasMany(Appointment::class, 'CreatedBy');
-	}
-
-	public function service_orders()
-	{
-		return $this->hasMany(ServiceOrder::class, 'AssignedStaffId');
-	}
-
-	public function import_bills()
-	{
-		return $this->hasMany(ImportBill::class, 'CreatedBy');
-	}
-
-	public function invoices()
-	{
-		return $this->hasMany(Invoice::class, 'PatientId');
+		return $this->hasMany(MedicalRecord::class, 'CreatedBy');
 	}
 
 	public function notifications()
@@ -137,8 +98,23 @@ class User extends Authenticatable
 		return $this->hasMany(Notification::class, 'UserId');
 	}
 
-	public function prescriptions()
+	public function appointments()
 	{
-		return $this->hasMany(Prescription::class, 'StaffId');
+		return $this->hasMany(Appointment::class, 'CreatedBy');
+	}
+
+	public function queues()
+	{
+		return $this->hasMany(Queue::class, 'CreatedBy');
+	}
+
+	public function patient()
+	{
+		return $this->hasOne(Patient::class, 'PatientId');
+	}
+
+	public function import_bills()
+	{
+		return $this->hasMany(ImportBill::class, 'CreatedBy');
 	}
 }

@@ -111,4 +111,16 @@ class MedicinesController extends Controller
             'message' => 'Xóa thuốc thành công'
         ]);
     }
+    //check tồn kho
+    public function checkLowStock(Request $request){
+        $threshold =$request->get('threshold', 100);
+
+        $lowStock=Medicine::where('StockQuantity','<',$threshold)->orderBy('StockQuantity','asc')->get(['MedicineId','MedicineName','StockQuantity','Unit']);
+
+        return response()->json([
+            'message'=> 'Danh sách thuốc tồn kho thấp',
+            'threshold'=> $threshold,
+            'data'=> $lowStock
+        ]);
+    }
 }

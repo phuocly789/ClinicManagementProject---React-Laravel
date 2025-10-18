@@ -1,0 +1,241 @@
+/* 🌈 Tổng thể Dashboard */
+.dashboard-container {
+    padding: 2rem;
+    font-family: 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg, #f8f9fb 0%, #eef1f6 100%);
+    min-height: 100vh;
+}
+
+/* 🏷️ Tiêu đề */
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.dashboard-header h1 {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #2d3436;
+}
+
+/* 📅 Bộ lọc ngày */
+.date-range-picker {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    justify-content: center;
+}
+
+.date-range-picker label {
+    font-weight: 500;
+    color: #495057;
+    white-space: nowrap;
+}
+
+.date-range-picker input {
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    padding: 6px 10px;
+    outline: none;
+    transition: 0.3s;
+}
+
+.date-range-picker input:hover,
+.date-range-picker input:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+.date-range-picker button {
+    background: #007bff;
+    border: none;
+    color: white;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.25s;
+}
+
+.date-range-picker button:hover {
+    background: #0056b3;
+}
+
+/* 📊 Các thẻ thống kê */
+.stat-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    color: #fff;
+    padding: 1.5rem 1.8rem;
+    border-radius: 1rem;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.12);
+    transition: all 0.3s ease;
+    transform: translateY(0);
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+}
+
+.stat-card i {
+    font-size: 2.3rem;
+    opacity: 0.9;
+}
+
+.stat-card h5 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 500;
+    opacity: 0.9;
+}
+
+.stat-card p {
+    font-size: 1.3rem;
+    font-weight: bold;
+    margin: 0;
+}
+
+.bg-primary {
+    background: linear-gradient(45deg, #007bff, #00a2ff);
+}
+
+.bg-success {
+    background: linear-gradient(45deg, #28a745, #33c37e);
+}
+
+.bg-danger {
+    background: linear-gradient(45deg, #dc3545, #ff5c75);
+}
+
+.bg-info {
+    background: linear-gradient(45deg, #17a2b8, #20c997);
+}
+
+/* 🧾 Hai khối chính: biểu đồ & cảnh báo tồn kho */
+.dashboard-row {
+    display: grid;
+    grid-template-columns: 1.7fr 1fr;
+    gap: 1.5rem;
+}
+
+/* 📈 Card chung */
+.card {
+    background: #fff;
+    border-radius: 1rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    transition: 0.3s;
+}
+
+.card:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.card-header {
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    padding: 1rem 1.5rem;
+}
+
+.card-header h3 {
+    font-size: 1.2rem;
+    margin: 0;
+    color: #212529;
+    font-weight: 600;
+}
+
+.card-body {
+    padding: 1.5rem;
+}
+
+/* 📊 Biểu đồ */
+.chart-container {
+    height: 61vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.inventory-container .card-body {
+    height: 44vh;
+    overflow-y: auto;
+}
+
+/* 💊 Bảng tồn kho */
+
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+.table thead {
+    position: sticky;
+    top: 0;
+    /* 👈 cố định header ở đầu container */
+    z-index: 2;
+    /* đảm bảo header nằm trên phần thân */
+    background-color: #f5f7fa;
+    /* màu nền header */
+}
+
+.table thead th {
+    font-weight: 600;
+    color: #333;
+    text-align: center;
+    padding: 12px 8px;
+    font-size: 15px;
+    border-bottom: 2px solid #e3e6ea;
+
+    border-top: none;
+    border-bottom: 1px solid #eee;
+    /* chỉ giữ gạch ngang */
+    border-left: none;
+    border-right: none;
+}
+
+.table tbody td {
+    padding: 12px 10px;
+    text-align: center;
+    vertical-align: middle;
+    color: #555;
+    border-bottom: 1px solid #eee;
+    font-size: 14px;
+
+    border-top: none;
+    border-bottom: 1px solid #eee;
+    /* chỉ giữ gạch ngang */
+    border-left: none;
+    border-right: none;
+}
+
+/* Hover dòng */
+.table tbody tr:hover {
+    background-color: #dfe0e1;
+    transition: background 0.2s ease;
+    cursor: pointer;
+}
+
+
+/* ✨ Loại bỏ gạch dọc ở mép ngoài */
+.table th:first-child,
+.table td:first-child {
+    border-left: none;
+}
+
+.table th:last-child,
+.table td:last-child {
+    border-right: none;
+}
+

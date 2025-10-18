@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Table, Button, Spinner, Form, Row, Col } from 'react-bootstrap';
-import Taskbar from '../Components/Taskbar';
-import Pagination from '../Components/Pagination/Pagination';
-import ConfirmDeleteModal from '../Components/CustomToast/DeleteConfirmModal';
-import CustomToast from '../Components/CustomToast/CustomToast';
+
+import Pagination from '../../Components/Pagination/Pagination';
+import ConfirmDeleteModal from '../../Components/CustomToast/DeleteConfirmModal';
+import CustomToast from '../../Components/CustomToast/CustomToast';
+import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -885,7 +886,7 @@ const AdminInventory = () => {
 
   return (
     <div style={{ display: 'flex', fontFamily: "'Segoe UI', sans-serif", margin: 0, backgroundColor: '#f8f9fa' }}>
-      <Taskbar />
+      <AdminSidebar />
       <div style={{ position: 'relative', width: '100%', flexGrow: 1, marginLeft: '5px', padding: '30px' }}>
         <h1 className="mb-4">Quản Lý Kho</h1>
         {currentView === 'list' && (
