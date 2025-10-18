@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property time without time zone $EndTime
  * @property bool|null $IsAvailable
  * 
- * @property User|null $user
+ * @property MedicalStaff|null $medical_staff
  * @property Collection|Appointment[] $appointments
  *
  * @package App\Models
@@ -49,9 +49,9 @@ class StaffSchedule extends Model
 		'IsAvailable'
 	];
 
-	public function user()
+	public function medical_staff()
 	{
-		return $this->belongsTo(User::class, 'StaffId');
+		return $this->belongsTo(MedicalStaff::class, 'StaffId');
 	}
 
 	public function appointments()

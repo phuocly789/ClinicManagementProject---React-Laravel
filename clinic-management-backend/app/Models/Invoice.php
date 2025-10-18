@@ -21,7 +21,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $Status
  * 
  * @property Appointment|null $appointment
- * @property User|null $user
+ * @property Patient|null $patient
  * @property Collection|InvoiceDetail[] $invoice_details
  *
  * @package App\Models
@@ -54,9 +54,9 @@ class Invoice extends Model
 		return $this->belongsTo(Appointment::class, 'AppointmentId');
 	}
 
-	public function user()
+	public function patient()
 	{
-		return $this->belongsTo(User::class, 'PatientId');
+		return $this->belongsTo(Patient::class, 'PatientId');
 	}
 
 	public function invoice_details()

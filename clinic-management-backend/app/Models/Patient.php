@@ -17,7 +17,9 @@ use Illuminate\Database\Eloquent\Model;
  * 
  * @property User $user
  * @property Collection|MedicalRecord[] $medical_records
+ * @property Collection|Appointment[] $appointments
  * @property Collection|Queue[] $queues
+ * @property Collection|Invoice[] $invoices
  *
  * @package App\Models
  */
@@ -46,8 +48,18 @@ class Patient extends Model
 		return $this->hasMany(MedicalRecord::class, 'PatientId');
 	}
 
+	public function appointments()
+	{
+		return $this->hasMany(Appointment::class, 'PatientId');
+	}
+
 	public function queues()
 	{
 		return $this->hasMany(Queue::class, 'PatientId');
+	}
+
+	public function invoices()
+	{
+		return $this->hasMany(Invoice::class, 'PatientId');
 	}
 }

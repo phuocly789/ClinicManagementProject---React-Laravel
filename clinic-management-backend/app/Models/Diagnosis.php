@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property Carbon|null $DiagnosisDate
  * 
  * @property Appointment|null $appointment
- * @property User|null $user
+ * @property MedicalStaff|null $medical_staff
  * @property MedicalRecord|null $medical_record
  *
  * @package App\Models
@@ -57,9 +57,9 @@ class Diagnosis extends Model
 		return $this->belongsTo(Appointment::class, 'AppointmentId');
 	}
 
-	public function user()
+	public function medical_staff()
 	{
-		return $this->belongsTo(User::class, 'StaffId');
+		return $this->belongsTo(MedicalStaff::class, 'StaffId');
 	}
 
 	public function medical_record()

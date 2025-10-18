@@ -6,18 +6,24 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 
 /**
  * Class MedicalStaff
- * 
+ *
  * @property int $StaffId
- * @property string $StaffType
+ * @property string|null $StaffType
  * @property string|null $Specialty
  * @property string|null $LicenseNumber
  * @property string|null $Bio
- * 
+ *
  * @property User $user
+ * @property Collection|StaffSchedule[] $staff_schedules
+ * @property Collection|Diagnosis[] $diagnoses
+ * @property Collection|Appointment[] $appointments
+ * @property Collection|ServiceOrder[] $service_orders
+ * @property Collection|Prescription[] $prescriptions
  *
  * @package App\Models
  */
@@ -29,7 +35,8 @@ class MedicalStaff extends Model
 	public $timestamps = false;
 
 	protected $casts = [
-		'StaffId' => 'int'
+		'StaffId' => 'int',
+		'StaffType' => 'string'
 	];
 
 	protected $fillable = [
@@ -42,5 +49,30 @@ class MedicalStaff extends Model
 	public function user()
 	{
 		return $this->belongsTo(User::class, 'StaffId');
+	}
+
+	public function staff_schedules()
+	{
+		return $this->hasMany(StaffSchedule::class, 'StaffId');
+	}
+
+	public function diagnoses()
+	{
+		return $this->hasMany(Diagnosis::class, 'StaffId');
+	}
+
+	public function appointments()
+	{
+		return $this->hasMany(Appointment::class, 'StaffId');
+	}
+
+	public function service_orders()
+	{
+		return $this->hasMany(ServiceOrder::class, 'AssignedStaffId');
+	}
+
+	public function prescriptions()
+	{
+		return $this->hasMany(Prescription::class, 'StaffId');
 	}
 }

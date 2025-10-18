@@ -21,7 +21,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $Instructions
  * 
  * @property Appointment|null $appointment
- * @property User|null $user
+ * @property MedicalStaff|null $medical_staff
  * @property MedicalRecord|null $medical_record
  * @property Collection|PrescriptionDetail[] $prescription_details
  *
@@ -55,9 +55,9 @@ class Prescription extends Model
 		return $this->belongsTo(Appointment::class, 'AppointmentId');
 	}
 
-	public function user()
+	public function medical_staff()
 	{
-		return $this->belongsTo(User::class, 'StaffId');
+		return $this->belongsTo(MedicalStaff::class, 'StaffId');
 	}
 
 	public function medical_record()

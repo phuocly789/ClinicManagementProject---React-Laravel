@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Table, Button, Spinner, Form, Row, Col } from 'react-bootstrap';
-import Taskbar from '../Components/Taskbar';
-import Pagination from '../Components/Pagination/Pagination';
-import ConfirmDeleteModal from '../Components/CustomToast/DeleteConfirmModal';
-import CustomToast from '../Components/CustomToast/CustomToast';
+
+import Pagination from '../../Components/Pagination/Pagination';
+import ConfirmDeleteModal from '../../Components/CustomToast/DeleteConfirmModal';
+import CustomToast from '../../Components/CustomToast/CustomToast';
 import { Pencil, PencilIcon, ServerCrash, Trash } from 'lucide-react';
+import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -582,7 +583,7 @@ const AdminMedicine = () => {
 
   return (
     <div className="d-flex">
-      <Taskbar />
+      <AdminSidebar />
       <div className="position-relative w-100 flex-grow-1 ms-5 p-4">
         <h1 className="mb-4">Quản Lý Thuốc</h1>
         {currentView === 'list' && (
