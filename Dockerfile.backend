@@ -22,8 +22,6 @@ WORKDIR /var/www/html
 # Copy toàn bộ code từ context
 COPY . /var/www/html
 
-
-
 # Install Composer deps
 RUN composer install --no-dev --optimize-autoloader
 
