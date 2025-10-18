@@ -25,7 +25,7 @@ COPY . /var/www/html
 
 
 # Install Composer deps
-RUN composer install --no-dev --optimize-autoloader
+RUN rm -rf vendor && composer install --no-dev --optimize-autoloader
 
 # Permissions
 RUN chown -R www-data:www-data /var/www/html \
