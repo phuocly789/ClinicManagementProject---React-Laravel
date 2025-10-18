@@ -6,6 +6,7 @@ use App\Http\Controllers\API\MedicinesController;
 use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\ImportBillController;
 use App\Http\Controllers\API\SuppliersController;
+use App\Http\Controllers\API\AuthController;
 
 /*
 |--------------------------------------------------------------------------
@@ -38,3 +39,6 @@ Route::post('/suppliers', [SuppliersController::class, 'store']);
 Route::put('/suppliers/{id}', [SuppliersController::class, 'update']);
 Route::delete('/suppliers/{id}', [SuppliersController::class, 'destroy']);
 Route::get('/suppliers/{id}', [SuppliersController::class, 'show']);
+
+Route::post('/auth/login', [AuthController::class, 'login']);
+Route::post('/create-user', [AuthController::class, 'createUser']);

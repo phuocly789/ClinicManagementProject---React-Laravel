@@ -8,10 +8,11 @@ RUN apt-get update && apt-get install -y \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
+    libsodium-dev \
     zip \
     unzip \
     libpq-dev \
-    && docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd
+    && docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd sodium
 
 # Cài Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -22,7 +23,7 @@ WORKDIR /var/www/html
 # Copy toàn bộ code từ context
 COPY . /var/www/html
 
-# Install Composer deps
+# Install Composer deps 
 RUN composer install --no-dev --optimize-autoloader
 
 # Permissions
