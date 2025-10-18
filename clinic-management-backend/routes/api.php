@@ -44,6 +44,7 @@ Route::get('/suppliers/{id}', [SuppliersController::class, 'show']);
 //admin-revenue
 Route::get('/report-revenue/dashboard', [ReportRevenueController::class, 'getDashboardStatistics']);
 Route::get('/report-revenue/revenue', [ReportRevenueController::class, 'getRevenueStatistics']);
+Route::get('/report-revenue/combined', [ReportRevenueController::class, 'getCombinedStatistics']);
 
 
 // Nhóm route cho Bác sĩ

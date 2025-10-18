@@ -1,5 +1,5 @@
 import './AdminDashboard.css';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import AdminSidebar from '../../../Components/Sidebar/AdminSidebar';
@@ -19,54 +19,59 @@ const AdminDashboard = () => {
     const [startDate, setStartDate] = useState(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
     const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
-    useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            NProgress.start();
-            try {
-                NProgress.set(0.4);
-                const [lowStockResponse, statsResponse, revenueResponse] = await Promise.all([
-                    instance.get('/medicines/low-stock?threshold=200').catch(error => ({
-                        data: { success: false, message: error.message || 'Lỗi khi tải danh sách thuốc!' }
-                    })),
-                    instance.get('/report-revenue/dashboard?startDate=${startDate}&endDate=${endDate}').catch(error => ({
-                        data: { success: false, message: error.message || 'Lỗi khi tải thống kê dashboard!' }
-                    })),
-                    instance.get(`/report-revenue/revenue?startDate=${startDate}&endDate=${endDate}`).catch(error => ({
-                        data: { success: false, message: error.message || 'Lỗi khi tải dữ liệu doanh thu!' }
-                    })),
-                ]);
-                NProgress.set(0.8);
+    const fetchData = async () => {
+        setLoading(true);
+        NProgress.start();
+        try {
+            NProgress.set(0.4);
+            const [lowStockResponse, combinedResponse] = await Promise.all([
+                instance.get('/medicines/low-stock?threshold=200'),
+                instance.get(`/report-revenue/combined?startDate=${startDate}&endDate=${endDate}`),
+            ]);
+            NProgress.set(0.8);
 
-                // Xử lý từng phản hồi riêng lẻ
-
-                setLowStockMedicines(lowStockResponse.data);
-
-
-                if (statsResponse.success) {
-                    setStats(statsResponse.data);
-                } else {
-                    setStats(null);
-                    setToast({ type: 'error', message: statsResponse.message || 'Lỗi khi tải thống kê dashboard!' });
-                }
-
-                if (revenueResponse.success) {
-                    setTotalRevenue(revenueResponse.data);
-                } else {
-                    setTotalRevenue(null);
-                    setToast({ type: 'error', message: revenueResponse.message || 'Lỗi khi tải dữ liệu doanh thu!' });
-                }
-            } catch (error) {
-                console.error('Lỗi khi tải dữ liệu:', error);
-                setToast({ type: 'error', message: error.message || 'Không thể tải dữ liệu!' });
-            } finally {
-                setLoading(false);
-                NProgress.done();
+            if (!lowStockResponse.success) {
+                throw new Error(lowStockResponse.message || 'Lỗi khi tải danh sách thuốc!');
             }
-        };
+            setLowStockMedicines(lowStockResponse.data);
 
+            if (!combinedResponse.success) {
+                throw new Error(combinedResponse.message || 'Lỗi khi tải thống kê!');
+            }
+            setStats({
+                totalAppointmentsToday: combinedResponse.data.totalAppointmentsToday,
+                completedAppointmentsToday: combinedResponse.data.completedAppointmentsToday,
+                pendingInvoicesCount: combinedResponse.data.pendingInvoicesCount,
+            });
+            setTotalRevenue({
+                totalRevenue: combinedResponse.data.totalRevenue,
+                byDate: combinedResponse.data.revenueByDate,
+            });
+        } catch (error) {
+            console.error('Lỗi khi tải dữ liệu:', error);
+            setToast({ type: 'error', message: error.message || 'Không thể tải dữ liệu!' });
+        } finally {
+            setLoading(false);
+            NProgress.done();
+        }
+    };
+
+    useEffect(() => {
         fetchData();
     }, [startDate, endDate]);
+
+    const chartData = useMemo(() => ({
+        labels: totalRevenue?.byDate?.map(item => new Date(item.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })) || [],
+        datasets: [
+            {
+                label: 'Doanh thu (VNĐ)',
+                data: totalRevenue?.byDate?.map(item => item.revenue) || [],
+                backgroundColor: 'rgba(23, 162, 184, 0.6)',
+                borderColor: 'rgba(23, 162, 184, 1)',
+                borderWidth: 1,
+            },
+        ],
+    }), [totalRevenue]);
 
     useEffect(() => {
         const ctx = document.getElementById('revenueChart');
@@ -74,52 +79,23 @@ const AdminDashboard = () => {
 
         const chart = new Chart(ctx, {
             type: 'bar',
-            data: {
-                labels: totalRevenue?.byDate?.map(item => new Date(item.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })) || [
-                    '10/10', '11/10', '12/10', '13/10', '14/10', '15/10', '16/10'
-                ],
-                datasets: [
-                    {
-                        label: 'Doanh thu (VNĐ)',
-                        data: totalRevenue?.byDate?.map(item => item.revenue) || [
-                            15000000, 18000000, 12000000, 25000000, 20000000, 30000000, 28000000
-                        ],
-                        backgroundColor: 'rgba(23, 162, 184, 0.6)',
-                        borderColor: 'rgba(23, 162, 184, 1)',
-                        borderWidth: 1
-                    }
-                ]
-            },
+            data: chartData,
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
                     x: {
-                        title: {
-                            display: true,
-                            text: 'Ngày',
-                            font: {
-                                size: 14,
-                                weight: 'bold'
-                            }
-                        }
+                        title: { display: true, text: 'Ngày', font: { size: 14, weight: 'bold' } },
                     },
                     y: {
                         beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Doanh thu (VNĐ)',
-                            font: {
-                                size: 14,
-                                weight: 'bold'
-                            }
-                        },
+                        title: { display: true, text: 'Doanh thu (VNĐ)', font: { size: 14, weight: 'bold' } },
                         ticks: {
                             callback: function (value) {
                                 return new Intl.NumberFormat('vi-VN').format(value);
-                            }
-                        }
-                    }
+                            },
+                        },
+                    },
                 },
                 plugins: {
                     legend: { display: false },
@@ -129,37 +105,18 @@ const AdminDashboard = () => {
                         formatter: function (value) {
                             return new Intl.NumberFormat('vi-VN').format(value);
                         },
-                        font: {
-                            weight: 'bold',
-                            size: 12
-                        },
-                        color: '#000'
-                    }
-                }
-            }
+                        font: { weight: 'bold', size: 12 },
+                        color: '#000',
+                    },
+                },
+            },
         });
 
         return () => chart.destroy();
-    }, [totalRevenue]);
+    }, [chartData]);
 
     const handleFilter = async () => {
-        setLoading(true);
-        NProgress.start();
-        try {
-            NProgress.set(0.4);
-            const revenueResponse = await instance.get(`/report-revenue/revenue?startDate=${startDate}&endDate=${endDate}`);
-            NProgress.set(0.8);
-            if (!revenueResponse.success) {
-                throw new Error(revenueResponse.message || 'Lỗi khi tải dữ liệu doanh thu!');
-            }
-            setTotalRevenue(revenueResponse.data);
-        } catch (error) {
-            console.error('Lỗi khi tải dữ liệu biểu đồ:', error);
-            setToast({ type: 'error', message: error.message || 'Không thể tải dữ liệu biểu đồ!' });
-        } finally {
-            setLoading(false);
-            NProgress.done();
-        }
+        await fetchData();
     };
 
     return (
