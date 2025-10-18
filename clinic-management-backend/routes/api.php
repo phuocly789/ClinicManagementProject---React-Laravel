@@ -15,6 +15,7 @@ use App\Http\Controllers\API\Doctor\DiagnosisSuggestionController;
 use App\Http\Controllers\API\Doctor\DoctorMedicineSearchController;
 use App\Http\Controllers\API\Doctor\AISuggestionController;
 use App\Http\Controllers\API\Doctor\ServiceController;
+use App\Http\Controllers\API\User\UserControllers;
 //----------------------------------------------Hết-------------------------------
 
 
@@ -70,4 +71,16 @@ Route::prefix('doctor')->group(function () {
     // Route::get('/examination/{appointmentId}', [ExaminationController::class, 'show']);
     // Route::post('/examination/complete/{appointmentId}', [ExaminationController::class, 'complete']);
 });
+
+//Nhóm route cho User
+
+Route::prefix('users')->group(function () {
+    Route::get('/', [UserControllers::class, 'index']);
+    Route::post('/', [UserControllers::class, 'store']);
+    Route::put('/{id}', [UserControllers::class, 'update']);
+    Route::delete('/{id}', [UserControllers::class, 'destroy']);
+    Route::patch('/{id}/toggle-status', [UserControllers::class, 'toggleStatus']);
+});
+
+Route::get('/roles', [UserControllers::class, 'roles']);
 
