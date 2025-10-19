@@ -3,9 +3,10 @@ import _ from "lodash";
 import NProgress from "nprogress";
 import "nprogress/nprogress.css";
 
+const API_BASE_URL = 'http://localhost:8000';
 NProgress.configure({ showSpinner: false });
 const instance = axios.create({
-    baseURL: import.meta.env.VITE_BACKEND_URL,
+    baseURL: API_BASE_URL,
     withCredentials: true,
 });
 

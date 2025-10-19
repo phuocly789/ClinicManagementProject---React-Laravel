@@ -7,10 +7,12 @@ const UserManagement = () => {
   const usersPerPage = 5;
 
   const [users, setUsers] = useState([]);
+  const [roles, setRoles] = useState([]); // ✅ Thêm danh sách vai trò
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({ gender: '', role: '', status: '' });
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -33,6 +35,7 @@ const UserManagement = () => {
 
   useEffect(() => {
     fetchUsers(currentPage);
+    fetchRoles(); // ✅ Lấy danh sách vai trò
   }, [currentPage]);
 
   const fetchUsers = (page = 1) => {
@@ -46,6 +49,13 @@ const UserManagement = () => {
       .catch((err) => console.error('Lỗi gọi API:', err));
   };
 
+  const fetchRoles = () => {
+    fetch('http://localhost:8000/api/roles')
+      .then((res) => res.json())
+      .then((data) => setRoles(data))
+      .catch((err) => console.error('Lỗi tải vai trò:', err));
+  };
+
   const handleCreateUser = () => {
     fetch('http://localhost:8000/api/users', {
       method: 'POST',
@@ -53,18 +63,7 @@ const UserManagement = () => {
       body: JSON.stringify(newUser),
     }).then(() => {
       setShowAddModal(false);
-      setNewUser({
-        Username: '',
-        Gender: '',
-        Email: '',
-        Phone: '',
-        BirthDate: '',
-        Address: '',
-        Role: '',
-        Specialty: '',
-        License: '',
-        IsActive: true,
-      });
+      resetForm();
       fetchUsers(currentPage);
     });
   };
@@ -99,6 +98,21 @@ const UserManagement = () => {
     }).then(() => {
       setShowStatusModal(false);
       fetchUsers(currentPage);
+    });
+  };
+
+  const resetForm = () => {
+    setNewUser({
+      Username: '',
+      Gender: '',
+      Email: '',
+      Phone: '',
+      BirthDate: '',
+      Address: '',
+      Role: '',
+      Specialty: '',
+      License: '',
+      IsActive: true,
     });
   };
 
@@ -325,27 +339,106 @@ const UserManagement = () => {
     </div>
   );
 
+  // ===================== Form Modal =====================
   function renderUserForm(title, onSubmit, onClose) {
     return (
       <div className="modal">
         <div className="modal-content">
           <div className="modal-header">{title}</div>
           <form>
-            {['Username', 'Email', 'Phone', 'Address', 'BirthDate', 'Gender', 'Role', 'Specialty', 'License'].map((f) => (
-              (f !== 'Specialty' && f !== 'License') || newUser.Role === 'Bác sĩ' ? (
-                <div key={f}>
-                  <label>{f}</label>
+            <div>
+              <label>Tên đăng nhập</label>
+              <input
+                type="text"
+                value={newUser.Username}
+                onChange={(e) => setNewUser({ ...newUser, Username: e.target.value })}
+              />
+            </div>
+            <div>
+              <label>Email</label>
+              <input
+                type="email"
+                value={newUser.Email}
+                onChange={(e) => setNewUser({ ...newUser, Email: e.target.value })}
+              />
+            </div>
+            <div>
+              <label>Số điện thoại</label>
+              <input
+                type="text"
+                value={newUser.Phone}
+                onChange={(e) => setNewUser({ ...newUser, Phone: e.target.value })}
+              />
+            </div>
+            <div>
+              <label>Địa chỉ</label>
+              <input
+                type="text"
+                value={newUser.Address}
+                onChange={(e) => setNewUser({ ...newUser, Address: e.target.value })}
+              />
+            </div>
+            <div>
+              <label>Ngày sinh</label>
+              <input
+                type="date"
+                value={newUser.BirthDate}
+                onChange={(e) => setNewUser({ ...newUser, BirthDate: e.target.value })}
+              />
+            </div>
+            <div>
+              <label>Giới tính</label>
+              <select
+                value={newUser.Gender}
+                onChange={(e) => setNewUser({ ...newUser, Gender: e.target.value })}
+              >
+                <option value="">Chọn</option>
+                <option value="Nam">Nam</option>
+                <option value="Nữ">Nữ</option>
+                <option value="Khác">Khác</option>
+              </select>
+            </div>
+            <div>
+              <label>Vai trò</label>
+              <select
+                value={newUser.Role}
+                onChange={(e) => setNewUser({ ...newUser, Role: e.target.value })}
+              >
+                <option value="">Chọn vai trò</option>
+                {roles.map((r) => (
+                  <option key={r.RoleId} value={r.RoleName}>
+                    {r.RoleName}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {newUser.Role === 'Bác sĩ' && (
+              <>
+                <div>
+                  <label>Chuyên khoa</label>
                   <input
-                    type={f === 'BirthDate' ? 'date' : 'text'}
-                    value={newUser[f] || ''}
-                    onChange={(e) => setNewUser({ ...newUser, [f]: e.target.value })}
+                    type="text"
+                    value={newUser.Specialty}
+                    onChange={(e) => setNewUser({ ...newUser, Specialty: e.target.value })}
                   />
                 </div>
-              ) : null
-            ))}
+                <div>
+                  <label>Giấy phép</label>
+                  <input
+                    type="text"
+                    value={newUser.License}
+                    onChange={(e) => setNewUser({ ...newUser, License: e.target.value })}
+                  />
+                </div>
+              </>
+            )}
             <div className="form-buttons">
-              <button type="button" className="save-btn" onClick={onSubmit}>Lưu</button>
-              <button type="button" className="cancel-btn" onClick={() => onClose(false)}>Hủy</button>
+              <button type="button" className="save-btn" onClick={onSubmit}>
+                Lưu
+              </button>
+              <button type="button" className="cancel-btn" onClick={() => onClose(false)}>
+                Hủy
+              </button>
             </div>
           </form>
         </div>

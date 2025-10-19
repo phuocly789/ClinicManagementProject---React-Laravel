@@ -12,14 +12,39 @@ class AISuggestionController extends Controller
 {
     public function suggest(Request $request)
     {
-        $diagnosis = trim($request->query('diagnosis', ''));
-        $type = trim($request->query('type', 'medicine')); // 'medicine' hoặc 'service'
+        // Log params để debug (giữ tạm)
+        $symptoms = $request->query('symptoms', '');
+        $diagnosis = $request->query('diagnosis', '');
+        $input = $request->query('input', '');
+        $type = $request->query('type', 'medicine');
+        Log::info('AI Suggestion Debug - Params: symptoms="' . $symptoms . '", diagnosis="' . $diagnosis . '", input="' . $input . '", type="' . $type . '"');
 
-        if (strlen($diagnosis) < 3) {
-            return response()->json(['error' => 'Thiếu thông tin chẩn đoán'], 400);
+        // Ưu tiên symptoms nếu có, rồi diagnosis, rồi input
+        $finalInput = trim($symptoms ?: $diagnosis ?: $input);
+
+        Log::info('Final input after trim: "' . $finalInput . '" (length: ' . strlen($finalInput) . ')');
+
+        if (strlen($finalInput) < 3) {
+            Log::warning('AI Suggestion - Input too short: ' . $finalInput);
+            return response()->json(['error' => 'Thiếu thông tin input (symptoms hoặc diagnosis)'], 400);
         }
 
-        // Lấy danh sách dữ liệu dựa trên loại
+        // Case cho type='diagnosis'
+        if ($type === 'diagnosis') {
+            $prompt = "
+        Bạn là bác sĩ chuyên khoa nội tổng quát.
+        Dựa trên triệu chứng: '{$finalInput}', hãy gợi ý 3-5 chẩn đoán có thể nhất.
+        Chỉ trả về JSON thuần túy với định dạng:
+        [
+          { 'DiagnosisName': 'Chẩn đoán 1', 'Reason': 'Lý do ngắn gọn...' },
+          { 'DiagnosisName': 'Chẩn đoán 2', 'Reason': 'Lý do ngắn gọn...' }
+        ]
+        Không thêm bất kỳ text nào ngoài JSON. Lý do phải dựa trên y khoa cơ bản, không chẩn đoán chính thức.
+        ";
+            return $this->callGemini($prompt);
+        }
+
+        // Medicine/Service logic
         $items = [];
         $itemList = '';
         if ($type === 'medicine') {
@@ -42,32 +67,51 @@ class AISuggestionController extends Controller
             return response()->json(['error' => 'Không tìm thấy ' . ($type === 'medicine' ? 'thuốc' : 'dịch vụ') . ' trong database'], 500);
         }
 
-        // Prompt động dựa trên loại
+        // 🆕 Prompt rõ ràng hơn (best practice: chỉ định schema chính xác, tránh Gemini bịa key)
+        $inputType = ($type === 'medicine') ? 'chẩn đoán' : 'chẩn đoán';
+        $itemType = ($type === 'medicine') ? 'thuốc' : 'dịch vụ cận lâm sàng';
+        $schemaKey = ($type === 'medicine') ? 'MedicineName' : 'ServiceName'; // 🆕 Fix key cho service
+        $extraField = ($type === 'service') ? ", 'ServiceId': '...' " : '';
         $prompt = "
-        Bạn là bác sĩ chuyên khoa nội tổng quát.
-        Dựa trên chẩn đoán: '{$diagnosis}', hãy chọn những " . ($type === 'medicine' ? 'thuốc' : 'dịch vụ cận lâm sàng') . " phù hợp nhất từ danh sách sau:
-        {$itemList}
-        Chỉ trả về JSON thuần túy với định dạng:
-        [
-          { 'MedicineName': '...', 'Reason': '...' } " . ($type === 'service' ? ", 'ServiceId': '...' " : '') . "
-        ]
-        Không thêm bất kỳ text nào ngoài JSON, chỉ chọn " . ($type === 'medicine' ? 'thuốc' : 'dịch vụ') . " có trong danh sách, không bịa thêm.
-        ";
+    Bạn là bác sĩ chuyên khoa nội tổng quát.
+    Dựa trên {$inputType}: '{$finalInput}', hãy chọn 3-5 {$itemType} phù hợp nhất từ danh sách sau (chỉ chọn có trong danh sách, không bịa thêm):
+    {$itemList}
 
+    Trả về JSON thuần túy, không text thừa, với schema chính xác sau:
+    [
+      { '{$schemaKey}': 'Tên chính xác từ danh sách', 'Reason': 'Lý do ngắn gọn dựa trên y khoa' {$extraField} }
+    ]
+
+    Ví dụ cho {$itemType}: { '{$schemaKey}': 'Tên dịch vụ/thuốc', 'Reason': 'Lý do' }
+    ";
+        Log::debug('Generated prompt for ' . $type . ': ' . substr($prompt, 0, 200) . '...'); // Log prompt ngắn
+
+        return $this->callGemini($prompt);
+    }
+
+    private function callGemini($prompt)
+    {
         $apiKey = env('GOOGLE_API_KEY');
+        if (!$apiKey) {
+            Log::error('GOOGLE_API_KEY not set in .env');
+            return response()->json(['error' => 'API key Gemini chưa cấu hình'], 500);
+        }
+
         $apiUrl = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={$apiKey}";
 
         try {
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
             ])->post($apiUrl, [
-                'contents' => [
-                    [
-                        'parts' => [['text' => $prompt]],
-                    ]
-                ],
-                'generationConfig' => ['temperature' => 0.4],
-            ]);
+                        'contents' => [
+                            [
+                                'parts' => [['text' => $prompt]],
+                            ]
+                        ],
+                        'generationConfig' => ['temperature' => 0.4],
+                    ]);
+
+            Log::info('Gemini Response Status: ' . $response->status());
 
             if ($response->failed()) {
                 return response()->json([
@@ -106,6 +150,7 @@ class AISuggestionController extends Controller
             return response()->json($json);
 
         } catch (\Exception $e) {
+            Log::error('Gemini Exception: ' . $e->getMessage());
             return response()->json([
                 'error' => 'Lỗi kết nối tới Gemini',
                 'message' => $e->getMessage(),
