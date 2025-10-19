@@ -9,6 +9,10 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class AISuggestionController extends Controller
+/**
+     * Gợi ý AI 
+     * /
+     */
 {
     public function suggest(Request $request)
     {

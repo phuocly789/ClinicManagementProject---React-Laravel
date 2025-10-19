@@ -6,6 +6,7 @@ import {
   Form,
   Button,
   Spinner,
+  Badge,
 } from "react-bootstrap";
 import Swal from 'sweetalert2';
 
@@ -44,10 +45,13 @@ const TodaySection = ({
   const [showModal, setShowModal] = useState(false);
   const [defaultData, setDefaultData] = useState(null);
   const [editIndex, setEditIndex] = useState(null);
+  const [isExamining, setIsExamining] = useState(false);
+  const [viewMode, setViewMode] = useState(false);
   const printRef = useRef(null);
   const cache = useRef(new Map());
 
-  const isFormDisabled = selectedTodayPatient && selectedTodayPatient?.status === 'Đang khám' ? false : true;
+  const isFormDisabled = viewMode || !selectedTodayPatient || selectedTodayPatient?.status !== 'Đang khám';
+  console.log('DEBUG - isFormDisabled:', isFormDisabled, 'Patient:', selectedTodayPatient?.name, 'Status:', selectedTodayPatient?.status, 'ViewMode:', viewMode);
 
   const getStatusVariant = useCallback((status) => {
     if (!status) return "secondary";
@@ -81,7 +85,7 @@ const TodaySection = ({
       if (response.success === true) {
         const filteredData = filterValidStatuses(response.data);
         cache.current.set('today-patients', response.data);
-        console.log("Check time: ", dayjs(response.data[0].date).format('DD/MM/YYYY HH:mm:ss'));
+        console.log("Check time: ", dayjs(response.data[0]?.date).format('DD/MM/YYYY HH:mm:ss'));
         setTodayPatients(filteredData);
       }
     } catch (error) {
@@ -92,6 +96,97 @@ const TodaySection = ({
   useEffect(() => {
     fetchTodayPatients();
   }, []);
+
+  const loadCompletedExam = useCallback(async (patientId) => {
+    if (!patientId) return;
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/doctor/examinations/${patientId}`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}: Không tải được hồ sơ`);
+      const data = await response.json();
+      
+      setSymptoms(data.symptoms || '');
+      setDiagnosis(data.diagnosis || '');
+      setservices(data.services || {});
+      setRequestedservices(data.requestedservices || {});
+      setPrescriptionRows(data.prescriptions || []);
+      
+      setToast({ show: true, message: '✅ Đã tải hồ sơ cũ để xem.', variant: 'info' });
+    } catch (error) {
+      console.error('Error loading completed exam:', error);
+      setToast({ show: true, message: `Lỗi tải hồ sơ: ${error.message}`, variant: 'danger' });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setToast]);
+
+  const startExamination = useCallback(async (patientId) => {
+    if (!patientId) return null;
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/doctor/examinations/${patientId}/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({}),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}: Không thể bắt đầu khám`);
+      
+      const result = await response.json();
+      console.log('API start response:', result);
+      
+      setSelectedTodayPatient(prev => prev ? { ...prev, status: 'Đang khám' } : null);
+      setIsExamining(true);
+      setViewMode(false);
+      setToast({ show: true, message: '✅ Đã bắt đầu khám bệnh nhân.', variant: 'info' });
+      
+      fetchTodayPatients();
+
+      return result.data;
+    } catch (error) {
+      console.error('Error starting exam:', error);
+      setToast({ show: true, message: `Lỗi bắt đầu khám: ${error.message}`, variant: 'danger' });
+      setSelectedTodayPatient(prev => prev ? { ...prev, status: 'Đang khám' } : null);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setToast]);
+
+  const handleSelectPatient = useCallback(async (patient) => {
+    if (!patient) {
+      setSelectedTodayPatient(null);
+      setIsExamining(false);
+      setViewMode(false);
+      setSymptoms('');
+      setDiagnosis('');
+      setservices({});
+      setRequestedservices({});
+      setPrescriptionRows([]);
+      return;
+    }
+    
+    const currentStatus = getStatusText(patient.status);
+    console.log('Select patient status:', currentStatus);
+    if (currentStatus === 'Đang khám') {
+      setSelectedTodayPatient(patient);
+      setIsExamining(true);
+      setViewMode(false);
+    } else if (currentStatus === 'Đang chờ') {
+      await startExamination(patient.id || patient.AppointmentId);
+    } else if (currentStatus === 'Đã khám') {
+      setSelectedTodayPatient(patient);
+      setViewMode(true);
+      await loadCompletedExam(patient.id || patient.AppointmentId);
+      setIsExamining(false);
+    } else {
+      setToast({ show: true, message: `⚠️ Trạng thái không hợp lệ cho bệnh nhân ${patient.name}.`, variant: 'warning' });
+      return;
+    }
+  }, [startExamination, getStatusText, setToast, loadCompletedExam]);
 
   const findNextPatient = useCallback((currentPatientId, patients) => {
     if (!currentPatientId || !patients.length) return null;
@@ -110,10 +205,17 @@ const TodaySection = ({
     return waitingPatientsAfter[0] || null;
   }, [getStatusText]);
 
+  // Fixed handleExaminationSubmit: Đảm bảo POST, prevent default GET
   const handleExaminationSubmit = async (e) => {
-    e.preventDefault();
+    e.preventDefault(); // Block default form GET
     if (!selectedTodayPatient) {
       setToast({ show: true, message: "Chưa chọn bệnh nhân.", variant: "warning" });
+      return;
+    }
+
+    // Validation
+    if (!symptoms && !diagnosis && Object.keys(services).length === 0 && prescriptionRows.length === 0) {
+      setToast({ show: true, message: "Chưa có dữ liệu nào để lưu. Vui lòng nhập chẩn đoán hoặc chọn dịch vụ/thuốc.", variant: "warning" });
       return;
     }
 
@@ -122,19 +224,18 @@ const TodaySection = ({
       const submitData = {
         symptoms,
         diagnosis,
-        services: { ...services }, // Dynamic services
-        prescriptions: [...prescriptionRows],
-        status: 'done',
+        services,
+        prescriptions: prescriptionRows,
+        status: 'done', // Đổi status 'Đã khám'
       };
 
       const response = await fetch(`${API_BASE_URL}/api/doctor/examinations/${selectedTodayPatient.id}/complete`, {
-        method: 'POST',
+        method: 'POST', // Explicit POST
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        credentials: 'include',
-        body: JSON.stringify(submitData),
+        body: JSON.stringify(submitData), // Body for POST
       });
 
       if (!response.ok) {
@@ -144,6 +245,7 @@ const TodaySection = ({
       const result = await response.json();
       console.log('Submit thành công:', result);
 
+      // Reset form
       setSymptoms('');
       setDiagnosis('');
       setservices({}); 
@@ -157,14 +259,14 @@ const TodaySection = ({
         setSelectedTodayPatient(nextPatient);
         setToast({
           show: true,
-          message: ` Hoàn tất khám cho ${selectedTodayPatient.name}. Đã chuyển sang bệnh nhân tiếp theo: ${nextPatient.name}.`,
+          message: `✅ Hoàn tất khám cho ${selectedTodayPatient.name}. Đã lưu vào DB và chuyển sang bệnh nhân tiếp theo: ${nextPatient.name}.`,
           variant: "success",
         });
       } else {
         setSelectedTodayPatient(null);
         setToast({
           show: true,
-          message: `Hoàn tất khám cho ${selectedTodayPatient.name}. Không còn bệnh nhân chờ khám hôm nay.`,
+          message: `✅ Hoàn tất khám cho ${selectedTodayPatient.name}. Đã lưu vào DB. Không còn bệnh nhân chờ khám hôm nay.`,
           variant: "success",
         });
       }
@@ -177,13 +279,67 @@ const TodaySection = ({
       });
     } finally {
       setIsLoading(false);
+      setIsExamining(false);
     }
   };
 
-  const handleTempSave = () => {
-    setToast({ show: true, message: "Đã tạm lưu.", variant: "info" });
+  // handleTempSave (giữ nguyên từ trước, nếu chưa có API thì placeholder)
+  const handleTempSave = async () => {
+    if (!selectedTodayPatient) {
+      setToast({ show: true, message: "Chưa chọn bệnh nhân.", variant: "warning" });
+      return;
+    }
+
+    // Validation
+    if (!symptoms && !diagnosis && Object.keys(services).length === 0 && prescriptionRows.length === 0) {
+      setToast({ show: true, message: "Chưa có dữ liệu nào để tạm lưu.", variant: "info" });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const draftData = {
+        symptoms,
+        diagnosis,
+        services,
+        prescriptions: prescriptionRows,
+      };
+
+      const response = await fetch(`${API_BASE_URL}/api/doctor/examinations/${selectedTodayPatient.id}/temp-save`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(draftData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Temp save thành công:', result);
+
+      setToast({
+        show: true,
+        message: "💾 Đã tạm lưu dữ liệu khám (không đổi trạng thái).",
+        variant: "info",
+      });
+    } catch (error) {
+      console.error('Error temporary save:', error);
+      setToast({
+        show: true,
+        message: `Lỗi tạm lưu: ${error.message}`,
+        variant: "danger",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
+  // Các hàm khác giữ nguyên (handleOpenAddModal, handleEdit, handleModalSubmit, handleModalClose, printDocument, handleRemoveWithConfirm)
   const handleOpenAddModal = () => {
     setDefaultData(null);
     setEditIndex(null);
@@ -238,7 +394,7 @@ const TodaySection = ({
         diagnosis,
         services,
         prescriptionRows,
-        {} // 🆕 Empty testLabels (ServicesSection sẽ handle dynamic)
+        {}
       );
       printHtml(html, printRef);
     } catch (error) {
@@ -291,7 +447,7 @@ const TodaySection = ({
                   todayPatients={todayPatients}
                   isLoading={isLoading}
                   selectedTodayPatient={selectedTodayPatient}
-                  setSelectedTodayPatient={setSelectedTodayPatient}
+                  onPatientSelect={handleSelectPatient}
                   getStatusVariant={getStatusVariant}
                   getStatusText={getStatusText}
                 />
@@ -303,9 +459,10 @@ const TodaySection = ({
             <Card className="shadow-sm">
               <Card.Header className="bg-info text-white text-start">
                 <h5 className="mb-0">Thông Tin Khám Bệnh</h5>
+                {viewMode && <Badge bg="secondary" className="ms-2">👁️ Chế độ xem (không chỉnh sửa)</Badge>}
               </Card.Header>
               <Card.Body>
-                <p className="card-text text-start">
+                <div className="card-text text-start">
                   {selectedTodayPatient ? (
                     <>
                       <strong>Bệnh nhân:</strong> {selectedTodayPatient.name} -{" "}
@@ -314,15 +471,42 @@ const TodaySection = ({
                       <strong>SĐT:</strong> {selectedTodayPatient.phone} -{" "}
                       <strong>Giờ:</strong> {selectedTodayPatient.time} -{" "}
                       <strong>Trạng thái:</strong>{" "}
-                      {getStatusText(selectedTodayPatient.status)}
+                      <Badge bg={getStatusVariant(selectedTodayPatient.status)}>
+                        {getStatusText(selectedTodayPatient.status)}
+                      </Badge>
                     </>
+                  ) : todayPatients.length > 0 ? (
+                    <div className="alert alert-info">
+                      <h6>👋 Chào mừng! Hôm nay có khám bệnh.</h6>
+                      <p>
+                        Số bệnh nhân đang chờ: <strong>{todayPatients.filter(p => getStatusText(p.status) === 'Đang chờ').length}</strong>.
+                        <br />
+                        Bệnh nhân tiếp theo: <strong>{todayPatients.find(p => getStatusText(p.status) === 'Đang chờ')?.name || todayPatients[0]?.name || 'Không có'}</strong> 
+                        ({todayPatients[0]?.time || 'N/A'}).
+                      </p>
+                      <Button 
+                        variant="primary" 
+                        size="sm" 
+                        onClick={() => {
+                          const firstPatient = todayPatients.find(p => getStatusText(p.status) === 'Đang chờ') || todayPatients[0];
+                          if (firstPatient) {
+                            handleSelectPatient(firstPatient);
+                          }
+                        }}
+                        disabled={isLoading}
+                        className="me-2"
+                      >
+                        {isLoading ? <Spinner animation="border" size="sm" className="me-1" /> : '🚀'} Bắt đầu khám ngay
+                      </Button>
+                      <small>Hoặc chọn từ danh sách bên trái để bắt đầu.</small>
+                    </div>
                   ) : (
-                    <span className="text-muted">Chưa chọn bệnh nhân nào</span>
+                    <span className="text-muted">Chưa có lịch khám bệnh nhân hôm nay. Kiểm tra lại sau.</span>
                   )}
-                </p>
+                </div>
                 <hr />
 
-                <Form onSubmit={handleExaminationSubmit}>
+                <Form onSubmit={(e) => e.preventDefault()}> {/* 🆕 onSubmit empty to prevent default GET */}
                   <Row>
                     <DiagnosisSection
                       symptoms={symptoms}
@@ -345,7 +529,7 @@ const TodaySection = ({
                       setToast={setToast}
                       printDocument={printDocument}
                       selectedTodayPatient={selectedTodayPatient}
-                    /> {/* 🆕 Bỏ services/servicesLoading, testLabels (local trong ServicesSection) */}
+                    />
 
                     <PrescriptionSection
                       prescriptionRows={prescriptionRows}
@@ -362,8 +546,9 @@ const TodaySection = ({
                   <div className="d-flex justify-content-start gap-2 mt-3">
                     <Button
                       variant="success"
-                      type="submit"
-                      disabled={isFormDisabled || isLoading}
+                      type="button" // 🆕 Change to button to avoid default form submit
+                      onClick={handleExaminationSubmit} // 🆕 onClick instead of submit
+                      disabled={isFormDisabled || isLoading || viewMode || (!symptoms && !diagnosis && Object.keys(services).length === 0 && prescriptionRows.length === 0)}
                       className="no-print"
                     >
                       {isLoading ? <Spinner animation="border" size="sm" /> : null}
@@ -373,7 +558,7 @@ const TodaySection = ({
                       variant="secondary"
                       type="button"
                       onClick={handleTempSave}
-                      disabled={isFormDisabled}
+                      disabled={isFormDisabled || isLoading || viewMode || (!symptoms && !diagnosis && Object.keys(services).length === 0 && prescriptionRows.length === 0)}
                       className="no-print"
                     >
                       Tạm Lưu
