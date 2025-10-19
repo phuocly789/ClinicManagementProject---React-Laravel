@@ -14,6 +14,8 @@ use App\Http\Controllers\API\Doctor\DiagnosisSuggestionController;
 use App\Http\Controllers\API\Doctor\DoctorMedicineSearchController;
 use App\Http\Controllers\API\Doctor\AISuggestionController;
 use App\Http\Controllers\API\Doctor\ServiceController;
+use App\Http\Controllers\API\Doctor\DoctorExaminationsController;
+
 //----------------------------------------------Hết-------------------------------
 
 
@@ -58,8 +60,12 @@ Route::prefix('doctor')->group(function () {
 
 
     // Khám bệnh
-    // Route::get('/examination/today', [ExaminationController::class, 'todayPatients']);
-    // Route::get('/examination/{appointmentId}', [ExaminationController::class, 'show']);
-    // Route::post('/examination/complete/{appointmentId}', [ExaminationController::class, 'complete']);
+    Route::prefix('examinations')->group(function () {
+        Route::post('{appointmentId}/start', [DoctorExaminationsController::class, 'start']);
+        Route::post('{appointmentId}/complete', [DoctorExaminationsController::class, 'complete']);
+        Route::get('{appointmentId}', [DoctorExaminationsController::class, 'show']);
+        Route::post('{appointmentId}/temp-save', [DoctorExaminationsController::class, 'tempSave']);
+    });
+
 });
 
