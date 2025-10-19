@@ -22,7 +22,7 @@ Route::get('/users', [UserController::class, 'index']);
 Route::get('/ping', [UserController::class, 'ping']);
 
 //check tồn kho
-Route::get('/medicines/low-stock',[MedicinesController::class, 'checkLowStock']);
+Route::get('/medicines/low-stock', [MedicinesController::class, 'checkLowStock']);
 Route::get('/medicines', [MedicinesController::class, 'index']);
 Route::get('/medicines/ping', [MedicinesController::class, 'ping']);
 Route::post('/medicines', [MedicinesController::class, 'store']);
@@ -42,9 +42,8 @@ Route::delete('/suppliers/{id}', [SuppliersController::class, 'destroy']);
 Route::get('/suppliers/{id}', [SuppliersController::class, 'show']);
 
 //admin-revenue
-Route::get('/report-revenue/dashboard', [ReportRevenueController::class, 'getDashboardStatistics']);
-Route::get('/report-revenue/revenue', [ReportRevenueController::class, 'getRevenueStatistics']);
 Route::get('/report-revenue/combined', [ReportRevenueController::class, 'getCombinedStatistics']);
+Route::get('/report-revenue/detail-revenue', [ReportRevenueController::class, 'getDetailRevenueReport']);
 
 
 // Nhóm route cho Bác sĩ
@@ -70,4 +69,3 @@ Route::prefix('doctor')->group(function () {
     // Route::get('/examination/{appointmentId}', [ExaminationController::class, 'show']);
     // Route::post('/examination/complete/{appointmentId}', [ExaminationController::class, 'complete']);
 });
-
