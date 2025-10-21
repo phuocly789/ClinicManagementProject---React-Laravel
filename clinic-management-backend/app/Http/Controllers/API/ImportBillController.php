@@ -41,15 +41,14 @@ class ImportBillController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'SupplierId' => 'nullable|exists:suppliers,SupplierId',
+            'SupplierId' => 'nullable|exists:Suppliers,SupplierId',
             'ImportDate' => 'nullable|date',
             'TotalAmount' => 'required|numeric|min:0',
             'Notes' => 'nullable|string|max:255',
             'import_details' => 'required|array|min:1',
-            'import_details.*.MedicineId' => 'required|exists:medicines,MedicineId',
+            'import_details.*.MedicineId' => 'required|exists:Medicines,MedicineId',
             'import_details.*.Quantity' => 'required|integer|min:1',
             'import_details.*.ImportPrice' => 'required|numeric|min:0',
-            'import_details.*.SubTotal' => 'required|numeric|min:0',
         ], [
             'SupplierId.exists' => 'Nhà cung cấp không tồn tại.',
             'ImportDate.date' => 'Ngày nhập không hợp lệ.',
@@ -66,9 +65,6 @@ class ImportBillController extends Controller
             'import_details.*.ImportPrice.required' => 'Giá nhập là bắt buộc ở mục #{index}.',
             'import_details.*.ImportPrice.numeric' => 'Giá nhập phải là số ở mục #{index}.',
             'import_details.*.ImportPrice.min' => 'Giá nhập không được nhỏ hơn 0 ở mục #{index}.',
-            'import_details.*.SubTotal.required' => 'Thành tiền là bắt buộc ở mục #{index}.',
-            'import_details.*.SubTotal.numeric' => 'Thành tiền phải là số ở mục #{index}.',
-            'import_details.*.SubTotal.min' => 'Thành tiền không được nhỏ hơn 0 ở mục #{index}.',
         ]);
 
         if ($validator->fails()) {
@@ -85,7 +81,9 @@ class ImportBillController extends Controller
             ], 422);
         }
 
-        $totalAmount = array_sum(array_column($request->import_details, 'SubTotal'));
+        $totalAmount = array_reduce($request->import_details, function ($carry, $detail) {
+            return $carry + ($detail['Quantity'] * $detail['ImportPrice']);
+        }, 0.0);
         if (abs($totalAmount - $request->TotalAmount) > 0.01) {
             return response()->json([
                 'status' => 'error',
@@ -109,7 +107,7 @@ class ImportBillController extends Controller
                         'MedicineId' => $detail['MedicineId'],
                         'Quantity' => $detail['Quantity'],
                         'ImportPrice' => $detail['ImportPrice'],
-                        'SubTotal' => $detail['SubTotal'],
+                        // Bỏ SubTotal
                     ]);
                 }
 
@@ -156,15 +154,14 @@ class ImportBillController extends Controller
         $importBill = ImportBill::findOrFail($id);
 
         $validator = Validator::make($request->all(), [
-            'SupplierId' => 'nullable|exists:suppliers,SupplierId',
+            'SupplierId' => 'nullable|exists:Suppliers,SupplierId',
             'ImportDate' => 'nullable|date',
             'TotalAmount' => 'required|numeric|min:0',
             'Notes' => 'nullable|string|max:255',
             'import_details' => 'required|array|min:1',
-            'import_details.*.MedicineId' => 'required|exists:medicines,MedicineId',
+            'import_details.*.MedicineId' => 'required|exists:Medicines,MedicineId',
             'import_details.*.Quantity' => 'required|integer|min:1',
             'import_details.*.ImportPrice' => 'required|numeric|min:0',
-            'import_details.*.SubTotal' => 'required|numeric|min:0',
         ], [
             'SupplierId.exists' => 'Nhà cung cấp không tồn tại.',
             'ImportDate.date' => 'Ngày nhập không hợp lệ.',
@@ -181,9 +178,6 @@ class ImportBillController extends Controller
             'import_details.*.ImportPrice.required' => 'Giá nhập là bắt buộc ở mục #{index}.',
             'import_details.*.ImportPrice.numeric' => 'Giá nhập phải là số ở mục #{index}.',
             'import_details.*.ImportPrice.min' => 'Giá nhập không được nhỏ hơn 0 ở mục #{index}.',
-            'import_details.*.SubTotal.required' => 'Thành tiền là bắt buộc ở mục #{index}.',
-            'import_details.*.SubTotal.numeric' => 'Thành tiền phải là số ở mục #{index}.',
-            'import_details.*.SubTotal.min' => 'Thành tiền không được nhỏ hơn 0 ở mục #{index}.',
         ]);
 
         if ($validator->fails()) {
@@ -200,7 +194,9 @@ class ImportBillController extends Controller
             ], 422);
         }
 
-        $totalAmount = array_sum(array_column($request->import_details, 'SubTotal'));
+        $totalAmount = array_reduce($request->import_details, function ($carry, $detail) {
+            return $carry + ($detail['Quantity'] * $detail['ImportPrice']);
+        }, 0.0);
         if (abs($totalAmount - $request->TotalAmount) > 0.01) {
             return response()->json([
                 'status' => 'error',
@@ -225,7 +221,7 @@ class ImportBillController extends Controller
                         'MedicineId' => $detail['MedicineId'],
                         'Quantity' => $detail['Quantity'],
                         'ImportPrice' => $detail['ImportPrice'],
-                        'SubTotal' => $detail['SubTotal'],
+                        // Bỏ SubTotal
                     ]);
                 }
 
