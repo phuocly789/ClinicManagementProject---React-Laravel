@@ -8,10 +8,11 @@ RUN apt-get update && apt-get install -y \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
+    libsodium-dev \
     zip \
     unzip \
     libpq-dev \
-    && docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd
+    && docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd sodium
 
 # Cài Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -24,7 +25,6 @@ COPY . /var/www/html
 
 # Install Composer deps
 RUN composer install --no-dev --optimize-autoloader
-
 
 # Permissions
 RUN chown -R www-data:www-data /var/www/html \
