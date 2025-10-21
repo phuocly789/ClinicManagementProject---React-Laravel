@@ -16,7 +16,7 @@ function App() {
       <Routes>
         <Route path="/admin/medicine" element={<AdminMedicine />} />
         <Route path="/admin/inventory" element={<AdminInventory />} />
-        <Route path="/" element={<AdminMedicine />} /> {/* Trang mặc định */}
+        <Route path="/" element={<AdminMedicine />} /> {/* Trang mặc địnhs */}
 
         <Route path={path.LOGIN} element={<LoginPage />} />{" "}
         <Route path="/admin/users" element={<UserManagement />} />
