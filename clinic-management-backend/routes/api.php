@@ -15,6 +15,12 @@ use App\Http\Controllers\API\Doctor\AppointmentsController;
 use App\Http\Controllers\API\Doctor\DiagnosisSuggestionController;
 use App\Http\Controllers\API\Doctor\DoctorMedicineSearchController;
 use App\Http\Controllers\API\Doctor\ServiceController;
+use App\Http\Controllers\API\Doctor\DoctorExaminationsController;
+
+//----------------------------------------------Hết-------------------------------
+use App\Http\Controllers\API\User\UserControllers;
+
+
 
 Route::get('/users', [UserController::class, 'index']);
 Route::get('/ping', [UserController::class, 'ping']);
@@ -44,9 +50,8 @@ Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/create-user', [AuthController::class, 'createUser']);
 
 //admin-revenue
-Route::get('/report-revenue/dashboard', [ReportRevenueController::class, 'getDashboardStatistics']);
-Route::get('/report-revenue/revenue', [ReportRevenueController::class, 'getRevenueStatistics']);
 Route::get('/report-revenue/combined', [ReportRevenueController::class, 'getCombinedStatistics']);
+Route::get('/report-revenue/detail-revenue', [ReportRevenueController::class, 'getDetailRevenueReport']);
 
 
 // Nhóm route cho Bác sĩ
@@ -68,7 +73,24 @@ Route::prefix('doctor')->group(function () {
 
 
     // Khám bệnh
-    // Route::get('/examination/today', [ExaminationController::class, 'todayPatients']);
-    // Route::get('/examination/{appointmentId}', [ExaminationController::class, 'show']);
-    // Route::post('/examination/complete/{appointmentId}', [ExaminationController::class, 'complete']);
+    Route::prefix('examinations')->group(function () {
+        Route::post('{appointmentId}/start', [DoctorExaminationsController::class, 'start']);
+        Route::post('{appointmentId}/complete', [DoctorExaminationsController::class, 'complete']);
+        Route::get('{appointmentId}', [DoctorExaminationsController::class, 'show']);
+        Route::post('{appointmentId}/temp-save', [DoctorExaminationsController::class, 'tempSave']);
+    });
+
 });
+
+//Nhóm route cho User
+
+Route::prefix('users')->group(function () {
+    Route::get('/', [UserControllers::class, 'index']);
+    Route::post('/', [UserControllers::class, 'store']);
+    Route::put('/{id}', [UserControllers::class, 'update']);
+    Route::delete('/{id}', [UserControllers::class, 'destroy']);
+    Route::patch('/{id}/toggle-status', [UserControllers::class, 'toggleStatus']);
+});
+
+Route::get('/roles', [UserControllers::class, 'roles']);
+

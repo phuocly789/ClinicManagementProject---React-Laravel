@@ -1,40 +1,67 @@
+/* ========== Tổng quan ========== */
 .content {
-  padding: 20px 30px;
+  padding: 30px;
+  font-family: 'Inter', sans-serif;
+  background: #f9fafb;
+  min-height: 100vh;
 }
 
 h1 {
-  color: #007bff;
-  margin-bottom: 25px;
+  font-size: 26px;
+  margin-bottom: 20px;
+  color: #333;
 }
 
+/* ========== Thanh tìm kiếm ========== */
 .search-container {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 20px;
+  align-items: center;
+  margin-bottom: 15px;
 }
 
 .search-container input {
-  flex: 1;
-  margin-right: 10px;
-  padding: 10px 14px;
-  border: 1px solid #ccc;
+  width: 70%;
+  padding: 10px 15px;
+  font-size: 15px;
+  border: 1px solid #d1d5db;
   border-radius: 8px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.search-container input:focus {
+  border-color: #3b82f6;
 }
 
 .add-btn {
-  background-color: #007bff;
+  padding: 10px 16px;
+  background-color: #3b82f6;
   color: white;
   border: none;
-  padding: 10px 16px;
   border-radius: 8px;
   cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
 }
 
+.add-btn:hover {
+  background-color: #2563eb;
+}
+
+/* ========== Bộ lọc ========== */
 .filter-section {
-  background: #f8f9fa;
-  border-radius: 12px;
-  padding: 15px;
-  margin-bottom: 25px;
+  background: white;
+  padding: 15px 20px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
+}
+
+.filter-section h3 {
+  font-size: 18px;
+  margin-bottom: 10px;
+  color: #374151;
 }
 
 .filter-row {
@@ -46,70 +73,162 @@ h1 {
   flex: 1;
 }
 
+.filter-group label {
+  display: block;
+  margin-bottom: 6px;
+  color: #555;
+  font-weight: 500;
+}
+
+.filter-group select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background-color: #fff;
+  font-size: 14px;
+  color: #333;
+}
+
+/* ========== Bảng ========== */
 table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 25px;
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
 }
 
-table th, table td {
-  border: 1px solid #ddd;
-  padding: 10px 12px;
+thead {
+  background: #f3f4f6;
+}
+
+th,
+td {
   text-align: left;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: #333;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-table th {
-  background-color: #007bff;
-  color: white;
+th {
+  font-weight: 600;
+  color: #111827;
+}
+
+tr:hover {
+  background-color: #f9fafb;
+}
+
+/* ========== Trạng thái ========== */
+.status {
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .status.active {
-  color: green;
-  font-weight: bold;
+  background-color: #dcfce7;
+  color: #166534;
 }
 
 .status.inactive {
-  color: red;
-  font-weight: bold;
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+/* ========== Nút hành động ========== */
+.action-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .action-buttons button {
-  margin: 0 4px;
   padding: 6px 10px;
-  border: none;
   border-radius: 6px;
+  border: none;
+  font-size: 13px;
   cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
 }
 
-.edit-btn { background: #ffc107; }
-.disable-btn { background: #17a2b8; color: white; }
-.delete-btn { background: #dc3545; color: white; }
-.detail-btn { background: #6c757d; color: white; }
+.edit-btn {
+  background-color: #3b82f6;
+  color: white;
+}
 
+.edit-btn:hover {
+  background-color: #2563eb;
+}
+
+.toggle-btn.enable {
+  background-color: #22c55e;
+  color: white;
+}
+
+.toggle-btn.enable:hover {
+  background-color: #16a34a;
+}
+
+.toggle-btn.disable {
+  background-color: #f97316;
+  color: white;
+}
+
+.toggle-btn.disable:hover {
+  background-color: #ea580c;
+}
+
+.delete-btn {
+  background-color: #ef4444;
+  color: white;
+}
+
+.delete-btn:hover {
+  background-color: #dc2626;
+}
+
+.detail-btn {
+  background-color: #6b7280;
+  color: white;
+}
+
+.detail-btn:hover {
+  background-color: #4b5563;
+}
+
+/* ========== Modal ========== */
 .modal {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0,0,0,0.4);
+  background: rgba(31, 41, 55, 0.4);
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: center;
+  z-index: 1000;
 }
 
 .modal-content {
   background: white;
   padding: 25px;
-  border-radius: 12px;
-  width: 500px;
+  border-radius: 10px;
+  width: 450px;
   max-height: 90vh;
   overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  animation: fadeIn 0.3s ease;
 }
 
 .modal-content.small {
-  width: 350px;
-  text-align: center;
+  width: 360px;
 }
 
 .modal-content.detail {
@@ -117,62 +236,95 @@ table th {
 }
 
 .modal-header {
-  background: linear-gradient(90deg, #007bff, #0099ff);
-  color: white;
-  padding: 12px;
-  border-radius: 8px;
-  margin-bottom: 15px;
-  text-align: center;
-  font-weight: bold;
-}
-
-label {
-  display: block;
-  margin-bottom: 6px;
+  font-size: 20px;
   font-weight: 600;
+  margin-bottom: 15px;
+  color: #111827;
+  text-align: center;
 }
 
-input, select {
+.modal-content form div {
+  margin-bottom: 12px;
+}
+
+.modal-content label {
+  display: block;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 5px;
+}
+
+.modal-content input,
+.modal-content select {
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  margin-bottom: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  outline: none;
+  transition: border 0.2s;
   font-size: 14px;
 }
 
+.modal-content input:focus,
+.modal-content select:focus {
+  border-color: #3b82f6;
+}
+
+/* ========== Nút trong modal ========== */
 .form-buttons {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-}
-
-.save-btn {
-  background: #007bff;
-  color: white;
-}
-
-.cancel-btn {
-  background: #6c757d;
-  color: white;
-}
-.detail-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px 20px;
-  background: #f9fafb;
-  padding: 15px;
-  border-radius: 10px;
   margin-top: 10px;
 }
 
-.detail-grid p {
-  font-size: 15px;
-  color: #1e293b;
-  margin: 0;
-  padding: 4px 0;
+.save-btn {
+  background-color: #3b82f6;
+  color: white;
 }
 
-.detail-grid strong {
-  color: #334155;
+.save-btn:hover {
+  background-color: #2563eb;
+}
+
+.confirm-btn {
+  background-color: #ef4444;
+  color: white;
+}
+
+.confirm-btn:hover {
+  background-color: #dc2626;
+}
+
+.cancel-btn {
+  background-color: #9ca3af;
+  color: white;
+}
+
+.cancel-btn:hover {
+  background-color: #6b7280;
+}
+
+/* ========== Chi tiết ========== */
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 16px;
+}
+
+.detail-grid p {
+  margin: 5px 0;
+  color: #374151;
+}
+
+/* ========== Animation ========== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
