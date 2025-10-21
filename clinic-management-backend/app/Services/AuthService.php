@@ -68,40 +68,62 @@ class AuthService
      */
     public function login(array $data)
     {
-        $validated = validator($data, [
-            'username' => 'required|string',
-            'password' => 'required|string',
-        ])->validate();
+        try {
+            $validated = validator($data, [
+                'username' => 'required|string',
+                'password' => 'required|string',
+            ])->validate();
 
-        // Kiểm tra email có tồn tại không
-        $user = \App\Models\User::where('Username', $validated['username'])->first();
+            // Kiểm tra email có tồn tại không
+            $user = \App\Models\User::where('Username', $validated['username'])->first();
 
-        if (!$user) {
-            throw ValidationException::withMessages([
-                'username' => ['User không tồn tại trong hệ thống.'],
-            ]);
+            if (!$user) {
+                throw ValidationException::withMessages([
+                    'username' => ['User không tồn tại trong hệ thống.'],
+                ]);
+            }
+
+            // Kiểm tra mật khẩu đúng không
+            if (!Hash::check($validated['password'], $user->PasswordHash)) {
+                throw ValidationException::withMessages([
+                    'password' => ['Mật khẩu không chính xác.'],
+                ]);
+            }
+
+            Auth::login($user);
+
+            // Tạo token Passport
+            $token = $user->createToken('auth_token')->accessToken;
+            $user_role = User::find($user->UserId);
+
+            $roles = $user_role->roles;
+
+            // Chỉ lấy RoleName
+            $roleNames = $roles->pluck('RoleName');
+            // Tạo mảng user mới giữ những field bạn muốn + roles đầy đủ
+            $userData = [
+                'full_name' => $user->FullName,
+                'email' => $user->Email,
+                'username' => $user->Username,
+                'must_change_password' => $user->MustChangePassword,
+                'is_active' => $user->IsActive,
+                'roles' => $roleNames
+            ];
+
+            return [
+                'success' => true,
+                'message' => 'Đăng nhập thành công.',
+                'user' => $userData,
+                'token' => $token,
+            ];
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'message' => "Đã xảy ra lỗi ở phía server. Vui lòng đăng nhập lại",
+            ];
         }
-
-        // Kiểm tra mật khẩu đúng không
-        if (!Hash::check($validated['password'], $user->PasswordHash)) {
-            throw ValidationException::withMessages([
-                'password' => ['Mật khẩu không chính xác.'],
-            ]);
-        }
-
-        Auth::login($user);
-
-        // Tạo token Passport
-        $token = $user->createToken('auth_token')->accessToken;
-        $user->load(['roles' => function ($q) {
-            $q->select('Roles.id', 'Roles.name');
-        }]);
-        return [
-            'message' => 'Đăng nhập thành công.',
-            'user' => $user,
-            'token' => $token,
-        ];
     }
+
 
     /**
      * Đăng xuất (revoke token hiện tại)

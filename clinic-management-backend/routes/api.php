@@ -10,7 +10,11 @@ use App\Http\Controllers\API\ImportBillController;
 use App\Http\Controllers\API\SuppliersController;
 
 use App\Http\Controllers\API\AuthController;
-
+use App\Http\Controllers\API\Doctor\AISuggestionController;
+use App\Http\Controllers\API\Doctor\AppointmentsController;
+use App\Http\Controllers\API\Doctor\DiagnosisSuggestionController;
+use App\Http\Controllers\API\Doctor\DoctorMedicineSearchController;
+use App\Http\Controllers\API\Doctor\ServiceController;
 
 Route::get('/users', [UserController::class, 'index']);
 Route::get('/ping', [UserController::class, 'ping']);
