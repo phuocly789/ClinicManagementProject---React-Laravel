@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import './UserManagement.css';
 import Pagination from '../../Components/Pagination/Pagination';
 import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
-
+import dayjs from 'dayjs';
 const UserManagement = () => {
   const usersPerPage = 5;
 
   const [users, setUsers] = useState([]);
-  const [roles, setRoles] = useState([]); // ✅ Thêm danh sách vai trò
+  const [roles, setRoles] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
@@ -25,7 +25,7 @@ const UserManagement = () => {
     Gender: '',
     Email: '',
     Phone: '',
-    BirthDate: '',
+    DateOfBirth: '',
     Address: '',
     Role: '',
     Specialty: '',
@@ -35,14 +35,20 @@ const UserManagement = () => {
 
   useEffect(() => {
     fetchUsers(currentPage);
-    fetchRoles(); // ✅ Lấy danh sách vai trò
+    fetchRoles();
   }, [currentPage]);
 
   const fetchUsers = (page = 1) => {
     fetch(`http://localhost:8000/api/users?page=${page}&per_page=${usersPerPage}`)
       .then((res) => res.json())
       .then((data) => {
-        setUsers(data.data || []);
+        const formattedUsers = (data.data || []).map((user) => ({
+          ...user,
+          BirthDate: user.DateOfBirth
+            ? dayjs(user.DateOfBirth).format('DD/MM/YYYY') // ✅ định dạng ngày
+            : 'Không có',
+        }));
+        setUsers(formattedUsers);
         setTotalPages(data.last_page || 1);
         setCurrentPage(data.current_page || 1);
       })
@@ -107,7 +113,7 @@ const UserManagement = () => {
       Gender: '',
       Email: '',
       Phone: '',
-      BirthDate: '',
+      DateOfBirth: '',
       Address: '',
       Role: '',
       Specialty: '',
@@ -135,8 +141,10 @@ const UserManagement = () => {
   return (
     <div style={{ display: 'flex', margin: 0, backgroundColor: '#f8f9fa' }}>
       <AdminSidebar />
-      <div className="content" style={{ position: 'relative', width: '100%', flexGrow: 1, marginLeft: '5px', padding: '30px' }}>
-
+      <div
+        className="content"
+        style={{ position: 'relative', width: '100%', flexGrow: 1, marginLeft: '5px', padding: '30px' }}
+      >
         <h1>Quản Lý Người Dùng</h1>
 
         <div className="search-container">
@@ -151,6 +159,7 @@ const UserManagement = () => {
           </button>
         </div>
 
+        {/* === Bộ lọc nâng cao === */}
         <div className="filter-section">
           <h3>Bộ Lọc Nâng Cao</h3>
           <div className="filter-row">
@@ -196,6 +205,7 @@ const UserManagement = () => {
           </div>
         </div>
 
+        {/* === Bảng người dùng === */}
         <table>
           <thead>
             <tr>
@@ -220,7 +230,7 @@ const UserManagement = () => {
                 <td>
                   {user.roles && user.roles.length > 0
                     ? user.roles.map((r) => r.RoleName).join(', ')
-                    : '—'}
+                    : user.Role || '—'}
                 </td>
                 <td>
                   <span className={`status ${user.IsActive ? 'active' : 'inactive'}`}>
@@ -278,14 +288,18 @@ const UserManagement = () => {
           isLoading={false}
         />
 
-        {/* === Các Modal === */}
+        {/* === Các Modal CRUD === */}
         {showDeleteModal && (
           <div className="modal">
             <div className="modal-content small">
               <p>Bạn có chắc chắn muốn xóa người dùng này không?</p>
               <div className="form-buttons">
-                <button className="confirm-btn" onClick={handleDeleteUser}>Xóa</button>
-                <button className="cancel-btn" onClick={() => setShowDeleteModal(false)}>Hủy</button>
+                <button className="confirm-btn" onClick={handleDeleteUser}>
+                  Xóa
+                </button>
+                <button className="cancel-btn" onClick={() => setShowDeleteModal(false)}>
+                  Hủy
+                </button>
               </div>
             </div>
           </div>
@@ -296,8 +310,12 @@ const UserManagement = () => {
             <div className="modal-content small">
               <p>{selectedUser?.IsActive ? 'Vô hiệu hóa người dùng?' : 'Kích hoạt người dùng?'}</p>
               <div className="form-buttons">
-                <button className="confirm-btn" onClick={handleToggleStatus}>Xác nhận</button>
-                <button className="cancel-btn" onClick={() => setShowStatusModal(false)}>Hủy</button>
+                <button className="confirm-btn" onClick={handleToggleStatus}>
+                  Xác nhận
+                </button>
+                <button className="cancel-btn" onClick={() => setShowStatusModal(false)}>
+                  Hủy
+                </button>
               </div>
             </div>
           </div>
@@ -315,24 +333,24 @@ const UserManagement = () => {
                 <p><strong>Số điện thoại:</strong> {selectedUser.Phone || '—'}</p>
                 <p><strong>Ngày sinh:</strong> {selectedUser.BirthDate || '—'}</p>
                 <p><strong>Địa chỉ:</strong> {selectedUser.Address || '—'}</p>
-                <p><strong>Vai trò:</strong>
+                <p>
+                  <strong>Vai trò:</strong>{' '}
                   {selectedUser.roles && selectedUser.roles.length > 0
-                    ? selectedUser.roles.map(r => r.RoleName).join(', ')
-                    : '—'}
+                    ? selectedUser.roles.map((r) => r.RoleName).join(', ')
+                    : selectedUser.Role || '—'}
                 </p>
-                <p><strong>Trạng thái:</strong>
-                  {selectedUser.IsActive ? 'Hoạt động' : 'Vô hiệu hóa'}
-                </p>
+                <p><strong>Trạng thái:</strong> {selectedUser.IsActive ? 'Hoạt động' : 'Vô hiệu hóa'}</p>
               </div>
-
               <div className="form-buttons" style={{ justifyContent: 'center', marginTop: '15px' }}>
-                <button className="cancel-btn" onClick={() => setShowDetailModal(false)}>Đóng</button>
+                <button className="cancel-btn" onClick={() => setShowDetailModal(false)}>
+                  Đóng
+                </button>
               </div>
             </div>
           </div>
         )}
 
-
+        {/* === Form thêm / sửa === */}
         {showAddModal && renderUserForm('Thêm Người Dùng Mới', handleCreateUser, setShowAddModal)}
         {showEditModal && selectedUser && renderUserForm('Sửa Người Dùng', handleUpdateUser, setShowEditModal)}
       </div>
@@ -341,6 +359,13 @@ const UserManagement = () => {
 
   // ===================== Form Modal =====================
   function renderUserForm(title, onSubmit, onClose) {
+    const roleName =
+      selectedUser?.Role ||
+      (selectedUser?.roles && selectedUser.roles.length > 0
+        ? selectedUser.roles[0].RoleName
+        : '');
+    const isEditingAdmin = roleName === 'Admin'; // ✅ kiểm tra chính xác hơn
+
     return (
       <div className="modal">
         <div className="modal-content">
@@ -382,8 +407,8 @@ const UserManagement = () => {
               <label>Ngày sinh</label>
               <input
                 type="date"
-                value={newUser.BirthDate}
-                onChange={(e) => setNewUser({ ...newUser, BirthDate: e.target.value })}
+                value={newUser.DateOfBirth || ''}
+                onChange={(e) => setNewUser({ ...newUser, DateOfBirth: e.target.value })}
               />
             </div>
             <div>
@@ -398,20 +423,26 @@ const UserManagement = () => {
                 <option value="Khác">Khác</option>
               </select>
             </div>
-            <div>
-              <label>Vai trò</label>
-              <select
-                value={newUser.Role}
-                onChange={(e) => setNewUser({ ...newUser, Role: e.target.value })}
-              >
-                <option value="">Chọn vai trò</option>
-                {roles.map((r) => (
-                  <option key={r.RoleId} value={r.RoleName}>
-                    {r.RoleName}
-                  </option>
-                ))}
-              </select>
-            </div>
+
+            {/* ✅ Chỉ hiển thị vai trò nếu KHÔNG phải admin */}
+            {!isEditingAdmin && (
+              <div>
+                <label>Vai trò</label>
+                <select
+                  value={newUser.Role}
+                  onChange={(e) => setNewUser({ ...newUser, Role: e.target.value })}
+                >
+                  <option value="">Chọn vai trò</option>
+                  {roles.map((r) => (
+                    <option key={r.RoleId} value={r.RoleName}>
+                      {r.RoleName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* === Hiện thêm 2 trường nếu là bác sĩ === */}
             {newUser.Role === 'Bác sĩ' && (
               <>
                 <div>
@@ -432,6 +463,7 @@ const UserManagement = () => {
                 </div>
               </>
             )}
+
             <div className="form-buttons">
               <button type="button" className="save-btn" onClick={onSubmit}>
                 Lưu
@@ -445,6 +477,7 @@ const UserManagement = () => {
       </div>
     );
   }
+
 };
 
 export default UserManagement;
