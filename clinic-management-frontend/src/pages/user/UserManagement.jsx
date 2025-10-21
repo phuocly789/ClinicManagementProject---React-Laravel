@@ -89,12 +89,29 @@ const UserManagement = () => {
   };
 
   const handleDeleteUser = () => {
+    if (!selectedUser) return;
+
+
     fetch(`http://localhost:8000/api/users/${selectedUser.UserId}`, {
       method: 'DELETE',
-    }).then(() => {
-      setShowDeleteModal(false);
-      fetchUsers(currentPage);
-    });
+    })
+      .then((res) => {
+        if (!res.ok) {
+          return res.json().then((err) => {
+            throw new Error(err.error || 'Lỗi khi xóa người dùng');
+          });
+        }
+        return res.json();
+      })
+      .then((data) => {
+        alert(data.message || 'Đã xóa người dùng thành công');
+        setShowDeleteModal(false);
+        fetchUsers(currentPage);
+      })
+      .catch((err) => {
+        alert(err.message);
+        console.error('Lỗi khi xóa người dùng:', err);
+      });
   };
 
   const handleToggleStatus = () => {
@@ -294,6 +311,19 @@ const UserManagement = () => {
         {/* === Các modal CRUD === */}
         {showAddModal && renderUserForm('Thêm Người Dùng Mới', handleCreateUser, setShowAddModal)}
         {showEditModal && selectedUser && renderUserForm('Sửa Người Dùng', handleUpdateUser, setShowEditModal)}
+        {showDeleteModal && selectedUser && (
+          <div className="modal">
+            <div className="modal-content">
+              <h3>Xác nhận xóa</h3>
+              <p>Bạn có chắc muốn xóa người dùng <strong>{selectedUser.FullName}</strong> không?</p>
+              <div className="form-buttons">
+                <button className="delete-btn" onClick={handleDeleteUser}>Xóa</button>
+                <button className="cancel-btn" onClick={() => setShowDeleteModal(false)}>Hủy</button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
