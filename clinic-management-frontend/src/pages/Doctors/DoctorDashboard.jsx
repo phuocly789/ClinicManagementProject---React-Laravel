@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Container, Modal, Button, Toast, ToastContainer, Spinner } from 'react-bootstrap';
-
-import TodaySection from './TodaySection';
-import ScheduleSection from './ScheduleSection';
-import HistorySection from './HistorySection';
-import EventModalContent from './EventModal';
-import PrescriptionModalContent from './PrescriptionModalContent';
-import './DoctorDashboard.css';
-import DoctorSidebar from '../../Components/Sidebar/DoctorSidebar';
+import Sidebar from '../Components/Sidebar';
+import TodaySection from './Doctors/TodaySection';
+import ScheduleSection from './Doctors/ScheduleSection';
+import HistorySection from './Doctors/HistorySection';
+import EventModalContent from './Doctors/EventModal';
+import PrescriptionModalContent from './Doctors/DotorTodayCompo/PrescriptionModalContent';
+import '../pages/Doctors/DoctorDashboard.css';
 
 const API_BASE_URL = 'http://localhost:8000'; // Backend Laravel
 
