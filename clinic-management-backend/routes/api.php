@@ -8,15 +8,18 @@ use App\Http\Controllers\API\MedicinesController;
 use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\ImportBillController;
 use App\Http\Controllers\API\SuppliersController;
-// Controllers for Doctor
+
+use App\Http\Controllers\API\AuthController;
+use App\Http\Controllers\API\Doctor\AISuggestionController;
 use App\Http\Controllers\API\Doctor\AppointmentsController;
-use App\Http\Controllers\API\Doctor\ExaminationController;
 use App\Http\Controllers\API\Doctor\DiagnosisSuggestionController;
 use App\Http\Controllers\API\Doctor\DoctorMedicineSearchController;
-use App\Http\Controllers\API\Doctor\AISuggestionController;
 use App\Http\Controllers\API\Doctor\ServiceController;
-use App\Http\Controllers\API\User\UserControllers;
+use App\Http\Controllers\API\Doctor\DoctorExaminationsController;
+
 //----------------------------------------------Hết-------------------------------
+use App\Http\Controllers\API\User\UserControllers;
+
 
 
 Route::get('/users', [UserController::class, 'index']);
@@ -42,6 +45,10 @@ Route::put('/suppliers/{id}', [SuppliersController::class, 'update']);
 Route::delete('/suppliers/{id}', [SuppliersController::class, 'destroy']);
 Route::get('/suppliers/{id}', [SuppliersController::class, 'show']);
 
+
+Route::post('/auth/login', [AuthController::class, 'login']);
+Route::post('/create-user', [AuthController::class, 'createUser']);
+
 //admin-revenue
 Route::get('/report-revenue/combined', [ReportRevenueController::class, 'getCombinedStatistics']);
 Route::get('/report-revenue/detail-revenue', [ReportRevenueController::class, 'getDetailRevenueReport']);
@@ -66,9 +73,13 @@ Route::prefix('doctor')->group(function () {
 
 
     // Khám bệnh
-    // Route::get('/examination/today', [ExaminationController::class, 'todayPatients']);
-    // Route::get('/examination/{appointmentId}', [ExaminationController::class, 'show']);
-    // Route::post('/examination/complete/{appointmentId}', [ExaminationController::class, 'complete']);
+    Route::prefix('examinations')->group(function () {
+        Route::post('{appointmentId}/start', [DoctorExaminationsController::class, 'start']);
+        Route::post('{appointmentId}/complete', [DoctorExaminationsController::class, 'complete']);
+        Route::get('{appointmentId}', [DoctorExaminationsController::class, 'show']);
+        Route::post('{appointmentId}/temp-save', [DoctorExaminationsController::class, 'tempSave']);
+    });
+
 });
 
 //Nhóm route cho User

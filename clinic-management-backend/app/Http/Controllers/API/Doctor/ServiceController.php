@@ -8,6 +8,10 @@ use Illuminate\Support\Facades\DB;
 
 class ServiceController extends Controller
 {
+    /**
+     * Lấy danh sách các dịch vụ vhir định
+     * /
+     */
     public function index()
     {
         $services = DB::table('Services')
