@@ -13,8 +13,7 @@ const API_BASE_URL = 'http://localhost:8000'; // Backend Laravel
 const DoctorDashboard = () => {
   const [currentSection, setCurrentSection] = useState('today');
   const [todayPatients, setTodayPatients] = useState([]); // Từ /api/doctor/today-patients
-  const [patients, setPatients] = useState([]); // Từ /api/doctor/patients
-  const [events, setEvents] = useState([]); // Từ /api/doctor/staff-schedules
+  const [events, setEvents] = useState([]); // Từ /api/doctor/schedules/{doctorId}
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showEventModal, setShowEventModal] = useState(false);
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
@@ -35,7 +34,8 @@ const DoctorDashboard = () => {
   const [toastMessage, setToastMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // BỎ token và auth check - load trực tiếp
+  // Giả sử doctorId tạm thời (lấy từ localStorage hoặc context sau)
+  const doctorId = 1; // Thay bằng ID bác sĩ thực tế
 
   // Fetch helper KHÔNG CẦN TOKEN (public API tạm thời)
   const fetchWithAuth = useCallback(async (url, options = {}) => {
@@ -43,7 +43,6 @@ const DoctorDashboard = () => {
       const config = {
         headers: {
           'Accept': 'application/json',
-          // BỎ Authorization header
           ...options.headers,
         },
         credentials: 'include',
@@ -52,7 +51,8 @@ const DoctorDashboard = () => {
 
       const response = await fetch(`${API_BASE_URL}/api${url}`, config);
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
       }
       return await response.json();
     } catch (error) {
@@ -63,62 +63,46 @@ const DoctorDashboard = () => {
     }
   }, []);
 
-  // Load data theo section
+  // Load data theo section (chỉ cho today và schedule)
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
       switch (currentSection) {
         case 'today':
           const todayData = await fetchWithAuth('/doctor/today-patients');
-          setTodayPatients(todayData);
-          break;
-        case 'history':
-          const patientsData = await fetchWithAuth('/doctor/patients');
-          setPatients(patientsData);
+          console.log('DEBUG - Today patients loaded:', todayData);
+          setTodayPatients(todayData.data || todayData || []);
           break;
         case 'schedule':
-          const eventsData = await fetchWithAuth('/doctor/staff-schedules'); // Giả định endpoint
-          setEvents(eventsData);
+          const eventsData = await fetchWithAuth(`/doctor/schedules/${doctorId}`);
+          console.log('DEBUG - Events loaded:', eventsData);
+          setEvents(eventsData.data || eventsData || []);
           break;
         default:
           break;
       }
     } catch (error) {
-      // Error handled in fetchWithAuth
+      console.error(`Error loading ${currentSection} data:`, error);
+      // Fallback empty arrays
+      if (currentSection === 'today') setTodayPatients([]);
+      if (currentSection === 'schedule') setEvents([]);
     } finally {
       setIsLoading(false);
     }
-  }, [currentSection, fetchWithAuth]);
+  }, [currentSection, fetchWithAuth, doctorId]);
 
-  // Load data khi section thay đổi - LUÔN LOAD, KHÔNG CHECK TOKEN
+  // Load data khi section thay đổi (chỉ today/schedule)
   useEffect(() => {
-    loadData();
+    if (currentSection !== 'history') {
+      loadData();
+    }
   }, [currentSection, loadData]);
 
-  // Switch section và load data
+  // Switch section
   const switchSection = (section) => {
     setCurrentSection(section);
-  };
-
-  // Các handler khác (event, prescription, examination) như trước, nhưng dùng fetchWithAuth cho POST
-  const handleEventSubmit = async (formData) => {
-    try {
-      setIsLoading(true);
-      const method = editingEventId ? 'PUT' : 'POST';
-      const url = editingEventId ? `/doctor/staff-schedules/${editingEventId}` : '/doctor/staff-schedules';
-      const result = await fetchWithAuth(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-      setToastMessage(result.message || 'Lưu lịch thành công');
-      setShowToast(true);
-      loadData(); // Reload events
-      closeEventModal();
-    } catch (error) {
-      // Handled
-    } finally {
-      setIsLoading(false);
+    if (section !== 'history') {
+      setSelectedPatient(null); // Reset selected when leaving history
     }
   };
 
@@ -129,20 +113,20 @@ const DoctorDashboard = () => {
       const result = await fetchWithAuth('/doctor/prescriptions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, appointment_id: selectedTodayPatient.id }), // Dùng AppointmentId
+        body: JSON.stringify({ ...data, appointment_id: selectedTodayPatient.id }),
       });
       setToastMessage(result.message || 'Thêm thuốc thành công');
       setShowToast(true);
       setPrescriptionRows([...prescriptionRows, data]);
       closePrescriptionModal();
     } catch (error) {
-      // Handled
+      // Handled in fetchWithAuth
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Handler cho examination (lưu/tạm lưu, cập nhật Appointment Status)
+  // Handler cho examination
   const handleExaminationSubmit = async (e) => {
     e.preventDefault();
     if (!selectedTodayPatient) return;
@@ -150,7 +134,7 @@ const DoctorDashboard = () => {
     try {
       setIsProcessing(true);
       const data = {
-        appointment_id: selectedTodayPatient.id, // AppointmentId
+        appointment_id: selectedTodayPatient.id,
         patient_id: selectedTodayPatient.patient_id,
         symptoms,
         diagnosis,
@@ -168,9 +152,11 @@ const DoctorDashboard = () => {
       setToastMessage(result.message || (isSave ? 'Hoàn tất hồ sơ' : 'Tạm lưu thành công'));
       setShowToast(true);
       if (isSave) {
-        // Reset form
-        setSymptoms(''); setDiagnosis(''); setTests({ test1: false, test2: false, test3: false });
-        setPrescriptionRows([]); setSelectedTodayPatient(null);
+        setSymptoms(''); 
+        setDiagnosis(''); 
+        setTests({ test1: false, test2: false, test3: false });
+        setPrescriptionRows([]); 
+        setSelectedTodayPatient(null);
       }
       setShowConfirm(false);
     } catch (error) {
@@ -180,19 +166,29 @@ const DoctorDashboard = () => {
     }
   };
 
-  // Các function khác (open/close modal, prev/next month, etc.) giữ nguyên như code gốc
-  const openEventModal = (eventId = null) => { setEditingEventId(eventId); setShowEventModal(true); };
-  const closeEventModal = () => { setShowEventModal(false); setEditingEventId(null); };
+  // Các function khác
+  const openEventModal = (eventId = null) => { 
+    setEditingEventId(eventId); 
+    setShowEventModal(true); 
+  };
+  const closeEventModal = () => { 
+    setShowEventModal(false); 
+    setEditingEventId(null); 
+  };
   const openPrescriptionModal = () => setShowPrescriptionModal(true);
   const closePrescriptionModal = () => setShowPrescriptionModal(false);
-  const handleTempSave = () => { setConfirmType('temp'); setShowConfirm(true); };
-  const handleConfirmSave = () => { setConfirmType('save'); setShowConfirm(true); };
+  const handleTempSave = () => { 
+    setConfirmType('temp'); 
+    setShowConfirm(true); 
+  };
+  const handleConfirmSave = () => { 
+    setConfirmType('save'); 
+    setShowConfirm(true); 
+  };
   const processConfirm = () => handleExaminationSubmit({ preventDefault: () => {} });
 
   const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-
-  // BỎ check token - dashboard load trực tiếp
 
   return (
     <div className="d-flex min-vh-100 bg-light">
@@ -225,14 +221,14 @@ const DoctorDashboard = () => {
               handleTempSave={handleTempSave}
               selectedTodayPatient={selectedTodayPatient}
               setSelectedTodayPatient={setSelectedTodayPatient}
-              todayPatients={todayPatients} // Từ API
+              todayPatients={todayPatients}
             />
           )}
 
           {currentSection === 'schedule' && (
             <ScheduleSection
               currentSection={currentSection}
-              events={events} // Từ API
+              events={events}
               currentDate={currentDate}
               openEventModal={openEventModal}
               prevMonth={prevMonth}
@@ -243,7 +239,6 @@ const DoctorDashboard = () => {
           {currentSection === 'history' && (
             <HistorySection
               currentSection={currentSection}
-              patients={patients} // Từ API
               selectedPatient={selectedPatient}
               setSelectedPatient={setSelectedPatient}
             />
@@ -251,7 +246,6 @@ const DoctorDashboard = () => {
         </Container>
       </div>
 
-      {/* Modals và Toast giữ nguyên như code gốc */}
       <Modal show={showConfirm} onHide={() => setShowConfirm(false)} centered>
         <Modal.Header closeButton className="bg-primary text-white">
           <Modal.Title>{confirmType === 'save' ? 'Xác nhận lưu hồ sơ' : 'Xác nhận tạm lưu'}</Modal.Title>
@@ -270,16 +264,6 @@ const DoctorDashboard = () => {
           <Toast.Body className="text-white">{toastMessage}</Toast.Body>
         </Toast>
       </ToastContainer>
-
-      {/* Event Modal */}
-      <Modal show={showEventModal} onHide={closeEventModal} centered size="lg">
-        <Modal.Header closeButton className="bg-light">
-          <Modal.Title>{editingEventId ? 'Sửa Lịch' : 'Thêm Lịch'}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <EventModalContent editingEventId={editingEventId} events={events} onSubmit={handleEventSubmit} onClose={closeEventModal} />
-        </Modal.Body>
-      </Modal>
 
       {/* Prescription Modal */}
       <Modal show={showPrescriptionModal} onHide={closePrescriptionModal} centered>
