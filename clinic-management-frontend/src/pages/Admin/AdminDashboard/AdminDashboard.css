@@ -1,9 +1,12 @@
-/* 🌈 Tổng thể Dashboard */
+
 .dashboard-container {
     padding: 2rem;
     font-family: 'Segoe UI', sans-serif;
     background: linear-gradient(135deg, #f8f9fb 0%, #eef1f6 100%);
     min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
 }
 
 /* 🏷️ Tiêu đề */
@@ -126,6 +129,8 @@
     display: grid;
     grid-template-columns: 1.7fr 1fr;
     gap: 1.5rem;
+    flex-grow: 1;
+    min-height: 0;
 }
 
 /* 📈 Card chung */
@@ -158,16 +163,37 @@
     padding: 1.5rem;
 }
 
-/* 📊 Biểu đồ */
 .chart-container {
-    height: 61vh;
+    /* ❌ Loại bỏ cách tính toán cũ */
+    /* height: calc(100vh - 35%); */
+
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    /* Xếp header và canvas theo chiều dọc */
+    /* 💡 Đảm bảo nó là 1 card */
+    background: #fff;
+    border-radius: 1rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+}
+
+.chart-container canvas {
+    /* 💡 Biểu đồ chiếm hết không gian còn lại */
+    flex-grow: 1;
+}
+
+.inventory-container {
+    /* Kế thừa .card */
+    display: flex;
+    flex-direction: column;
 }
 
 .inventory-container .card-body {
-    height: 44vh;
+    /* ❌ Loại bỏ cách tính toán cũ */
+    /* height: 44vh; */
+
+    /* 💡 Phần thân bảng chiếm hết không gian còn lại */
+    flex-grow: 1;
     overflow-y: auto;
 }
 
@@ -238,4 +264,3 @@
 .table td:last-child {
     border-right: none;
 }
-
