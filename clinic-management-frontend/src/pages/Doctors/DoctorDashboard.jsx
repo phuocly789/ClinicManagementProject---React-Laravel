@@ -183,7 +183,7 @@ const DoctorDashboard = () => {
 
   return (
     <div className="d-flex min-vh-100 bg-light">
-      <Sidebars currentSection={currentSection} switchSection={switchSection} />
+      <Sidebar currentSection={currentSection} switchSection={switchSection} />
       <div className="flex-grow-1 p-4" style={{ marginLeft: '250px' }}>
         <Container fluid>
           <div className="alert alert-success mb-4 tab-container">
