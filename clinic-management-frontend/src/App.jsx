@@ -13,6 +13,7 @@ import AdminInventory from "./pages/Admin/AdminInventory.jsx";
 import DoctorDashboard from "./pages/Doctors/DoctorDashboard.jsx";
 import AdminDashboard from "./pages/Admin/AdminDashboard/AdminDashboard.jsx";
 import AdminRevenueReport from "./pages/Admin/AdminRevenueReport/AdminRevenueReport.jsx";
+import DoctorDashboard from './pages/Doctors/DoctorDashboard.jsx';
 function App() {
   return (
     <BrowserRouter>
