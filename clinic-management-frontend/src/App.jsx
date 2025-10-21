@@ -9,7 +9,7 @@ import AdminInventory from "./pages/AdminInventory";
 import { path } from "./utils/constant";
 import LoginPage from "./pages/auth/Login/Login";
 import UserManagement from './pages/user/UserManagement.jsx';
-import DoctorDashboard from './pages/DoctorDashboard';
+import DoctorDashboard from './pages/Doctors/DoctorDashboard.jsx';
 function App() {
   return (
     <BrowserRouter>

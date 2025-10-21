@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Table, Button, Spinner, Form, Row, Col } from 'react-bootstrap';
-import Taskbar from '../Components/Taskbar';
+import Taskbar from '../Components/Sidebar/AdminSidebar';
 import Pagination from '../Components/Pagination/Pagination';
 import ConfirmDeleteModal from '../Components/CustomToast/DeleteConfirmModal';
 import CustomToast from '../Components/CustomToast/CustomToast';
