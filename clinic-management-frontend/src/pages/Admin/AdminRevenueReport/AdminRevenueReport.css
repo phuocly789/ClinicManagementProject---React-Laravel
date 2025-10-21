@@ -1,0 +1,205 @@
+.main-content {
+    /* padding: 2rem; */
+    font-family: 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg, #f8f9fb 0%, #eef1f6 100%);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 20px;
+    margin-bottom: 30px;
+}
+
+.header h1 {
+    margin: 0;
+}
+
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+th,
+td {
+    border: 1px solid #ddd;
+    padding: 12px;
+    text-align: left;
+}
+
+th {
+    background-color: #e9ecef;
+}
+
+button {
+    padding: 8px 15px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    color: white;
+    margin-right: 5px;
+}
+
+
+/* Style cho ô tìm kiếm */
+.header div {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.form-control {
+    width: 200px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+
+/* Modal styles */
+.modal-overlay {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background-color: rgba(0, 0, 0, 0.5) !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    z-index: 1000 !important;
+}
+
+.modal {
+    background-color: #fff !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2) !important;
+    width: 700px !important;
+    max-width: 90% !important;
+    /* max-height: 80vh !important;
+     */
+    margin: auto;
+    margin-top: 20px;
+    position: relative;
+    overflow-y: auto !important;
+    z-index: 1001;
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    height: auto;
+    max-height: 700px;
+}
+
+.modal-header {
+    padding: 15px 20px !important;
+    border-bottom: 1px solid #ddd !important;
+    position: sticky;
+    top: 0;
+    background-color: white !important;
+    z-index: 10;
+}
+
+.modal-header h3 {
+    margin: 0 !important;
+    font-size: 1.5em !important;
+}
+
+.modal-body {
+    padding: 20px !important;
+}
+
+.modal-footer {
+    padding: 15px 20px !important;
+    border-top: 1px solid #ddd !important;
+    text-align: right !important;
+}
+
+
+
+
+
+
+table tr:hover {
+    background-color: #000000;
+    cursor: pointer;
+}
+
+/* Hover cho button trong table */
+button:hover {
+    opacity: 0.8;
+    transform: scale(1.05);
+    transition: all 0.2s ease;
+}
+
+/* Định dạng màu cho trạng thái */
+.status {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: 500;
+    font-size: 14px;
+    text-align: center;
+    min-width: 150px;
+}
+
+.status-active {
+    background-color: #d1f7c4;
+    color: #155724;
+    border: 1px solid #a8e6a3;
+}
+
+.status-pending {
+    background-color: #fff3cd;
+    /* Nền vàng nhạt */
+    color: #856404;
+    /* Chữ vàng nâu đậm */
+    border: 1px solid #ffeeba;
+    /* Viền vàng */
+}
+
+.status-inactive {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* 📦 Tổng thể bảng */
+.table-container {
+    max-height: calc(100vh - 175px);
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    background: #fff;
+
+    /* 👇 Giúp header dính sát, không dư khoảng trắng */
+    position: relative;
+}
+
+
+
+
+
+
+
+
+
+
+
+label {
+    white-space: nowrap;
+}

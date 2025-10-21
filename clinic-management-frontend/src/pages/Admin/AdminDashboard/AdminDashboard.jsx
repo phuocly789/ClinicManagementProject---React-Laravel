@@ -23,7 +23,7 @@ const AdminDashboard = () => {
 
     // Gọi API low stock
     const getLowStockMedicines = useCallback(async () => {
-        const response = await instance.get('/medicines/low-stock?threshold=200');
+        const response = await instance.get('api/medicines/low-stock?threshold=200');
         return response;
     }, []);
 
@@ -32,7 +32,7 @@ const AdminDashboard = () => {
         if (!start || !end || new Date(start) > new Date(end)) {
             throw new Error('Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc');
         }
-        const response = await instance.get(`/report-revenue/combined?startDate=${start}&endDate=${end}`);
+        const response = await instance.get(`api/report-revenue/combined?startDate=${start}&endDate=${end}`);
         return response;
     }, []);
 
@@ -174,7 +174,7 @@ const AdminDashboard = () => {
     };
 
     return (
-        <div style={{ display: 'flex', margin: 0, backgroundColor: '#f8f9fa' }}>
+        <div style={{ display: 'flex', margin: 0, backgroundColor: '#f8f9fa', height: '100vh' }}>
             <AdminSidebar />
             <div
                 className="dashboard-container"
