@@ -115,7 +115,7 @@ class MedicinesController extends Controller
     public function checkLowStock(Request $request){
         $threshold =$request->get('threshold', 100);
 
-        $lowStock=Medicine::where('StockQuantity','<',$threshold)->orderBy('StockQuantity','asc')->get(['MedicineName','StockQuantity','Unit']);
+        $lowStock=Medicine::where('StockQuantity','<',$threshold)->orderBy('StockQuantity','asc')->get(['MedicineId','MedicineName','StockQuantity','Unit']);
 
         return response()->json([
             'message'=> 'Danh sách thuốc tồn kho thấp',

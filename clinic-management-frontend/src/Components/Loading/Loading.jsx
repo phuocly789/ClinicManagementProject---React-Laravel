@@ -1,14 +1,15 @@
-import Lottie from "lottie-react";
-import loadingAnimation from "../../../assets/lottie/loading.json";
+import React from "react";
+import "./Loading.css";
 
-const Loading = () => {
-  return (
-    <div className="position-fixed top-0 start-0 w-100 h-100 bg-light bg-opacity-50 d-flex align-items-center justify-content-center z-50">
-      <div className="w-25 h-25 rounded shadow">
-        <Lottie animationData={loadingAnimation} loop={true} />
-      </div>
-    </div>
-  );
+const Loading = ({ isLoading }) => {
+    if (!isLoading) return null;
+
+    return (
+        <div className="loading-overlay">
+            <div className="spinner-gradient"></div>
+            <p className="loading-text">Đang tải dữ liệu...</p>
+        </div>
+    );
 };
 
 export default Loading;
