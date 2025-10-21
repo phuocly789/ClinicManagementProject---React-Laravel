@@ -3,6 +3,7 @@ import './UserManagement.css';
 import Pagination from '../../Components/Pagination/Pagination';
 import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
 import dayjs from 'dayjs';
+
 const UserManagement = () => {
   const usersPerPage = 5;
 
@@ -22,6 +23,7 @@ const UserManagement = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [newUser, setNewUser] = useState({
     Username: '',
+    FullName: '', // ✅ Họ tên
     Gender: '',
     Email: '',
     Phone: '',
@@ -45,7 +47,7 @@ const UserManagement = () => {
         const formattedUsers = (data.data || []).map((user) => ({
           ...user,
           BirthDate: user.DateOfBirth
-            ? dayjs(user.DateOfBirth).format('DD/MM/YYYY') // ✅ định dạng ngày
+            ? dayjs(user.DateOfBirth).format('DD/MM/YYYY')
             : 'Không có',
         }));
         setUsers(formattedUsers);
@@ -110,6 +112,7 @@ const UserManagement = () => {
   const resetForm = () => {
     setNewUser({
       Username: '',
+      FullName: '',
       Gender: '',
       Email: '',
       Phone: '',
@@ -126,6 +129,7 @@ const UserManagement = () => {
     const matchesSearch =
       searchTerm.trim() === '' ||
       user.Username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.FullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.Email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.Phone?.includes(searchTerm);
 
@@ -141,10 +145,7 @@ const UserManagement = () => {
   return (
     <div style={{ display: 'flex', margin: 0, backgroundColor: '#f8f9fa' }}>
       <AdminSidebar />
-      <div
-        className="content"
-        style={{ position: 'relative', width: '100%', flexGrow: 1, marginLeft: '5px', padding: '30px' }}
-      >
+      <div className="content" style={{ position: 'relative', width: '100%', flexGrow: 1, marginLeft: '5px', padding: '30px' }}>
         <h1>Quản Lý Người Dùng</h1>
 
         <div className="search-container">
@@ -159,7 +160,7 @@ const UserManagement = () => {
           </button>
         </div>
 
-        {/* === Bộ lọc nâng cao === */}
+        {/* === Bộ lọc === */}
         <div className="filter-section">
           <h3>Bộ Lọc Nâng Cao</h3>
           <div className="filter-row">
@@ -183,11 +184,11 @@ const UserManagement = () => {
                 onChange={(e) => setFilters({ ...filters, role: e.target.value })}
               >
                 <option value="">Tất cả</option>
-                <option value="Admin">Admin</option>
-                <option value="Lễ Tân">Lễ Tân</option>
-                <option value="Nhân viên">Nhân viên</option>
-                <option value="Bác sĩ">Bác sĩ</option>
-                <option value="Bệnh nhân">Bệnh nhân</option>
+                {roles.map((r) => (
+                  <option key={r.RoleId} value={r.RoleName}>
+                    {r.RoleName}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -211,6 +212,7 @@ const UserManagement = () => {
             <tr>
               <th>ID</th>
               <th>Tên đăng nhập</th>
+              <th>Họ tên</th>
               <th>Giới tính</th>
               <th>Email</th>
               <th>SĐT</th>
@@ -224,6 +226,7 @@ const UserManagement = () => {
               <tr key={user.UserId}>
                 <td>{user.UserId}</td>
                 <td>{user.Username}</td>
+                <td>{user.FullName || '—'}</td>
                 <td>{user.Gender}</td>
                 <td>{user.Email}</td>
                 <td>{user.Phone}</td>
@@ -288,69 +291,7 @@ const UserManagement = () => {
           isLoading={false}
         />
 
-        {/* === Các Modal CRUD === */}
-        {showDeleteModal && (
-          <div className="modal">
-            <div className="modal-content small">
-              <p>Bạn có chắc chắn muốn xóa người dùng này không?</p>
-              <div className="form-buttons">
-                <button className="confirm-btn" onClick={handleDeleteUser}>
-                  Xóa
-                </button>
-                <button className="cancel-btn" onClick={() => setShowDeleteModal(false)}>
-                  Hủy
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showStatusModal && (
-          <div className="modal">
-            <div className="modal-content small">
-              <p>{selectedUser?.IsActive ? 'Vô hiệu hóa người dùng?' : 'Kích hoạt người dùng?'}</p>
-              <div className="form-buttons">
-                <button className="confirm-btn" onClick={handleToggleStatus}>
-                  Xác nhận
-                </button>
-                <button className="cancel-btn" onClick={() => setShowStatusModal(false)}>
-                  Hủy
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showDetailModal && selectedUser && (
-          <div className="modal">
-            <div className="modal-content detail">
-              <h3>Chi tiết người dùng</h3>
-              <div className="detail-grid">
-                <p><strong>ID:</strong> {selectedUser.UserId}</p>
-                <p><strong>Tên đăng nhập:</strong> {selectedUser.Username}</p>
-                <p><strong>Giới tính:</strong> {selectedUser.Gender || '—'}</p>
-                <p><strong>Email:</strong> {selectedUser.Email || '—'}</p>
-                <p><strong>Số điện thoại:</strong> {selectedUser.Phone || '—'}</p>
-                <p><strong>Ngày sinh:</strong> {selectedUser.BirthDate || '—'}</p>
-                <p><strong>Địa chỉ:</strong> {selectedUser.Address || '—'}</p>
-                <p>
-                  <strong>Vai trò:</strong>{' '}
-                  {selectedUser.roles && selectedUser.roles.length > 0
-                    ? selectedUser.roles.map((r) => r.RoleName).join(', ')
-                    : selectedUser.Role || '—'}
-                </p>
-                <p><strong>Trạng thái:</strong> {selectedUser.IsActive ? 'Hoạt động' : 'Vô hiệu hóa'}</p>
-              </div>
-              <div className="form-buttons" style={{ justifyContent: 'center', marginTop: '15px' }}>
-                <button className="cancel-btn" onClick={() => setShowDetailModal(false)}>
-                  Đóng
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* === Form thêm / sửa === */}
+        {/* === Các modal CRUD === */}
         {showAddModal && renderUserForm('Thêm Người Dùng Mới', handleCreateUser, setShowAddModal)}
         {showEditModal && selectedUser && renderUserForm('Sửa Người Dùng', handleUpdateUser, setShowEditModal)}
       </div>
@@ -364,7 +305,7 @@ const UserManagement = () => {
       (selectedUser?.roles && selectedUser.roles.length > 0
         ? selectedUser.roles[0].RoleName
         : '');
-    const isEditingAdmin = roleName === 'Admin'; // ✅ kiểm tra chính xác hơn
+    const isEditingAdmin = roleName === 'Admin';
 
     return (
       <div className="modal">
@@ -379,6 +320,16 @@ const UserManagement = () => {
                 onChange={(e) => setNewUser({ ...newUser, Username: e.target.value })}
               />
             </div>
+
+            <div>
+              <label>Họ tên</label>
+              <input
+                type="text"
+                value={newUser.FullName}
+                onChange={(e) => setNewUser({ ...newUser, FullName: e.target.value })}
+              />
+            </div>
+
             <div>
               <label>Email</label>
               <input
@@ -387,6 +338,7 @@ const UserManagement = () => {
                 onChange={(e) => setNewUser({ ...newUser, Email: e.target.value })}
               />
             </div>
+
             <div>
               <label>Số điện thoại</label>
               <input
@@ -395,6 +347,7 @@ const UserManagement = () => {
                 onChange={(e) => setNewUser({ ...newUser, Phone: e.target.value })}
               />
             </div>
+
             <div>
               <label>Địa chỉ</label>
               <input
@@ -403,6 +356,7 @@ const UserManagement = () => {
                 onChange={(e) => setNewUser({ ...newUser, Address: e.target.value })}
               />
             </div>
+
             <div>
               <label>Ngày sinh</label>
               <input
@@ -411,6 +365,7 @@ const UserManagement = () => {
                 onChange={(e) => setNewUser({ ...newUser, DateOfBirth: e.target.value })}
               />
             </div>
+
             <div>
               <label>Giới tính</label>
               <select
@@ -424,7 +379,6 @@ const UserManagement = () => {
               </select>
             </div>
 
-            {/* ✅ Chỉ hiển thị vai trò nếu KHÔNG phải admin */}
             {!isEditingAdmin && (
               <div>
                 <label>Vai trò</label>
@@ -442,7 +396,6 @@ const UserManagement = () => {
               </div>
             )}
 
-            {/* === Hiện thêm 2 trường nếu là bác sĩ === */}
             {newUser.Role === 'Bác sĩ' && (
               <>
                 <div>
@@ -477,7 +430,6 @@ const UserManagement = () => {
       </div>
     );
   }
-
 };
 
 export default UserManagement;
