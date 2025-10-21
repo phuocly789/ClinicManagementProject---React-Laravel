@@ -5,7 +5,7 @@ import TodaySection from './Doctors/TodaySection';
 import ScheduleSection from './Doctors/ScheduleSection';
 import HistorySection from './Doctors/HistorySection';
 import EventModalContent from './Doctors/EventModal';
-import PrescriptionModalContent from './Doctors/PrescriptionModalContent';
+import PrescriptionModalContent from './Doctors/DotorTodayCompo/PrescriptionModalContent';
 import '../pages/Doctors/DoctorDashboard.css';
 
 const API_BASE_URL = 'http://localhost:8000'; // Backend Laravel

@@ -14,7 +14,7 @@ import PatientList from '../Doctors/DotorTodayCompo/PatientList';
 import DiagnosisSection from '../Doctors/DotorTodayCompo/DiagnosisSection';
 import ServicesSection from '../Doctors/DotorTodayCompo/ServicesSection';
 import PrescriptionSection from '../Doctors/DotorTodayCompo/PrescriptionSection';
-import PrescriptionModal from './PrescriptionModal';
+import PrescriptionModal from '../Doctors/DotorTodayCompo/PrescriptionModal';
 import doctorService from "../../services/doctorService";
 import dayjs from "dayjs";
 import { generatePrintHtml, printHtml } from "../../utils/PrintDocument";
