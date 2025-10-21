@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { Table, Button, Spinner, Form, Row, Col } from 'react-bootstrap';
 
 import Pagination from '../../Components/Pagination/Pagination';
@@ -25,20 +25,27 @@ class ErrorBoundary extends React.Component {
 
 const API_BASE_URL = 'http://localhost:8000';
 
-// Load html2pdf.js for PDF export
+// Load html2pdf.js for PDF export lazily
 const loadHtml2Pdf = () => {
-  const script = document.createElement('script');
-  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-  script.async = true;
-  document.body.appendChild(script);
-  return script;
+  return new Promise((resolve) => {
+    const existingScript = document.querySelector('script[src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"]');
+    if (existingScript) {
+      resolve();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    script.async = true;
+    script.onload = resolve;
+    document.body.appendChild(script);
+  });
 };
 
 // Regex kiểm tra ký tự đặc biệt và ngôn ngữ code
 const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
 const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class|import|export|\$\w+)/i;
 
-const InventoryList = ({ inventories, isLoading, formatVND, handleShowDeleteModal, handleShowDetail, handleShowAddInventory, handleShowEditForm, pageCount, currentPage, handlePageChange, suppliers }) => {
+const InventoryList = memo(({ inventories, isLoading, formatVND, handleShowDeleteModal, handleShowDetail, handleShowAddInventory, handleShowEditForm, pageCount, currentPage, handlePageChange, suppliers }) => {
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-3">
@@ -125,9 +132,9 @@ const InventoryList = ({ inventories, isLoading, formatVND, handleShowDeleteModa
       )}
     </div>
   );
-};
+});
 
-const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading, suppliers, medicines, formLoading }) => {
+const InventoryForm = memo(({ isEditMode, inventory, onSubmit, onCancel, isLoading, suppliers, medicines, formLoading }) => {
   // Thêm kiểm tra formLoading
   if (formLoading) {
     return (
@@ -167,9 +174,9 @@ const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading, s
       ...prev,
       items: items.map(() => ({ medicineId: '', quantity: '', importPrice: '' })),
     }));
-  }, [items]);
+  }, [items.length]); // Chỉ depend vào length để tránh loop
 
-  const validateForm = (formData, items) => {
+  const validateForm = useCallback((formData, items) => {
     const newErrors = {
       supplierId: '',
       date: '',
@@ -243,30 +250,31 @@ const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading, s
 
     setErrors(newErrors);
     return isValid;
-  };
+  }, [medicines, suppliers]);
 
-  const handleAddItem = () => {
-    setItems([...items, { medicineId: '', quantity: 0, importPrice: 0, subTotal: 0 }]);
-  };
+  const handleAddItem = useCallback(() => {
+    setItems(prev => [...prev, { medicineId: '', quantity: 0, importPrice: 0, subTotal: 0 }]);
+  }, []);
 
-  const handleItemChange = (index, field, value) => {
-    const newItems = [...items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    if (field === 'quantity' || field === 'importPrice') {
-      newItems[index].subTotal = (newItems[index].quantity || 0) * (newItems[index].importPrice || 0);
-    }
-    setItems(newItems);
-  };
+  const handleItemChange = useCallback((index, field, value) => {
+    setItems(prev => {
+      const newItems = [...prev];
+      newItems[index] = { ...newItems[index], [field]: value };
+      if (field === 'quantity' || field === 'importPrice') {
+        newItems[index].subTotal = (newItems[index].quantity || 0) * (newItems[index].importPrice || 0);
+      }
+      return newItems;
+    });
+  }, []);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = useCallback((e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
     if (validateForm(formData, items)) {
       const totalAmount = items.reduce((sum, item) => sum + (item.subTotal || 0), 0);
-      console.log('Submitting form with items:', items, 'and totalAmount:', totalAmount);
       onSubmit(e, items, totalAmount);
     }
-  };
+  }, [items, onSubmit, validateForm]);
 
   const styles = {
     itemGroup: { border: '1px solid #ddd', padding: '10px', marginBottom: '10px', borderRadius: '4px' },
@@ -420,16 +428,17 @@ const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading, s
       </Form>
     </div>
   );
-};
+});
 
-const InventoryDetail = ({ inventory, details, supplier, isLoading, formatVND, onBack }) => {
+const InventoryDetail = memo(({ inventory, details, supplier, isLoading, formatVND, onBack }) => {
   const printableAreaRef = useRef(null);
 
-  const printPage = () => {
+  const printPage = useCallback(() => {
     window.print();
-  };
+  }, []);
 
-  const exportPDF = () => {
+  const exportPDF = useCallback(async () => {
+    await loadHtml2Pdf();
     const element = printableAreaRef.current;
     const opt = {
       margin: 0.5,
@@ -439,7 +448,7 @@ const InventoryDetail = ({ inventory, details, supplier, isLoading, formatVND, o
       jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
     };
     window.html2pdf().set(opt).from(element).save();
-  };
+  }, [inventory.id]);
 
   const styles = {
     dashboardContainer: { display: 'flex' },
@@ -473,6 +482,8 @@ const InventoryDetail = ({ inventory, details, supplier, isLoading, formatVND, o
       buttonContainer: { display: 'none' }
     }
   };
+
+  console.log(details);
 
   return (
     <div style={styles.mainContent}>
@@ -548,7 +559,7 @@ const InventoryDetail = ({ inventory, details, supplier, isLoading, formatVND, o
       </div>
     </div>
   );
-};
+});
 
 const AdminInventory = () => {
   const [inventories, setInventories] = useState([]);
@@ -568,20 +579,16 @@ const AdminInventory = () => {
   const cache = useRef(new Map());
   const debounceRef = useRef(null);
 
-  useEffect(() => {
-    const script = loadHtml2Pdf();
-    return () => script.remove();
+  const showToast = useCallback((type, message) => {
+    setToast({ show: true, type, message });
   }, []);
 
-  const showToast = (type, message) => {
-    setToast({ show: true, type, message });
-  };
-
-  const hideToast = () => {
+  const hideToast = useCallback(() => {
     setToast({ show: false, type: 'info', message: '' });
-  };
+  }, []);
 
   const fetchSuppliers = useCallback(async () => {
+    if (suppliers.length > 0) return; // Avoid re-fetch if already loaded
     try {
       setIsLoading(true);
       const response = await fetch(`${API_BASE_URL}/api/suppliers`, {
@@ -597,9 +604,10 @@ const AdminInventory = () => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [suppliers.length, showToast]);
 
   const fetchMedicines = useCallback(async () => {
+    if (medicines.length > 0) return; // Avoid re-fetch if already loaded
     try {
       setIsLoading(true);
       const response = await fetch(`${API_BASE_URL}/api/medicines/all`, {
@@ -615,7 +623,7 @@ const AdminInventory = () => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [medicines.length, showToast]);
 
   const fetchInventories = useCallback(async (page = 1) => {
     if (cache.current.has(page)) {
@@ -654,7 +662,7 @@ const AdminInventory = () => {
         setIsLoading(false);
       }
     }, 300);
-  }, []);
+  }, [showToast]);
 
   const fetchInventoryDetails = useCallback(async (importId) => {
     try {
@@ -672,7 +680,7 @@ const AdminInventory = () => {
         date: data.data.ImportDate,
         total: data.data.TotalAmount,
         note: data.data.Notes || '',
-        details: data.data.import_details || [], // Đảm bảo details luôn là mảng
+        details: data.data.import_details || [],
       };
       const mappedDetails = (data.data.import_details || []).map(detail => ({
         id: detail.ImportDetailId,
@@ -698,7 +706,7 @@ const AdminInventory = () => {
         details: mappedDetails
       });
       setDetails(mappedDetails);
-      setEditInventory(mappedInventory); // Cập nhật editInventory cho form edit
+      setEditInventory(mappedInventory);
       return mappedInventory;
     } catch (error) {
       console.error('Error fetching inventory details:', error);
@@ -708,9 +716,9 @@ const AdminInventory = () => {
       setIsLoading(false);
       setFormLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
-  const getCsrfToken = async (retries = 3) => {
+  const getCsrfToken = useCallback(async (retries = 3) => {
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const response = await fetch(`${API_BASE_URL}/sanctum/csrf-cookie`, {
@@ -730,7 +738,7 @@ const AdminInventory = () => {
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
     }
-  };
+  }, []);
 
   const handleDelete = useCallback(
     async (inventoryId) => {
@@ -763,24 +771,23 @@ const AdminInventory = () => {
         setInventoryToDelete(null);
       }
     },
-    [currentPage, fetchInventories]
+    [currentPage, fetchInventories, getCsrfToken, showToast]
   );
 
-  const handleShowDeleteModal = (inventoryId) => {
+  const handleShowDeleteModal = useCallback((inventoryId) => {
     setInventoryToDelete(inventoryId);
     setShowDeleteModal(true);
-  };
+  }, []);
 
-  const handleCancelDelete = () => {
+  const handleCancelDelete = useCallback(() => {
     setShowDeleteModal(false);
     setInventoryToDelete(null);
-  };
+  }, []);
 
   const handleShowAddInventory = useCallback(async () => {
     try {
       setIsLoading(true);
-      if (suppliers.length === 0) await fetchSuppliers();
-      if (medicines.length === 0) await fetchMedicines();
+      await Promise.all([fetchSuppliers(), fetchMedicines()]);
       setEditInventory(null);
       setDetails([]);
       setCurrentView('add');
@@ -790,36 +797,37 @@ const AdminInventory = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [fetchSuppliers, fetchMedicines, suppliers, medicines]);
+  }, [fetchSuppliers, fetchMedicines, showToast]);
 
-  const handleShowEditForm = async (inventory) => {
+  const handleShowEditForm = useCallback(async (inventory) => {
     setFormLoading(true);
     setCurrentView('edit');
+    await Promise.all([fetchSuppliers(), fetchMedicines()]);
     const fullInventory = await fetchInventoryDetails(inventory.id);
     if (fullInventory) {
       setEditInventory(fullInventory);
     }
-  };
+  }, [fetchInventoryDetails, fetchSuppliers, fetchMedicines]);
 
-  const handleShowDetail = (inventoryId) => {
+  const handleShowDetail = useCallback((inventoryId) => {
     setCurrentView('detail');
     fetchInventoryDetails(inventoryId);
-  };
+  }, [fetchInventoryDetails]);
 
-  const handleCancelForm = () => {
+  const handleCancelForm = useCallback(() => {
     setCurrentView('list');
     setEditInventory(null);
     setDetails([]);
     setFormLoading(false);
-  };
+  }, []);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     setCurrentView('list');
     setSelectedInventory(null);
     setDetails([]);
-  };
+  }, []);
 
-  const handleAddInventory = async (e, items, totalAmount) => {
+  const handleAddInventory = useCallback(async (e, items) => {
     try {
       setIsLoading(true);
       const token = await getCsrfToken();
@@ -827,16 +835,13 @@ const AdminInventory = () => {
       const data = {
         SupplierId: parseInt(formData.get('supplierId')),
         ImportDate: formData.get('date'),
-        TotalAmount: totalAmount,
         Notes: formData.get('note')?.trim() || null,
         import_details: items.map(item => ({
           MedicineId: parseInt(item.medicineId),
           Quantity: parseInt(item.quantity),
           ImportPrice: parseFloat(item.importPrice),
-          // Bỏ SubTotal
         })),
       };
-      console.log('Adding inventory with items:', data.import_details, 'and totalAmount:', totalAmount);
 
       const response = await fetch(`${API_BASE_URL}/api/import-bills`, {
         method: 'POST',
@@ -874,9 +879,9 @@ const AdminInventory = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [fetchInventories, getCsrfToken, showToast]);
 
-  const handleEditInventory = async (e, items, totalAmount) => {
+  const handleEditInventory = useCallback(async (e, items) => {
     try {
       setIsLoading(true);
       const token = await getCsrfToken();
@@ -884,16 +889,13 @@ const AdminInventory = () => {
       const data = {
         SupplierId: parseInt(formData.get('supplierId')),
         ImportDate: formData.get('date'),
-        TotalAmount: totalAmount,
         Notes: formData.get('note')?.trim() || null,
         import_details: items.map(item => ({
           MedicineId: parseInt(item.medicineId),
           Quantity: parseInt(item.quantity),
           ImportPrice: parseFloat(item.importPrice),
-          // Bỏ SubTotal
         })),
       };
-      console.log('Editing inventory with items:', data.import_details, 'and totalAmount:', totalAmount);
 
       const response = await fetch(`${API_BASE_URL}/api/import-bills/${editInventory.id}`, {
         method: 'PUT',
@@ -932,7 +934,7 @@ const AdminInventory = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentPage, editInventory, fetchInventories, getCsrfToken, showToast]);
 
   useEffect(() => {
     if (currentView === 'list') {
@@ -945,14 +947,14 @@ const AdminInventory = () => {
     };
   }, [currentView, fetchInventories, fetchSuppliers, fetchMedicines]);
 
-  const handlePageChange = ({ selected }) => {
+  const handlePageChange = useCallback(({ selected }) => {
     const nextPage = selected + 1;
     fetchInventories(nextPage);
-  };
+  }, [fetchInventories]);
 
-  const formatVND = (value) => {
+  const formatVND = useCallback((value) => {
     return Number(value).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
-  };
+  }, []);
 
   return (
     <div style={{ display: 'flex', fontFamily: "'Segoe UI', sans-serif", margin: 0, backgroundColor: '#f8f9fa' }}>

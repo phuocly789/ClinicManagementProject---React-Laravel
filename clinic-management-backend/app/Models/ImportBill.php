@@ -28,10 +28,11 @@ use Illuminate\Database\Eloquent\Model;
  */
 class ImportBill extends Model
 {
-	protected $table = 'ImportBills';
-	protected $primaryKey = 'ImportId';
-	public $incrementing = false;
-	public $timestamps = false;
+	protected $table = 'ImportBills'; // Tên bảng, khớp với lược đồ PostgreSQL
+    protected $primaryKey = 'ImportId'; // Khóa chính
+    protected $keyType = 'int'; // Kiểu dữ liệu của khóa chính là integer
+    public $incrementing = true; // Xác nhận rằng ImportId là cột tự tăng
+    public $timestamps = false; // Không sử dụng timestamps nếu bảng không có created_at/updated_at
 
 	protected $casts = [
 		'ImportId' => 'int',
