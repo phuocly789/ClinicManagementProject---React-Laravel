@@ -4,6 +4,7 @@ import Sidebar from '../../Components/Sidebar/DoctorSidebar';
 import TodaySection from './TodaySection';
 import ScheduleSection from './ScheduleSection';
 import HistorySection from './HistorySection';
+import EventModalContent from './EventModal';
 import PrescriptionModalContent from './DotorTodayCompo/PrescriptionModalContent';
 import '../Doctors/DoctorDashboard.css';
 
@@ -14,6 +15,7 @@ const DoctorDashboard = () => {
   const [todayPatients, setTodayPatients] = useState([]); // Từ /api/doctor/today-patients
   const [events, setEvents] = useState([]); // Từ /api/doctor/schedules/{doctorId}
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [showEventModal, setShowEventModal] = useState(false);
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -165,7 +167,14 @@ const DoctorDashboard = () => {
   };
 
   // Các function khác
- 
+  const openEventModal = (eventId = null) => { 
+    setEditingEventId(eventId); 
+    setShowEventModal(true); 
+  };
+  const closeEventModal = () => { 
+    setShowEventModal(false); 
+    setEditingEventId(null); 
+  };
   const openPrescriptionModal = () => setShowPrescriptionModal(true);
   const closePrescriptionModal = () => setShowPrescriptionModal(false);
   const handleTempSave = () => { 
@@ -183,7 +192,7 @@ const DoctorDashboard = () => {
 
   return (
     <div className="d-flex min-vh-100 bg-light">
-      <Sidebar currentSection={currentSection} switchSection={switchSection} />
+      <DoctorSidebar currentSection={currentSection} switchSection={switchSection} />
       <div className="flex-grow-1 p-4" style={{ marginLeft: '250px' }}>
         <Container fluid>
           <div className="alert alert-success mb-4 tab-container">
@@ -221,6 +230,7 @@ const DoctorDashboard = () => {
               currentSection={currentSection}
               events={events}
               currentDate={currentDate}
+              openEventModal={openEventModal}
               prevMonth={prevMonth}
               nextMonth={nextMonth}
             />
