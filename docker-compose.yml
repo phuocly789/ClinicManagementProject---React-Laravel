@@ -25,15 +25,7 @@ services:
       - "8000:8000"  # Expose port cho php artisan serve
     networks:
       - app-network
-    command: >
-      bash -c "
-        if [ ! -d vendor ]; then
-          composer install --no-dev --optimize-autoloader --no-scripts;
-        fi &&
-        php artisan migrate --path=/var/www/html/database/migrations --force &&
-        php artisan passport:install --force || true &&
-        php artisan serve --host=0.0.0.0 --port=8000
-      "
+    command: bash -c "if [ ! -d vendor ]; then composer install --no-dev --optimize-autoloader; fi && php artisan serve --host=0.0.0.0 --port=8000"
 
   # Frontend: React dev server (giữ nguyên)
   frontend:
