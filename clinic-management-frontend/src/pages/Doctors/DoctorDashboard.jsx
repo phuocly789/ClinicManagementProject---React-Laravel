@@ -4,7 +4,6 @@ import Sidebar from '../../Components/Sidebar/DoctorSidebar';
 import TodaySection from './TodaySection';
 import ScheduleSection from './ScheduleSection';
 import HistorySection from './HistorySection';
-import PrescriptionModalContent from './DotorTodayCompo/PrescriptionModalContent';
 import '../Doctors/DoctorDashboard.css';
 
 const API_BASE_URL = 'http://localhost:8000'; // Backend Laravel
@@ -255,15 +254,6 @@ const DoctorDashboard = () => {
         </Toast>
       </ToastContainer>
 
-      {/* Prescription Modal */}
-      <Modal show={showPrescriptionModal} onHide={closePrescriptionModal} centered>
-        <Modal.Header closeButton className="bg-light">
-          <Modal.Title>Thêm Thuốc</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <PrescriptionModalContent onSubmit={handlePrescriptionSubmit} onClose={closePrescriptionModal} />
-        </Modal.Body>
-      </Modal>
     </div>
   );
 };

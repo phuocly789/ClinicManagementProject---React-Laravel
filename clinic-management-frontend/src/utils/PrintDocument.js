@@ -1,11 +1,11 @@
 /**
  * Utility để tạo HTML cho việc in ấn phiếu dịch vụ hoặc toa thuốc.
  * @param {string} type - 'service' hoặc 'prescription'
- * @param {Object} patient - Object bệnh nhân { name, age, gender, phone }
+ * @param {Object} patient - Object bệnh nhân { name, age, gender, phone, address }
  * @param {string} symptoms - Triệu chứng
  * @param {string} diagnosis - Chẩn đoán
  * @param {Object} tests - Object tests { test1: bool, ... }
- * @param {Array} prescriptionRows - Mảng đơn thuốc [{ medicine, quantity, dosage }, ...]
+ * @param {Array} prescriptionRows - Mảng đơn thuốc [{ medicine, quantity, dosage, unitPrice, totalPrice }, ...]
  * @param {Object} testLabels - Object label dịch vụ { test1: 'Tên dịch vụ', ... }
  * @returns {string} - HTML string đầy đủ để in
  */
@@ -22,11 +22,48 @@ export const generatePrintHtml = (
     throw new Error('Patient data is required for printing.');
   }
 
-  const { name: patientName, age, gender, phone } = patient;
+  console.log('Patient data in generatePrintHtml:', patient); // Log patient data
+  console.log('PrescriptionRows in generatePrintHtml:', prescriptionRows); // Log prescriptionRows để kiểm tra price
+
+  const { name: patientName, age, gender, phone, address } = patient;
   const codePrefix = type === 'service' ? 'DV' : 'TT';
   const code = codePrefix + Math.floor(Math.random() * 10000).toString().padStart(4, '0');
   const date = new Date().toLocaleDateString('vi-VN');
   const doctor = 'Trần Thị B';
+
+  // Function to convert number to Vietnamese text
+  const numberToVietnameseText = (num) => {
+    const units = ['', 'nghìn', 'triệu', 'tỷ'];
+    const numbers = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
+    const readThreeDigits = (num) => {
+      let str = '';
+      const hundred = Math.floor(num / 100);
+      const ten = Math.floor((num % 100) / 10);
+      const unit = num % 10;
+      if (hundred > 0) str += numbers[hundred] + ' trăm ';
+      if (ten > 1) str += numbers[ten] + ' mươi ';
+      else if (ten === 1) str += 'mười ';
+      if (unit > 0) {
+        if (ten === 0 && hundred > 0) str += 'lẻ ';
+        if (ten > 1 && unit === 5) str += 'lăm ';
+        else if (ten > 0 && unit === 1) str += 'mốt ';
+        else str += numbers[unit] + ' ';
+      }
+      return str.trim();
+    };
+    if (num === 0) return 'không đồng';
+    let result = '';
+    let unitIndex = 0;
+    while (num > 0) {
+      const threeDigits = num % 1000;
+      if (threeDigits > 0) {
+        result = readThreeDigits(threeDigits) + ' ' + units[unitIndex] + ' ' + result;
+      }
+      num = Math.floor(num / 1000);
+      unitIndex++;
+    }
+    return result.trim() + ' đồng';
+  };
 
   let title = '';
   let tableHtml = '';
@@ -46,7 +83,8 @@ export const generatePrintHtml = (
             <th>STT</th>
             <th>Tên dịch vụ</th>
             <th>Ghi chú</th>
-            <th>Tổng tiền</th>
+            <th>Đơn giá</th>
+            <th>Thành tiền</th>
           </tr>
         </thead>
         <tbody>
@@ -58,7 +96,15 @@ export const generatePrintHtml = (
                     <td>${test}</td>
                     <td></td>
                     <td></td>
+                    <td></td>
                   </tr>
+                  <tr>
+                <td colspan="5" style="text-align:right;">Cộng số tiền thanh toán:</td>
+                <td>${0} VNĐ</td>
+              </tr>
+              <tr>
+                <td colspan="6" style="text-align:left;">Số tiền viết thành chữ: ${numberToVietnameseText(0)}</td>
+              </tr>
                 `)
                 .join('')
             : '<tr><td colspan="4" style="text-align:center;">Không có dịch vụ nào được chọn</td></tr>'
@@ -74,6 +120,8 @@ export const generatePrintHtml = (
         <p><strong>Chẩn đoán:</strong> ${diagnosis}</p>
       </div>
     `;
+    const totalPayment = prescriptionRows.reduce((sum, row) => sum + (row.totalPrice || 0), 0);
+    console.log('Total Payment calculated:', totalPayment); // Log totalPayment để kiểm tra
     tableHtml = `
       <table>
         <thead>
@@ -82,6 +130,8 @@ export const generatePrintHtml = (
             <th>Tên thuốc</th>
             <th>Số lượng</th>
             <th>Liều dùng</th>
+            <th>Đơn giá</th>
+            <th>Thành tiền</th>
           </tr>
         </thead>
         <tbody>
@@ -93,10 +143,24 @@ export const generatePrintHtml = (
                     <td>${row.medicine}</td>
                     <td>${row.quantity}</td>
                     <td>${row.dosage}</td>
+                    <td style="text-align:right;">${(row.unitPrice || 0).toLocaleString()} VNĐ</td>
+                    <td style="text-align:right;">${(row.totalPrice || 0).toLocaleString()} VNĐ</td>
                   </tr>
                 `)
                 .join('')
-            : '<tr><td colspan="4" style="text-align:center;">Không có thuốc nào được kê</td></tr>'
+            : '<tr><td colspan="6" style="text-align:center;">Không có thuốc nào được kê</td></tr>'
+          }
+          ${prescriptionRows.length > 0
+            ? `
+              <tr>
+                <td colspan="5" style="text-align:right; font-weight:bold;">Cộng số tiền thanh toán:</td>
+                <td style="text-align:right; font-weight:bold;">${totalPayment.toLocaleString()} VNĐ</td>
+              </tr>
+              <tr>
+                <td colspan="6" style="text-align:left; font-style:italic;">Số tiền viết thành chữ: ${numberToVietnameseText(totalPayment)}</td>
+              </tr>
+            `
+            : ''
           }
         </tbody>
       </table>
@@ -108,8 +172,11 @@ export const generatePrintHtml = (
 
   const html = `
     <div class="container">
+      <div class="watermark">
+        <img src="../src/assets/react.svg" alt="Watermark Logo">
+      </div>
       <div class="header">
-        <img src="https://cdn-icons-png.flaticon.com/512/2966/2966327.png" alt="Logo">
+        <img src="../src/assets/react.svg" alt="Logo">
         <h2>PHÒNG KHÁM XYZ</h2>
         <p>Địa chỉ: Số 53 Võ Văn Ngân, TP. Thủ Đức, TP.HCM</p>
         <p>Điện thoại: 024.3574.7788 — MST: 0100688738</p>
@@ -122,6 +189,7 @@ export const generatePrintHtml = (
           <p><strong>Họ tên BN:</strong> ${patientName}</p>
           <p><strong>Tuổi:</strong> ${age}</p>
           <p><strong>Giới tính:</strong> ${gender}</p>
+          <p><strong>Địa chỉ:</strong> ${address || 'Chưa có thông tin'}</p>
         </div>
         <div>
           <p><strong>Mã ${type === 'service' ? 'phiếu' : 'toa'}:</strong> ${code}</p>
@@ -158,12 +226,28 @@ export const generatePrintHtml = (
         max-width: 700px;
         margin: auto;
         background: #fff;
+        position: relative;
+        overflow: hidden;
+      }
+      .watermark {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(0deg);
+        opacity: 0.1;
+        z-index: 0;
+      }
+      .watermark img {
+        width: 300px;
+        height: auto;
       }
       .header {
         text-align: center;
         border-bottom: 2px solid #000;
         padding-bottom: 10px;
         margin-bottom: 20px;
+        position: relative;
+        z-index: 1;
       }
       .header img {
         width: 80px;
@@ -183,11 +267,12 @@ export const generatePrintHtml = (
       .title {
         text-align: center;
         margin: 25px 0;
+        position: relative;
+        z-index: 1;
       }
       .title h3 {
         font-size: 20px;
         margin: 0;
-        text-decoration: underline;
         font-weight: bold;
       }
       .info {
@@ -195,11 +280,15 @@ export const generatePrintHtml = (
         display: flex;
         justify-content: space-between;
         margin-bottom: 10px;
+        position: relative;
+        z-index: 1;
       }
       .info p { margin: 3px 0; }
       .diagnosis-section {
         margin-bottom: 20px;
         font-size: 14px;
+        position: relative;
+        z-index: 1;
       }
       .diagnosis-section p {
         margin: 5px 0;
@@ -209,6 +298,8 @@ export const generatePrintHtml = (
         border-collapse: collapse;
         margin-top: 15px;
         font-size: 14px;
+        position: relative;
+        z-index: 1;
       }
       th, td {
         border: 1px solid #000;
@@ -219,12 +310,17 @@ export const generatePrintHtml = (
         background: #f3f3f3;
         text-align: center;
       }
+      td {
+        text-align: right; /* Căn phải cho cột giá */
+      }
       .footer {
         display: flex;
         justify-content: space-between;
         margin-top: 40px;
         font-size: 14px;
         text-align: center;
+        position: relative;
+        z-index: 1;
       }
       .footer div {
         width: 45%;

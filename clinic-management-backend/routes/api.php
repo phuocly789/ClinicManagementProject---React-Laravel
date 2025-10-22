@@ -49,6 +49,7 @@ Route::prefix('doctor')->group(function () {
     Route::apiResource('appointments', AppointmentsController::class);
 
     // Gợi ý chẩn đoán & thuốc
+    
     //Gợi ý lấy từ lịch sử bệnh trước đó
     Route::get('/diagnoses/suggestions', [DiagnosisSuggestionController::class, 'suggestions']);
     // Tìm kiếm thuốc theo tên, loại
