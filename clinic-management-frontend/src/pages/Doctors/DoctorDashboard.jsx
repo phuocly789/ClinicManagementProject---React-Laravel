@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Container, Modal, Button, Toast, ToastContainer, Spinner } from 'react-bootstrap';
-import Sidebar from '../Components/Sidebar';
+import DoctorSidebar from '../Components/Sidebar/DoctorSidebar.jsx';
 import TodaySection from './Doctors/TodaySection';
 import ScheduleSection from './Doctors/ScheduleSection';
 import HistorySection from './Doctors/HistorySection';
