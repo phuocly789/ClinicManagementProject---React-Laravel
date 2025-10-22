@@ -2,10 +2,15 @@
 
 namespace App\Services;
 
+use App\Mail\AccountActivationMail;
+use App\Models\Role;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Str;
 
 class AuthService
 {
@@ -14,33 +19,97 @@ class AuthService
      */
     public function register(array $data)
     {
-        // Validate dữ liệu
+        // Validate dữ liệu đầu vào
         $validated = validator($data, [
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|min:6|confirmed',
+            'fullName'        => 'required|string|max:255',
+            'username'        => 'required|string|max:255|unique:Users,Username',
+            'email'           => 'required|email|unique:Users,Email',
+            'password'        => 'required|string|min:6|same:confirmPassword',
+            'confirmPassword' => 'required|string|min:6',
+            'phone'           => 'required|string|regex:/^0\d{9}$/|unique:Users,Phone',
+            'birthday'        => 'required|date|before:today',
+            'gender'          => 'required|in:male,female,other',
+        ], [
+            // Thông báo lỗi tiếng Việt
+            'fullName.required' => 'Họ tên không được để trống.',
+            'email.unique' => 'Email đã tồn tại.',
+            'username.unique' => 'Tên đăng nhập đã tồn tại.',
+            'password.same' => 'Mật khẩu xác nhận không khớp.',
+            'birthday.before' => 'Ngày sinh phải nhỏ hơn ngày hiện tại.',
+            'gender.in' => 'Giới tính không hợp lệ.',
+            'phone.regex' => 'Số điện thoại không hợp lệ.',
+            'phone.unique' => 'Số điện thoại đã tồn tại.',
         ])->validate();
 
+        $code = rand(100000, 999999);
+        $userExitst = \App\Models\User::where('Username', $validated['username'])->first();
+
+        if ($userExitst) {
+            throw ValidationException::withMessages([
+                'username' => ['User tồn tại.'],
+            ]);
+        }
+        $emailExists = \App\Models\User::where('Email', $validated['email'])->first();
+        if ($emailExists) {
+            throw ValidationException::withMessages([
+                'email' => ['Email tồn tại.'],
+            ]);
+        }
+        $phoneExists = \App\Models\User::where('Phone', $validated['phone'])->first();
+        if ($phoneExists) {
+            throw ValidationException::withMessages([
+                'phone' => ['Số điện thoại tồn tại.'],
+            ]);
+        }
         // Tạo user
         $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
+            'FullName' => $validated['fullName'],
+            'Username' => $validated['username'],
+            'Email' => $validated['email'],
+            'PasswordHash' => Hash::make($validated['password']),
+            'Phone' => $validated['phone'],
+            'Birthday' => $validated['birthday'],
+            'Gender' => match (Str::lower($validated['gender'])) {
+                'male' => 'Nam',
+                'female' => 'Nữ',
+                'other' => 'Khác',
+                default => 'Khác',
+            },
+            'MustChangePassword' => false,
+            'IsActive' => true,
+            'CodeId' => $code,
+            'CodeExpired' =>  Carbon::now('Asia/Ho_Chi_Minh')->addMinutes(5),
         ]);
-
-        // Tạo access token bằng Passport
+        $user->roles()->attach(2);
+        try {
+            Mail::to($user->Email)->send(
+                new AccountActivationMail($user->FullName, $user->CodeId, $user->CodeExpired)
+            );
+        } catch (\Exception $e) {
+            // Nếu gửi mail lỗi => rollback user và thông báo
+            $user->delete();
+            return response()->json([
+                'status' => false,
+                'error' => 'Không thể gửi email xác thực. Vui lòng thử lại sau.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+        // Tạo access token (Passport)
         $token = $user->createToken('auth_token')->accessToken;
 
         return [
+            'status' => true,
             'user' => $user,
             'token' => $token,
         ];
     }
+
     public function handleCreateUser(array $data)
     {
         // Validate dữ liệu
         $validated = validator($data, [
             'name' => 'required|string|max:255',
+            'phone' => 'required|string|max:10',
             'username' => 'required|string|max:255',
             'email' => 'required|email|unique:Users,Email',
             'password' => 'required|min:6',
@@ -74,7 +143,7 @@ class AuthService
                 'password' => 'required|string',
             ])->validate();
 
-            // Kiểm tra email có tồn tại không
+            // Kiểm tra user có tồn tại không
             $user = \App\Models\User::where('Username', $validated['username'])->first();
 
             if (!$user) {
