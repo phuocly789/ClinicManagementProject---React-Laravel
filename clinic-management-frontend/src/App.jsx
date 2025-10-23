@@ -13,6 +13,7 @@ import DoctorDashboard from "./pages/Doctors/DoctorDashboard.jsx";
 import AdminDashboard from "./pages/Admin/AdminDashboard/AdminDashboard.jsx";
 import Register from "./pages/auth/Register/Register.jsx";
 import AdminRevenueReport from "./pages/Admin/AdminRevenueReport/AdminRevenueReport.jsx";
+import AdminScheduleManagement from "./pages/Admin/AdminScheduleManagement/AdminScheduleManagement.jsx";
 function App() {
   return (
     <BrowserRouter>
@@ -22,6 +23,7 @@ function App() {
         <Route path="/admin/inventory" element={<AdminInventory />} />
         <Route path="/" element={<AdminMedicine />} /> {/* Trang mặc định */}
         <Route path="/admin/revenue-report" element={<AdminRevenueReport />} />
+        <Route path="/admin/schedule-management" element={<AdminScheduleManagement />} />
 
         <Route path="/admin/medicines" element={<AdminMedicine />} />
         <Route path="/admin/inventory" element={<AdminInventory />} />
