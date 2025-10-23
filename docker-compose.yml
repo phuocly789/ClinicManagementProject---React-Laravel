@@ -12,20 +12,20 @@ services:
     volumes:
       - ./clinic-management-backend:/var/www/html
     environment:
-    # postgresql://postgres.teswvvsewnjpelnvmeze:[YOUR-PASSWORD]@aws-1-us-east-2.pooler.supabase.com:5432/postgres
+    # postgresql://postgres.phzrctyceyysendeluac:[YOUR-PASSWORD]@aws-1-ap-south-1.pooler.supabase.com:5432/postgres
       - DB_CONNECTION=pgsql
-      - DB_HOST=aws-1-us-east-2.pooler.supabase.com
+      - DB_HOST=aws-1-ap-south-1.pooler.supabase.com:5432
       - DB_PORT=5432
       - DB_DATABASE=postgres
-      - DB_USERNAME=postgres.teswvvsewnjpelnvmeze
+      - DB_USERNAME=postgres.phzrctyceyysendeluac
       - DB_PASSWORD=lmp@123
       - DB_SSLMODE=require
-      # Thêm các env khác từ .env nếu cần (như APP_KEY, etc.)
+    # Thêm các env khác từ .env nếu cần (như APP_KEY, etc.)
     ports:
       - "8000:8000"  # Expose port cho php artisan serve
     networks:
       - app-network
-    command: php artisan serve --host=0.0.0.0 --port=8000  # Chạy built-in server
+    command: bash -c "if [ ! -d vendor ]; then composer install --no-dev --optimize-autoloader; fi && php artisan serve --host=0.0.0.0 --port=8000"
 
   # Frontend: React dev server (giữ nguyên)
   frontend:

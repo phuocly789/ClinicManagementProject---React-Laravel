@@ -5,6 +5,8 @@ namespace App\Http\Controllers\API\Doctor;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\Patient; // Import nếu cần cho relation
+use App\Models\StaffSchedule;
+use App\Models\MedicalStaff;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -18,72 +20,65 @@ class AppointmentsController extends Controller
     {
         $today = now()->format('Y-m-d');
 
-        $appointments = Appointment::with('patient')
+        // Load cả Patient và User liên quan
+        $appointments = Appointment::with(['patient.user'])
             ->whereDate('AppointmentDate', $today)
             ->get()
             ->map(function ($appointment) {
-                $patient = $appointment->patient;
+                $user = $appointment->patient?->user; // thông tin người bệnh (User)
+                $statusRaw = $appointment->Status ?? 'waiting';
 
                 // Mapping trạng thái
-                $statusRaw = $appointment->Status ?? 'waiting';
-                switch ($statusRaw) {
-                    case 'waiting':
-                        $status = 'Đang chờ';
-                        break;
-                    case 'in-progress':
-                        $status = 'Đang khám';
-                        break;
-                    case 'done':
-                        $status = 'Đã khám';
-                        break;
-                    default:
-                        $status = ucfirst($statusRaw);
-                        break;
-                }
+                $status = match ($statusRaw) {
+                    'waiting' => 'Đang chờ',
+                    'in-progress' => 'Đang khám',
+                    'done' => 'Đã khám',
+                    default => ucfirst($statusRaw),
+                };
 
-                // Format giờ
-                $time = $appointment->AppointmentTime instanceof \Carbon\Carbon
-                    ? $appointment->AppointmentTime->format('H:i')
-                    : (is_string($appointment->AppointmentTime) ? substr($appointment->AppointmentTime, 0, 5) : '00:00');
+                // Giờ hẹn
+                $time = is_string($appointment->AppointmentTime)
+                    ? substr($appointment->AppointmentTime, 0, 5)
+                    : '00:00';
 
-                // Tính tuổi
-                $age = !empty($patient?->DateOfBirth) ? \Carbon\Carbon::parse($patient->DateOfBirth)->age : 0;
+                // Tuổi
+                $age = !empty($user?->DateOfBirth)
+                    ? \Carbon\Carbon::parse($user->DateOfBirth)->age
+                    : 0;
 
                 return [
                     'id' => $appointment->AppointmentId,
                     'date' => $appointment->AppointmentDate,
                     'time' => $time,
-                    'name' => $patient?->FullName ?? 'N/A',
+                    'name' => $user?->FullName ?? 'N/A',
                     'status' => $status,
                     'age' => $age,
-                    'gender' => $patient?->Gender ?? 'N/A',
-                    'phone' => $patient?->Phone ?? 'N/A',
-                    'patient_id' => $patient?->UserId ?? null,
+                    'gender' => $user?->Gender ?? 'N/A',
+                    'phone' => $user?->Phone ?? 'N/A',
+                    'patient_id' => $appointment->PatientId,
                     'notes' => $appointment->notes ?? '',
                 ];
             })
-            // Lọc chỉ 3 trạng thái
-            ->filter(function ($appointment) {
-                return in_array($appointment['status'], ['Đang chờ', 'Đang khám', 'Đã khám']);
-            })
-            // Sắp xếp theo priority status và giờ
+            // Lọc 3 trạng thái hợp lệ
+            ->filter(fn($a) => in_array($a['status'], ['Đang chờ', 'Đang khám', 'Đã khám']))
+            // Sắp xếp: trạng thái ưu tiên → theo giờ tăng dần
             ->sort(function ($a, $b) {
                 $priority = ['Đang chờ' => 1, 'Đang khám' => 2, 'Đã khám' => 3];
-
                 $pa = $priority[$a['status']] ?? 99;
                 $pb = $priority[$b['status']] ?? 99;
-
-                if ($pa !== $pb) {  
-                    return $pa <=> $pb; // Status ưu tiên trước
-                }
-
-                // Cùng status → so giờ tăng dần
+                if ($pa !== $pb)
+                    return $pa <=> $pb;
                 return strtotime($a['time']) <=> strtotime($b['time']);
             })
-            ->values(); // Reset index
+            ->values();
 
-        return response()->json($appointments);
+        return response()->json([
+            'success' => true,
+            'message' => 'Danh sách lịch hẹn hôm nay được tải thành công.',
+            'data' => $appointments,
+        ]);
     }
+
     /**
      * Các method CRUD cơ bản cho Appointment.
      * Chỉ bác sĩ (StaffId) mới được thao tác với lịch hẹn của mình.
@@ -158,4 +153,33 @@ class AppointmentsController extends Controller
         $appointment->delete();
         return response()->json(['message' => 'Xóa lịch hẹn thành công']);
     }
+
+
+    /**
+     * 🩺 Lấy lịch làm việc của bác sĩ theo ID (không cần đăng nhập)
+     */
+    public function getStaffScheduleById($doctorId)
+    {
+        // Lấy toàn bộ lịch làm việc của bác sĩ
+        $schedules = StaffSchedule::where('StaffId', $doctorId)
+            ->orderBy('WorkDate')
+            ->orderBy('StartTime')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->ScheduleId,
+                    'date' => $item->WorkDate->format('Y-m-d'),
+                    'time' => $item->StartTime . ' - ' . $item->EndTime,
+                    'title' => 'Lịch làm việc của bác sĩ',
+                    'description' => $item->IsAvailable ? 'Có mặt làm việc' : 'Nghỉ',
+                    'type' => $item->IsAvailable ? 'work' : 'off',
+                ];
+            });
+
+        return response()->json([
+            'data' => $schedules,
+        ]);
+    }
+
+
 }

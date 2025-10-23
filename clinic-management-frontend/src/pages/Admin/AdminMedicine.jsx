@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { Table, Button, Spinner, Form, Row, Col } from 'react-bootstrap';
 
 import Pagination from '../../Components/Pagination/Pagination';
 import ConfirmDeleteModal from '../../Components/CustomToast/DeleteConfirmModal';
 import CustomToast from '../../Components/CustomToast/CustomToast';
-import { Pencil, PencilIcon, ServerCrash, Trash } from 'lucide-react';
+import { PencilIcon, Trash } from 'lucide-react';
 import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -33,7 +33,7 @@ const units = [
 const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
 const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class|import|export|\$\w+)/i;
 
-const MedicineList = ({ medicines, isLoading, formatVND, handleShowDeleteModal, handleShowEditForm, pageCount, currentPage, handlePageChange }) => {
+const MedicineList = memo(({ medicines, isLoading, formatVND, handleShowDeleteModal, handleShowEditForm, pageCount, currentPage, handlePageChange }) => {
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-3">
@@ -85,7 +85,6 @@ const MedicineList = ({ medicines, isLoading, formatVND, handleShowDeleteModal, 
                         onClick={() => handleShowEditForm(medicine)}
                       >
                         <PencilIcon />
-
                       </a>
                     </span>
                     <span className="px-1">/</span>
@@ -115,9 +114,9 @@ const MedicineList = ({ medicines, isLoading, formatVND, handleShowDeleteModal, 
       )}
     </div>
   );
-};
+});
 
-const MedicineForm = ({ isEditMode, medicine, onSubmit, onCancel, isLoading }) => {
+const MedicineForm = memo(({ isEditMode, medicine, onSubmit, onCancel, isLoading }) => {
   const [errors, setErrors] = useState({
     MedicineName: '',
     MedicineType: '',
@@ -127,15 +126,8 @@ const MedicineForm = ({ isEditMode, medicine, onSubmit, onCancel, isLoading }) =
     Description: '',
   });
 
-  const validateForm = (formData) => {
-    const newErrors = {
-      MedicineName: '',
-      MedicineType: '',
-      Unit: '',
-      Price: '',
-      StockQuantity: '',
-      Description: '',
-    };
+  const validateForm = useCallback((formData) => {
+    const newErrors = {};
     let isValid = true;
 
     // Validate MedicineName
@@ -209,15 +201,15 @@ const MedicineForm = ({ isEditMode, medicine, onSubmit, onCancel, isLoading }) =
 
     setErrors(newErrors);
     return isValid;
-  };
+  }, []);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = useCallback((e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
     if (validateForm(formData)) {
       onSubmit(e);
     }
-  };
+  }, [onSubmit, validateForm]);
 
   return (
     <div>
@@ -329,7 +321,7 @@ const MedicineForm = ({ isEditMode, medicine, onSubmit, onCancel, isLoading }) =
       </Form>
     </div>
   );
-};
+});
 
 const AdminMedicine = () => {
   const [medicines, setMedicines] = useState([]);
@@ -344,13 +336,13 @@ const AdminMedicine = () => {
   const cache = useRef(new Map());
   const debounceRef = useRef(null);
 
-  const showToast = (type, message) => {
+  const showToast = useCallback((type, message) => {
     setToast({ show: true, type, message });
-  };
+  }, []);
 
-  const hideToast = () => {
+  const hideToast = useCallback(() => {
     setToast({ show: false, type: 'info', message: '' });
-  };
+  }, []);
 
   const fetchMedicines = useCallback(async (page = 1) => {
     if (cache.current.has(page)) {
@@ -386,9 +378,9 @@ const AdminMedicine = () => {
         setIsLoading(false);
       }
     }, 300);
-  }, []);
+  }, [showToast]);
 
-  const getCsrfToken = async (retries = 3) => {
+  const getCsrfToken = useCallback(async (retries = 3) => {
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const response = await fetch(`${API_BASE_URL}/sanctum/csrf-cookie`, {
@@ -414,7 +406,7 @@ const AdminMedicine = () => {
         await new Promise(resolve => setTimeout(resolve, 500)); // Wait before retry
       }
     }
-  };
+  }, []);
 
   const handleDelete = useCallback(async (medicineId) => {
     try {
@@ -446,33 +438,29 @@ const AdminMedicine = () => {
       setShowDeleteModal(false);
       setMedicineToDelete(null);
     }
-  }, [currentPage, fetchMedicines]);
+  }, [currentPage, fetchMedicines, getCsrfToken, showToast]);
 
-  const handleShowDeleteModal = (medicineId) => {
+  const handleShowDeleteModal = useCallback((medicineId) => {
     setMedicineToDelete(medicineId);
     setShowDeleteModal(true);
-  };
+  }, []);
 
-  const handleCancelDelete = () => {
+  const handleCancelDelete = useCallback(() => {
     setShowDeleteModal(false);
     setMedicineToDelete(null);
-  };
+  }, []);
 
-  const handleShowEditForm = (medicine) => {
+  const handleShowEditForm = useCallback((medicine) => {
     setEditMedicine(medicine);
     setCurrentView(medicine ? 'edit' : 'add');
-  };
+  }, []);
 
-  const handleCancelForm = () => {
-    try {
-      setCurrentView('list');
-      setEditMedicine(null);
-    } catch (error) {
-      showToast('error', 'Hủy thất bại');
-    }
-  };
+  const handleCancelForm = useCallback(() => {
+    setCurrentView('list');
+    setEditMedicine(null);
+  }, []);
 
-  const handleAddMedicine = async (e) => {
+  const handleAddMedicine = useCallback(async (e) => {
     try {
       setIsLoading(true);
       const token = await getCsrfToken();
@@ -515,9 +503,9 @@ const AdminMedicine = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [fetchMedicines, getCsrfToken, showToast]);
 
-  const handleEditMedicine = async (e) => {
+  const handleEditMedicine = useCallback(async (e) => {
     try {
       setIsLoading(true);
       const token = await getCsrfToken();
@@ -561,7 +549,7 @@ const AdminMedicine = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentPage, editMedicine, fetchMedicines, getCsrfToken, showToast]);
 
   useEffect(() => {
     if (currentView === 'list') {
@@ -572,14 +560,14 @@ const AdminMedicine = () => {
     };
   }, [currentView, fetchMedicines]);
 
-  const handlePageChange = ({ selected }) => {
+  const handlePageChange = useCallback(({ selected }) => {
     const nextPage = selected + 1;
     fetchMedicines(nextPage);
-  };
+  }, [fetchMedicines]);
 
-  const formatVND = (price) => {
+  const formatVND = useCallback((price) => {
     return Number(price).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
-  };
+  }, []);
 
   return (
     <div className="d-flex">

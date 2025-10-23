@@ -60,6 +60,7 @@
     position: relative !important;
     width: 100% !important;
   }
+
   .flex-grow-1 {
     margin-left: 0 !important;
   }
@@ -259,6 +260,7 @@ button.btn-link:hover {
     opacity: 0;
     transform: translateY(-10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -342,4 +344,38 @@ button.btn-link:hover {
   padding: 4px 12px;
   font-size: 12px;
   height: auto;
+}
+
+.month-grid-col {
+  flex: 0 0 14.2857% !important;
+  max-width: 14.2857% !important;
+}
+
+@media (max-width: 767.98px) {
+  .month-grid-col {
+    flex: 0 0 50% !important;
+    /* 2 cột trên mobile */
+    max-width: 50% !important;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .month-grid-col {
+    flex: 0 0 100% !important;
+    /* 1 cột trên xs */
+    max-width: 100% !important;
+  }
+}
+
+.modal-dialog-centered {
+  display: flex !important;
+  align-items: center !important;
+  min-height: calc(100% - 1rem);
+}
+
+.modal-content-centered {
+  margin: auto;
+  width: 100%;
+  max-width: 500px;
+  /* Điều chỉnh nếu cần */
 }
