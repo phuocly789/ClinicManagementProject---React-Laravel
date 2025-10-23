@@ -17,6 +17,7 @@ use App\Http\Controllers\API\Doctor\DiagnosisSuggestionController;
 use App\Http\Controllers\API\Doctor\DoctorMedicineSearchController;
 use App\Http\Controllers\API\Doctor\ServiceController;
 use App\Http\Controllers\API\Doctor\DoctorExaminationsController;
+use App\Http\Controllers\API\Doctor\PatientsController;
 
 //----------------------------------------------Hết-------------------------------
 use App\Http\Controllers\API\User\UserControllers;
@@ -33,6 +34,7 @@ Route::get('/medicines/ping', [MedicinesController::class, 'ping']);
 Route::post('/medicines', [MedicinesController::class, 'store']);
 Route::put('/medicines/{id}', [MedicinesController::class, 'update']);
 Route::delete('/medicines/{id}', [MedicinesController::class, 'destroy']);
+Route::get('/medicines/all',[MedicinesController::class, 'all']);
 
 Route::get('/import-bills', [ImportBillController::class, 'index']);
 Route::post('/import-bills', [ImportBillController::class, 'store']);
@@ -52,7 +54,7 @@ Route::post('/schedules', [ScheduleController::class, 'createSchedule']);
 
 
 Route::post('/auth/login', [AuthController::class, 'login']);
-Route::post('/create-user', [AuthController::class, 'createUser']);
+Route::post('/auth/register', [AuthController::class, 'register']);
 
 //admin-revenue
 Route::get('/report-revenue/combined', [ReportRevenueController::class, 'getCombinedStatistics']);
@@ -66,6 +68,7 @@ Route::prefix('doctor')->group(function () {
     Route::apiResource('appointments', AppointmentsController::class);
 
     // Gợi ý chẩn đoán & thuốc
+    
     //Gợi ý lấy từ lịch sử bệnh trước đó
     Route::get('/diagnoses/suggestions', [DiagnosisSuggestionController::class, 'suggestions']);
     // Tìm kiếm thuốc theo tên, loại
@@ -75,6 +78,14 @@ Route::prefix('doctor')->group(function () {
     // Lấy danh sách dịch vụ
     Route::get('/services', [ServiceController::class, 'index']);
 
+    // Lấy lịch làm việc của bác sĩ
+    Route::get('/schedules/{doctorId}', [AppointmentsController::class, 'getStaffScheduleById']);
+
+    // Lấy danh sách tất cả bệnh nhân 
+    Route::get('/patients', [PatientsController::class, 'index']);
+    
+    // Lịch sử bệnh nhân
+    Route::get('/patients/{patientId}/history', [PatientsController::class, 'getPatientHistory']);
 
 
     // Khám bệnh
@@ -84,7 +95,6 @@ Route::prefix('doctor')->group(function () {
         Route::get('{appointmentId}', [DoctorExaminationsController::class, 'show']);
         Route::post('{appointmentId}/temp-save', [DoctorExaminationsController::class, 'tempSave']);
     });
-
 });
 
 //Nhóm route cho User
@@ -98,4 +108,3 @@ Route::prefix('users')->group(function () {
 });
 
 Route::get('/roles', [UserControllers::class, 'roles']);
-

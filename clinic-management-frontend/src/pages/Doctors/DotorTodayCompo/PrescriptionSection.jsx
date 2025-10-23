@@ -1,5 +1,6 @@
 import React from "react";
 import { Col, Card, Table, Button } from "react-bootstrap";
+import { printDocument } from "../../../utils/printDocument"; // Adjust path as needed
 
 const PrescriptionSection = ({
   prescriptionRows,
@@ -8,9 +9,16 @@ const PrescriptionSection = ({
   handleOpenAddModal,
   handleEdit,
   isFormDisabled,
-  printDocument,
   selectedTodayPatient,
+  symptoms,
+  diagnosis,
+  services, // Add these if not already in props
 }) => {
+  const handlePrint = () => {
+    if (!selectedTodayPatient || prescriptionRows.length === 0) return;
+    printDocument('prescription', selectedTodayPatient, prescriptionRows, symptoms, diagnosis, services);
+  };
+
   return (
     <Col md={12}>
       <Card className="mb-3 border-light shadow-sm">
@@ -68,7 +76,7 @@ const PrescriptionSection = ({
       </Card>
       <Button
         variant="outline-success"
-        onClick={() => printDocument('prescription')}
+        onClick={handlePrint}
         disabled={!selectedTodayPatient || prescriptionRows.length === 0}
         className="no-print"
       >

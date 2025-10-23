@@ -12,7 +12,8 @@ services:
     volumes:
       - ./clinic-management-backend:/var/www/html
     environment:
-# postgresql://postgres.phzrctyceyysendeluac:[YOUR-PASSWORD]@aws-1-ap-south-1.pooler.supabase.com:5432/postgres
+
+    # postgresql://postgres.phzrctyceyysendeluac:[YOUR-PASSWORD]@aws-1-ap-south-1.pooler.supabase.com:5432/postgres
       - DB_CONNECTION=pgsql
       - DB_HOST=aws-1-ap-south-1.pooler.supabase.com:5432
       - DB_PORT=5432

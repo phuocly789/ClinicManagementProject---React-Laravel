@@ -34,11 +34,12 @@ class UserControllers extends Controller
     {
         $validated = $request->validate([
             'Username' => 'required|string|max:255',
+            'FullName' => 'required|string|max:255',
             'Email' => 'nullable|email',
             'Phone' => 'nullable|string|max:20',
             'Address' => 'nullable|string|max:255',
             'Gender' => 'nullable|string|max:10',
-            'BirthDate' => 'nullable|date',
+            'DateOfBirth' => 'nullable|date', // ✅ Đổi lại cho khớp frontend
             'Role' => 'required|string',
             'IsActive' => 'boolean'
         ]);
@@ -48,11 +49,12 @@ class UserControllers extends Controller
         try {
             $user = new User();
             $user->Username = $validated['Username'];
+            $user->FullName = $validated['FullName'];
             $user->Email = $validated['Email'] ?? null;
             $user->Phone = $validated['Phone'] ?? null;
             $user->Address = $validated['Address'] ?? null;
             $user->Gender = $validated['Gender'] ?? null;
-            $user->DateOfBirth = $validated['BirthDate'] ?? null;
+            $user->DateOfBirth = $validated['DateOfBirth'] ?? null;
             $user->IsActive = $validated['IsActive'] ?? true;
             $user->PasswordHash = bcrypt('123456'); // mặc định mật khẩu
             $user->CreatedAt = now();
@@ -80,11 +82,12 @@ class UserControllers extends Controller
 
         $validated = $request->validate([
             'Username' => 'sometimes|string|max:255',
+            'FullName' => 'sometimes|string|max:255',
             'Email' => 'nullable|email',
             'Phone' => 'nullable|string|max:20',
             'Address' => 'nullable|string|max:255',
             'Gender' => 'nullable|string|max:10',
-            'BirthDate' => 'nullable|date',
+            'DateOfBirth' => 'nullable|date',
             'Role' => 'nullable|string',
             'IsActive' => 'boolean'
         ]);
