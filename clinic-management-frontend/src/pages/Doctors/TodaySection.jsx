@@ -17,7 +17,7 @@ import PrescriptionSection from '../Doctors/DotorTodayCompo/PrescriptionSection'
 import PrescriptionModal from '../Doctors/DotorTodayCompo/PrescriptionModal';
 import doctorService from "../../services/doctorService";
 import dayjs from "dayjs";
-import { generatePrintHtml, printHtml } from "../../utils/PrintDocument";
+// import { generatePrintHtml, printHtml } from "../../utils/PrintDocument";
 
 const API_BASE_URL = 'http://localhost:8000';
 
