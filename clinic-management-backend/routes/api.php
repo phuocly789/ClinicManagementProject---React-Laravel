@@ -49,7 +49,7 @@ Route::get('/suppliers/{id}', [SuppliersController::class, 'show']);
 
 
 Route::post('/auth/login', [AuthController::class, 'login']);
-Route::post('/create-user', [AuthController::class, 'createUser']);
+Route::post('/auth/register', [AuthController::class, 'register']);
 
 //admin-revenue
 Route::get('/report-revenue/combined', [ReportRevenueController::class, 'getCombinedStatistics']);
@@ -90,7 +90,6 @@ Route::prefix('doctor')->group(function () {
         Route::get('{appointmentId}', [DoctorExaminationsController::class, 'show']);
         Route::post('{appointmentId}/temp-save', [DoctorExaminationsController::class, 'tempSave']);
     });
-
 });
 
 //Nhóm route cho User
@@ -104,4 +103,3 @@ Route::prefix('users')->group(function () {
 });
 
 Route::get('/roles', [UserControllers::class, 'roles']);
-
