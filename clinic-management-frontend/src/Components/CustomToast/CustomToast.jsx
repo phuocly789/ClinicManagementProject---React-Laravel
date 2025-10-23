@@ -1,24 +1,27 @@
 import React, { useEffect } from "react";
 import { CheckCircle, XCircle, Info, AlertTriangle, X } from "lucide-react";
-import { Modal, Button } from "react-bootstrap";
 import "./CustomToast.css";
 
 const typeConfig = {
   success: {
-    icon: <CheckCircle className="w-10 h-10 text-success" />,
-    bg: "bg-light text-success border-success",
+    icon: <CheckCircle size={40} />,
+    bg: "bg-success-subtle text-success-emphasis border border-success",
+    iconColor: "text-success",
   },
   error: {
-    icon: <XCircle className="w-10 h-10 text-danger" />,
-    bg: "bg-light text-danger border-danger",
+    icon: <XCircle size={40} />,
+    bg: "bg-danger-subtle text-danger-emphasis border border-danger",
+    iconColor: "text-danger",
   },
   info: {
-    icon: <Info className="w-10 h-10 text-info" />,
-    bg: "bg-light text-info border-info",
+    icon: <Info size={40} />,
+    bg: "bg-info-subtle text-info-emphasis border border-info",
+    iconColor: "text-info",
   },
   warning: {
-    icon: <AlertTriangle className="w-10 h-10 text-warning" />,
-    bg: "bg-light text-warning border-warning",
+    icon: <AlertTriangle size={40} />,
+    bg: "bg-warning-subtle text-warning-emphasis border border-warning",
+    iconColor: "text-warning",
   },
 };
 
@@ -26,33 +29,37 @@ export default function CustomToast({ type = "success", message, onClose }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 2500);
     return () => clearTimeout(timer);
-  }, [onClose]);
+  }, []);
 
-  const { icon, bg } = typeConfig[type] || typeConfig.info;
+  const { icon, bg, iconColor } = typeConfig[type] || typeConfig.info;
 
   return (
-    <Modal
-      show={true}
-      onHide={onClose}
-      centered
-      backdrop="static"
-      className="custom-toast"
+    <div
+      className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center toast-fade"
+      style={{
+        zIndex: 9999,
+        backgroundColor: "rgba(0, 0, 0, 0.4)",
+        backdropFilter: "blur(4px)",
+      }}
       onClick={onClose}
     >
-      <Modal.Body className={`p-4 rounded ${bg} border text-center`}>
-        <Button
-          variant="link"
-          className="position-absolute top-0 end-0 p-2 text-secondary"
+      <div
+        className={`mx-auto px-4 py-4 rounded-3 shadow-lg ${bg} d-flex flex-column align-items-center text-center gap-3 toast-popup position-relative`}
+        style={{ maxWidth: "28rem", width: "90%" }}
+      >
+        <button
           onClick={onClose}
+          className="position-absolute top-0 end-0 btn btn-link text-secondary p-2"
+          style={{ textDecoration: "none" }}
         >
-          <X className="w-5 h-5" />
-        </Button>
-        <div className="d-flex flex-column align-items-center gap-3">
-          {icon}
-          <h2 className="mb-0">{message}</h2>
-          <p className="mb-0 text-muted">Nhấn bất kỳ đâu để đóng</p>
-        </div>
-      </Modal.Body>
-    </Modal>
+          <X size={20} />
+        </button>
+        <div className={iconColor}>{icon}</div>
+        <h2 className={`fs-5 fw-semibold mb-0 ${iconColor}`}>{message}</h2>
+        <p className={`small mb-0 opacity-75 ${iconColor}`}>
+          Click anywhere to close
+        </p>
+      </div>
+    </div>
   );
 }
