@@ -11,7 +11,7 @@ const Pagination = ({ pageCount, onPageChange, currentPage, isLoading }) => {
   if (!pageCount || pageCount <= 1) return null;
 
   return (
-    <div className="d-flex justify-content-center align-items-center mt-3 gap-3">
+    <div className="d-flex justify-content-center align-items-center mt-5 gap-3">
       {/* First button */}
       <button
         onClick={() => onPageChange({ selected: 0 })}

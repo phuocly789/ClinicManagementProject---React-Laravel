@@ -12,14 +12,14 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Class StaffSchedule
- *
+ * 
  * @property int $ScheduleId
  * @property int|null $StaffId
  * @property Carbon $WorkDate
  * @property time without time zone $StartTime
  * @property time without time zone $EndTime
  * @property bool|null $IsAvailable
- *
+ * 
  * @property MedicalStaff|null $medical_staff
  * @property Collection|Appointment[] $appointments
  *
