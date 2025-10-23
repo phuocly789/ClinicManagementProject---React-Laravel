@@ -36,8 +36,8 @@ class StaffSchedule extends Model
 		'ScheduleId' => 'int',
 		'StaffId' => 'int',
 		'WorkDate' => 'datetime',
-		'StartTime' => 'time without time zone',
-		'EndTime' => 'time without time zone',
+		'StartTime' => 'string',
+		'EndTime' => 'string',
 		'IsAvailable' => 'bool'
 	];
 

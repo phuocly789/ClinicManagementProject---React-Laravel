@@ -5,6 +5,8 @@ namespace App\Http\Controllers\API\Doctor;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\Patient; // Import nếu cần cho relation
+use App\Models\StaffSchedule;
+use App\Models\MedicalStaff;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -18,7 +20,7 @@ class AppointmentsController extends Controller
     {
         $today = now()->format('Y-m-d');
 
-        // 👉 Load cả Patient và User liên quan
+        // Load cả Patient và User liên quan
         $appointments = Appointment::with(['patient.user'])
             ->whereDate('AppointmentDate', $today)
             ->get()
@@ -151,4 +153,33 @@ class AppointmentsController extends Controller
         $appointment->delete();
         return response()->json(['message' => 'Xóa lịch hẹn thành công']);
     }
+
+
+    /**
+     * 🩺 Lấy lịch làm việc của bác sĩ theo ID (không cần đăng nhập)
+     */
+    public function getStaffScheduleById($doctorId)
+    {
+        // Lấy toàn bộ lịch làm việc của bác sĩ
+        $schedules = StaffSchedule::where('StaffId', $doctorId)
+            ->orderBy('WorkDate')
+            ->orderBy('StartTime')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->ScheduleId,
+                    'date' => $item->WorkDate->format('Y-m-d'),
+                    'time' => $item->StartTime . ' - ' . $item->EndTime,
+                    'title' => 'Lịch làm việc của bác sĩ',
+                    'description' => $item->IsAvailable ? 'Có mặt làm việc' : 'Nghỉ',
+                    'type' => $item->IsAvailable ? 'work' : 'off',
+                ];
+            });
+
+        return response()->json([
+            'data' => $schedules,
+        ]);
+    }
+
+
 }
