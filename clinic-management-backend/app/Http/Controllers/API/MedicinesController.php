@@ -8,6 +8,12 @@ use Illuminate\Support\Facades\Validator;
 
 class MedicinesController extends Controller
 {
+
+    public function all() {
+        $medicines = Medicine::all();
+        return response()->json($medicines);
+    }
+
     public function index(Request $request)
     {
         $perPage = $request->get('per_page', 10); // Mặc định 10 items/page, có thể override qua query param
@@ -109,6 +115,18 @@ class MedicinesController extends Controller
 
         return response()->json([
             'message' => 'Xóa thuốc thành công'
+        ]);
+    }
+    //check tồn kho
+    public function checkLowStock(Request $request){
+        $threshold =$request->get('threshold', 100);
+
+        $lowStock=Medicine::where('StockQuantity','<',$threshold)->orderBy('StockQuantity','asc')->get(['MedicineId','MedicineName','StockQuantity','Unit']);
+
+        return response()->json([
+            'message'=> 'Danh sách thuốc tồn kho thấp',
+            'threshold'=> $threshold,
+            'data'=> $lowStock
         ]);
     }
 }

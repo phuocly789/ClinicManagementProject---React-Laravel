@@ -1,4 +1,4 @@
-FROM php:8.2-cli 
+FROM php:8.3-cli
 # Dùng CLI vì không cần web server
 
 # Cài đặt dependencies hệ thống
@@ -8,28 +8,30 @@ RUN apt-get update && apt-get install -y \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
+    libsodium-dev \
     zip \
     unzip \
     libpq-dev \
-    && docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd
+    && docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd sodium
 
 # Cài Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+ENV COMPOSER_ALLOW_SUPERUSER=1
 
-# Working dir
+# Thư mục làm việc
 WORKDIR /var/www/html
 
-# Copy toàn bộ code từ context
-COPY . /var/www/html
+# ✅ Bước 1: chỉ copy file composer trước
+COPY composer.json composer.lock ./
 
+# ✅ Bước 3: copy toàn bộ source còn lại
+COPY . .
 
-
-# Install Composer deps
-RUN composer install --no-dev --optimize-autoloader
-
+# ✅ Bước 2: cài đặt dependencies
+RUN composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
 # Permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage
 
-# Expose port cho built-in servers
+# Expose port cho built-in server
 EXPOSE 8000

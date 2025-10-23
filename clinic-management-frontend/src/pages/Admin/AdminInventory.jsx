@@ -1,26 +1,51 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { Table, Button, Spinner, Form, Row, Col } from 'react-bootstrap';
-import Taskbar from '../Components/Sidebar/AdminSidebar';
-import Pagination from '../Components/Pagination/Pagination';
-import ConfirmDeleteModal from '../Components/CustomToast/DeleteConfirmModal';
-import CustomToast from '../Components/CustomToast/CustomToast';
+
+import Pagination from '../../Components/Pagination/Pagination';
+import ConfirmDeleteModal from '../../Components/CustomToast/DeleteConfirmModal';
+import CustomToast from '../../Components/CustomToast/CustomToast';
+import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
+
+// Thêm ErrorBoundary
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return <h3>Đã xảy ra lỗi. Vui lòng thử lại.</h3>;
+    }
+    return this.props.children;
+  }
+}
 
 const API_BASE_URL = 'http://localhost:8000';
 
-// Load html2pdf.js for PDF export
+// Load html2pdf.js for PDF export lazily
 const loadHtml2Pdf = () => {
-  const script = document.createElement('script');
-  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-  script.async = true;
-  document.body.appendChild(script);
-  return script;
+  return new Promise((resolve) => {
+    const existingScript = document.querySelector('script[src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"]');
+    if (existingScript) {
+      resolve();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    script.async = true;
+    script.onload = resolve;
+    document.body.appendChild(script);
+  });
 };
 
 // Regex kiểm tra ký tự đặc biệt và ngôn ngữ code
 const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
 const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class|import|export|\$\w+)/i;
 
-const InventoryList = ({ inventories, isLoading, formatVND, handleShowDeleteModal, handleShowDetail, handleShowAddInventory, handleShowEditForm, pageCount, currentPage, handlePageChange, suppliers }) => {
+const InventoryList = memo(({ inventories, isLoading, formatVND, handleShowDeleteModal, handleShowDetail, handleShowAddInventory, handleShowEditForm, pageCount, currentPage, handlePageChange, suppliers }) => {
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-3">
@@ -107,32 +132,63 @@ const InventoryList = ({ inventories, isLoading, formatVND, handleShowDeleteModa
       )}
     </div>
   );
-};
+});
 
-const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading, suppliers, medicines }) => {
-  const [items, setItems] = useState(
-    isEditMode && inventory?.details
-      ? inventory.details.map(detail => ({
-          medicineId: detail.medicineId || '',
-          quantity: detail.quantity || 0,
-          importPrice: detail.price || 0,
-          subTotal: detail.subTotal || 0,
-        }))
-      : [{ medicineId: '', quantity: 0, importPrice: 0, subTotal: 0 }]
-  );
+const InventoryForm = memo(({ isEditMode, inventory, onSubmit, onCancel, isLoading, suppliers, medicines, formLoading }) => {
+  // Thêm kiểm tra formLoading
+  if (formLoading) {
+    return (
+      <div className="text-center">
+        <Spinner animation="border" variant="primary" />
+        <p>Đang tải chi tiết...</p>
+      </div>
+    );
+  }
+
+  // Sửa khởi tạo items để đảm bảo luôn có ít nhất một item
+  const [items, setItems] = useState(() => {
+    const defaultItem = [{ medicineId: '', quantity: 0, importPrice: 0, subTotal: 0 }];
+    if (!isEditMode) return defaultItem;
+    if (!inventory?.details || !Array.isArray(inventory.details) || inventory.details.length === 0) {
+      return defaultItem;
+    }
+    return inventory.details
+      .map(detail => ({
+        medicineId: detail.medicineId || '',
+        quantity: detail.quantity || 0,
+        importPrice: detail.price || 0,
+        subTotal: detail.subTotal || 0,
+      }))
+      .filter(item => item && typeof item === 'object' && item.medicineId !== undefined);
+  });
+
   const [errors, setErrors] = useState({
     supplierId: '',
     date: '',
-    items: [],
+    items: items.map(() => ({ medicineId: '', quantity: '', importPrice: '' })), // Đồng bộ với items
   });
 
-  const validateForm = (formData, items) => {
+  // Cập nhật errors khi items thay đổi
+  useEffect(() => {
+    setErrors(prev => ({
+      ...prev,
+      items: items.map(() => ({ medicineId: '', quantity: '', importPrice: '' })),
+    }));
+  }, [items.length]); // Chỉ depend vào length để tránh loop
+
+  const validateForm = useCallback((formData, items) => {
     const newErrors = {
       supplierId: '',
       date: '',
       items: items.map(() => ({ medicineId: '', quantity: '', importPrice: '' })),
     };
     let isValid = true;
+
+    // Kiểm tra items hợp lệ
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      newErrors.items = [{ medicineId: 'Phải có ít nhất một mục thuốc' }];
+      isValid = false;
+    }
 
     // Validate SupplierId
     const supplierId = formData.get('supplierId')?.trim();
@@ -160,6 +216,11 @@ const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading, s
 
     // Validate Items
     items.forEach((item, index) => {
+      if (!item || typeof item !== 'object') {
+        newErrors.items[index].medicineId = 'Mục thuốc không hợp lệ';
+        isValid = false;
+        return;
+      }
       if (!item.medicineId) {
         newErrors.items[index].medicineId = 'Vui lòng chọn thuốc';
         isValid = false;
@@ -189,36 +250,38 @@ const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading, s
 
     setErrors(newErrors);
     return isValid;
-  };
+  }, [medicines, suppliers]);
 
-  const handleAddItem = () => {
-    setItems([...items, { medicineId: '', quantity: 0, importPrice: 0, subTotal: 0 }]);
-  };
+  const handleAddItem = useCallback(() => {
+    setItems(prev => [...prev, { medicineId: '', quantity: 0, importPrice: 0, subTotal: 0 }]);
+  }, []);
 
-  const handleItemChange = (index, field, value) => {
-    const newItems = [...items];
-    newItems[index][field] = value;
-    if (field === 'quantity' || field === 'importPrice') {
-      newItems[index].subTotal = newItems[index].quantity * newItems[index].importPrice;
-    }
-    setItems(newItems);
-  };
+  const handleItemChange = useCallback((index, field, value) => {
+    setItems(prev => {
+      const newItems = [...prev];
+      newItems[index] = { ...newItems[index], [field]: value };
+      if (field === 'quantity' || field === 'importPrice') {
+        newItems[index].subTotal = (newItems[index].quantity || 0) * (newItems[index].importPrice || 0);
+      }
+      return newItems;
+    });
+  }, []);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = useCallback((e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
     if (validateForm(formData, items)) {
-      const totalAmount = items.reduce((sum, item) => sum + item.subTotal, 0);
+      const totalAmount = items.reduce((sum, item) => sum + (item.subTotal || 0), 0);
       onSubmit(e, items, totalAmount);
     }
-  };
+  }, [items, onSubmit, validateForm]);
 
   const styles = {
     itemGroup: { border: '1px solid #ddd', padding: '10px', marginBottom: '10px', borderRadius: '4px' },
     btnAddItem: { backgroundColor: '#28a745', color: 'white', padding: '8px 15px', borderRadius: '4px', border: 'none', cursor: 'pointer' },
     btnAddItemHover: { backgroundColor: '#218838' },
   };
-  console.log(medicines);
+
   return (
     <div className="card" style={{ backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px', marginBottom: '20px' }}>
       <h2>{isEditMode ? 'Sửa Phiếu Nhập' : 'Thêm Phiếu Nhập'}</h2>
@@ -273,60 +336,64 @@ const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading, s
           </Col>
         </Row>
         <h3>Chi Tiết Nhập Kho</h3>
-        {items.map((item, index) => (
-          <div key={index} style={styles.itemGroup}>
-            <Row>
-              <Col md={4}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Tên Thuốc <span className="text-danger">*</span></Form.Label>
-                  <Form.Select
-                    name={`medicineId[${index}]`}
-                    value={item.medicineId}
-                    onChange={(e) => handleItemChange(index, 'medicineId', e.target.value)}
-                    isInvalid={!!errors.items[index].medicineId}
-                  >
-                    <option value="" disabled>Chọn thuốc</option>
-                    {medicines.map((medicine) => (
-                      <option key={medicine.MedicineId} value={medicine.MedicineId}>
-                        {medicine.MedicineName}
-                      </option>
-                    ))}
-                  </Form.Select>
-                  <Form.Control.Feedback type="invalid">{errors.items[index].medicineId}</Form.Control.Feedback>
-                </Form.Group>
-              </Col>
-              <Col md={4}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Số Lượng <span className="text-danger">*</span></Form.Label>
-                  <Form.Control
-                    type="number"
-                    name={`quantity[${index}]`}
-                    value={item.quantity}
-                    onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value) || 0)}
-                    min="0"
-                    isInvalid={!!errors.items[index].quantity}
-                  />
-                  <Form.Control.Feedback type="invalid">{errors.items[index].quantity}</Form.Control.Feedback>
-                </Form.Group>
-              </Col>
-              <Col md={4}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Giá Nhập (VNĐ) <span className="text-danger">*</span></Form.Label>
-                  <Form.Control
-                    type="number"
-                    name={`importPrice[${index}]`}
-                    value={item.importPrice}
-                    onChange={(e) => handleItemChange(index, 'importPrice', parseFloat(e.target.value) || 0)}
-                    step="0.01"
-                    min="0"
-                    isInvalid={!!errors.items[index].importPrice}
-                  />
-                  <Form.Control.Feedback type="invalid">{errors.items[index].importPrice}</Form.Control.Feedback>
-                </Form.Group>
-              </Col>
-            </Row>
-          </div>
-        ))}
+        {items.length === 0 ? (
+          <p className="text-danger">Chưa có mục thuốc nào. Vui lòng thêm mục.</p>
+        ) : (
+          items.map((item, index) => (
+            <div key={index} style={styles.itemGroup}>
+              <Row>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Tên Thuốc <span className="text-danger">*</span></Form.Label>
+                    <Form.Select
+                      name={`medicineId[${index}]`}
+                      value={item.medicineId || ''}
+                      onChange={(e) => handleItemChange(index, 'medicineId', e.target.value)}
+                      isInvalid={!!errors.items[index]?.medicineId}
+                    >
+                      <option value="" disabled>Chọn thuốc</option>
+                      {medicines.map((medicine) => (
+                        <option key={medicine.MedicineId} value={medicine.MedicineId}>
+                          {medicine.MedicineName}
+                        </option>
+                      ))}
+                    </Form.Select>
+                    <Form.Control.Feedback type="invalid">{errors.items[index]?.medicineId}</Form.Control.Feedback>
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Số Lượng <span className="text-danger">*</span></Form.Label>
+                    <Form.Control
+                      type="number"
+                      name={`quantity[${index}]`}
+                      value={item.quantity || 0}
+                      onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value) || 0)}
+                      min="0"
+                      isInvalid={!!errors.items[index]?.quantity}
+                    />
+                    <Form.Control.Feedback type="invalid">{errors.items[index]?.quantity}</Form.Control.Feedback>
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Giá Nhập (VNĐ) <span className="text-danger">*</span></Form.Label>
+                    <Form.Control
+                      type="number"
+                      name={`importPrice[${index}]`}
+                      value={item.importPrice || 0}
+                      onChange={(e) => handleItemChange(index, 'importPrice', parseFloat(e.target.value) || 0)}
+                      step="0.01"
+                      min="0"
+                      isInvalid={!!errors.items[index]?.importPrice}
+                    />
+                    <Form.Control.Feedback type="invalid">{errors.items[index]?.importPrice}</Form.Control.Feedback>
+                  </Form.Group>
+                </Col>
+              </Row>
+            </div>
+          ))
+        )}
         <Button
           style={styles.btnAddItem}
           onMouseOver={(e) => (e.target.style.backgroundColor = styles.btnAddItemHover.backgroundColor)}
@@ -361,16 +428,17 @@ const InventoryForm = ({ isEditMode, inventory, onSubmit, onCancel, isLoading, s
       </Form>
     </div>
   );
-};
+});
 
-const InventoryDetail = ({ inventory, details, supplier, isLoading, formatVND, onBack }) => {
+const InventoryDetail = memo(({ inventory, details, supplier, isLoading, formatVND, onBack }) => {
   const printableAreaRef = useRef(null);
 
-  const printPage = () => {
+  const printPage = useCallback(() => {
     window.print();
-  };
+  }, []);
 
-  const exportPDF = () => {
+  const exportPDF = useCallback(async () => {
+    await loadHtml2Pdf();
     const element = printableAreaRef.current;
     const opt = {
       margin: 0.5,
@@ -380,7 +448,7 @@ const InventoryDetail = ({ inventory, details, supplier, isLoading, formatVND, o
       jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
     };
     window.html2pdf().set(opt).from(element).save();
-  };
+  }, [inventory.id]);
 
   const styles = {
     dashboardContainer: { display: 'flex' },
@@ -414,6 +482,8 @@ const InventoryDetail = ({ inventory, details, supplier, isLoading, formatVND, o
       buttonContainer: { display: 'none' }
     }
   };
+
+  console.log(details);
 
   return (
     <div style={styles.mainContent}>
@@ -489,7 +559,7 @@ const InventoryDetail = ({ inventory, details, supplier, isLoading, formatVND, o
       </div>
     </div>
   );
-};
+});
 
 const AdminInventory = () => {
   const [inventories, setInventories] = useState([]);
@@ -505,23 +575,20 @@ const AdminInventory = () => {
   const [currentView, setCurrentView] = useState('list'); // list, add, edit, detail
   const [editInventory, setEditInventory] = useState(null);
   const [selectedInventory, setSelectedInventory] = useState(null);
+  const [formLoading, setFormLoading] = useState(false);
   const cache = useRef(new Map());
   const debounceRef = useRef(null);
 
-  useEffect(() => {
-    const script = loadHtml2Pdf();
-    return () => script.remove();
+  const showToast = useCallback((type, message) => {
+    setToast({ show: true, type, message });
   }, []);
 
-  const showToast = (type, message) => {
-    setToast({ show: true, type, message });
-  };
-
-  const hideToast = () => {
+  const hideToast = useCallback(() => {
     setToast({ show: false, type: 'info', message: '' });
-  };
+  }, []);
 
   const fetchSuppliers = useCallback(async () => {
+    if (suppliers.length > 0) return; // Avoid re-fetch if already loaded
     try {
       setIsLoading(true);
       const response = await fetch(`${API_BASE_URL}/api/suppliers`, {
@@ -537,25 +604,26 @@ const AdminInventory = () => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [suppliers.length, showToast]);
 
   const fetchMedicines = useCallback(async () => {
+    if (medicines.length > 0) return; // Avoid re-fetch if already loaded
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/medicines`, {
+      const response = await fetch(`${API_BASE_URL}/api/medicines/all`, {
         headers: { 'Accept': 'application/json' },
         credentials: 'include',
       });
       if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
       const data = await response.json();
-      setMedicines(data.data || []);
+      setMedicines(data || []);
     } catch (error) {
       console.error('Error fetching medicines:', error);
       showToast('error', `Lỗi khi tải danh sách thuốc: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [medicines.length, showToast]);
 
   const fetchInventories = useCallback(async (page = 1) => {
     if (cache.current.has(page)) {
@@ -594,11 +662,12 @@ const AdminInventory = () => {
         setIsLoading(false);
       }
     }, 300);
-  }, []);
+  }, [showToast]);
 
   const fetchInventoryDetails = useCallback(async (importId) => {
     try {
       setIsLoading(true);
+      setFormLoading(true);
       const response = await fetch(`${API_BASE_URL}/api/import-bills/${importId}`, {
         headers: { 'Accept': 'application/json' },
         credentials: 'include',
@@ -630,21 +699,26 @@ const AdminInventory = () => {
         Address: data.data.supplier.Address,
         Description: data.data.supplier.Description
       } : {};
+
       setSelectedInventory({
         inventory: mappedInventory,
         supplier: mappedSupplier,
         details: mappedDetails
       });
       setDetails(mappedDetails);
+      setEditInventory(mappedInventory);
+      return mappedInventory;
     } catch (error) {
       console.error('Error fetching inventory details:', error);
       showToast('error', `Lỗi khi tải chi tiết phiếu nhập: ${error.message}`);
+      return null;
     } finally {
       setIsLoading(false);
+      setFormLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
-  const getCsrfToken = async (retries = 3) => {
+  const getCsrfToken = useCallback(async (retries = 3) => {
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const response = await fetch(`${API_BASE_URL}/sanctum/csrf-cookie`, {
@@ -664,7 +738,7 @@ const AdminInventory = () => {
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
     }
-  };
+  }, []);
 
   const handleDelete = useCallback(
     async (inventoryId) => {
@@ -697,25 +771,23 @@ const AdminInventory = () => {
         setInventoryToDelete(null);
       }
     },
-    [currentPage, fetchInventories]
+    [currentPage, fetchInventories, getCsrfToken, showToast]
   );
 
-  const handleShowDeleteModal = (inventoryId) => {
+  const handleShowDeleteModal = useCallback((inventoryId) => {
     setInventoryToDelete(inventoryId);
     setShowDeleteModal(true);
-  };
+  }, []);
 
-  const handleCancelDelete = () => {
+  const handleCancelDelete = useCallback(() => {
     setShowDeleteModal(false);
     setInventoryToDelete(null);
-  };
+  }, []);
 
   const handleShowAddInventory = useCallback(async () => {
     try {
       setIsLoading(true);
-      // Đảm bảo dữ liệu nhà cung cấp và thuốc đã được tải
-      if (suppliers.length === 0) await fetchSuppliers();
-      if (medicines.length === 0) await fetchMedicines();
+      await Promise.all([fetchSuppliers(), fetchMedicines()]);
       setEditInventory(null);
       setDetails([]);
       setCurrentView('add');
@@ -725,32 +797,37 @@ const AdminInventory = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [fetchSuppliers, fetchMedicines, suppliers, medicines]);
+  }, [fetchSuppliers, fetchMedicines, showToast]);
 
-  const handleShowEditForm = (inventory) => {
-    setEditInventory(inventory);
+  const handleShowEditForm = useCallback(async (inventory) => {
+    setFormLoading(true);
     setCurrentView('edit');
-    if (inventory) fetchInventoryDetails(inventory.id);
-  };
+    await Promise.all([fetchSuppliers(), fetchMedicines()]);
+    const fullInventory = await fetchInventoryDetails(inventory.id);
+    if (fullInventory) {
+      setEditInventory(fullInventory);
+    }
+  }, [fetchInventoryDetails, fetchSuppliers, fetchMedicines]);
 
-  const handleShowDetail = (inventoryId) => {
+  const handleShowDetail = useCallback((inventoryId) => {
     setCurrentView('detail');
     fetchInventoryDetails(inventoryId);
-  };
+  }, [fetchInventoryDetails]);
 
-  const handleCancelForm = () => {
+  const handleCancelForm = useCallback(() => {
     setCurrentView('list');
     setEditInventory(null);
     setDetails([]);
-  };
+    setFormLoading(false);
+  }, []);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     setCurrentView('list');
     setSelectedInventory(null);
     setDetails([]);
-  };
+  }, []);
 
-  const handleAddInventory = async (e, items, totalAmount) => {
+  const handleAddInventory = useCallback(async (e, items) => {
     try {
       setIsLoading(true);
       const token = await getCsrfToken();
@@ -758,13 +835,11 @@ const AdminInventory = () => {
       const data = {
         SupplierId: parseInt(formData.get('supplierId')),
         ImportDate: formData.get('date'),
-        TotalAmount: totalAmount,
         Notes: formData.get('note')?.trim() || null,
         import_details: items.map(item => ({
           MedicineId: parseInt(item.medicineId),
           Quantity: parseInt(item.quantity),
           ImportPrice: parseFloat(item.importPrice),
-          SubTotal: parseFloat(item.subTotal),
         })),
       };
 
@@ -798,15 +873,15 @@ const AdminInventory = () => {
       showToast(
         'error',
         error.message.includes('CSRF token')
-          ? 'Thêm thất bại: Không thể lấy CSRF token. Vui lòng kiểm tra backend.'
-          : `Thêm thất bại: ${error.message}`
+          ? 'Thêm thất bại: Không thể lấy CSRF token.'
+          : `Thêm thất bại: ${error.message.includes('does not exist') ? 'Lỗi cơ sở dữ liệu.' : error.message}`
       );
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [fetchInventories, getCsrfToken, showToast]);
 
-  const handleEditInventory = async (e, items, totalAmount) => {
+  const handleEditInventory = useCallback(async (e, items) => {
     try {
       setIsLoading(true);
       const token = await getCsrfToken();
@@ -814,13 +889,11 @@ const AdminInventory = () => {
       const data = {
         SupplierId: parseInt(formData.get('supplierId')),
         ImportDate: formData.get('date'),
-        TotalAmount: totalAmount,
         Notes: formData.get('note')?.trim() || null,
         import_details: items.map(item => ({
           MedicineId: parseInt(item.medicineId),
           Quantity: parseInt(item.quantity),
           ImportPrice: parseFloat(item.importPrice),
-          SubTotal: parseFloat(item.subTotal),
         })),
       };
 
@@ -855,13 +928,13 @@ const AdminInventory = () => {
       showToast(
         'error',
         error.message.includes('CSRF token')
-          ? 'Sửa thất bại: Không thể lấy CSRF token. Vui lòng kiểm tra backend.'
-          : `Sửa thất bại: ${error.message}`
+          ? 'Sửa thất bại: Không thể lấy CSRF token.'
+          : `Sửa thất bại: ${error.message.includes('does not exist') ? 'Lỗi cơ sở dữ liệu.' : error.message}`
       );
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentPage, editInventory, fetchInventories, getCsrfToken, showToast]);
 
   useEffect(() => {
     if (currentView === 'list') {
@@ -874,57 +947,61 @@ const AdminInventory = () => {
     };
   }, [currentView, fetchInventories, fetchSuppliers, fetchMedicines]);
 
-  const handlePageChange = ({ selected }) => {
+  const handlePageChange = useCallback(({ selected }) => {
     const nextPage = selected + 1;
     fetchInventories(nextPage);
-  };
+  }, [fetchInventories]);
 
-  const formatVND = (value) => {
+  const formatVND = useCallback((value) => {
     return Number(value).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
-  };
+  }, []);
 
   return (
     <div style={{ display: 'flex', fontFamily: "'Segoe UI', sans-serif", margin: 0, backgroundColor: '#f8f9fa' }}>
-      <Taskbar />
+      <AdminSidebar />
       <div style={{ position: 'relative', width: '100%', flexGrow: 1, marginLeft: '5px', padding: '30px' }}>
         <h1 className="mb-4">Quản Lý Kho</h1>
         {currentView === 'list' && (
-          <>
-            <InventoryList
-              inventories={inventories}
-              isLoading={isLoading}
-              formatVND={formatVND}
-              handleShowDeleteModal={handleShowDeleteModal}
-              handleShowDetail={handleShowDetail}
-              handleShowAddInventory={handleShowAddInventory}
-              handleShowEditForm={handleShowEditForm}
-              pageCount={pageCount}
-              currentPage={currentPage}
-              handlePageChange={handlePageChange}
-              suppliers={suppliers}
-            />
-          </>
+          <InventoryList
+            inventories={inventories}
+            isLoading={isLoading}
+            formatVND={formatVND}
+            handleShowDeleteModal={handleShowDeleteModal}
+            handleShowDetail={handleShowDetail}
+            handleShowAddInventory={handleShowAddInventory}
+            handleShowEditForm={handleShowEditForm}
+            pageCount={pageCount}
+            currentPage={currentPage}
+            handlePageChange={handlePageChange}
+            suppliers={suppliers}
+          />
         )}
         {currentView === 'add' && (
-          <InventoryForm
-            isEditMode={false}
-            onSubmit={handleAddInventory}
-            onCancel={handleCancelForm}
-            isLoading={isLoading}
-            suppliers={suppliers}
-            medicines={medicines}
-          />
+          <ErrorBoundary>
+            <InventoryForm
+              isEditMode={false}
+              onSubmit={handleAddInventory}
+              onCancel={handleCancelForm}
+              isLoading={isLoading}
+              suppliers={suppliers}
+              medicines={medicines}
+              formLoading={formLoading}
+            />
+          </ErrorBoundary>
         )}
         {currentView === 'edit' && (
-          <InventoryForm
-            isEditMode={true}
-            inventory={editInventory}
-            onSubmit={handleEditInventory}
-            onCancel={handleCancelForm}
-            isLoading={isLoading}
-            suppliers={suppliers}
-            medicines={medicines}
-          />
+          <ErrorBoundary>
+            <InventoryForm
+              isEditMode={true}
+              inventory={editInventory}
+              onSubmit={handleEditInventory}
+              onCancel={handleCancelForm}
+              isLoading={isLoading}
+              suppliers={suppliers}
+              medicines={medicines}
+              formLoading={formLoading}
+            />
+          </ErrorBoundary>
         )}
         {currentView === 'detail' && selectedInventory && (
           <InventoryDetail

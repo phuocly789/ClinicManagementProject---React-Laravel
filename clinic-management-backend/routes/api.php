@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\API\ReportRevenueController;
 use Dba\Connection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -7,28 +8,32 @@ use App\Http\Controllers\API\MedicinesController;
 use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\ImportBillController;
 use App\Http\Controllers\API\SuppliersController;
-// Controllers for Doctor
+
+use App\Http\Controllers\API\AuthController;
+use App\Http\Controllers\API\Doctor\AISuggestionController;
 use App\Http\Controllers\API\Doctor\AppointmentsController;
-use App\Http\Controllers\API\Doctor\ExaminationController;
 use App\Http\Controllers\API\Doctor\DiagnosisSuggestionController;
 use App\Http\Controllers\API\Doctor\DoctorMedicineSearchController;
-use App\Http\Controllers\API\Doctor\AISuggestionController;
 use App\Http\Controllers\API\Doctor\ServiceController;
 use App\Http\Controllers\API\Doctor\DoctorExaminationsController;
 use App\Http\Controllers\API\Doctor\PatientsController;
 
 //----------------------------------------------Hết-------------------------------
+use App\Http\Controllers\API\User\UserControllers;
+
 
 
 Route::get('/users', [UserController::class, 'index']);
 Route::get('/ping', [UserController::class, 'ping']);
 
+//check tồn kho
+Route::get('/medicines/low-stock', [MedicinesController::class, 'checkLowStock']);
 Route::get('/medicines', [MedicinesController::class, 'index']);
 Route::get('/medicines/ping', [MedicinesController::class, 'ping']);
 Route::post('/medicines', [MedicinesController::class, 'store']);
 Route::put('/medicines/{id}', [MedicinesController::class, 'update']);
 Route::delete('/medicines/{id}', [MedicinesController::class, 'destroy']);
-
+Route::get('/medicines/all',[MedicinesController::class, 'all']);
 
 Route::get('/import-bills', [ImportBillController::class, 'index']);
 Route::post('/import-bills', [ImportBillController::class, 'store']);
@@ -41,6 +46,15 @@ Route::post('/suppliers', [SuppliersController::class, 'store']);
 Route::put('/suppliers/{id}', [SuppliersController::class, 'update']);
 Route::delete('/suppliers/{id}', [SuppliersController::class, 'destroy']);
 Route::get('/suppliers/{id}', [SuppliersController::class, 'show']);
+
+
+Route::post('/auth/login', [AuthController::class, 'login']);
+Route::post('/create-user', [AuthController::class, 'createUser']);
+
+//admin-revenue
+Route::get('/report-revenue/combined', [ReportRevenueController::class, 'getCombinedStatistics']);
+Route::get('/report-revenue/detail-revenue', [ReportRevenueController::class, 'getDetailRevenueReport']);
+
 
 // Nhóm route cho Bác sĩ
 Route::prefix('doctor')->group(function () {
@@ -78,4 +92,16 @@ Route::prefix('doctor')->group(function () {
     });
 
 });
+
+//Nhóm route cho User
+
+Route::prefix('users')->group(function () {
+    Route::get('/', [UserControllers::class, 'index']);
+    Route::post('/', [UserControllers::class, 'store']);
+    Route::put('/{id}', [UserControllers::class, 'update']);
+    Route::delete('/{id}', [UserControllers::class, 'destroy']);
+    Route::patch('/{id}/toggle-status', [UserControllers::class, 'toggleStatus']);
+});
+
+Route::get('/roles', [UserControllers::class, 'roles']);
 

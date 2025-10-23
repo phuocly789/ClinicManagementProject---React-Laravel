@@ -13,6 +13,7 @@ const DoctorDashboard = () => {
   const [todayPatients, setTodayPatients] = useState([]); // Từ /api/doctor/today-patients
   const [events, setEvents] = useState([]); // Từ /api/doctor/schedules/{doctorId}
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [showEventModal, setShowEventModal] = useState(false);
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -164,7 +165,14 @@ const DoctorDashboard = () => {
   };
 
   // Các function khác
- 
+  const openEventModal = (eventId = null) => { 
+    setEditingEventId(eventId); 
+    setShowEventModal(true); 
+  };
+  const closeEventModal = () => { 
+    setShowEventModal(false); 
+    setEditingEventId(null); 
+  };
   const openPrescriptionModal = () => setShowPrescriptionModal(true);
   const closePrescriptionModal = () => setShowPrescriptionModal(false);
   const handleTempSave = () => { 
@@ -220,6 +228,7 @@ const DoctorDashboard = () => {
               currentSection={currentSection}
               events={events}
               currentDate={currentDate}
+              openEventModal={openEventModal}
               prevMonth={prevMonth}
               nextMonth={nextMonth}
             />
