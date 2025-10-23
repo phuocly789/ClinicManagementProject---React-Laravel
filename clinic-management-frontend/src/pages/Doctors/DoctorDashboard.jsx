@@ -4,8 +4,6 @@ import Sidebar from '../../Components/Sidebar/DoctorSidebar';
 import TodaySection from './TodaySection';
 import ScheduleSection from './ScheduleSection';
 import HistorySection from './HistorySection';
-import EventModalContent from './EventModal';
-import PrescriptionModalContent from './DotorTodayCompo/PrescriptionModalContent';
 import '../Doctors/DoctorDashboard.css';
 
 const API_BASE_URL = 'http://localhost:8000'; // Backend Laravel
@@ -192,7 +190,7 @@ const DoctorDashboard = () => {
 
   return (
     <div className="d-flex min-vh-100 bg-light">
-      <DoctorSidebar currentSection={currentSection} switchSection={switchSection} />
+      <Sidebar currentSection={currentSection} switchSection={switchSection} />
       <div className="flex-grow-1 p-4" style={{ marginLeft: '250px' }}>
         <Container fluid>
           <div className="alert alert-success mb-4 tab-container">
@@ -265,15 +263,6 @@ const DoctorDashboard = () => {
         </Toast>
       </ToastContainer>
 
-      {/* Prescription Modal */}
-      <Modal show={showPrescriptionModal} onHide={closePrescriptionModal} centered>
-        <Modal.Header closeButton className="bg-light">
-          <Modal.Title>Thêm Thuốc</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <PrescriptionModalContent onSubmit={handlePrescriptionSubmit} onClose={closePrescriptionModal} />
-        </Modal.Body>
-      </Modal>
     </div>
   );
 };
