@@ -6,7 +6,6 @@ import "./App.css";
 
 import { path } from "./utils/constant";
 import LoginPage from "./pages/auth/Login/Login";
-import UserManagement from "./pages/user/UserManagement.jsx";
 import AdminMedicine from "./pages/Admin/AdminMedicine.jsx";
 import AdminInventory from "./pages/Admin/AdminInventory.jsx";
 import DoctorDashboard from "./pages/Doctors/DoctorDashboard.jsx";
@@ -14,6 +13,7 @@ import AdminDashboard from "./pages/Admin/AdminDashboard/AdminDashboard.jsx";
 import Register from "./pages/auth/Register/Register.jsx";
 import AdminRevenueReport from "./pages/Admin/AdminRevenueReport/AdminRevenueReport.jsx";
 import AdminScheduleManagement from "./pages/Admin/AdminScheduleManagement/AdminScheduleManagement.jsx";
+import AdminUserManagement from "./pages/Admin/AdminUserManagement/AdminUserManagement.jsx";
 function App() {
   return (
     <BrowserRouter>
@@ -24,6 +24,7 @@ function App() {
         <Route path="/" element={<AdminMedicine />} /> {/* Trang mặc định */}
         <Route path="/admin/revenue-report" element={<AdminRevenueReport />} />
         <Route path="/admin/schedule-management" element={<AdminScheduleManagement />} />
+        <Route path="/admin/users" element={<AdminUserManagement />} />
 
         <Route path="/admin/medicines" element={<AdminMedicine />} />
         <Route path="/admin/inventory" element={<AdminInventory />} />
@@ -31,7 +32,6 @@ function App() {
 
         <Route path={path.LOGIN} element={<LoginPage />} />{" "}
         <Route path={path.REGISTER} element={<Register />} />{" "}
-        <Route path="/admin/users" element={<UserManagement />} />
         {/* Trang mặc định */}
         <Route path="/doctor" element={<DoctorDashboard />} />
       </Routes>
