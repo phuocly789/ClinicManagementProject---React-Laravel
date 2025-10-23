@@ -1,54 +1,31 @@
-/* CustomToast.css */
+/* FullScreenToast.css */
 
-/*
-* Overlay animation for the backdrop
-*/
 .toast-fade {
-  animation: fadeIn 0.4s ease-in-out forwards; /* Added forwards to keep the final state */
+  animation: fadeIn 0.3s ease-in-out;
 }
 
-/*
-* Animation for the toast content itself
-*/
-.toast-popup .modal-content {
-  animation: popup 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Bouncier, more engaging ease-out */
+.toast-popup {
+  animation: popup 0.4s ease-out;
 }
 
-.custom-toast .modal-dialog {
-  max-width: 350px; /* Slightly more compact for a modern toast */
-  margin-top: 15vh; /* Position it a bit lower than the absolute center */
-}
-
-.custom-toast .modal-content {
-  border-radius: 0.75rem; /* Larger border-radius */
-  border: none; /* Removing default border */
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); /* Deeper, softer shadow */
-  overflow: hidden; /* Ensure content respects the border-radius */
-}
-
-/* Animation for the background overlay (Modal Backdrop) */
 @keyframes fadeIn {
   0% {
     opacity: 0;
     backdrop-filter: blur(0px);
   }
-
   100% {
     opacity: 1;
-    backdrop-filter: blur(8px); /* Stronger blur for a better focus effect */
-    background-color: rgba(0, 0, 0, 0.1); /* Subtle dark layer for contrast */
+    backdrop-filter: blur(4px);
   }
 }
 
-/* Animation for the toast's content */
 @keyframes popup {
   0% {
-    transform: scale(0.85); /* Starting a bit smaller */
+    transform: scale(0.9) translateY(20px);
     opacity: 0;
   }
-
   100% {
-    transform: scale(1);
+    transform: scale(1) translateY(0);
     opacity: 1;
   }
 }
