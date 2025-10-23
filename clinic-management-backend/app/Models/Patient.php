@@ -40,7 +40,7 @@ class Patient extends Model
 
 	public function user()
 	{
-		return $this->belongsTo(User::class, 'PatientId');
+		return $this->belongsTo(User::class, 'PatientId', 'UserId');
 	}
 
 	public function medical_records()

@@ -8,6 +8,12 @@ use Illuminate\Support\Facades\Validator;
 
 class MedicinesController extends Controller
 {
+
+    public function all() {
+        $medicines = Medicine::all();
+        return response()->json($medicines);
+    }
+
     public function index(Request $request)
     {
         $perPage = $request->get('per_page', 10); // Mặc định 10 items/page, có thể override qua query param

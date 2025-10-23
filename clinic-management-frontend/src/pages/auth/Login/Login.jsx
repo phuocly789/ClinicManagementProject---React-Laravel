@@ -3,6 +3,7 @@ import { Spinner } from "react-bootstrap";
 import authService from "../../../services/authService";
 import { useNavigate } from "react-router-dom";
 import CustomToast from "../../../Components/CustomToast/CustomToast";
+import { path } from "../../../utils/constant";
 const LoginPage = () => {
   const [formData, setFormData] = useState({
     username: "",
@@ -175,7 +176,7 @@ const LoginPage = () => {
                   Quên mật khẩu?
                 </a>
                 <span className="mx-2 text-muted">|</span>
-                <a href="#" className="text-decoration-none">
+                <a href={path.REGISTER} className="text-decoration-none">
                   Đăng ký tài khoản mới
                 </a>
               </div>
