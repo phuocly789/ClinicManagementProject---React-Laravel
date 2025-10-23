@@ -48,6 +48,8 @@ Route::get('/suppliers/{id}', [SuppliersController::class, 'show']);
 
 Route::get('/schedules', [ScheduleController::class, 'index']);
 Route::post('/schedules', [ScheduleController::class, 'createSchedule']);
+Route::put('/schedules/{scheduleId}', [ScheduleController::class, 'updateSchedule']);
+Route::delete('/schedules/{scheduleId}', [ScheduleController::class, 'deleteSchedule']);
 
 
 
