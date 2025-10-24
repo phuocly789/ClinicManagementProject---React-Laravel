@@ -19,9 +19,6 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
-        <Route path="/admin/medicines" element={<AdminMedicine />} />
-        <Route path="/admin/inventory" element={<AdminInventory />} />
-        <Route path="/" element={<AdminMedicine />} /> {/* Trang mặc định */}
         <Route path="/admin/revenue-report" element={<AdminRevenueReport />} />
         <Route path="/admin/schedule-management" element={<AdminScheduleManagement />} />
         <Route path="/admin/users" element={<AdminUserManagement />} />
