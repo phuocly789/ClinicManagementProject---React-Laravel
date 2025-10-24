@@ -99,6 +99,7 @@ const AdminUserManagement = () => {
   };
 
   const handleFormSubmit = async (e) => {
+    setLoading(true);
     e.preventDefault();
     const { type, user } = modal;
     const isEditing = type === 'edit';
@@ -116,9 +117,13 @@ const AdminUserManagement = () => {
         : (err.response?.data?.message || 'Có lỗi xảy ra.');
       setToast({ type: 'error', message: errorMessage });
     }
+    finally {
+      setLoading(false);
+    }
   };
 
   const handleDeleteUser = async () => {
+    setLoading(true);
     try {
       const response = await instance.delete(`/api/users/${modal.user.UserId}`);
       setToast({ type: 'success', message: response.data.message || 'Xóa người dùng thành công!' });
@@ -128,6 +133,9 @@ const AdminUserManagement = () => {
       fetchUsers(newPage);
     } catch (err) {
       setToast({ type: 'error', message: err.response?.data?.error || 'Lỗi khi xóa người dùng.' });
+    }
+    finally {
+      setLoading(false);
     }
   };
 
@@ -252,8 +260,8 @@ const AdminUserManagement = () => {
                 <h2 className="modal-title">{modal.type === 'add' ? 'Thêm Người Dùng Mới' : 'Cập Nhật Thông Tin'}</h2>
                 <button className="btn-close" onClick={handleCloseModal}>&times;</button>
               </div>
-              <form onSubmit={handleFormSubmit}>
                 <div className="modal-body">
+              <form onSubmit={handleFormSubmit}>
                   <div className="row g-3">
                     <div className="col-md-6 form-group"><label>Tên đăng nhập</label><input type="text" name="Username" value={formData.Username || ''} onChange={handleFormChange} className="form-control" required disabled={modal.type === 'edit'} /></div>
                     <div className="col-md-6 form-group"><label>Họ tên</label><input type="text" name="FullName" value={formData.FullName || ''} onChange={handleFormChange} className="form-control" required /></div>
@@ -265,9 +273,9 @@ const AdminUserManagement = () => {
                     <div className="col-12 form-group"><label>Địa chỉ</label><input type="text" name="Address" value={formData.Address || ''} onChange={handleFormChange} className="form-control" /></div>
                     <div className="col-12 form-group"><label>Vai trò</label><select name="Role" value={formData.Role || ''} onChange={handleFormChange} className="form-select" required disabled={formData.Role === 'Admin'}><option value="">Chọn vai trò</option>{roles.map(r => <option key={r.RoleId} value={r.RoleName}>{r.RoleName}</option>)}</select></div>
                   </div>
+              </form>
                 </div>
                 <div className="modal-footer"><button type="button" className="btn btn-outline" onClick={handleCloseModal}>Hủy</button><button type="submit" className="btn btn-primary">Lưu Thay Đổi</button></div>
-              </form>
             </div>
           </div>
         )}
