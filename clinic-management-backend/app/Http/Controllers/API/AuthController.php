@@ -25,8 +25,12 @@ class AuthController extends Controller
     }
     public function login(Request $request)
     {
-        $result = $this->authService->login($request->all());
-        return response()->json($result, 200);
+        $result = $this->authService->handleLogin($request->all());
+        return response()->json([
+            'success' => true,
+            'message' => 'Đăng nhập thành công',
+            'data' => $result,
+        ]);
     }
     // public function logout(Request $request)
     // {

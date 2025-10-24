@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Constants\Errors\AuthMessages;
+use App\Exceptions\AppErrors;
 use App\Mail\AccountActivationMail;
 use App\Models\Role;
 use App\Models\User;
@@ -135,63 +137,63 @@ class AuthService
     /**
      * Đăng nhập
      */
-    public function login(array $data)
+    public function handleLogin(array $data)
     {
-        try {
-            $validated = validator($data, [
-                'username' => 'required|string',
-                'password' => 'required|string',
-            ])->validate();
+        // Validate dữ liệu đầu vào
+        $validated = validator($data, [
+            'username' => 'required|string|min:6|max:255|not_regex:/<[^>]*>/',
+            'password' => 'required|string|min:6|max:255|not_regex:/<[^>]*>/',
+        ], [
+            'username.required' => AuthMessages::VALIDATION['USERNAME_REQUIRED'],
+            'username.min' => AuthMessages::VALIDATION['USERNAME_MIN'],
+            'username.max' => AuthMessages::VALIDATION['USERNAME_MAX'],
+            'username.not_regex' => AuthMessages::VALIDATION['USERNAME_HTML'],
 
-            // Kiểm tra user có tồn tại không
-            $user = \App\Models\User::where('Username', $validated['username'])->first();
+            'password.required' => AuthMessages::VALIDATION['PASSWORD_REQUIRED'],
+            'password.min' => AuthMessages::VALIDATION['PASSWORD_MIN'],
+            'password.max' => AuthMessages::VALIDATION['PASSWORD_MAX'],
+            'password.not_regex' => AuthMessages::VALIDATION['PASSWORD_HTML'],
+        ])->validate();
 
-            if (!$user) {
-                throw ValidationException::withMessages([
-                    'username' => ['User không tồn tại trong hệ thống.'],
-                ]);
-            }
-
-            // Kiểm tra mật khẩu đúng không
-            if (!Hash::check($validated['password'], $user->PasswordHash)) {
-                throw ValidationException::withMessages([
-                    'password' => ['Mật khẩu không chính xác.'],
-                ]);
-            }
-
-            Auth::login($user);
-
-            // Tạo token Passport
-            $token = $user->createToken('auth_token')->accessToken;
-            $user_role = User::find($user->UserId);
-
-            $roles = $user_role->roles;
-
-            // Chỉ lấy RoleName
-            $roleNames = $roles->pluck('RoleName');
-            // Tạo mảng user mới giữ những field bạn muốn + roles đầy đủ
-            $userData = [
-                'full_name' => $user->FullName,
-                'email' => $user->Email,
-                'username' => $user->Username,
-                'must_change_password' => $user->MustChangePassword,
-                'is_active' => $user->IsActive,
-                'roles' => $roleNames
-            ];
-
-            return [
-                'success' => true,
-                'message' => 'Đăng nhập thành công.',
-                'user' => $userData,
-                'token' => $token,
-            ];
-        } catch (\Exception $e) {
-            return [
-                'success' => false,
-                'message' => "Đã xảy ra lỗi ở phía server. Vui lòng đăng nhập lại",
-            ];
+        // Kiểm tra user
+        $user = User::where('Username', $validated['username'])->first();
+        if (!$user) {
+            $msg = AuthMessages::AUTH['USER_NOT_FOUND'];
+            throw new AppErrors($msg['message'], $msg['status'], $msg['code']);
         }
+
+        // Kiểm tra mật khẩu
+        if (!Hash::check($validated['password'], $user->PasswordHash)) {
+            $msg = AuthMessages::AUTH['WRONG_PASSWORD'];
+            throw new AppErrors($msg['message'], $msg['status'], $msg['code']);
+        }
+
+        // Kiểm tra kích hoạt
+        if (!$user->IsActive) {
+            $msg = AuthMessages::AUTH['ACCOUNT_INACTIVE'];
+            throw new AppErrors($msg['message'], $msg['status'], $msg['code']);
+        }
+
+        // Đăng nhập thành công
+        Auth::login($user);
+        $token = $user->createToken('auth_token')->accessToken;
+
+        $userData = [
+            'full_name' => $user->FullName,
+            'email' => $user->Email,
+            'username' => $user->Username,
+            'must_change_password' => $user->MustChangePassword,
+            'is_active' => $user->IsActive,
+            'roles' => $user->roles()->pluck('RoleName'),
+        ];
+
+        // Trả dữ liệu thành công, middleware chỉ xử lý lỗi
+        return [
+            'user' => $userData,
+            'token' => $token,
+        ];
     }
+
 
 
     /**

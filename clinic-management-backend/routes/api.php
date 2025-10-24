@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\API\ReportRevenueController;
+use App\Http\Controllers\API\ScheduleController;
 use Dba\Connection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -46,6 +47,12 @@ Route::post('/suppliers', [SuppliersController::class, 'store']);
 Route::put('/suppliers/{id}', [SuppliersController::class, 'update']);
 Route::delete('/suppliers/{id}', [SuppliersController::class, 'destroy']);
 Route::get('/suppliers/{id}', [SuppliersController::class, 'show']);
+
+Route::get('/schedules', [ScheduleController::class, 'index']);
+Route::post('/schedules', [ScheduleController::class, 'createSchedule']);
+Route::put('/schedules/{scheduleId}', [ScheduleController::class, 'updateSchedule']);
+Route::delete('/schedules/{scheduleId}', [ScheduleController::class, 'deleteSchedule']);
+
 
 
 Route::post('/auth/login', [AuthController::class, 'login']);
