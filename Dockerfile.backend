@@ -14,6 +14,13 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd sodium
 
+# Cài Xdebug cho PHP
+RUN pecl install xdebug \
+    && docker-php-ext-enable xdebug
+
+# Copy file cấu hình Xdebug
+COPY ./xdebug.ini /usr/local/etc/php/conf.d/xdebug.ini
+
 # Cài Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 ENV COMPOSER_ALLOW_SUPERUSER=1
