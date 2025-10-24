@@ -29,13 +29,13 @@ class StaffSchedule extends Model
 {
 	protected $table = 'StaffSchedules';
 	protected $primaryKey = 'ScheduleId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [
 		'ScheduleId' => 'int',
 		'StaffId' => 'int',
-		'WorkDate' => 'datetime',
+		'WorkDate' => 'date',
 		'StartTime' => 'string',
 		'EndTime' => 'string',
 		'IsAvailable' => 'bool'
