@@ -4,66 +4,64 @@ namespace App\Services;
 
 use App\Models\MedicalStaff;
 use App\Models\StaffSchedule;
-use App\Models\User;
 use Carbon\Carbon;
-use Exception;
-use GuzzleHttp\Promise\Create;
-use GuzzleHttp\Psr7\Request;
-use Illuminate\Container\Attributes\Log;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Log;
 
 class ScheduleService
 {
-    public function index()
+    public function index(): array
     {
         try {
-            $query = StaffSchedule::with(['medical_staff.user.roles'])->orderBy('ScheduleId')->get()->map(function ($schedule) {
-                $user = $schedule->medical_staff?->User;
-                return [
-                    'ScheduleId' => $schedule->ScheduleId,
-                    'StaffId' => $schedule->StaffId,
-                    'StaffName' => $user?->FullName ?? '(Không xác định)',
-                    'Role' => $user?->roles?->first()?->RoleName,
-                    'WorkDate' => $schedule->WorkDate->format('Y-m-d'),
-                    'StartTime' => $schedule->StartTime,
-                    'EndTime' => $schedule->EndTime,
-                    'IsAvailable' => $schedule->IsAvailable,
-                ];
-            });
-            //
-            $schedules = $query;
+            $schedules = StaffSchedule::with(['medical_staff.user.roles'])
+                ->orderBy('ScheduleId')
+                ->get()
+                ->map(function ($schedule) {
+                    $user = $schedule->medical_staff?->user;
+                    return [
+                        'ScheduleId' => $schedule->ScheduleId,
+                        'StaffId' => $schedule->StaffId,
+                        'StaffName' => $user?->FullName ?? '(Không xác định)',
+                        'Role' => $user?->roles?->first()?->RoleName,
+                        'WorkDate' => $schedule->WorkDate->format('Y-m-d'),
+                        'StartTime' => $schedule->StartTime,
+                        'EndTime' => $schedule->EndTime,
+                        'IsAvailable' => $schedule->IsAvailable,
+                    ];
+                });
+
             $totalItems = $schedules->count();
-            //
+
             $responseData = [
                 'TotalItems' => $totalItems,
                 'Page' => 0,
-                'PegeSize' => 0,
+                'PageSize' => 0,
                 'Items' => $schedules,
-
             ];
-            return response()->json([
+
+            return [
                 'data' => $responseData,
-                'status' => 'success',
-                'message' => 'Lấy lịch làm việc thành công'
-            ], 200);
+                'status' => 'Success',
+                'message' => 'Lấy lịch làm việc thành công.'
+            ];
         } catch (\Exception $ex) {
-            return response()->json([
+            Log::error('Lỗi khi lấy danh sách lịch: ' . $ex->getMessage());
+            return [
                 'data' => null,
-                'status' => 'error',
-                'message' => 'An error occurred while processing your request: ' . $ex->getMessage()
-            ], 500);
+                'status' => 'Error',
+                'message' => 'Đã xảy ra lỗi khi lấy danh sách lịch: ' . $ex->getMessage()
+            ];
         }
     }
-    public function createSchedule(array $data):array
+
+    public function createSchedule(array $data): array
     {
         try {
             $workDate = Carbon::parse($data['WorkDate']);
             $startTime = Carbon::parse($data['StartTime'])->toTimeString();
             $endTime = Carbon::parse($data['EndTime'])->toTimeString();
 
+            Log::info('Input data', $data);
             if ($startTime >= $endTime) {
                 return [
                     'data' => null,
@@ -72,20 +70,15 @@ class ScheduleService
                 ];
             }
 
-            // Check if staff is not a patient
-            $isNotPatient = MedicalStaff::where('StaffId', $data['StaffId'])
-                ->where('StaffType', '!=', 'Patient')
-                ->exists();
-
-            if (!$isNotPatient) {
+            $staffExists = MedicalStaff::where('StaffId', $data['StaffId'])->exists();
+            if (!$staffExists) {
                 return [
                     'data' => null,
                     'status' => 'BadRequest',
-                    'message' => 'StaffId là bệnh nhân, không thể thêm lịch.'
+                    'message' => 'StaffId không tồn tại trong danh sách nhân viên y tế.'
                 ];
             }
 
-            // Check for overlapping schedules
             $hasOverlappingSchedule = StaffSchedule::where('StaffId', $data['StaffId'])
                 ->where('WorkDate', $workDate->toDateString())
                 ->where(function ($query) use ($startTime, $endTime) {
@@ -106,7 +99,6 @@ class ScheduleService
                 ];
             }
 
-            // Create schedule
             DB::beginTransaction();
 
             $schedule = StaffSchedule::create([
@@ -131,10 +123,137 @@ class ScheduleService
                 'message' => 'Tạo lịch thành công.'
             ];
         } catch (\Exception $ex) {
+            DB::rollBack();
+            Log::error('Lỗi khi tạo lịch: ' . $ex->getMessage());
             return [
                 'data' => null,
                 'status' => 'Error',
                 'message' => 'Đã xảy ra lỗi khi tạo lịch: ' . $ex->getMessage()
+            ];
+        }
+    }
+
+    public function updateSchedule(int $scheduleId, array $data): array
+    {
+        try {
+            $workDate = Carbon::parse($data['WorkDate']);
+            $startTime = Carbon::parse($data['StartTime'])->toTimeString();
+            $endTime = Carbon::parse($data['EndTime'])->toTimeString();
+
+            if ($startTime >= $endTime) {
+                return [
+                    'data' => null,
+                    'status' => 'BadRequest',
+                    'message' => 'Giờ bắt đầu phải trước giờ kết thúc.'
+                ];
+            }
+
+            $schedule = StaffSchedule::find($scheduleId);
+            if (!$schedule) {
+                return [
+                    'data' => null,
+                    'status' => 'NotFound',
+                    'message' => 'Không tìm thấy lịch.'
+                ];
+            }
+
+            if ($schedule->WorkDate->toDateString() !== $workDate->toDateString()) {
+                return [
+                    'data' => null,
+                    'status' => 'BadRequest',
+                    'message' => 'Chỉ có thể cập nhật lịch trong cùng ngày.'
+                ];
+            }
+
+            $staffExists = MedicalStaff::where('StaffId', $data['StaffId'])->exists();
+            if (!$staffExists) {
+                return [
+                    'data' => null,
+                    'status' => 'BadRequest',
+                    'message' => 'StaffId không tồn tại trong danh sách nhân viên y tế.'
+                ];
+            }
+
+
+            $hasOverlappingSchedule = StaffSchedule::where('StaffId', $schedule->StaffId)
+                ->where('ScheduleId', '!=', $scheduleId)
+                ->where('WorkDate', $workDate->toDateString())
+                ->where(function ($query) use ($startTime, $endTime) {
+                    $query->whereBetween('StartTime', [$startTime, $endTime])
+                        ->orWhereBetween('EndTime', [$startTime, $endTime])
+                        ->orWhere(function ($q) use ($startTime, $endTime) {
+                            $q->where('StartTime', '<=', $startTime)
+                                ->where('EndTime', '>=', $endTime);
+                        });
+                })
+                ->exists();
+
+            if ($hasOverlappingSchedule) {
+                return [
+                    'data' => null,
+                    'status' => 'BadRequest',
+                    'message' => 'Lịch mới trùng với lịch hiện có.'
+                ];
+            }
+
+            DB::beginTransaction();
+
+            $schedule->update([
+                'WorkDate' => $workDate->toDateString(),
+                'StartTime' => $startTime,
+                'EndTime' => $endTime,
+                'IsAvailable' => $data['IsAvailable'],
+            ]);
+
+            DB::commit();
+
+            return [
+                'data' => [
+                    'WorkDate' => $schedule->WorkDate,
+                    'StartTime' => $schedule->StartTime,
+                    'EndTime' => $schedule->EndTime,
+                    'IsAvailable' => $schedule->IsAvailable,
+                ],
+                'status' => 'Success',
+                'message' => 'Cập nhật lịch thành công.'
+            ];
+        } catch (\Exception $ex) {
+            Log::error("Lỗi khi cập nhật lịch {$scheduleId}: " . $ex->getMessage());
+            return [
+                'data' => null,
+                'status' => 'Error',
+                'message' => 'Đã xảy ra lỗi khi cập nhật lịch: ' . $ex->getMessage()
+            ];
+        }
+    }
+
+    public function deleteSchedule(int $scheduleId): array
+    {
+        try {
+            $schedule = StaffSchedule::find($scheduleId);
+            if (!$schedule) {
+                return [
+                    'data' => false,
+                    'status' => 'NotFound',
+                    'message' => 'Không tìm thấy lịch.'
+                ];
+            }
+
+            DB::beginTransaction();
+            $schedule->delete();
+            DB::commit();
+
+            return [
+                'data' => true,
+                'status' => 'Success',
+                'message' => 'Xóa lịch thành công.'
+            ];
+        } catch (\Exception $ex) {
+            Log::error('Lỗi khi xóa lịch: ' . $ex->getMessage());
+            return [
+                'data' => false,
+                'status' => 'Error',
+                'message' => 'Đã xảy ra lỗi khi xóa lịch: ' . $ex->getMessage()
             ];
         }
     }
