@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
@@ -9,7 +10,17 @@ use Illuminate\Support\Facades\Validator;
 class MedicinesController extends Controller
 {
 
-    public function all() {
+    public function test_simple_addition()
+    {
+        $a = 5; // Đặt breakpoint ở đây
+        $b = 10;
+        $sum = $a + $b;
+
+        $this->assertEquals(15, $sum); // Kiểm tra kết quả
+    }
+
+    public function all()
+    {
         $medicines = Medicine::all();
         return response()->json($medicines);
     }
@@ -118,15 +129,16 @@ class MedicinesController extends Controller
         ]);
     }
     //check tồn kho
-    public function checkLowStock(Request $request){
-        $threshold =$request->get('threshold', 100);
+    public function checkLowStock(Request $request)
+    {
+        $threshold = $request->get('threshold', 100);
 
-        $lowStock=Medicine::where('StockQuantity','<',$threshold)->orderBy('StockQuantity','asc')->get(['MedicineId','MedicineName','StockQuantity','Unit']);
+        $lowStock = Medicine::where('StockQuantity', '<', $threshold)->orderBy('StockQuantity', 'asc')->get(['MedicineId', 'MedicineName', 'StockQuantity', 'Unit']);
 
         return response()->json([
-            'message'=> 'Danh sách thuốc tồn kho thấp',
-            'threshold'=> $threshold,
-            'data'=> $lowStock
+            'message' => 'Danh sách thuốc tồn kho thấp',
+            'threshold' => $threshold,
+            'data' => $lowStock
         ]);
     }
 }
