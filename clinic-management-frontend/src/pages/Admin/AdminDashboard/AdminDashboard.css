@@ -1,266 +1,263 @@
-
-.dashboard-container {
-    padding: 2rem;
-    font-family: 'Segoe UI', sans-serif;
-    background: linear-gradient(135deg, #f8f9fb 0%, #eef1f6 100%);
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    box-sizing: border-box;
+/* ----- BIẾN MÀU VÀ FONT (GIỮ NGUYÊN) ----- */
+:root {
+    --primary-color: #3B71CA;
+    --primary-hover: #3260AC;
+    --sky-color: #0ea5e9;
+    --green-color: #22c55e;
+    --orange-color: #f97316;
+    --danger-color: #ef4444;
+    --background-color: #F8F9FA;
+    --card-background: #FFFFFF;
+    --text-primary: #1d2d3d;
+    --text-secondary: #34495e;
+    --text-muted: #6c757d;
+    --border-color: #EAECEF;
+    --font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+    --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    --border-radius: 8px;
 }
 
-/* 🏷️ Tiêu đề */
-.dashboard-header {
+/* ----- LAYOUT CHUNG (ĐÃ SỬA LỖI) ----- */
+.dashboard-layout {
+    display: flex;
+    background-color: var(--background-color);
+    font-family: var(--font-family);
+}
+
+.main-content {
+    flex-grow: 1;
+    padding: 24px;
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* ----- HEADER VÀ BỘ LỌC NGÀY ----- */
+.page-header {
+    flex-shrink: 0;
+    /* Quan trọng: Không cho co lại */
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
 }
 
-.dashboard-header h1 {
-    font-size: 1.8rem;
+.page-header h1 {
+    font-size: 24px;
     font-weight: 600;
-    color: #2d3436;
+    color: var(--text-primary);
+    margin: 0;
 }
 
-/* 📅 Bộ lọc ngày */
-.date-range-picker {
+.date-filter {
     display: flex;
     align-items: center;
-    gap: 22px;
+    gap: 12px;
+}
+
+.date-filter label {
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.date-filter input {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 8px 12px;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
     justify-content: center;
-}
-
-.date-range-picker label {
-    font-weight: 500;
-    color: #495057;
-    white-space: nowrap;
-}
-
-.date-range-picker input {
-    border: 1px solid #ced4da;
-    border-radius: 6px;
-    padding: 6px 10px;
-    outline: none;
-    transition: 0.3s;
-}
-
-.date-range-picker input:hover,
-.date-range-picker input:focus {
-    border-color: #007bff;
-    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
-}
-
-.date-range-picker button {
-    background: #007bff;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: var(--border-radius);
     border: none;
-    color: white;
-    padding: 6px 14px;
-    border-radius: 6px;
     cursor: pointer;
-    transition: 0.25s;
+    transition: all 0.2s ease;
 }
 
-.date-range-picker button:hover {
-    background: #0056b3;
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
 }
 
-/* 📊 Các thẻ thống kê */
-.stat-cards {
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+}
+
+/* ----- CÁC THẺ THỐNG KÊ (STAT CARDS) ----- */
+.stat-cards-grid {
+    flex-shrink: 0;
+    /* <<<< ĐÂY LÀ PHẦN SỬA LỖI QUAN TRỌNG */
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2rem;
+    gap: 24px;
 }
 
 .stat-card {
+    background-color: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 20px;
     display: flex;
     align-items: center;
-    gap: 1rem;
-    color: #fff;
-    padding: 1.5rem 1.8rem;
-    border-radius: 1rem;
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.12);
-    transition: all 0.3s ease;
-    transform: translateY(0);
+    gap: 16px;
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .stat-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+    transform: translateY(-4px);
+    box-shadow: var(--box-shadow);
 }
 
-.stat-card i {
-    font-size: 2.3rem;
-    opacity: 0.9;
+.stat-card__icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #fff;
+    /* Icon sẽ có màu trắng */
+    font-size: 28px;
+    /* Kích thước icon */
 }
 
-.stat-card h5 {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 500;
-    opacity: 0.9;
+.stat-card--blue {
+    background-color: var(--primary-color);
 }
 
-.stat-card p {
-    font-size: 1.3rem;
-    font-weight: bold;
-    margin: 0;
+.stat-card--sky {
+    background-color: var(--sky-color);
 }
 
-.bg-primary {
-    background: linear-gradient(45deg, #007bff, #00a2ff);
+.stat-card--green {
+    background-color: var(--green-color);
 }
 
-.bg-success {
-    background: linear-gradient(45deg, #28a745, #33c37e);
+.stat-card--orange {
+    background-color: var(--orange-color);
 }
 
-.bg-danger {
-    background: linear-gradient(45deg, #dc3545, #ff5c75);
+.stat-card__info {
+    display: flex;
+    flex-direction: column;
 }
 
-.bg-info {
-    background: linear-gradient(45deg, #17a2b8, #20c997);
+.stat-card__info .label {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
 }
 
-/* 🧾 Hai khối chính: biểu đồ & cảnh báo tồn kho */
-.dashboard-row {
-    display: grid;
-    grid-template-columns: 1.7fr 1fr;
-    gap: 1.5rem;
+.stat-card__info .value {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* ----- KHUNG LƯỚI CHÍNH (BIỂU ĐỒ & BẢNG) ----- */
+.dashboard-grid {
     flex-grow: 1;
+    /* Quan trọng: Lấp đầy không gian còn lại */
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 24px;
     min-height: 0;
+    /* Fix lỗi overflow trên flex-child */
 }
 
-/* 📈 Card chung */
-.card {
-    background: #fff;
-    border-radius: 1rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    overflow: hidden;
-    transition: 0.3s;
-}
-
-.card:hover {
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+/* ----- CARD STYLE CHUNG ----- */
+.card-style {
+    background-color: var(--card-background);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    /* Quan trọng: Đảm bảo card có thể co giãn đúng cách */
 }
 
 .card-header {
-    background: #f8f9fa;
-    border-bottom: 1px solid #e9ecef;
-    padding: 1rem 1.5rem;
+    flex-shrink: 0;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .card-header h3 {
-    font-size: 1.2rem;
     margin: 0;
-    color: #212529;
+    font-size: 16px;
     font-weight: 600;
+    color: var(--text-primary);
 }
 
-.card-body {
-    padding: 1.5rem;
-}
-
-.chart-container {
-    /* ❌ Loại bỏ cách tính toán cũ */
-    /* height: calc(100vh - 35%); */
-
-    display: flex;
-    flex-direction: column;
-    /* Xếp header và canvas theo chiều dọc */
-    /* 💡 Đảm bảo nó là 1 card */
-    background: #fff;
-    border-radius: 1rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    overflow: hidden;
-}
-
-.chart-container canvas {
-    /* 💡 Biểu đồ chiếm hết không gian còn lại */
+.card-body,
+.table-responsive {
     flex-grow: 1;
-}
-
-.inventory-container {
-    /* Kế thừa .card */
-    display: flex;
-    flex-direction: column;
-}
-
-.inventory-container .card-body {
-    /* ❌ Loại bỏ cách tính toán cũ */
-    /* height: 44vh; */
-
-    /* 💡 Phần thân bảng chiếm hết không gian còn lại */
-    flex-grow: 1;
+    min-height: 0;
     overflow-y: auto;
 }
 
-/* 💊 Bảng tồn kho */
+.chart-container .card-body {
+    padding: 20px;
+}
 
-
-.table {
+/* ----- BẢNG TỒN KHO ----- */
+.clinic-table {
     width: 100%;
     border-collapse: collapse;
-    border-spacing: 0;
 }
 
-.table thead {
+.clinic-table th,
+.clinic-table td {
+    padding: 14px 16px;
+    text-align: left;
+    vertical-align: middle;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.clinic-table thead {
     position: sticky;
     top: 0;
-    /* 👈 cố định header ở đầu container */
-    z-index: 2;
-    /* đảm bảo header nằm trên phần thân */
-    background-color: #f5f7fa;
-    /* màu nền header */
+    z-index: 10;
+    background-color: var(--card-background);
 }
 
-.table thead th {
+.clinic-table th {
     font-weight: 600;
-    color: #333;
+    font-size: 13px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.clinic-table tbody tr {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.clinic-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+.no-data {
     text-align: center;
-    padding: 12px 8px;
-    font-size: 15px;
-    border-bottom: 2px solid #e3e6ea;
-
-    border-top: none;
-    border-bottom: 1px solid #eee;
-    /* chỉ giữ gạch ngang */
-    border-left: none;
-    border-right: none;
+    padding: 40px;
+    color: var(--text-muted);
 }
 
-.table tbody td {
-    padding: 12px 10px;
-    text-align: center;
-    vertical-align: middle;
-    color: #555;
-    border-bottom: 1px solid #eee;
-    font-size: 14px;
-
-    border-top: none;
-    border-bottom: 1px solid #eee;
-    /* chỉ giữ gạch ngang */
-    border-left: none;
-    border-right: none;
+.text-end {
+    text-align: right;
 }
 
-/* Hover dòng */
-.table tbody tr:hover {
-    background-color: #dfe0e1;
-    transition: background 0.2s ease;
-    cursor: pointer;
+.fw-bold {
+    font-weight: 700;
 }
 
-
-/* ✨ Loại bỏ gạch dọc ở mép ngoài */
-.table th:first-child,
-.table td:first-child {
-    border-left: none;
-}
-
-.table th:last-child,
-.table td:last-child {
-    border-right: none;
+.text-danger {
+    color: var(--danger-color);
 }
