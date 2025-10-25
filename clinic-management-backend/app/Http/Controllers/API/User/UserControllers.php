@@ -12,14 +12,14 @@ use Illuminate\Support\Facades\Validator;
 
 class UserControllers extends Controller
 {
-    // ✅ NÂNG CẤP: Lấy danh sách người dùng với tìm kiếm, lọc và phân trang
+    //ấy danh sách người dùng với tìm kiếm, lọc và phân trang
     public function index(Request $request)
     {
         $perPage = $request->input('per_page', 5);
 
         $query = User::with('roles')->orderBy('UserId', 'asc');
 
-        // Tìm kiếm
+        //Tìm kiếm
         if ($request->has('search') && $request->input('search') != '') {
             $searchTerm = $request->input('search');
             $query->where(function ($q) use ($searchTerm) {
@@ -30,12 +30,12 @@ class UserControllers extends Controller
             });
         }
 
-        // Lọc theo giới tính
+        //Lọc theo giới tính
         if ($request->has('gender') && $request->input('gender') != '') {
             $query->where('Gender', $request->input('gender'));
         }
 
-        // Lọc theo vai trò
+        //Lọc theo vai trò
         if ($request->has('role') && $request->input('role') != '') {
             $roleName = $request->input('role');
             $query->whereHas('roles', function ($q) use ($roleName) {
@@ -43,7 +43,7 @@ class UserControllers extends Controller
             });
         }
 
-        // Lọc theo trạng thái
+        //Lọc theo trạng thái
         if ($request->has('status') && $request->input('status') != '') {
             $status = $request->input('status') == '1' ? true : false;
             $query->where('IsActive', $status);
@@ -54,14 +54,14 @@ class UserControllers extends Controller
         return response()->json($users);
     }
 
-    // ✅ Lấy danh sách tất cả vai trò
+    //Lấy danh sách tất cả vai trò
     public function roles()
     {
         $roles = Role::where('RoleName', '!=', 'Admin')->orderBy('RoleName', 'asc')->get();
         return response()->json($roles);
     }
 
-    // ✅ Tạo mới người dùng
+    //Tạo mới người dùng
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -109,7 +109,7 @@ class UserControllers extends Controller
         }
     }
 
-    // ✅ Cập nhật người dùng
+    //Cập nhật người dùng
     public function update(Request $request, $id)
     {
         $user = User::with('roles')->findOrFail($id);
@@ -148,7 +148,7 @@ class UserControllers extends Controller
         }
     }
 
-    // ✅ Xóa người dùng
+    //Xóa người dùng
     public function destroy($id)
     {
         $user = User::with('roles')->findOrFail($id);
@@ -169,7 +169,7 @@ class UserControllers extends Controller
         }
     }
 
-    // ✅ Kích hoạt / vô hiệu hóa người dùng
+    //Kích hoạt / vô hiệu hóa người dùng
     public function toggleStatus($id)
     {
         $user = User::with('roles')->findOrFail($id);
