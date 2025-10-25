@@ -1,6 +1,6 @@
 import React from "react";
 import { Col, Card, Table, Button } from "react-bootstrap";
-import { printDocument } from "../../../utils/printDocument"; // Adjust path as needed
+import { printDocument } from "../../../utils/PrintDocument"; // Adjust path as needed
 
 const PrescriptionSection = ({
   prescriptionRows,
@@ -12,11 +12,28 @@ const PrescriptionSection = ({
   selectedTodayPatient,
   symptoms,
   diagnosis,
-  services, // Add these if not already in props
+  services,
+  setToast, // Add setToast to props
 }) => {
   const handlePrint = () => {
-    if (!selectedTodayPatient || prescriptionRows.length === 0) return;
-    printDocument('prescription', selectedTodayPatient, prescriptionRows, symptoms, diagnosis, services);
+    if (!selectedTodayPatient || prescriptionRows.length === 0) {
+      setToast({
+        show: true,
+        message: "⚠️ Vui lòng chọn bệnh nhân và thêm ít nhất một đơn thuốc trước khi in.",
+        variant: "warning",
+      });
+      return;
+    }
+    try {
+      printDocument('prescription', selectedTodayPatient, prescriptionRows, symptoms, diagnosis, services);
+    } catch (error) {
+      console.error('Error in handlePrint:', error);
+      setToast({
+        show: true,
+        message: `Lỗi khi xuất toa thuốc: ${error.message}`,
+        variant: "danger",
+      });
+    }
   };
 
   return (

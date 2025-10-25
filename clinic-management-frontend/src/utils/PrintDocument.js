@@ -1,5 +1,8 @@
 export const printDocument = (type, patientData, prescriptionRows, symptoms, diagnosis, services) => {
-  if (!patientData || (type === 'prescription' && prescriptionRows.length === 0) || (type === 'service' && !services) || (type === 'invoice' && !prescriptionRows && !services)) return;
+  if (!patientData || (type === 'prescription' && prescriptionRows.length === 0) || (type === 'service' && !services) || (type === 'invoice' && !prescriptionRows && !services)) {
+    console.error('Invalid input data for printDocument:', { type, patientData, prescriptionRows, services });
+    return;
+  }
 
   // Normalize rows based on document type
   let rows = [];
@@ -44,8 +47,8 @@ export const printDocument = (type, patientData, prescriptionRows, symptoms, dia
   }
 
   const currentDate = new Date().toISOString().split('T')[0];
-  const code = '';
-  const doctor = '';
+  const code = 'PK001';
+  const doctor = 'BS. Nguyễn Văn A';
   const formattedDate = new Date(currentDate).toLocaleDateString('vi-VN');
 
   const totalSum = rows.reduce((sum, r) => sum + r.total, 0);
@@ -93,6 +96,28 @@ export const printDocument = (type, patientData, prescriptionRows, symptoms, dia
     return result.charAt(0).toUpperCase() + result.slice(1) + ' đồng';
   };
 
+  // Escape special characters to prevent HTML/JSON injection
+  const escapeHtml = (str) => {
+    if (typeof str !== 'string') return str || '';
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  };
+
+  // Sanitize rows to prevent injection
+  const sanitizedRows = rows.map(row => ({
+    id: row.id,
+    name: escapeHtml(row.name),
+    qty: row.qty,
+    dose: escapeHtml(row.dose || ''),
+    note: escapeHtml(row.note || ''),
+    unit: row.unit,
+    total: row.total
+  }));
+
   // Determine title, table headers, and footer based on type
   let title = '';
   let tableHeaders = '';
@@ -100,43 +125,68 @@ export const printDocument = (type, patientData, prescriptionRows, symptoms, dia
   let footerLeft = 'Bệnh nhân';
   let footerRight = 'Bác sĩ';
   let showDiagnosisSection = true;
+  let tableEditHeaders = '';
+  let initialTableBody = '';
 
   if (type === 'prescription') {
     title = 'TOA THUỐC';
     tableHeaders = '<th>STT</th><th>Tên thuốc</th><th>Số lượng</th><th>Liều dùng</th><th>Đơn giá</th><th>Thành tiền</th>';
-    tableRows = rows.map((row, i) => `
+    tableRows = sanitizedRows.map((row, i) => `
       <tr>
         <td>${i + 1}</td>
-        <td id="print-name-${i}">${row.name}</td>
+        <td id="print-name-${i}">${escapeHtml(row.name)}</td>
         <td id="print-qty-${i}">${row.qty}</td>
-        <td id="print-dose-${i}">${row.dose}</td>
+        <td id="print-dose-${i}">${escapeHtml(row.dose)}</td>
         <td id="print-unit-${i}">${formatNumber(row.unit)}</td>
         <td id="print-total-${i}">${formatNumber(row.total)}</td>
       </tr>
     `).join('');
+    tableEditHeaders = '<th>#</th><th>Tên thuốc</th><th>Số lượng</th><th>Liều dùng</th><th>Đơn giá (VNĐ)</th><th>Thành tiền (VNĐ)</th><th>Hành động</th>';
+    initialTableBody = sanitizedRows.length > 0 ? sanitizedRows.map((row, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td><div class="editable-field" contenteditable="true" data-field="name" data-row="${row.id}">${escapeHtml(row.name)}</div></td>
+        <td><input type="number" min="1" value="${row.qty}" data-field="qty" data-row="${row.id}"></td>
+        <td><div class="editable-field" contenteditable="true" data-field="dose" data-row="${row.id}">${escapeHtml(row.dose)}</div></td>
+        <td><input type="number" min="0" value="${row.unit}" data-field="unit" data-row="${row.id}"></td>
+        <td><input type="number" min="0" value="${row.total}" readonly data-row="${row.id}"></td>
+        <td style="text-align: center"><button class="btn danger btn-sm delete-row-btn" data-row-id="${row.id}">Xóa</button></td>
+      </tr>
+    `).join('') : '<tr><td colspan="7" style="text-align:center;">Không có dữ liệu</td></tr>';
   } else if (type === 'service') {
     title = 'PHIẾU CHỈ ĐỊNH DỊCH VỤ CẬN LÂM SÀNG';
     tableHeaders = '<th>STT</th><th>Tên dịch vụ</th><th>Ghi chú</th><th>Đơn giá</th><th>Thành tiền</th>';
-    tableRows = rows.length > 0
-      ? rows.map((row, i) => `
+    tableRows = sanitizedRows.length > 0
+      ? sanitizedRows.map((row, i) => `
           <tr>
             <td style="text-align:center;">${i + 1}</td>
-            <td id="print-name-${i}">${row.name}</td>
-            <td id="print-note-${i}">${row.note}</td>
+            <td id="print-name-${i}">${escapeHtml(row.name)}</td>
+            <td id="print-note-${i}">${escapeHtml(row.note)}</td>
             <td id="print-unit-${i}">${formatNumber(row.unit)}</td>
             <td id="print-total-${i}">${formatNumber(row.total)}</td>
           </tr>
         `).join('')
       : '<tr><td colspan="5" style="text-align:center;">Không có dịch vụ nào được chọn</td></tr>';
     footerRight = 'Bác sĩ chỉ định';
+    tableEditHeaders = '<th>#</th><th>Tên dịch vụ</th><th>Ghi chú</th><th>Đơn giá (VNĐ)</th><th>Thành tiền (VNĐ)</th><th>Hành động</th>';
+    initialTableBody = sanitizedRows.length > 0 ? sanitizedRows.map((row, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td><div class="editable-field" contenteditable="true" data-field="name" data-row="${row.id}">${escapeHtml(row.name)}</div></td>
+        <td><div class="editable-field" contenteditable="true" data-field="note" data-row="${row.id}">${escapeHtml(row.note)}</div></td>
+        <td><input type="number" min="0" value="${row.unit}" data-field="unit" data-row="${row.id}"></td>
+        <td><input type="number" min="0" value="${row.total}" readonly data-row="${row.id}"></td>
+        <td style="text-align: center"><button class="btn danger btn-sm delete-row-btn" data-row-id="${row.id}">Xóa</button></td>
+      </tr>
+    `).join('') : '<tr><td colspan="6" style="text-align:center;">Không có dữ liệu</td></tr>';
   } else if (type === 'invoice') {
     title = 'HÓA ĐƠN THANH TOÁN';
     tableHeaders = '<th>STT</th><th>Tên dịch vụ/thuốc</th><th>Số lượng</th><th>Đơn giá</th><th>Thành tiền</th>';
-    tableRows = rows.length > 0
-      ? rows.map((row, i) => `
+    tableRows = sanitizedRows.length > 0
+      ? sanitizedRows.map((row, i) => `
           <tr>
             <td style="text-align:center;">${i + 1}</td>
-            <td id="print-name-${i}">${row.name}</td>
+            <td id="print-name-${i}">${escapeHtml(row.name)}</td>
             <td id="print-qty-${i}">${row.qty}</td>
             <td id="print-unit-${i}">${formatNumber(row.unit)}</td>
             <td id="print-total-${i}">${formatNumber(row.total)}</td>
@@ -145,444 +195,996 @@ export const printDocument = (type, patientData, prescriptionRows, symptoms, dia
       : '<tr><td colspan="5" style="text-align:center;">Không có dữ liệu</td></tr>';
     footerRight = 'Người lập hóa đơn';
     showDiagnosisSection = false;
+    tableEditHeaders = '<th>#</th><th>Tên dịch vụ/thuốc</th><th>Số lượng</th><th>Đơn giá (VNĐ)</th><th>Thành tiền (VNĐ)</th><th>Hành động</th>';
+    initialTableBody = sanitizedRows.length > 0 ? sanitizedRows.map((row, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td><div class="editable-field" contenteditable="true" data-field="name" data-row="${row.id}">${escapeHtml(row.name)}</div></td>
+        <td><input type="number" min="1" value="${row.qty}" data-field="qty" data-row="${row.id}"></td>
+        <td><input type="number" min="0" value="${row.unit}" data-field="unit" data-row="${row.id}"></td>
+        <td><input type="number" min="0" value="${row.total}" readonly data-row="${row.id}"></td>
+        <td style="text-align: center"><button class="btn danger btn-sm delete-row-btn" data-row-id="${row.id}">Xóa</button></td>
+      </tr>
+    `).join('') : '<tr><td colspan="6" style="text-align:center;">Không có dữ liệu</td></tr>';
   }
 
-  const html = '<!DOCTYPE html>' +
-    '<html lang="vi">' +
-    '<head>' +
-      '<meta charset="UTF-8">' +
-      '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
-      '<title>Chỉnh sửa & In ' + title + '</title>' +
-      '<style>' +
-        'html, body { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; }' +
-        ':root { --page-width: 210mm; --page-height: 297mm; --mm: 1mm; --font-family: "Times New Roman", serif; --font-size: 12px; --global-bold: normal; --global-italic: normal; --global-underline: none; }' +
-        'body { font-family: var(--font-family); font-size: var(--font-size); font-weight: var(--global-bold); font-style: var(--global-italic); text-decoration: var(--global-underline); color: #000; background: #fff; line-height: 1.3; box-sizing: border-box; }' +
-        '.app { display: flex; gap: 0; align-items: flex-start; max-width: 100vw; margin: 0; padding: 0; background: #fff; box-sizing: border-box; height: 100vh; }' +
-        '.controls { width: 440px; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1); overflow-y: auto; max-height: 100vh; }' +
-        '.controls h3 { margin: 0 0 16px; font-size: 20px; color: #333; font-weight: 600; }' +
-        '.style-section { border: 1px solid #e0e0e0; padding: 10px; border-radius: 6px; margin-bottom: 10px; background: #f9f9f9; }' +
-        '.style-section h4 { margin: 0 0 10px; font-size: 16px; color: #333; }' +
-        '.toolbar { display: flex; gap: 5px; margin-bottom: 5px; padding: 5px; background: #f0f0f0; border-radius: 4px; }' +
-        '.toolbar button { padding: 4px 8px; border: 1px solid #ccc; background: #fff; cursor: pointer; border-radius: 3px; font-size: 12px; }' +
-        '.toolbar button:hover { background: #e0e0e0; }' +
-        '.toolbar button.active { background: #0b63d6; color: #fff; }' +
-        '.editable-field { min-height: 40px; padding: 8px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fafafa; font-family: var(--font-family); font-size: var(--font-size); line-height: 1.4; }' +
-        '.editable-field:focus { border-color: #0b63d6; outline: none; background: #fff; }' +
-        'label { display: block; font-size: 14px; margin: 10px 0 5px; color: #444; font-weight: 500; }' +
-        'input[type="text"], input[type="number"], input[type="date"], select { width: 100%; padding: 10px; box-sizing: border-box; font-size: 14px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fafafa; transition: border-color 0.2s; }' +
-        'input:focus, select:focus { border-color: #0b63d6; outline: none; }' +
-        '.row { display: flex; gap: 12px; }' +
-        '.row > * { flex: 1; }' +
-        '.btn { display: inline-block; padding: 10px 16px; margin: 8px 8px 0 0; border-radius: 6px; cursor: pointer; border: 1px solid #888; background: #fff; font-size: 14px; transition: background-color 0.2s, color 0.2s; }' +
-        '.btn.primary { background: #0b63d6; color: #fff; border-color: #0b63d6; }' +
-        '.btn.primary:hover { background: #094bb0; }' +
-        '.btn.danger { background: #f44336; color: #fff; border-color: #f44336; }' +
-        '.btn.danger:hover { background: #d32f2f; }' +
-        '.btn.apply { background: #4caf50; color: #fff; border-color: #4caf50; }' +
-        '.btn.apply:hover { background: #45a049; }' +
-        '.table-edit { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }' +
-        '.table-edit th, .table-edit td { border: 1px solid #e0e0e0; padding: 8px; text-align: left; }' +
-        '.table-edit th { background: #f7f7f7; text-align: center; font-weight: 600; color: #333; }' +
-        '.table-edit .editable-field { min-height: 30px; padding: 4px; border: none; background: transparent; width: 100%; }' +
-        '.preview-wrap { flex: 1; height: 100vh; }' +
-        '.page { width: var(--page-width); height: var(--page-height); margin: 0 auto; background: #fff; box-shadow: none; padding: 0; box-sizing: border-box; position: relative; overflow: hidden; page-break-after: avoid; }' +
-        '@page { size: A4 portrait; margin: 0mm; orientation: portrait; max-height: 100%; max-width: 100%; }' +
-        '.print-container { border: 1.5px solid #333; height: 100%; box-sizing: border-box; padding: 5px; position: relative; z-index: 1; page-break-inside: avoid; font-family: var(--font-family); font-size: var(--font-size); font-weight: var(--global-bold); font-style: var(--global-italic); text-decoration: var(--global-underline); line-height: 1.2; }' +
-        '.watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 50px; color: rgba(0, 0, 0, 0.1); font-weight: 700; text-transform: uppercase; pointer-events: none; z-index: 0; white-space: nowrap; }' +
-        '.header { text-align: center; border-bottom: 1.5px solid #333; padding-bottom: 6px; margin-bottom: 6px; }' +
-        '.header h2 { margin: 0; font-size: 1.5em; text-transform: uppercase; color: #222; font-weight: 700; }' +
-        '.header p { margin: 2px 0; font-size: 0.9em; color: #444; }' +
-        '.title { text-align: center; margin: 8px 0 12px; }' +
-        '.title h3 { margin: 0; font-size: 1.3em; font-weight: 600; color: #222; }' +
-        '.info { display: flex; justify-content: space-between; font-size: 0.9em; margin-bottom: 8px; gap: 8px; }' +
-        '.info div p { margin: 2px 0; color: #333; }' +
-        '.info div p strong { color: #222; }' +
-        '.diagnosis { font-size: 0.9em; margin-bottom: 8px; }' +
-        '.diagnosis p { margin: 2px 0; }' +
-        '.diagnosis p strong { color: #222; }' +
-        'table.print-table { width: 100%; border-collapse: collapse; font-size: 0.9em; margin-bottom: 12px; }' +
-        'table.print-table th, table.print-table td { border: 1px solid #333; padding: 4px 6px; text-align: left; }' +
-        'table.print-table th { background: #f0f0f0; text-align: center; font-weight: 600; color: #222; }' +
-        'table.print-table td { color: #333; }' +
-        'table.print-table .total-row td { font-weight: 600; background: #f7f7f7; }' +
-        '.total-text { font-size: 0.9em; margin-bottom: 12px; color: #222; }' +
-        '.total-text strong { color: #222; }' +
-        '.footer { display: flex; justify-content: space-between; margin-top: 20px; font-size: 0.9em; color: #333; }' +
-        '.footer div { width: 45%; text-align: center; }' +
-        '.signature { margin-top: 40px; font-style: italic; border-top: 1px solid #333; padding-top: 6px; width: 200px; margin-left: auto; margin-right: auto; }' +
-        '@media print {' +
-          'html, body { height: 100% !important; width: 100% !important; overflow: hidden !important; }' +
-          'body { background: #fff !important; margin: 0 !important; padding: 0 !important; line-height: 1.15 !important; }' +
-          '.app { gap: 0 !important; padding: 0 !important; background: #fff !important; height: 100vh !important; }' +
-          '.controls { display: none !important; }' +
-          '.page { box-shadow: none !important; margin: 0 !important; padding: 0 !important; width: var(--page-width) !important; height: var(--page-height) !important; overflow: hidden !important; }' +
-          '@page { size: A4 portrait !important; margin: 0mm !important; orientation: portrait !important; }' +
-          '.print-container { border: none !important; padding: 3mm !important; height: 100% !important; box-sizing: border-box !important; page-break-inside: avoid !important; }' +
-          '.watermark { color: rgba(0, 0, 0, 0.05) !important; }' +
-          'table.print-table { font-size: 0.85em !important; margin-bottom: 8px !important; }' +
-          'table.print-table th, table.print-table td { padding: 3px 4px !important; }' +
-          '.header { padding-bottom: 4px !important; margin-bottom: 4px !important; }' +
-          '.info { gap: 6px !important; }' +
-          '.diagnosis { margin-bottom: 6px !important; }' +
-          '.footer { margin-top: 20px !important; }' +
-          '.signature { margin-top: 30px !important; }' +
-          '.header, .info, .diagnosis, .total-text, .footer, .signature { page-break-inside: avoid !important; }' +
-          '.print-container > * { page-break-inside: avoid !important; }' +
-          'body { -webkit-print-color-adjust: exact !important; }' +
-        '}' +
-        '.btn-sm { padding: 4px 8px; font-size: 12px; }' +
-      '</style>' +
-    '</head>' +
-    '<body>' +
-      '<div class="app">' +
-        '<div class="controls">' +
-          '<h3>Chỉnh sửa phiếu / toa</h3>' +
-          '<div class="style-section">' +
-            '<h4>Thiết lập font & style toàn bộ</h4>' +
-            '<label>Font chữ</label>' +
-            '<select id="customFontFamily">' +
-              '<option value="Times New Roman">Times New Roman</option>' +
-              '<option value="Arial">Arial</option>' +
-              '<option value="Helvetica">Helvetica</option>' +
-              '<option value="Georgia">Georgia</option>' +
-              '<option value="Verdana">Verdana</option>' +
-              '<option value="Courier New">Courier New</option>' +
-            '</select>' +
-            '<label>Kích cỡ chữ (px)</label>' +
-            '<input type="number" id="customFontSize" value="12" min="8" max="24" placeholder="Nhập size (px)">' +
-            '<label>Kiểu chữ toàn bộ</label>' +
-            '<select id="globalStyle">' +
-              '<option value="normal">Bình thường</option>' +
-              '<option value="bold">Đậm</option>' +
-              '<option value="italic">Nghiêng</option>' +
-              '<option value="underline">Gạch chân</option>' +
-              '<option value="bold italic">Đậm & Nghiêng</option>' +
-              '<option value="bold underline">Đậm & Gạch chân</option>' +
-              '<option value="italic underline">Nghiêng & Gạch chân</option>' +
-              '<option value="bold italic underline">Đậm, Nghiêng & Gạch chân</option>' +
-            '</select>' +
-          '</div>' +
-          '<label>Loại tài liệu</label>' +
-          '<select id="type">' +
-            '<option value="prescription"' + (type === 'prescription' ? ' selected' : '') + '>Toa thuốc</option>' +
-            '<option value="service"' + (type === 'service' ? ' selected' : '') + '>Phiếu chỉ định dịch vụ</option>' +
-            '<option value="invoice"' + (type === 'invoice' ? ' selected' : '') + '>Hóa đơn thanh toán</option>' +
-          '</select>' +
-          '<label>Họ tên bệnh nhân</label>' +
-          '<div class="editable-field" contenteditable="true" id="patientName">' + (patientData.name || 'Nguyễn Văn A') + '</div>' +
-          '<div class="row">' +
-            '<div><label>Tuổi</label><input type="number" min="0" id="patientAge" value="' + (patientData.age || '35') + '"></div>' +
-            '<div><label>Giới tính</label><input type="text" id="patientGender" value="' + (patientData.gender || 'Nam') + '"></div>' +
-          '</div>' +
-          '<label>Địa chỉ</label>' +
-          '<div class="editable-field" contenteditable="true" id="patientAddress">' + (patientData.address || '123 Nguyễn Trãi, Quận 5, TP.HCM') + '</div>' +
-          '<label>Điện thoại</label>' +
-          '<input type="text" id="patientPhone" value="' + (patientData.phone || '0909xxxxxx') + '">' +
-          '<div class="row">' +
-            '<div><label>Mã phiếu / toa</label><input type="text" id="code" value="' + code + '"></div>' +
-            '<div><label>Ngày lập</label><input type="date" id="date" value="' + currentDate + '"></div>' +
-          '</div>' +
-          '<label>Bác sĩ</label>' +
-          '<input type="text" id="doctor" value="' + doctor + '">' +
-          (type === 'prescription' ? `
-            <label>Triệu chứng</label>
-            <div class="toolbar" data-field="symptoms">
-              <button type="button" onclick="toggleBold('symptoms')" id="bold-symptoms">B</button>
-              <button type="button" onclick="toggleItalic('symptoms')" id="italic-symptoms">I</button>
-              <button type="button" onclick="toggleUnderline('symptoms')" id="underline-symptoms">U</button>
-            </div>
-            <div id="symptoms" class="editable-field" contenteditable="true">${symptoms || 'Ho, sốt nhẹ'}</div>
-            <label>Chẩn đoán</label>
-            <div class="toolbar" data-field="diagnosis">
-              <button type="button" onclick="toggleBold('diagnosis')" id="bold-diagnosis">B</button>
-              <button type="button" onclick="toggleItalic('diagnosis')" id="italic-diagnosis">I</button>
-              <button type="button" onclick="toggleUnderline('diagnosis')" id="underline-diagnosis">U</button>
-            </div>
-            <div id="diagnosis" class="editable-field" contenteditable="true">${diagnosis || 'Viêm họng cấp'}</div>
-          ` : '') +
-          '<h4>Danh sách ' + (type === 'prescription' ? 'thuốc' : type === 'service' ? 'dịch vụ' : 'thuốc/dịch vụ') + '</h4>' +
-          '<table class="table-edit">' +
-            '<thead><tr>' +
-              (type === 'prescription' ?
-                '<th>#</th><th>Tên thuốc</th><th>Số lượng</th><th>Liều dùng</th><th>Đơn giá (VNĐ)</th><th>Thành tiền (VNĐ)</th><th>Hành động</th>' :
-                type === 'service' ?
-                '<th>#</th><th>Tên dịch vụ</th><th>Ghi chú</th><th>Đơn giá (VNĐ)</th><th>Thành tiền (VNĐ)</th><th>Hành động</th>' :
-                '<th>#</th><th>Tên dịch vụ/thuốc</th><th>Số lượng</th><th>Đơn giá (VNĐ)</th><th>Thành tiền (VNĐ)</th><th>Hành động</th>'
-              ) +
-            '</tr></thead>' +
-            '<tbody id="table-body">' +
-              (rows.length > 0 ? rows.map((row, i) => `
-                <tr>
-                  <td>${i + 1}</td>
-                  <td><div class="editable-field" contenteditable="true" data-field="name" data-row="${row.id}">${row.name}</div></td>
-                  ${type === 'prescription' ? `
-                    <td><input type="number" min="1" value="${row.qty}" data-field="qty" data-row="${row.id}"></td>
-                    <td><div class="editable-field" contenteditable="true" data-field="dose" data-row="${row.id}">${row.dose}</div></td>
-                  ` : type === 'service' ? `
-                    <td><div class="editable-field" contenteditable="true" data-field="note" data-row="${row.id}">${row.note}</div></td>
-                  ` : `
-                    <td><input type="number" min="1" value="${row.qty}" data-field="qty" data-row="${row.id}"></td>
-                  `}
-                  <td><input type="number" min="0" value="${row.unit}" data-field="unit" data-row="${row.id}"></td>
-                  <td><input type="number" min="0" value="${row.total}" readonly data-row="${row.id}"></td>
-                  <td style="text-align: center"><button class="btn danger btn-sm" onclick="deleteRow(${row.id})">Xóa</button></td>
-                </tr>
-              `).join('') : `
-                <tr><td colspan="${type === 'prescription' ? 7 : 6}" style="text-align:center;">Không có dữ liệu</td></tr>
-              `) +
-            '</tbody>' +
-          '</table>' +
-          '<button class="btn" onclick="addRow()">+ Thêm hàng</button>' +
-          '<button class="btn apply" onclick="updatePreview()">Áp dụng</button>' +
-          '<button class="btn primary" onclick="printWindow()">In / Lưu PDF</button>' +
-          '<button class="btn" onclick="closeWindow()">Đóng</button>' +
-        '</div>' +
-        '<div class="preview-wrap">' +
-          '<div class="page">' +
-            '<div class="watermark">MẪU</div>' +
-            '<div class="print-container">' +
-              '<div class="header">' +
-                '<h2>PHÒNG KHÁM XYZ</h2>' +
-                '<p>Địa chỉ: Số 53 Võ Văn Ngân, TP. Thủ Đức</p>' +
-                '<p>Điện thoại: 024.3574.7788 — MST: 0100688738</p>' +
-              '</div>' +
-              '<div class="title" id="title"><h3>' + title + '</h3></div>' +
-              '<div class="info" id="info">' +
-                '<div>' +
-                  '<p><strong>Họ tên:</strong> <span id="info-patientName">' + (patientData.name || 'Nguyễn Văn A') + '</span></p>' +
-                  '<p><strong>Tuổi:</strong> <span id="info-patientAge">' + (patientData.age || '35') + '</span></p>' +
-                  '<p><strong>Giới tính:</strong> <span id="info-patientGender">' + (patientData.gender || 'Nam') + '</span></p>' +
-                  '<p><strong>Địa chỉ:</strong> <span id="info-patientAddress">' + (patientData.address || '123 Nguyễn Trãi, Quận 5, TP.HCM') + '</span></p>' +
-                  '<p><strong>Điện thoại:</strong> <span id="info-patientPhone">' + (patientData.phone || '0909xxxxxx') + '</span></p>' +
-                '</div>' +
-                '<div>' +
-                  '<p><strong>Mã:</strong> <span id="info-code">' + code + '</span></p>' +
-                  '<p><strong>Ngày lập:</strong> <span id="info-date">' + formattedDate + '</span></p>' +
-                  '<p><strong>Bác sĩ:</strong> <span id="info-doctor">' + doctor + '</span></p>' +
-                '</div>' +
-              '</div>' +
-              (showDiagnosisSection ? `
-                <div class="diagnosis" id="diagnosis">
-                  <p><strong>Triệu chứng:</strong> <span id="diag-symptoms">${symptoms || 'Ho, sốt nhẹ'}</span></p>
-                  <p><strong>Chẩn đoán:</strong> <span id="diag-diagnosis">${diagnosis || 'Viêm họng cấp'}</span></p>
-                </div>
-              ` : '') +
-              '<table class="print-table" id="print-table">' +
-                '<thead><tr>' + tableHeaders + '</tr></thead>' +
-                '<tbody id="print-body">' + tableRows + '</tbody>' +
-                '<tfoot><tr class="total-row"><td colspan="' + (type === 'prescription' ? 5 : 4) + '" style="text-align: right">Tổng cộng:</td><td id="total-sum">' + formatNumber(totalSum) + ' VNĐ</td></tr></tfoot>' +
-              '</table>' +
-              '<p class="total-text"><strong>Số tiền viết bằng chữ:</strong> <span id="total-words">' + numberToVietnameseWords(totalSum) + '</span></p>' +
-              '<div class="footer">' +
-                '<div><p><strong>' + footerLeft + '</strong></p><p>(Ký và ghi rõ họ tên)</p><div class="signature"></div></div>' +
-                '<div><p><strong>' + footerRight + '</strong></p><p>(Ký và ghi rõ họ tên)</p><div class="signature"></div></div>' +
-              '</div>' +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
-      '<script>' +
-        '// Initialize rows and total sum' +
-        'let rows = ' + JSON.stringify(rows) + '; let totalSum = ' + totalSum + ';' +
-        'const docType = "' + type + '";' +
-        'function formatNumber(n) { return Number(n || 0).toLocaleString("vi-VN"); }' +
-        'function numberToVietnameseWords(num) {' +
-          'const ones = ["không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín"];' +
-          'const tens = ["", "mười", "hai mươi", "ba mươi", "bốn mươi", "năm mươi", "sáu mươi", "bảy mươi", "tám mươi", "chín mươi"];' +
-          'const units = ["", "nghìn", "triệu", "tỷ"];' +
-          'if (num === 0) return "Không đồng";' +
-          'let result = ""; let unitIndex = 0; let numStr = Math.floor(num).toString();' +
-          'while (numStr.length > 0) {' +
-            'let group = parseInt(numStr.slice(-3)) || 0; numStr = numStr.slice(0, -3);' +
-            'if (group > 0) {' +
-              'let str = ""; let hundred = Math.floor(group / 100); let ten = Math.floor((group % 100) / 10); let one = group % 10;' +
-              'if (hundred > 0) str += ones[hundred] + " trăm";' +
-              'if (ten > 1) {str += (str ? " " : "") + tens[ten]; if (one > 0) str += " " + ones[one];}' +
-              'else if (ten === 1) {str += (str ? " " : "") + "mười"; if (one > 0) str += " " + ones[one];}' +
-              'else if (one > 0) str += (str ? " " : "") + ones[one];' +
-              'str += " " + units[unitIndex]; result = (str.trim() + (result ? " " : "") + result).trim();' +
-            '}' +
-            'unitIndex++;' +
-          '}' +
-          'return result.charAt(0).toUpperCase() + result.slice(1) + " đồng";' +
-        '}' +
-        '// Toggle text styles for symptoms and diagnosis' +
-        'function toggleBold(fieldId) { toggleStyle(fieldId, "bold", "strong"); }' +
-        'function toggleItalic(fieldId) { toggleStyle(fieldId, "italic", "em"); }' +
-        'function toggleUnderline(fieldId) { toggleStyle(fieldId, "underline", "u"); }' +
-        'function toggleStyle(fieldId, style, tag) {' +
-          'const editable = document.getElementById(fieldId);' +
-          'const selection = window.getSelection();' +
-          'if (selection.rangeCount && editable && editable.contains(selection.anchorNode)) {' +
-            'const range = selection.getRangeAt(0);' +
-            'const selectedText = range.toString().trim();' +
-            'if (selectedText) {' +
-              'const element = document.createElement(tag);' +
-              'element.appendChild(range.extractContents());' +
-              'range.insertNode(element);' +
-              'selection.removeAllRanges();' +
-              'selection.addRange(range);' +
-              'updateStyleState(fieldId, style);' +
-            '}' +
-          '}' +
-        '}' +
-        'function updateStyleState(fieldId, style) {' +
-          'const selection = window.getSelection();' +
-          'if (selection.rangeCount) {' +
-            'const range = selection.getRangeAt(0);' +
-            'const container = range.commonAncestorContainer;' +
-            'const btn = document.getElementById(style + "-" + fieldId);' +
-            'if (btn) {' +
-              'const isActive = style === "bold" ? (window.getComputedStyle(container).fontWeight === "bold" || parseInt(window.getComputedStyle(container).fontWeight) >= 600) : ' +
-                              'style === "italic" ? window.getComputedStyle(container).fontStyle === "italic" : ' +
-                              'style === "underline" ? window.getComputedStyle(container).textDecoration.includes("underline") : false;' +
-              'btn.classList.toggle("active", isActive);' +
-            '}' +
-          '}' +
-        '}' +
-        '// Update global styles' +
-        'function updateGlobalStyle() {' +
-          'const styleSelect = document.getElementById("globalStyle").value;' +
-          'const styles = {' +
-            'normal: { bold: "normal", italic: "normal", underline: "none" },' +
-            'bold: { bold: "bold", italic: "normal", underline: "none" },' +
-            'italic: { bold: "normal", italic: "italic", underline: "none" },' +
-            'underline: { bold: "normal", italic: "normal", underline: "underline" },' +
-            '"bold italic": { bold: "bold", italic: "italic", underline: "none" },' +
-            '"bold underline": { bold: "bold", italic: "normal", underline: "underline" },' +
-            '"italic underline": { bold: "normal", italic: "italic", underline: "underline" },' +
-            '"bold italic underline": { bold: "bold", italic: "italic", underline: "underline" }' +
-          '};' +
-          'const { bold, italic, underline } = styles[styleSelect];' +
-          'document.documentElement.style.setProperty("--global-bold", bold);' +
-          'document.documentElement.style.setProperty("--global-italic", italic);' +
-          'document.documentElement.style.setProperty("--global-underline", underline);' +
-        '}' +
-        '// Update preview based on input changes' +
-        'function updatePreview() {' +
-          'const typeEl = document.getElementById("type");' +
-          'const titleText = typeEl.value === "prescription" ? "TOA THUỐC" : typeEl.value === "service" ? "PHIẾU CHỈ ĐỊNH DỊCH VỤ CẬN LÂM SÀNG" : "HÓA ĐƠN THANH TOÁN";' +
-          'document.getElementById("title").innerHTML = "<h3>" + titleText + "</h3>";' +
-          'const customFont = document.getElementById("customFontFamily").value;' +
-          'const customSize = document.getElementById("customFontSize").value + "px";' +
-          'if (customFont) document.documentElement.style.setProperty("--font-family", customFont + ", serif");' +
-          'if (customSize) document.documentElement.style.setProperty("--font-size", customSize);' +
-          'updateGlobalStyle();' +
-          '// Update patient info, code, doctor' +
-          '["patientName", "patientAge", "patientGender", "patientAddress", "patientPhone", "code", "doctor"].forEach(id => {' +
-            'const el = document.getElementById(id); if (el) {' +
-              'const targetId = id === "symptoms" ? "diag-symptoms" : id === "diagnosis" ? "diag-diagnosis" : "info-" + id.replace("patient", "").toLowerCase();' +
-              'const targetEl = document.getElementById(targetId); if (targetEl) targetEl.innerHTML = el.innerHTML || el.value;' +
-            '}' +
-          '});' +
-          'document.getElementById("info-date").textContent = new Date(document.getElementById("date").value || "' + currentDate + '").toLocaleDateString("vi-VN");' +
-          'if (docType === "prescription") {' +
-            'const symptomsEl = document.getElementById("symptoms"); const diagnosisEl = document.getElementById("diagnosis");' +
-            'if (symptomsEl) document.getElementById("diag-symptoms").innerHTML = symptomsEl.innerHTML;' +
-            'if (diagnosisEl) document.getElementById("diag-diagnosis").innerHTML = diagnosisEl.innerHTML;' +
-          '}' +
-          '// Update table rows' +
-          'const printBody = document.getElementById("print-body"); printBody.innerHTML = "";' +
-          'if (rows.length === 0) {' +
-            'const colspan = docType === "prescription" ? 6 : 5;' +
-            'printBody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center;">Không có dữ liệu</td></tr>`;' +
-          '} else {' +
-            'rows.forEach((row, i) => {' +
-              'const tr = document.createElement("tr");' +
-              'tr.innerHTML = `<td style="text-align:center;">${i + 1}</td>` + ' +
-                '(docType === "prescription" ? ' +
-                  '`<td id="print-name-${i}">${getRowText("name", i)}</td><td id="print-qty-${i}">${row.qty}</td><td id="print-dose-${i}">${getRowText("dose", i)}</td>` : ' +
-                  'docType === "service" ? ' +
-                  '`<td id="print-name-${i}">${getRowText("name", i)}</td><td id="print-note-${i}">${getRowText("note", i)}</td>` : ' +
-                  '`<td id="print-name-${i}">${getRowText("name", i)}</td><td id="print-qty-${i}">${row.qty}</td>`' +
-                ') + ' +
-                '`<td id="print-unit-${i}">${formatNumber(row.unit)}</td><td id="print-total-${i}">${formatNumber(row.total)}</td>`;' +
-              'printBody.appendChild(tr);' +
-            '});' +
-          '}' +
-          'totalSum = rows.reduce((sum, r) => sum + r.total, 0);' +
-          'document.getElementById("total-sum").textContent = formatNumber(totalSum) + " VNĐ";' +
-          'document.getElementById("total-words").textContent = numberToVietnameseWords(totalSum);' +
-        '}' +
-        'function getRowText(field, i) {' +
-          'const el = document.querySelector(`[data-field="${field}"][data-row="${rows[i].id}"]`);' +
-          'return el ? el.innerText : rows[i][field];' +
-        '}' +
-        '// Add new row to table' +
-        'function addRow() {' +
-          'const newId = Date.now();' +
-          'rows.push({ id: newId, name: "", qty: 1, ' + (type === 'prescription' ? 'dose: "", ' : type === 'service' ? 'note: "", ' : '') + 'unit: 0, total: 0 });' +
-          'const tbody = document.getElementById("table-body"); const tr = document.createElement("tr");' +
-          'tr.innerHTML = `<td>${rows.length}</td>` + ' +
-            '`<td><div class="editable-field" contenteditable="true" data-field="name" data-row="${newId}" oninput="handleTableInput(event)"></div></td>` + ' +
-            (docType === "prescription" ?
-              '`<td><input type="number" min="1" value="1" data-field="qty" data-row="${newId}" oninput="handleTableInput(event)"></td>` + ' +
-              '`<td><div class="editable-field" contenteditable="true" data-field="dose" data-row="${newId}" oninput="handleTableInput(event)"></div></td>`' :
-              docType === "service" ?
-              '`<td><div class="editable-field" contenteditable="true" data-field="note" data-row="${newId}" oninput="handleTableInput(event)"></div></td>`' :
-              '`<td><input type="number" min="1" value="1" data-field="qty" data-row="${newId}" oninput="handleTableInput(event)"></td>`'
-            ) +
-            '`<td><input type="number" min="0" value="0" data-field="unit" data-row="${newId}" oninput="handleTableInput(event)"></td>` + ' +
-            '`<td><input type="number" min="0" value="0" readonly data-row="${newId}"></td>` + ' +
-            '`<td style="text-align: center"><button class="btn danger btn-sm" onclick="deleteRow(${newId})">Xóa</button></td>`;' +
-          'tbody.appendChild(tr); updatePreview();' +
-        '}' +
-        '// Delete row from table' +
-        'function deleteRow(id) {' +
-          'rows = rows.filter(r => r.id !== id);' +
-          'const tbody = document.getElementById("table-body");' +
-          'tbody.innerHTML = rows.length > 0 ? rows.map((row, i) => `<tr><td>${i + 1}</td>` + ' +
-            '`<td><div class="editable-field" contenteditable="true" data-field="name" data-row="${row.id}" oninput="handleTableInput(event)">${row.name}</div></td>` + ' +
-            (docType === "prescription" ?
-              '`<td><input type="number" min="1" value="${row.qty}" data-field="qty" data-row="${row.id}" oninput="handleTableInput(event)"></td>` + ' +
-              '`<td><div class="editable-field" contenteditable="true" data-field="dose" data-row="${row.id}" oninput="handleTableInput(event)">${row.dose}</div></td>`' :
-              docType === "service" ?
-              '`<td><div class="editable-field" contenteditable="true" data-field="note" data-row="${row.id}" oninput="handleTableInput(event)">${row.note}</div></td>`' :
-              '`<td><input type="number" min="1" value="${row.qty}" data-field="qty" data-row="${row.id}" oninput="handleTableInput(event)"></td>`'
-            ) +
-            '`<td><input type="number" min="0" value="${row.unit}" data-field="unit" data-row="${row.id}" oninput="handleTableInput(event)"></td>` + ' +
-            '`<td><input type="number" min="0" value="${row.total}" readonly data-row="${row.id}"></td>` + ' +
-            '`<td style="text-align: center"><button class="btn danger btn-sm" onclick="deleteRow(${row.id})">Xóa</button></td></tr>`).join("") : ' +
-            '`<tr><td colspan="${docType === "prescription" ? 7 : 6}" style="text-align:center;">Không có dữ liệu</td></tr>`;' +
-          'updatePreview();' +
-        '}' +
-        '// Handle table input changes' +
-        'function handleTableInput(e) {' +
-          'const rowId = parseInt(e.target.dataset.row); const field = e.target.dataset.field; const rowIndex = rows.findIndex(r => r.id === rowId);' +
-          'if (rowIndex > -1) {' +
-            'if (field === "name" || field === "dose" || field === "note") { rows[rowIndex][field] = e.target.innerText; }' +
-            'else { rows[rowIndex][field] = e.target.value; }' +
-            'if (field === "qty" || field === "unit") {' +
-              'rows[rowIndex].total = parseFloat(rows[rowIndex].qty || 0) * parseFloat(rows[rowIndex].unit || 0);' +
-              'const totalInput = e.target.closest("tr").querySelector("input[readonly]");' +
-              'if (totalInput) totalInput.value = rows[rowIndex].total;' +
-            '}' +
-          '}' +
-        '}' +
-        '// Print or save as PDF' +
-        'function printWindow() { updatePreview(); window.print(); }' +
-        '// Close window with confirmation' +
-        'function closeWindow() { if (confirm("Bạn có chắc muốn đóng cửa sổ này?")) window.close(); }' +
-        '// Initialize event listeners' +
-        'document.addEventListener("DOMContentLoaded", () => {' +
-          'if (docType === "prescription") {' +
-            '["symptoms", "diagnosis"].forEach(id => {' +
-              'const el = document.getElementById(id); if (el) {' +
-                'el.addEventListener("input", () => { updateStyleState(id, "bold"); updateStyleState(id, "italic"); updateStyleState(id, "underline"); });' +
-                'el.addEventListener("mouseup", () => { updateStyleState(id, "bold"); updateStyleState(id, "italic"); updateStyleState(id, "underline"); });' +
-                'el.addEventListener("keyup", () => { updateStyleState(id, "bold"); updateStyleState(id, "italic"); updateStyleState(id, "underline"); });' +
-              '}' +
-            '});' +
-          '}' +
-          'document.querySelectorAll("[data-field][data-row]").forEach(el => el.addEventListener("input", handleTableInput));' +
-          'document.getElementById("type").addEventListener("change", () => { location.reload(); });' +
-          'updatePreview();' +
-        '});' +
-      '</script>' +
-    '</body>' +
-    '</html>';
+  // Generate HTML với layout controls bên trái - preview bên phải
+  const html = `<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chỉnh sửa & In ${escapeHtml(title)}</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-  const printWin = window.open('', '_blank', 'width=800,height=1200,scrollbars=yes,resizable=yes');
-  printWin.document.write(html);
-  printWin.document.close();
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f5f5f5;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .app-container {
+      display: flex;
+      height: 100vh;
+      gap: 0;
+    }
+
+    /* Controls Panel - Bên trái */
+    .controls-panel {
+      width: 450px;
+      background: white;
+      padding: 20px;
+      border-right: 1px solid #e0e0e0;
+      overflow-y: auto;
+      box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+    }
+
+    .controls-panel h2 {
+      color: #2c3e50;
+      margin-bottom: 20px;
+      font-size: 1.5em;
+      border-bottom: 2px solid #3498db;
+      padding-bottom: 10px;
+    }
+
+    .section {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+    }
+
+    .section h3 {
+      color: #495057;
+      margin-bottom: 12px;
+      font-size: 1.1em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section h3::before {
+      content: "📋";
+      font-size: 1em;
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+      color: #495057;
+      font-size: 0.9em;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ced4da;
+      border-radius: 6px;
+      font-size: 0.9em;
+      transition: border-color 0.2s;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: #3498db;
+      box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .row .form-group {
+      flex: 1;
+    }
+
+    .editable-field {
+      min-height: 40px;
+      padding: 8px 12px;
+      border: 1px solid #ced4da;
+      border-radius: 6px;
+      background: white;
+      font-size: 0.9em;
+      line-height: 1.4;
+    }
+
+    .editable-field:focus {
+      outline: none;
+      border-color: #3498db;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 8px;
+    }
+
+    .toolbar button {
+      padding: 4px 8px;
+      border: 1px solid #ddd;
+      background: white;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8em;
+    }
+
+    .toolbar button:hover {
+      background: #f8f9fa;
+    }
+
+    .toolbar button.active {
+      background: #3498db;
+      color: white;
+      border-color: #3498db;
+    }
+
+    /* Table Controls */
+    .table-controls {
+      margin-top: 15px;
+    }
+
+    .table-edit {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8em;
+      margin-bottom: 10px;
+    }
+
+    .table-edit th,
+    .table-edit td {
+      border: 1px solid #dee2e6;
+      padding: 6px;
+      text-align: left;
+    }
+
+    .table-edit th {
+      background: #e9ecef;
+      font-weight: 600;
+    }
+
+    .table-edit input {
+      width: 100%;
+      border: none;
+      padding: 4px;
+      background: transparent;
+    }
+
+    .table-edit input:focus {
+      outline: none;
+      background: #fff;
+    }
+
+    /* Buttons */
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9em;
+      font-weight: 500;
+      transition: all 0.2s;
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .btn-primary {
+      background: #3498db;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #2980b9;
+    }
+
+    .btn-success {
+      background: #27ae60;
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #219a52;
+    }
+
+    .btn-danger {
+      background: #e74c3c;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #c0392b;
+    }
+
+    .btn-secondary {
+      background: #95a5a6;
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: #7f8c8d;
+    }
+
+    .btn-sm {
+      padding: 4px 8px;
+      font-size: 0.8em;
+      min-width: auto;
+      flex: none;
+    }
+
+    /* Preview Panel - Bên phải */
+    .preview-panel {
+      flex: 1;
+      background: #8b8b8b;
+      padding: 20px;
+      overflow: auto;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+    }
+
+    .preview-container {
+      background: white;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      background: white;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    .print-container {
+      padding: 15mm;
+      height: 100%;
+      font-family: 'Times New Roman', serif;
+      font-size: 12pt;
+      line-height: 1.4;
+    }
+
+    .watermark {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-45deg);
+      font-size: 60px;
+      color: rgba(0,0,0,0.1);
+      font-weight: bold;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .header {
+      text-align: center;
+      border-bottom: 2px solid #333;
+      padding-bottom: 10px;
+      margin-bottom: 15px;
+    }
+
+    .header h2 {
+      margin: 0;
+      font-size: 18pt;
+      text-transform: uppercase;
+      color: #222;
+    }
+
+    .header p {
+      margin: 2px 0;
+      font-size: 11pt;
+    }
+
+    .title {
+      text-align: center;
+      margin: 15px 0;
+    }
+
+    .title h3 {
+      margin: 0;
+      font-size: 16pt;
+      font-weight: bold;
+    }
+
+    .info {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 15px;
+      font-size: 11pt;
+    }
+
+    .info div p {
+      margin: 3px 0;
+    }
+
+    .info div p strong {
+      color: #222;
+    }
+
+    .diagnosis {
+      margin-bottom: 15px;
+      font-size: 11pt;
+    }
+
+    .diagnosis p {
+      margin: 3px 0;
+    }
+
+    table.print-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11pt;
+      margin-bottom: 15px;
+    }
+
+    table.print-table th,
+    table.print-table td {
+      border: 1px solid #333;
+      padding: 6px 8px;
+      text-align: left;
+    }
+
+    table.print-table th {
+      background: #f8f9fa;
+      text-align: center;
+      font-weight: bold;
+    }
+
+    .total-row td {
+      font-weight: bold;
+      background: #f8f9fa;
+    }
+
+    .total-text {
+      margin-bottom: 20px;
+      font-size: 11pt;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 40px;
+    }
+
+    .footer div {
+      text-align: center;
+      width: 45%;
+    }
+
+    .signature {
+      margin-top: 60px;
+      font-style: italic;
+      border-top: 1px solid #333;
+      padding-top: 5px;
+    }
+
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      .preview-panel,
+      .preview-panel * {
+        visibility: visible;
+      }
+      .preview-panel {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        padding: 0;
+        background: white;
+      }
+      .controls-panel {
+        display: none;
+      }
+    }
+
+    /* Scrollbar styling */
+    .controls-panel::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .controls-panel::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+
+    .controls-panel::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 3px;
+    }
+
+    .controls-panel::-webkit-scrollbar-thumb:hover {
+      background: #a8a8a8;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Controls Panel - Bên trái -->
+    <div class="controls-panel">
+      <h2>🛠️ Tùy chỉnh PDF</h2>
+      
+      <div class="section">
+        <h3>Thông tin tài liệu</h3>
+        <div class="form-group">
+          <label>Loại tài liệu</label>
+          <select class="form-control" id="docType">
+            <option value="prescription" ${type === 'prescription' ? 'selected' : ''}>Toa thuốc</option>
+            <option value="service" ${type === 'service' ? 'selected' : ''}>Phiếu chỉ định dịch vụ</option>
+            <option value="invoice" ${type === 'invoice' ? 'selected' : ''}>Hóa đơn thanh toán</option>
+          </select>
+        </div>
+        <div class="row">
+          <div class="form-group">
+            <label>Mã phiếu</label>
+            <input type="text" class="form-control" id="docCode" value="${code}">
+          </div>
+          <div class="form-group">
+            <label>Ngày lập</label>
+            <input type="date" class="form-control" id="docDate" value="${currentDate}">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Bác sĩ</label>
+          <input type="text" class="form-control" id="docDoctor" value="${doctor}">
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Thiết lập hiển thị</h3>
+        <div class="form-group">
+          <label>Font chữ</label>
+          <select class="form-control" id="customFontFamily">
+            <option value="Times New Roman">Times New Roman</option>
+            <option value="Arial">Arial</option>
+            <option value="Helvetica">Helvetica</option>
+            <option value="Georgia">Georgia</option>
+          </select>
+        </div>
+        <div class="row">
+          <div class="form-group">
+            <label>Kích thước chữ (pt)</label>
+            <input type="number" class="form-control" id="customFontSize" value="12" min="8" max="24">
+          </div>
+          <div class="form-group">
+            <label>Kiểu chữ</label>
+            <select class="form-control" id="globalStyle">
+              <option value="normal">Bình thường</option>
+              <option value="bold">Đậm</option>
+              <option value="italic">Nghiêng</option>
+              <option value="bold italic">Đậm & Nghiêng</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Thông tin bệnh nhân</h3>
+        <div class="form-group">
+          <label>Họ tên bệnh nhân</label>
+          <div class="editable-field" contenteditable="true" id="patientName">${escapeHtml(patientData.name || 'Nguyễn Văn A')}</div>
+        </div>
+        <div class="row">
+          <div class="form-group">
+            <label>Tuổi</label>
+            <input type="number" class="form-control" id="patientAge" value="${patientData.age || '35'}">
+          </div>
+          <div class="form-group">
+            <label>Giới tính</label>
+            <input type="text" class="form-control" id="patientGender" value="${patientData.gender || 'Nam'}">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Địa chỉ</label>
+          <div class="editable-field" contenteditable="true" id="patientAddress">${escapeHtml(patientData.address || '123 Nguyễn Trãi, Quận 5, TP.HCM')}</div>
+        </div>
+        <div class="form-group">
+          <label>Điện thoại</label>
+          <input type="text" class="form-control" id="patientPhone" value="${patientData.phone || '0909xxxxxx'}">
+        </div>
+      </div>
+
+      ${showDiagnosisSection ? `
+      <div class="section">
+        <h3>Thông tin khám bệnh</h3>
+        <div class="form-group">
+          <label>Triệu chứng</label>
+          <div class="toolbar">
+            <button type="button" data-style="bold">B</button>
+            <button type="button" data-style="italic">I</button>
+            <button type="button" data-style="underline">U</button>
+          </div>
+          <div class="editable-field" contenteditable="true" id="symptoms">${escapeHtml(symptoms || 'Ho, sốt nhẹ')}</div>
+        </div>
+        <div class="form-group">
+          <label>Chẩn đoán</label>
+          <div class="toolbar">
+            <button type="button" data-style="bold">B</button>
+            <button type="button" data-style="italic">I</button>
+            <button type="button" data-style="underline">U</button>
+          </div>
+          <div class="editable-field" contenteditable="true" id="diagnosis">${escapeHtml(diagnosis || 'Viêm họng cấp')}</div>
+        </div>
+      </div>
+      ` : ''}
+
+      <div class="section">
+        <h3>Danh sách ${type === 'prescription' ? 'thuốc' : type === 'service' ? 'dịch vụ' : 'thuốc/dịch vụ'}</h3>
+        <div class="table-controls">
+          <table class="table-edit">
+            <thead>
+              <tr>${tableEditHeaders}</tr>
+            </thead>
+            <tbody id="table-body">
+              ${initialTableBody}
+            </tbody>
+          </table>
+          <button class="btn btn-secondary btn-sm" id="add-row-btn">
+            + Thêm dòng
+          </button>
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button class="btn btn-success" id="apply-btn">
+          🔄 Cập nhật Preview
+        </button>
+        <button class="btn btn-primary" id="print-btn">
+          🖨️ In / Lưu PDF
+        </button>
+        <button class="btn btn-secondary" id="close-btn">
+          ❌ Đóng
+        </button>
+      </div>
+    </div>
+
+    <!-- Preview Panel - Bên phải -->
+    <div class="preview-panel">
+      <div class="preview-container">
+        <div class="page">
+          <div class="watermark">MẪU</div>
+          <div class="print-container">
+            <div class="header">
+              <h2>PHÒNG KHÁM XYZ</h2>
+              <p>Địa chỉ: Số 53 Võ Văn Ngân, TP. Thủ Đức</p>
+              <p>Điện thoại: 024.3574.7788 — MST: 0100688738</p>
+            </div>
+            <div class="title" id="title">
+              <h3>${escapeHtml(title)}</h3>
+            </div>
+            <div class="info" id="info">
+              <div>
+                <p><strong>Họ tên:</strong> <span id="info-patientName">${escapeHtml(patientData.name || 'Nguyễn Văn A')}</span></p>
+                <p><strong>Tuổi:</strong> <span id="info-patientAge">${patientData.age || '35'}</span></p>
+                <p><strong>Giới tính:</strong> <span id="info-patientGender">${patientData.gender || 'Nam'}</span></p>
+                <p><strong>Địa chỉ:</strong> <span id="info-patientAddress">${escapeHtml(patientData.address || '123 Nguyễn Trãi, Quận 5, TP.HCM')}</span></p>
+                <p><strong>Điện thoại:</strong> <span id="info-patientPhone">${patientData.phone || '0909xxxxxx'}</span></p>
+              </div>
+              <div>
+                <p><strong>Mã:</strong> <span id="info-code">${code}</span></p>
+                <p><strong>Ngày lập:</strong> <span id="info-date">${formattedDate}</span></p>
+                <p><strong>Bác sĩ:</strong> <span id="info-doctor">${doctor}</span></p>
+              </div>
+            </div>
+            ${showDiagnosisSection ? `
+            <div class="diagnosis" id="diagnosis-section">
+              <p><strong>Triệu chứng:</strong> <span id="diag-symptoms">${escapeHtml(symptoms || 'Ho, sốt nhẹ')}</span></p>
+              <p><strong>Chẩn đoán:</strong> <span id="diag-diagnosis">${escapeHtml(diagnosis || 'Viêm họng cấp')}</span></p>
+            </div>
+            ` : ''}
+            <table class="print-table" id="print-table">
+              <thead>
+                <tr>${tableHeaders}</tr>
+              </thead>
+              <tbody id="print-body">${tableRows}</tbody>
+              <tfoot>
+                <tr class="total-row">
+                  <td colspan="${type === 'prescription' ? 5 : 4}" style="text-align: right; font-weight: bold;">
+                    Tổng cộng:
+                  </td>
+                  <td id="total-sum" style="font-weight: bold;">
+                    ${formatNumber(totalSum)} VNĐ
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+            <p class="total-text">
+              <strong>Số tiền viết bằng chữ:</strong> 
+              <span id="total-words">${numberToVietnameseWords(totalSum)}</span>
+            </p>
+            <div class="footer">
+              <div>
+                <p><strong>${footerLeft}</strong></p>
+                <p>(Ký và ghi rõ họ tên)</p>
+                <div class="signature"></div>
+              </div>
+              <div>
+                <p><strong>${footerRight}</strong></p>
+                <p>(Ký và ghi rõ họ tên)</p>
+                <div class="signature"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    console.log('Print window script loaded successfully');
+    let rows = ${JSON.stringify(sanitizedRows)};
+    let totalSum = ${totalSum};
+    const docType = '${type}';
+    
+    // Định nghĩa các hàm utility
+    function formatNumber(n) { return Number(n || 0).toLocaleString("vi-VN"); }
+    
+    function numberToVietnameseWords(num) {
+      const ones = ["không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín"];
+      const tens = ["", "mười", "hai mươi", "ba mươi", "bốn mươi", "năm mươi", "sáu mươi", "bảy mươi", "tám mươi", "chín mươi"];
+      const units = ["", "nghìn", "triệu", "tỷ"];
+      if (num === 0) return "Không đồng";
+      let result = ""; let unitIndex = 0; let numStr = Math.floor(num).toString();
+      while (numStr.length > 0) {
+        let group = parseInt(numStr.slice(-3)) || 0; numStr = numStr.slice(0, -3);
+        if (group > 0) {
+          let str = ""; let hundred = Math.floor(group / 100); let ten = Math.floor((group % 100) / 10); let one = group % 10;
+          if (hundred > 0) str += ones[hundred] + " trăm";
+          if (ten > 1) {str += (str ? " " : "") + tens[ten]; if (one > 0) str += " " + ones[one];}
+          else if (ten === 1) {str += (str ? " " : "") + "mười"; if (one > 0) str += " " + ones[one];}
+          else if (one > 0) str += (str ? " " : "") + ones[one];
+          str += " " + units[unitIndex]; result = (str.trim() + (result ? " " : "") + result).trim();
+        }
+        unitIndex++;
+      }
+      return result.charAt(0).toUpperCase() + result.slice(1) + " đồng";
+    }
+    
+    // Event delegation cho tất cả các button
+    document.addEventListener('click', function(e) {
+      console.log('Click detected:', e.target);
+      
+      // Xử lý nút xóa
+      if (e.target.classList.contains('delete-row-btn')) {
+        const rowId = parseInt(e.target.getAttribute('data-row-id'));
+        console.log('Delete row clicked:', rowId);
+        deleteRow(rowId);
+        return;
+      }
+      
+      // Xử lý các nút khác
+      if (e.target.id === 'add-row-btn') {
+        console.log('Add row clicked');
+        addRow();
+        return;
+      }
+      
+      if (e.target.id === 'apply-btn') {
+        console.log('Apply clicked');
+        updatePreview();
+        return;
+      }
+      
+      if (e.target.id === 'print-btn') {
+        console.log('Print clicked');
+        printWindow();
+        return;
+      }
+      
+      if (e.target.id === 'close-btn') {
+        console.log('Close clicked');
+        closeWindow();
+        return;
+      }
+      
+      // Xử lý toolbar buttons
+      if (e.target.hasAttribute('data-style')) {
+        const style = e.target.getAttribute('data-style');
+        const toolbar = e.target.closest('.toolbar');
+        if (toolbar) {
+          const field = toolbar.nextElementSibling;
+          toggleStyle(field, style);
+        }
+      }
+    });
+    
+    // Xử lý input với event delegation
+    document.addEventListener('input', function(e) {
+      if (e.target.matches('[data-field][data-row]')) {
+        console.log('Table input detected');
+        handleTableInput(e);
+      }
+    });
+    
+    // Định nghĩa các hàm chức năng
+    function toggleStyle(field, style) {
+      try {
+        document.execCommand(style);
+        field.focus();
+      } catch (e) {
+        console.error('Error in toggleStyle:', e);
+      }
+    }
+    
+    function updatePreview() {
+      try {
+        console.log('Updating preview...');
+        
+        // Cập nhật thông tin tài liệu
+        const docCode = document.getElementById('docCode').value;
+        const docDate = document.getElementById('docDate').value;
+        const docDoctor = document.getElementById('docDoctor').value;
+        
+        document.getElementById('info-code').textContent = docCode;
+        document.getElementById('info-date').textContent = new Date(docDate).toLocaleDateString('vi-VN');
+        document.getElementById('info-doctor').textContent = docDoctor;
+        
+        // Cập nhật thông tin bệnh nhân
+        const patientName = document.getElementById('patientName').innerHTML;
+        const patientAge = document.getElementById('patientAge').value;
+        const patientGender = document.getElementById('patientGender').value;
+        const patientAddress = document.getElementById('patientAddress').innerHTML;
+        const patientPhone = document.getElementById('patientPhone').value;
+        
+        document.getElementById('info-patientName').innerHTML = patientName;
+        document.getElementById('info-patientAge').textContent = patientAge;
+        document.getElementById('info-patientGender').textContent = patientGender;
+        document.getElementById('info-patientAddress').innerHTML = patientAddress;
+        document.getElementById('info-patientPhone').textContent = patientPhone;
+        
+        // Cập nhật thông tin khám bệnh
+        if (docType === 'prescription') {
+          const symptoms = document.getElementById('symptoms').innerHTML;
+          const diagnosis = document.getElementById('diagnosis').innerHTML;
+          document.getElementById('diag-symptoms').innerHTML = symptoms;
+          document.getElementById('diag-diagnosis').innerHTML = diagnosis;
+        }
+        
+        // Cập nhật bảng
+        const printBody = document.getElementById('print-body');
+        printBody.innerHTML = '';
+        
+        if (rows.length === 0) {
+          const colspan = docType === 'prescription' ? 6 : docType === 'service' ? 5 : 5;
+          printBody.innerHTML = '<tr><td colspan="' + colspan + '" style="text-align:center;">Không có dữ liệu</td></tr>';
+        } else {
+          rows.forEach(function(row, i) {
+            const tr = document.createElement('tr');
+            let rowHtml = '<td style="text-align:center;">' + (i + 1) + '</td>' +
+                          '<td>' + (row.name || '') + '</td>';
+            
+            if (docType === 'prescription') {
+              rowHtml += '<td>' + row.qty + '</td>' +
+                         '<td>' + (row.dose || '') + '</td>';
+            } else if (docType === 'service') {
+              rowHtml += '<td>' + (row.note || '') + '</td>';
+            } else {
+              rowHtml += '<td>' + row.qty + '</td>';
+            }
+            
+            rowHtml += '<td>' + formatNumber(row.unit) + '</td>' +
+                       '<td>' + formatNumber(row.total) + '</td>';
+            
+            tr.innerHTML = rowHtml;
+            printBody.appendChild(tr);
+          });
+        }
+        
+        // Cập nhật tổng tiền
+        totalSum = rows.reduce(function(sum, r) { return sum + (r.total || 0); }, 0);
+        document.getElementById('total-sum').textContent = formatNumber(totalSum) + ' VNĐ';
+        document.getElementById('total-words').textContent = numberToVietnameseWords(totalSum);
+        
+        // Cập nhật font và style
+        const customFont = document.getElementById('customFontFamily').value;
+        const customSize = document.getElementById('customFontSize').value + 'pt';
+        const printContainer = document.querySelector('.print-container');
+        
+        if (printContainer) {
+          printContainer.style.fontFamily = customFont + ', serif';
+          printContainer.style.fontSize = customSize;
+        }
+        
+        console.log('Preview updated successfully');
+      } catch (e) {
+        console.error('Error in updatePreview:', e);
+      }
+    }
+    
+    function addRow() {
+      try {
+        const newId = Date.now();
+        const newRow = { 
+          id: newId, 
+          name: '', 
+          qty: 1, 
+          unit: 0, 
+          total: 0 
+        };
+        
+        if (docType === 'prescription') {
+          newRow.dose = '';
+        } else if (docType === 'service') {
+          newRow.note = '';
+        }
+        
+        rows.push(newRow);
+        
+        const tbody = document.getElementById('table-body');
+        const tr = document.createElement('tr');
+        
+        let rowHtml = '<td>' + rows.length + '</td>' +
+          '<td><div class="editable-field" contenteditable="true" data-field="name" data-row="' + newId + '"></div></td>';
+        
+        if (docType === 'prescription') {
+          rowHtml += '<td><input type="number" min="1" value="1" data-field="qty" data-row="' + newId + '"></td>' +
+            '<td><div class="editable-field" contenteditable="true" data-field="dose" data-row="' + newId + '"></div></td>';
+        } else if (docType === 'service') {
+          rowHtml += '<td><div class="editable-field" contenteditable="true" data-field="note" data-row="' + newId + '"></div></td>';
+        } else {
+          rowHtml += '<td><input type="number" min="1" value="1" data-field="qty" data-row="' + newId + '"></td>';
+        }
+        
+        rowHtml += '<td><input type="number" min="0" value="0" data-field="unit" data-row="' + newId + '"></td>' +
+          '<td><input type="number" min="0" value="0" readonly data-row="' + newId + '"></td>' +
+          '<td style="text-align: center"><button class="btn danger btn-sm delete-row-btn" data-row-id="' + newId + '">Xóa</button></td>';
+        
+        tr.innerHTML = rowHtml;
+        tbody.appendChild(tr);
+        updatePreview();
+        
+        console.log('Row added successfully');
+      } catch (e) {
+        console.error('Error in addRow:', e);
+      }
+    }
+    
+    function deleteRow(id) {
+      try {
+        console.log('Deleting row:', id);
+        rows = rows.filter(function(r) { return r.id !== id; });
+        const tbody = document.getElementById('table-body');
+        
+        // Cập nhật toàn bộ table
+        let html = '';
+        if (rows.length > 0) {
+          rows.forEach(function(row, i) {
+            html += '<tr><td>' + (i + 1) + '</td>' +
+              '<td><div class="editable-field" contenteditable="true" data-field="name" data-row="' + row.id + '">' + (row.name || '') + '</div></td>';
+            
+            if (docType === 'prescription') {
+              html += '<td><input type="number" min="1" value="' + (row.qty || 1) + '" data-field="qty" data-row="' + row.id + '"></td>' +
+                '<td><div class="editable-field" contenteditable="true" data-field="dose" data-row="' + row.id + '">' + (row.dose || '') + '</div></td>';
+            } else if (docType === 'service') {
+              html += '<td><div class="editable-field" contenteditable="true" data-field="note" data-row="' + row.id + '">' + (row.note || '') + '</div></td>';
+            } else {
+              html += '<td><input type="number" min="1" value="' + (row.qty || 1) + '" data-field="qty" data-row="' + row.id + '"></td>';
+            }
+            
+            html += '<td><input type="number" min="0" value="' + (row.unit || 0) + '" data-field="unit" data-row="' + row.id + '"></td>' +
+              '<td><input type="number" min="0" value="' + (row.total || 0) + '" readonly data-row="' + row.id + '"></td>' +
+              '<td style="text-align: center"><button class="btn danger btn-sm delete-row-btn" data-row-id="' + row.id + '">Xóa</button></td></tr>';
+          });
+          tbody.innerHTML = html;
+        } else {
+          const colspan = docType === 'prescription' ? 7 : docType === 'service' ? 6 : 6;
+          tbody.innerHTML = '<tr><td colspan="' + colspan + '" style="text-align:center;">Không có dữ liệu</td></tr>';
+        }
+        updatePreview();
+        
+        console.log('Row deleted successfully');
+      } catch (e) {
+        console.error('Error in deleteRow:', e);
+      }
+    }
+    
+    function handleTableInput(e) {
+      try {
+        const rowId = parseInt(e.target.dataset.row);
+        const field = e.target.dataset.field;
+        const rowIndex = rows.findIndex(function(r) { return r.id === rowId; });
+        
+        if (rowIndex > -1) {
+          if (field === 'name' || field === 'dose' || field === 'note') {
+            rows[rowIndex][field] = e.target.textContent || e.target.value;
+          } else {
+            rows[rowIndex][field] = parseFloat(e.target.value) || 0;
+          }
+          
+          if (field === 'qty' || field === 'unit') {
+            rows[rowIndex].total = (parseFloat(rows[rowIndex].qty) || 0) * (parseFloat(rows[rowIndex].unit) || 0);
+            const totalInput = e.target.closest('tr').querySelector('input[readonly]');
+            if (totalInput) totalInput.value = rows[rowIndex].total;
+          }
+        }
+      } catch (e) {
+        console.error('Error in handleTableInput:', e);
+      }
+    }
+    
+    function printWindow() {
+      try {
+        updatePreview();
+        window.print();
+      } catch (e) {
+        console.error('Error in printWindow:', e);
+      }
+    }
+    
+    function closeWindow() {
+      try {
+        if (confirm('Bạn có chắc muốn đóng cửa sổ này?')) {
+          window.close();
+        }
+      } catch (e) {
+        console.error('Error in closeWindow:', e);
+      }
+    }
+    
+    // Khởi tạo khi trang load xong
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('DOM fully loaded and initialized');
+      updatePreview();
+    });
+  </script>
+</body>
+</html>`;
+
+  try {
+    console.log('Generated HTML length:', html.length);
+    const printWin = window.open('', '_blank', 'width=1400,height=900,scrollbars=yes,resizable=yes');
+    if (!printWin) {
+      console.error('Failed to open new window. Please check if pop-ups are blocked.');
+      alert('Không thể mở cửa sổ mới. Vui lòng cho phép pop-up cho trang web này.');
+      return;
+    }
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+    
+    // Focus vào cửa sổ mới
+    printWin.focus();
+  } catch (e) {
+    console.error('Error writing to new window:', e);
+    alert('Có lỗi xảy ra khi mở cửa sổ in: ' + e.message);
+  }
 };
