@@ -171,17 +171,23 @@ class UserControllers extends Controller
 
     //Kích hoạt / vô hiệu hóa người dùng
     public function toggleStatus($id)
-    {
-        $user = User::with('roles')->findOrFail($id);
+{
+    $user = User::find($id);
 
-        if ($user->roles->pluck('RoleName')->contains('Admin')) {
-            return response()->json(['error' => 'Không thể thay đổi trạng thái của Admin.'], 403);
-        }
-
-        $user->IsActive = !$user->IsActive;
-        $user->save();
-
-        $message = $user->IsActive ? 'Kích hoạt tài khoản thành công.' : 'Vô hiệu hóa tài khoản thành công.';
-        return response()->json(['message' => $message, 'user' => $user]);
+    if (!$user) {
+        return response()->json(['message' => 'Người dùng không tồn tại.'], 404);
     }
+
+    // Đảo trạng thái IsActive
+    $user->IsActive = !$user->IsActive;
+    $user->save();
+
+    return response()->json([
+        'message' => $user->IsActive
+            ? 'Kích hoạt tài khoản thành công!'
+            : 'Vô hiệu hóa tài khoản thành công!',
+        'data' => $user
+    ], 200);
+}
+
 }
