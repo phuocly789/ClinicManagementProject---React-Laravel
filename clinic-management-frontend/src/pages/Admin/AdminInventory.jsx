@@ -550,7 +550,7 @@ const AdminInventory = () => {
     if (suppliers.length > 0) return;
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/suppliers`, {
+      const response = await fetch(`${API_BASE_URL}/api/suppliers/all`, {
         headers: { 'Accept': 'application/json' },
         credentials: 'include',
       });

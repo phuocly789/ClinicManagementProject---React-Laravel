@@ -43,6 +43,7 @@ Route::delete('/import-bills/{id}', [ImportBillController::class, 'destroy']);
 Route::get('/import-bills/{id}', [ImportBillController::class, 'show']);
 
 Route::get('/suppliers', [SuppliersController::class, 'index']);
+Route::get('/suppliers/all', [SuppliersController::class, 'all']);
 Route::post('/suppliers', [SuppliersController::class, 'store']);
 Route::put('/suppliers/{id}', [SuppliersController::class, 'update']);
 Route::delete('/suppliers/{id}', [SuppliersController::class, 'destroy']);

@@ -14,6 +14,7 @@ import Register from "./pages/auth/Register/Register.jsx";
 import AdminRevenueReport from "./pages/Admin/AdminRevenueReport/AdminRevenueReport.jsx";
 import AdminScheduleManagement from "./pages/Admin/AdminScheduleManagement/AdminScheduleManagement.jsx";
 import AdminUserManagement from "./pages/Admin/AdminUserManagement/AdminUserManagement.jsx";
+import AdminSuppliers from "./pages/Admin/AdminSuppliers";
 function App() {
   return (
     <BrowserRouter>
@@ -25,6 +26,7 @@ function App() {
 
         <Route path="/admin/medicines" element={<AdminMedicine />} />
         <Route path="/admin/inventory" element={<AdminInventory />} />
+        <Route path="/admin/supplier" element={<AdminSuppliers />} />
         <Route path="/" element={<AdminMedicine />} /> {/* Trang mặc địnhs */}
 
         <Route path={path.LOGIN} element={<LoginPage />} />{" "}
