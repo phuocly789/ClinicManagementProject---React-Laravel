@@ -24,7 +24,7 @@ use App\Http\Controllers\API\User\UserControllers;
 
 
 
-Route::get('/users', [UserController::class, 'index']);
+Route::get('/user', [UserController::class, 'index']);
 Route::get('/ping', [UserController::class, 'ping']);
 
 //check tồn kho
@@ -34,7 +34,7 @@ Route::get('/medicines/ping', [MedicinesController::class, 'ping']);
 Route::post('/medicines', [MedicinesController::class, 'store']);
 Route::put('/medicines/{id}', [MedicinesController::class, 'update']);
 Route::delete('/medicines/{id}', [MedicinesController::class, 'destroy']);
-Route::get('/medicines/all',[MedicinesController::class, 'all']);
+Route::get('/medicines/all', [MedicinesController::class, 'all']);
 
 Route::get('/import-bills', [ImportBillController::class, 'index']);
 Route::post('/import-bills', [ImportBillController::class, 'store']);
@@ -70,7 +70,7 @@ Route::prefix('doctor')->group(function () {
     Route::apiResource('appointments', AppointmentsController::class);
 
     // Gợi ý chẩn đoán & thuốc
-    
+
     //Gợi ý lấy từ lịch sử bệnh trước đó
     Route::get('/diagnoses/suggestions', [DiagnosisSuggestionController::class, 'suggestions']);
     // Tìm kiếm thuốc theo tên, loại
@@ -85,7 +85,7 @@ Route::prefix('doctor')->group(function () {
 
     // Lấy danh sách tất cả bệnh nhân 
     Route::get('/patients', [PatientsController::class, 'index']);
-    
+
     // Lịch sử bệnh nhân
     Route::get('/patients/{patientId}/history', [PatientsController::class, 'getPatientHistory']);
 
@@ -106,7 +106,8 @@ Route::prefix('users')->group(function () {
     Route::post('/', [UserControllers::class, 'store']);
     Route::put('/{id}', [UserControllers::class, 'update']);
     Route::delete('/{id}', [UserControllers::class, 'destroy']);
-    Route::patch('/{id}/toggle-status', [UserControllers::class, 'toggleStatus']);
+    Route::put('/toggle-status/{id}', [UserControllers::class, 'toggleStatus']);
+
 });
 
 Route::get('/roles', [UserControllers::class, 'roles']);
