@@ -6,51 +6,75 @@ use App\Models\Medicine;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithValidation;
-use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\SkipsOnFailure;
-use Maatwebsite\Excel\Concerns\Importable; // <-- THÊM: Để collect failures()
-use Maatwebsite\Excel\Concerns\SkipsFailures; // <-- THÊM: Import trait
 use Maatwebsite\Excel\Validators\Failure;
-use Illuminate\Support\Facades\Validator;
+use Maatwebsite\Excel\Concerns\SkipsFailures;
 
-class MedicinesImport implements ToModel, WithHeadingRow, WithValidation, WithChunkReading, SkipsOnFailure
+class MedicinesImport implements ToModel, WithHeadingRow, WithValidation, SkipsOnFailure
 {
-    use Importable, SkipsFailures; // <-- THÊM: Traits tự động skip & collect failures
-
-    // KHÔNG CẦN $failures nữa, dùng $this->failures() sau import
+    use SkipsFailures;
 
     public function model(array $row)
     {
-        return Medicine::updateOrCreate(
-            ['MedicineId' => $row['medicineid'] ?? null],
-            [
-                'MedicineName' => $row['medicinename'],
-                'MedicineType' => $row['medicinetype'],
-                'Unit' => $row['unit'],
-                'Price' => $row['price'],
-                'StockQuantity' => $row['stockquantity'],
-                'Description' => $row['description'] ?? null,
-            ]
-        );
+        // Sử dụng đúng tên cột CHỮ HOA từ file Excel của bạn
+        return new Medicine([
+            'MedicineId'    => $row['MedicineId'] ?? null,
+            'MedicineName'  => $row['MedicineName'] ?? '',
+            'MedicineType'  => $row['MedicineType'] ?? '',
+            'Unit'          => $row['Unit'] ?? '',
+            'Price'         => $row['Price'] ?? 0,
+            'StockQuantity' => $row['StockQuantity'] ?? 0,
+            'Description'   => $row['Description'] ?? '',
+        ]);
     }
 
     public function rules(): array
     {
         return [
-            'medicinename' => 'required|string|max:100',
-            'medicinetype' => 'required|in:Thuốc viên,Thuốc nước,Thuốc tiêm,Thuốc bột,Thuốc bôi,Thuốc nhỏ mắt', // <-- THÊM: Validate enum
-            'unit' => 'required|in:Viên,Chai,Ống,Gói,Tuýp,Lọ', // <-- THÊM: Validate enum
-            'price' => 'required|numeric|min:0|max:9999999999999999.99',
-            'stockquantity' => 'required|integer|min:0',
-            'description' => 'nullable|string|max:500',
-            '*.medicineid' => 'nullable|string|max:50|unique:medicines,MedicineId', // Anti-duplicate
+            'MedicineName'  => 'required|string|max:100',
+            'MedicineType'  => 'required|string|max:50', 
+            'Unit'          => 'required|string|max:20',
+            'Price'         => 'required|numeric|min:0',
+            'StockQuantity' => 'required|integer|min:0',
+            // MedicineId và Description không bắt buộc
+            'MedicineId'    => 'sometimes|string|max:50',
+            'Description'   => 'nullable|string|max:500',
         ];
     }
 
-    public function chunkSize(): int
+    public function customValidationAttributes()
     {
-        return 1000;
+        return [
+            'MedicineName'  => 'Tên thuốc',
+            'MedicineType'  => 'Loại thuốc',
+            'Unit'          => 'Đơn vị',
+            'Price'         => 'Giá',
+            'StockQuantity' => 'Số lượng tồn kho',
+            'MedicineId'    => 'Mã thuốc',
+            'Description'   => 'Mô tả',
+        ];
     }
 
-    // BỎ onFailure: Trait tự handle. Nếu cần custom: Giữ và override.
+    /**
+     * Xử lý trước khi validation - chuyển đổi kiểu dữ liệu
+     */
+    public function prepareForValidation($data, $index)
+    {
+        // Chuyển MedicineId thành string nếu có
+        if (isset($data['MedicineId']) && is_numeric($data['MedicineId'])) {
+            $data['MedicineId'] = (string) $data['MedicineId'];
+        }
+
+        // Đảm bảo Price là numeric
+        if (isset($data['Price']) && is_string($data['Price'])) {
+            $data['Price'] = (float) str_replace(',', '', $data['Price']);
+        }
+
+        // Đảm bảo StockQuantity là integer
+        if (isset($data['StockQuantity']) && is_string($data['StockQuantity'])) {
+            $data['StockQuantity'] = (int) $data['StockQuantity'];
+        }
+
+        return $data;
+    }
 }
