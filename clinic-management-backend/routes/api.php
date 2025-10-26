@@ -48,6 +48,11 @@ Route::post('/suppliers', [SuppliersController::class, 'store']);
 Route::put('/suppliers/{id}', [SuppliersController::class, 'update']);
 Route::delete('/suppliers/{id}', [SuppliersController::class, 'destroy']);
 Route::get('/suppliers/{id}', [SuppliersController::class, 'show']);
+//handel excel
+Route::get('/medicines/template', [MedicinesController::class, 'downloadTemplate']);
+Route::post('/medicines/dry-run', [MedicinesController::class, 'dryRunImport']);
+Route::post('/medicines/import', [MedicinesController::class, 'import']);
+Route::get('/medicines/export', [MedicinesController::class, 'export']);
 
 Route::get('/schedules', [ScheduleController::class, 'index']);
 Route::post('/schedules', [ScheduleController::class, 'createSchedule']);
@@ -108,7 +113,6 @@ Route::prefix('users')->group(function () {
     Route::put('/{id}', [UserControllers::class, 'update']);
     Route::delete('/{id}', [UserControllers::class, 'destroy']);
     Route::put('/toggle-status/{id}', [UserControllers::class, 'toggleStatus']);
-
 });
 
 Route::get('/roles', [UserControllers::class, 'roles']);
