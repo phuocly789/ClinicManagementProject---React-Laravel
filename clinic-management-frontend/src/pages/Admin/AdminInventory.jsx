@@ -4,6 +4,7 @@ import Pagination from '../../Components/Pagination/Pagination';
 import ConfirmDeleteModal from '../../Components/CustomToast/DeleteConfirmModal';
 import CustomToast from '../../Components/CustomToast/CustomToast';
 import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
+import { PencilIcon, Trash } from 'lucide-react';
 
 // ErrorBoundary
 class ErrorBoundary extends React.Component {
@@ -46,7 +47,7 @@ const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class
 
 const InventoryList = memo(({ inventories, isLoading, formatVND, handleShowDeleteModal, handleShowDetail, handleShowAddInventory, handleShowEditForm, pageCount, currentPage, handlePageChange, suppliers }) => {
   return (
-    <div style={{ padding: '20px', backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+    <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h3 style={{ fontSize: '1.5rem', fontWeight: '600' }}>Danh Sách Phiếu Nhập Kho</h3>
         <Button variant="primary" onClick={handleShowAddInventory} style={{ padding: '8px 16px' }}>
@@ -99,7 +100,7 @@ const InventoryList = memo(({ inventories, isLoading, formatVND, handleShowDelet
                       className="text-success p-0 me-2"
                       onClick={() => handleShowEditForm(inventory)}
                     >
-                      Sửa
+                      <PencilIcon />
                     </Button>
                     <span>|</span>
                     <Button
@@ -107,7 +108,7 @@ const InventoryList = memo(({ inventories, isLoading, formatVND, handleShowDelet
                       className="text-danger p-0 ms-2"
                       onClick={() => handleShowDeleteModal(inventory.id)}
                     >
-                      Xóa
+                      <Trash />
                     </Button>
                   </td>
                 </tr>
@@ -916,9 +917,9 @@ const AdminInventory = () => {
   }, []);
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "'Segoe UI', sans-serif", backgroundColor: '#f8f9fa' }}>
+    <div className='d-flex'>
       <AdminSidebar />
-      <div style={{ flexGrow: 1, padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+      <div className='position-relative w-100 flex-grow-1 ms-5 p-4'>
         <h1 className="mb-4" style={{ fontSize: '1.8rem', fontWeight: '600' }}>Quản Lý Kho</h1>
         {currentView === 'list' && (
           <InventoryList
