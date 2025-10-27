@@ -205,9 +205,8 @@ const TodaySection = ({
     return waitingPatientsAfter[0] || null;
   }, [getStatusText]);
 
-  // Fixed handleExaminationSubmit: Đảm bảo POST, prevent default GET
   const handleExaminationSubmit = async (e) => {
-    e.preventDefault(); // Block default form GET
+    e.preventDefault();
     if (!selectedTodayPatient) {
       setToast({ show: true, message: "Chưa chọn bệnh nhân.", variant: "warning" });
       return;
@@ -226,16 +225,16 @@ const TodaySection = ({
         diagnosis,
         services,
         prescriptions: prescriptionRows,
-        status: 'done', // Đổi status 'Đã khám'
+        status: 'done',
       };
 
       const response = await fetch(`${API_BASE_URL}/api/doctor/examinations/${selectedTodayPatient.id}/complete`, {
-        method: 'POST', // Explicit POST
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify(submitData), // Body for POST
+        body: JSON.stringify(submitData),
       });
 
       if (!response.ok) {
@@ -283,7 +282,6 @@ const TodaySection = ({
     }
   };
 
-  // handleTempSave (giữ nguyên từ trước, nếu chưa có API thì placeholder)
   const handleTempSave = async () => {
     if (!selectedTodayPatient) {
       setToast({ show: true, message: "Chưa chọn bệnh nhân.", variant: "warning" });
@@ -339,7 +337,6 @@ const TodaySection = ({
     }
   };
 
-  // Các hàm khác giữ nguyên (handleOpenAddModal, handleEdit, handleModalSubmit, handleModalClose, printDocument, handleRemoveWithConfirm)
   const handleOpenAddModal = () => {
     setDefaultData(null);
     setEditIndex(null);
@@ -387,16 +384,22 @@ const TodaySection = ({
     }
 
     try {
-      const html = generatePrintHtml(
-        type,
-        selectedTodayPatient,
-        symptoms,
-        diagnosis,
-        services,
-        prescriptionRows,
-        {}
-      );
-      printHtml(html, printRef);
+      // Tạm thời comment do thiếu hàm generatePrintHtml
+      // const html = generatePrintHtml(
+      //   type,
+      //   selectedTodayPatient,
+      //   symptoms,
+      //   diagnosis,
+      //   services,
+      //   prescriptionRows,
+      //   {}
+      // );
+      // printHtml(html, printRef);
+      setToast({ 
+        show: true, 
+        message: "🖨️ Chức năng in đang được phát triển", 
+        variant: "info" 
+      });
     } catch (error) {
       console.error('Error printing:', error);
       setToast({ show: true, message: `Lỗi in: ${error.message}`, variant: "danger" });
@@ -433,6 +436,16 @@ const TodaySection = ({
           #print-content, #print-content * { visibility: visible; }
           #print-content { position: absolute; left: 0; top: 0; width: 100%; display: block !important; }
           .no-print { display: none !important; }
+        }
+        /* FIXED: CSS cho checkbox */
+        .form-check-input:checked {
+          background-color: #0d6efd;
+          border-color: #0d6efd;
+        }
+        .form-check-input:focus {
+          border-color: #86b7fe;
+          outline: 0;
+          box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
         }
       `}</style>
       <div className={`section ${currentSection === "today" ? "active" : ""}`} id="today">
@@ -506,7 +519,7 @@ const TodaySection = ({
                 </div>
                 <hr />
 
-                <Form onSubmit={(e) => e.preventDefault()}> {/* 🆕 onSubmit empty to prevent default GET */}
+                <Form onSubmit={(e) => e.preventDefault()}>
                   <Row>
                     <DiagnosisSection
                       symptoms={symptoms}
@@ -546,8 +559,8 @@ const TodaySection = ({
                   <div className="d-flex justify-content-start gap-2 mt-3">
                     <Button
                       variant="success"
-                      type="button" // 🆕 Change to button to avoid default form submit
-                      onClick={handleExaminationSubmit} // 🆕 onClick instead of submit
+                      type="button"
+                      onClick={handleExaminationSubmit}
                       disabled={isFormDisabled || isLoading || viewMode || (!symptoms && !diagnosis && Object.keys(services).length === 0 && prescriptionRows.length === 0)}
                       className="no-print"
                     >

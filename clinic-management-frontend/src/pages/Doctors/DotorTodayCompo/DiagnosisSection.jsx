@@ -4,21 +4,40 @@ import { Col, Card, Form, Button, Spinner } from "react-bootstrap";
 const API_BASE_URL = 'http://localhost:8000';
 
 const DiagnosisSection = ({
-  symptoms,
-  setSymptoms,
-  diagnosis,
-  setDiagnosis,
+  symptoms: initialSymptoms,
+  setSymptoms: setInitialSymptoms,
+  diagnosis: initialDiagnosis,
+  setDiagnosis: setInitialDiagnosis,
   isFormDisabled,
   prescriptionRows,
   setPrescriptionRows,
   setToast,
+  onDiagnosisUpdate, // Callback mới để truyền diagnoses lên cha
 }) => {
+  const [symptoms, setSymptoms] = useState(initialSymptoms || '');
+  const [diagnosis, setDiagnosis] = useState(initialDiagnosis || '');
   const [diagnosisSuggestions, setDiagnosisSuggestions] = useState([]);
   const [diagnosisLoading, setDiagnosisLoading] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
 
-  // Gợi ý chẩn đoán dựa trên symptoms (chỉ trigger khi symptoms thay đổi >=3 ký tự)
+  // Cập nhật state cha khi symptoms hoặc diagnosis thay đổi
+  useEffect(() => {
+    setInitialSymptoms(symptoms);
+  }, [symptoms, setInitialSymptoms]);
+
+  useEffect(() => {
+    setInitialDiagnosis(diagnosis);
+    // Gửi diagnoses lên component cha qua callback
+    if (onDiagnosisUpdate) {
+      onDiagnosisUpdate({
+        Symptoms: symptoms || '',
+        Diagnosis: diagnosis || '',
+      });
+    }
+  }, [diagnosis, symptoms, setInitialDiagnosis, onDiagnosisUpdate]);
+
+  // Gợi ý chẩn đoán dựa trên symptoms
   useEffect(() => {
     const trimmedSymptoms = symptoms?.trim();
 
@@ -55,9 +74,9 @@ const DiagnosisSection = ({
     }, 800);
 
     return () => clearTimeout(timeout);
-  }, [symptoms, setToast]); // Chỉ depend symptoms
+  }, [symptoms, setToast]);
 
-  // Gợi ý thuốc dựa trên diagnosis (chỉ trigger khi diagnosis thay đổi >=3 ký tự)
+  // Gợi ý thuốc dựa trên diagnosis
   useEffect(() => {
     const trimmedDiagnosis = diagnosis?.trim();
 
@@ -94,9 +113,8 @@ const DiagnosisSection = ({
     }, 800);
 
     return () => clearTimeout(timeout);
-  }, [diagnosis, setToast]); // Chỉ depend diagnosis
+  }, [diagnosis, setToast]);
 
-  // 🆕 useCallback để ổn định handleSelect (giảm re-render)
   const handleSelectDiagnosis = useCallback((suggestedDiagnosis) => {
     const newDiagnosis = suggestedDiagnosis.DiagnosisName;
     setDiagnosis(newDiagnosis);
@@ -105,11 +123,8 @@ const DiagnosisSection = ({
       message: `✅ Đã chọn chẩn đoán: "${newDiagnosis}"`,
       variant: "success",
     });
-    // Clear gợi ý cũ khi chọn
     setDiagnosisSuggestions([]);
   }, [setDiagnosis, setToast]);
-
-  // Log re-render tổng (nên chỉ 3 lần chính)
 
   return (
     <Col md={12}>

@@ -21,6 +21,7 @@ use App\Http\Controllers\API\Doctor\PatientsController;
 
 //----------------------------------------------Hết-------------------------------
 use App\Http\Controllers\API\User\UserControllers;
+use App\Http\Controllers\API\Print\InvoicePrintController;
 
 
 
@@ -34,7 +35,7 @@ Route::get('/medicines/ping', [MedicinesController::class, 'ping']);
 Route::post('/medicines', [MedicinesController::class, 'store']);
 Route::put('/medicines/{id}', [MedicinesController::class, 'update']);
 Route::delete('/medicines/{id}', [MedicinesController::class, 'destroy']);
-Route::get('/medicines/all',[MedicinesController::class, 'all']);
+Route::get('/medicines/all', [MedicinesController::class, 'all']);
 
 Route::get('/import-bills', [ImportBillController::class, 'index']);
 Route::post('/import-bills', [ImportBillController::class, 'store']);
@@ -70,7 +71,7 @@ Route::prefix('doctor')->group(function () {
     Route::apiResource('appointments', AppointmentsController::class);
 
     // Gợi ý chẩn đoán & thuốc
-    
+
     //Gợi ý lấy từ lịch sử bệnh trước đó
     Route::get('/diagnoses/suggestions', [DiagnosisSuggestionController::class, 'suggestions']);
     // Tìm kiếm thuốc theo tên, loại
@@ -85,7 +86,7 @@ Route::prefix('doctor')->group(function () {
 
     // Lấy danh sách tất cả bệnh nhân 
     Route::get('/patients', [PatientsController::class, 'index']);
-    
+
     // Lịch sử bệnh nhân
     Route::get('/patients/{patientId}/history', [PatientsController::class, 'getPatientHistory']);
 
@@ -110,3 +111,8 @@ Route::prefix('users')->group(function () {
 });
 
 Route::get('/roles', [UserControllers::class, 'roles']);
+
+
+// Route::post('/print/export', [InvoicePrintController::class, 'export']); // POST để pass appointment_id + type
+Route::get('/print/{type}/{appointment_id}', [InvoicePrintController::class, 'export']);
+Route::post('/print/prescription/preview', [InvoicePrintController::class, 'previewPrescription']);
