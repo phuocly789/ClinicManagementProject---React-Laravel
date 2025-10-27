@@ -1,0 +1,263 @@
+/* ----- BIẾN MÀU VÀ FONT (GIỮ NGUYÊN) ----- */
+:root {
+    --primary-color: #3B71CA;
+    --primary-hover: #3260AC;
+    --sky-color: #0ea5e9;
+    --green-color: #22c55e;
+    --orange-color: #f97316;
+    --danger-color: #ef4444;
+    --background-color: #F8F9FA;
+    --card-background: #FFFFFF;
+    --text-primary: #1d2d3d;
+    --text-secondary: #34495e;
+    --text-muted: #6c757d;
+    --border-color: #EAECEF;
+    --font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+    --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    --border-radius: 8px;
+}
+
+/* ----- LAYOUT CHUNG (ĐÃ SỬA LỖI) ----- */
+.dashboard-layout {
+    display: flex;
+    background-color: var(--background-color);
+    font-family: var(--font-family);
+}
+
+.main-content {
+    flex-grow: 1;
+    padding: 24px;
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* ----- HEADER VÀ BỘ LỌC NGÀY ----- */
+.page-header {
+    flex-shrink: 0;
+    /* Quan trọng: Không cho co lại */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.page-header h1 {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.date-filter {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.date-filter label {
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.date-filter input {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 8px 12px;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: var(--border-radius);
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+}
+
+/* ----- CÁC THẺ THỐNG KÊ (STAT CARDS) ----- */
+.stat-cards-grid {
+    flex-shrink: 0;
+    /* <<<< ĐÂY LÀ PHẦN SỬA LỖI QUAN TRỌNG */
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 24px;
+}
+
+.stat-card {
+    background-color: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--box-shadow);
+}
+
+.stat-card__icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #fff;
+    /* Icon sẽ có màu trắng */
+    font-size: 28px;
+    /* Kích thước icon */
+}
+
+.stat-card--blue {
+    background-color: var(--primary-color);
+}
+
+.stat-card--sky {
+    background-color: var(--sky-color);
+}
+
+.stat-card--green {
+    background-color: var(--green-color);
+}
+
+.stat-card--orange {
+    background-color: var(--orange-color);
+}
+
+.stat-card__info {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-card__info .label {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.stat-card__info .value {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* ----- KHUNG LƯỚI CHÍNH (BIỂU ĐỒ & BẢNG) ----- */
+.dashboard-grid {
+    flex-grow: 1;
+    /* Quan trọng: Lấp đầy không gian còn lại */
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 24px;
+    min-height: 0;
+    /* Fix lỗi overflow trên flex-child */
+}
+
+/* ----- CARD STYLE CHUNG ----- */
+.card-style {
+    background-color: var(--card-background);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    /* Quan trọng: Đảm bảo card có thể co giãn đúng cách */
+}
+
+.card-header {
+    flex-shrink: 0;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.card-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.card-body,
+.table-responsive {
+    flex-grow: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.chart-container .card-body {
+    padding: 20px;
+}
+
+/* ----- BẢNG TỒN KHO ----- */
+.clinic-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.clinic-table th,
+.clinic-table td {
+    padding: 14px 16px;
+    text-align: left;
+    vertical-align: middle;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.clinic-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: var(--card-background);
+}
+
+.clinic-table th {
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.clinic-table tbody tr {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.clinic-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+.no-data {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-muted);
+}
+
+.text-end {
+    text-align: right;
+}
+
+.fw-bold {
+    font-weight: 700;
+}
+
+.text-danger {
+    color: var(--danger-color);
+}

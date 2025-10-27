@@ -174,7 +174,7 @@ button.btn-secondary:hover {
   border: none !important;
   border-left: 5px solid transparent;
   border-radius: 0 !important;
-  transition: all 0.25s ease-in-out;
+  transition: all 0.25s ease-in-out !important;
   padding: 10px 15px;
   background-color: #fff !important;
   color: #333;
@@ -378,4 +378,14 @@ button.btn-link:hover {
   width: 100%;
   max-width: 500px;
   /* Điều chỉnh nếu cần */
+}
+
+.form-control {
+  width: 100% !important;
+}
+
+.button:hover {
+  opacity: 0.8 !important;
+  transform: none !important; 
+  transition: all 0.2s ease !important;
 }
