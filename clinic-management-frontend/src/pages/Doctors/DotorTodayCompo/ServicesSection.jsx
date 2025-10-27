@@ -116,7 +116,6 @@ const ServicesSection = ({
     }
 
     try {
-      console.log('DEBUG - Sending service print data:', requestData);
 
       // Trong function printDocument của ServicesSection
       const response = await fetch(`${API_BASE_URL}/api/print/prescription/preview`, {
@@ -254,7 +253,6 @@ const ServicesSection = ({
   // FIX: Handle test change - sử dụng local state
   const handleTestChange = useCallback((serviceId) => (e) => {
     const isChecked = e.target.checked;
-    console.log('DEBUG - Checkbox changed:', serviceId, isChecked);
 
     // Cập nhật local state ngay lập tức để UI phản hồi
     setLocalServicesState(prev => {
@@ -262,7 +260,6 @@ const ServicesSection = ({
         ...prev,
         [serviceId]: isChecked
       };
-      console.log('DEBUG - New LOCAL services state:', newState);
       return newState;
     });
 
@@ -272,7 +269,6 @@ const ServicesSection = ({
         ...prev,
         [serviceId]: isChecked
       };
-      console.log('DEBUG - New PROP services state:', newState);
       return newState;
     });
   }, [setServices]);
@@ -280,7 +276,6 @@ const ServicesSection = ({
   // Handle request service
   const handleRequestService = useCallback(() => {
     const selected = Object.keys(localServicesState).filter((k) => localServicesState[k]);
-    console.log('DEBUG - Selected services from LOCAL state:', selected);
 
     if (selected.length === 0) {
       setToast({
@@ -312,7 +307,6 @@ const ServicesSection = ({
       columnServices.map((service) => {
         // Sử dụng localServicesState thay vì services prop
         const checked = localServicesState[service.ServiceId] || false;
-        console.log(`DEBUG - Rendering service ${service.ServiceId}:`, checked);
 
         return (
           <div key={service.ServiceId} className="d-flex justify-content-between align-items-center mb-2">
@@ -352,8 +346,6 @@ const ServicesSection = ({
 
   // Debug logs
   useEffect(() => {
-    console.log('DEBUG - LocalServicesState updated:', localServicesState);
-    console.log('DEBUG - Services prop updated:', services);
   }, [localServicesState, services]);
 
   return (
