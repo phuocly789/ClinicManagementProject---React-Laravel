@@ -48,10 +48,10 @@ const availableColumns = [
 const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
 const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class|import|export|\$\w+)/i;
 
-const MedicineList = memo(({ 
-  medicines, isLoading, formatVND, handleShowDeleteModal, handleShowEditForm, 
-  pageCount, currentPage, handlePageChange, 
-  onDownloadTemplate, onExport, uploadErrors, previewData, headers, 
+const MedicineList = memo(({
+  medicines, isLoading, formatVND, handleShowDeleteModal, handleShowEditForm,
+  pageCount, currentPage, handlePageChange,
+  onDownloadTemplate, onExport, uploadErrors, previewData, headers,
   dryRunResult, onDryRun, onConfirmImport, isProcessing,
   selectedColumns, onColumnChange, filters, onFilterChange,
   mapping, onMappingChange, getRootProps, getInputProps, importFile, onShowImport
@@ -92,12 +92,12 @@ const MedicineList = memo(({
               <Form.Label>Chọn Cột</Form.Label>
               <div className="d-flex flex-wrap gap-2">
                 {availableColumns.map(col => (
-                  <Form.Check 
-                    type="checkbox" 
-                    label={col.label} 
-                    key={col.value} 
-                    checked={selectedColumns.includes(col.value)} 
-                    onChange={(e) => onColumnChange(col.value, e.target.checked)} 
+                  <Form.Check
+                    type="checkbox"
+                    label={col.label}
+                    key={col.value}
+                    checked={selectedColumns.includes(col.value)}
+                    onChange={(e) => onColumnChange(col.value, e.target.checked)}
                     disabled={selectedColumns.length >= 20 && !selectedColumns.includes(col.value)}
                   />
                 ))}
@@ -275,10 +275,10 @@ const ImportModal = ({ show, onHide, onDrop, uploadErrors, previewData, headers,
                 <Badge bg="success" className="d-flex align-items-center"><CheckCircle size={16} className="me-1" /> Thành công: {dryRunResult.success_count}</Badge>
                 <Badge bg="danger" className="d-flex align-items-center"><XCircle size={16} className="me-1" /> Lỗi: {dryRunResult.error_count}</Badge>
               </div>
-              <ProgressBar 
-                now={(dryRunResult.success_count / (dryRunResult.success_count + dryRunResult.error_count)) * 100} 
-                variant="success" 
-                label={`${Math.round((dryRunResult.success_count / (dryRunResult.success_count + dryRunResult.error_count)) * 100)}%`} 
+              <ProgressBar
+                now={(dryRunResult.success_count / (dryRunResult.success_count + dryRunResult.error_count)) * 100}
+                variant="success"
+                label={`${Math.round((dryRunResult.success_count / (dryRunResult.success_count + dryRunResult.error_count)) * 100)}%`}
               />
               {dryRunResult.errors.length > 0 && (
                 <div className="mt-3">
@@ -865,7 +865,7 @@ const AdminMedicine = () => {
         setPreviewData(rows.slice(1, 51)); // 50 dòng data
         // Auto map nếu match
         const autoMapping = {};
-        headerRow.forEach((h, idx) => {
+        headerRow.forEach((h) => {
           const lowerH = h.toLowerCase();
           availableColumns.forEach(col => {
             if (lowerH.includes(col.value.toLowerCase())) autoMapping[h] = col.value;
@@ -896,6 +896,7 @@ const AdminMedicine = () => {
       const token = await getCsrfToken();
       const formData = new FormData();
       formData.append('file', importFile);
+      formData.append('mapping', JSON.stringify(mapping));
       const response = await fetch(`${API_BASE_URL}/api/medicines/dry-run`, {
         method: 'POST',
         headers: {
@@ -931,6 +932,7 @@ const AdminMedicine = () => {
       const token = await getCsrfToken();
       const formData = new FormData();
       formData.append('file', importFile);
+      formData.append('mapping', JSON.stringify(mapping));
       const response = await fetch(`${API_BASE_URL}/api/medicines/import`, {
         method: 'POST',
         headers: {
@@ -957,7 +959,7 @@ const AdminMedicine = () => {
     } catch (error) {
       showToast('error', 'Lỗi import: ' + error.message);
     }
-  }, [importFile, getCsrfToken, showToast, fetchMedicines]);
+  }, [importFile, mapping, getCsrfToken, showToast, fetchMedicines]);
 
   const handleColumnChange = useCallback((value, checked) => {
     setSelectedColumns(prev => checked ? [...prev, value] : prev.filter(v => v !== value));

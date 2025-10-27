@@ -185,7 +185,7 @@ class MedicinesController extends Controller
     public function import(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'file' => 'required|file|mimes:xlsx,xls,csv|max:10240', // Tăng lên 10MB, thêm csv
+            'file' => 'required|file|mimes:xlsx,xls,csv|max:10240',
         ]);
 
         if ($validator->fails()) {
@@ -196,10 +196,16 @@ class MedicinesController extends Controller
         }
 
         try {
-            Excel::import(new MedicinesImport, $request->file('file'));
+            $mapping = json_decode($request->input('mapping', '{}'), true);  // THÊM: Lấy mapping
+            // CHỈ import sheet đầu tiên (DanhSachThuoc)
+            $data = Excel::toArray([], $request->file('file'))[0];
+
+            if (count($data) <= 1) {
+                return response()->json(['message' => 'File không có dữ liệu'], 422);
+            }
+            Excel::import(new MedicinesImport($mapping), $request->file('file'));
             return response()->json(['message' => 'Import thành công'], 200);
         } catch (\Maatwebsite\Excel\Validators\ValidationException $e) {
-            // Xử lý lỗi validation chi tiết
             $failures = $e->failures();
             return response()->json([
                 'message' => 'Import có lỗi validation',
@@ -208,6 +214,7 @@ class MedicinesController extends Controller
                         'row' => $failure->row(),
                         'attribute' => $failure->attribute(),
                         'errors' => $failure->errors(),
+                        'values' => $failure->values(),
                     ];
                 })->toArray()
             ], 422);
@@ -220,50 +227,90 @@ class MedicinesController extends Controller
     public function dryRunImport(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'file' => 'required|file|mimes:xlsx,xls,csv|max:10240' // 10MB
+            'file' => 'required|file|mimes:xlsx,xls,csv|max:10240'
         ]);
+
         if ($validator->fails()) {
             return response()->json(['message' => $validator->errors()->first()], 422);
         }
 
         try {
             $file = $request->file('file');
+            $mapping = json_decode($request->input('mapping', '{}'), true);  // Lấy mapping từ request
 
-            // Bước 1: Đọc headings để xác nhận header (optional)
-            HeadingRowFormatter::default('none'); // Không format header tự động
-            $headings = (new HeadingRowImport)->toArray($file)[0][0] ?? [];
+            // Đặt format header để khớp với file Excel
+            \Maatwebsite\Excel\Imports\HeadingRowFormatter::default('none');
 
-            // Bước 2: Sử dụng MedicinesImport nhưng override model() để KHÔNG save (dry-run)
-            $import = new class extends MedicinesImport {
+            // CHỈ đọc sheet "DanhSachThuoc" (sheet đầu tiên)
+            $data = Excel::toArray([], $file)[0]; // [0] = sheet đầu tiên
+
+            // Kiểm tra nếu không có dữ liệu
+            if (count($data) <= 1) {
+                return response()->json([
+                    'message' => 'File không có dữ liệu hoặc chỉ có header',
+                    'success_count' => 0,
+                    'error_count' => 0,
+                    'errors' => [],
+                    'total_rows' => 0
+                ]);
+            }
+
+            $totalRows = count($data) - 1; // Trừ header row
+
+            // Tạo import instance cho dry-run - SỬA: Truyền $mapping trực tiếp vào new class($mapping)
+            $import = new class($mapping) extends MedicinesImport {
+                public $processedRows = 0;
+                public $mapping;
+
+                public function __construct($mapping)
+                {
+                    $this->mapping = $mapping;
+                }
+
                 public function model(array $row)
                 {
-                    return null; // Dry-run: Không create/update model
+                    $this->processedRows++;
+                    // Dry-run: chỉ validate, không lưu
+                    return null;
+                }
+
+                public function prepareForValidation($data, $index)
+                {
+                    if (empty(array_filter($data))) {
+                        return null;  // THÊM: Skip empty rows
+                    }
+
+                    // Remap keys dựa trên mapping
+                    $remapped = [];
+                    foreach ($this->mapping as $fileHeader => $systemCol) {
+                        if (isset($data[$fileHeader])) {
+                            $remapped[$systemCol] = $data[$fileHeader];
+                        }
+                    }
+                    // Gọi parent để xử lý thêm (như chuyển kiểu dữ liệu)
+                    return parent::prepareForValidation($remapped, $index);
                 }
             };
 
-            // Bước 3: Import để trigger validation + collect failures
+            // Thực hiện import để validate - CHỈ sheet đầu tiên
             Excel::import($import, $file);
 
-            // Bước 4: Tính total rows (header + data rows)
-            $sheet = Excel::load($file)->getSheet(0);
-            $totalRows = $sheet->getHighestDataRow() - 1; // Trừ header row
-
-            // Bước 5: Failures từ import
-            $failures = $import->failures(); // Method, không phải property
+            $failures = $import->failures();
             $errorCount = count($failures);
-            $successCount = $totalRows - $errorCount;
 
-            // Bước 6: Format errors cho frontend (row-level)
+            // Tính success_count chính xác hơn
+            $successCount = max(0, $totalRows - $errorCount);
+
             $formattedErrors = collect($failures)->map(function ($failure) {
                 return [
-                    'row' => $failure->row(), // Row số (bắt đầu từ 2 vì header=1)
+                    'row' => $failure->row(),
                     'attribute' => $failure->attribute(),
                     'errors' => $failure->errors(),
                     'values' => $failure->values(),
                 ];
             })->toArray();
 
-            if ($successCount === 0) {
+            if ($successCount === 0 && $errorCount > 0) {
                 return response()->json([
                     'message' => 'Không có bản ghi nào hợp lệ để import. Vui lòng kiểm tra lại file.',
                     'success_count' => 0,
@@ -273,14 +320,13 @@ class MedicinesController extends Controller
             }
 
             return response()->json([
+                'message' => $errorCount > 0 ? 'File có lỗi cần sửa' : 'Kiểm tra file thành công',
                 'success_count' => $successCount,
                 'error_count' => $errorCount,
                 'errors' => $formattedErrors,
                 'total_rows' => $totalRows,
-                'headings' => $headings // Gửi header để frontend mapping/preview
             ]);
         } catch (\Maatwebsite\Excel\Validators\ValidationException $e) {
-            // Validation failures
             $failures = $e->failures();
             $formattedErrors = collect($failures)->map(function ($failure) {
                 return [
@@ -298,17 +344,36 @@ class MedicinesController extends Controller
                 'errors' => $formattedErrors
             ], 422);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Không thể xử lý file do lỗi hệ thống: ' . $e->getMessage()], 500);
+            \Log::error('Dry-run import error: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'message' => 'Lỗi hệ thống khi xử lý file: ' . $e->getMessage()
+            ], 500);
         }
     }
 
     // Download template
     public function downloadTemplate()
     {
-        $path = 'templates/medicines_template.xlsx';
-        if (!Storage::exists('public/' . $path)) {
-            return response()->json(['message' => 'Không tìm thấy file template. Vui lòng liên hệ quản trị viên.'], 404);
-        }
-        return Storage::download('public/' . $path, 'medicines_template.xlsx');
+        // Tạo template động thay vì dùng file tĩnh
+        $headers = [
+            'MedicineId',
+            'MedicineName',
+            'MedicineType',
+            'Unit',
+            'Price',
+            'StockQuantity',
+            'Description'
+        ];
+
+        $exampleData = [
+            ['', 'Paracetamol', 'Giảm đau, hạ sốt', 'Viên', 500, 1000, 'Thuốc giảm đau, hạ sốt thông dụng']
+        ];
+
+        return Excel::download(new MedicinesExport([], $headers, $exampleData), 'medicines_template.xlsx');
     }
 }
