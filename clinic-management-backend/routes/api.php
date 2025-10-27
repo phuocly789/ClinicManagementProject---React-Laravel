@@ -122,3 +122,5 @@ Route::get('/roles', [UserControllers::class, 'roles']);
 // Route::post('/print/export', [InvoicePrintController::class, 'export']); // POST để pass appointment_id + type
 Route::get('/print/{type}/{appointment_id}', [InvoicePrintController::class, 'export']);
 Route::post('/print/prescription/preview', [InvoicePrintController::class, 'previewPrescription']);
+// Route cho PDF Preview
+Route::post('/print/preview-html', [InvoicePrintController::class, 'previewHTML']);

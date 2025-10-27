@@ -15,6 +15,7 @@ import AdminRevenueReport from "./pages/Admin/AdminRevenueReport/AdminRevenueRep
 import AdminScheduleManagement from "./pages/Admin/AdminScheduleManagement/AdminScheduleManagement.jsx";
 import AdminUserManagement from "./pages/Admin/AdminUserManagement/AdminUserManagement.jsx";
 import AdminSuppliers from "./pages/Admin/AdminSuppliers";
+import PDFEditorPage from './pages/Doctors/PrintsPDF/PDFPreviewEditor.jsx';
 function App() {
   return (
     <BrowserRouter>
@@ -33,6 +34,8 @@ function App() {
         <Route path={path.REGISTER} element={<Register />} />{" "}
         {/* Trang mặc định */}
         <Route path="/doctor" element={<DoctorDashboard />} />
+        <Route path="/pdf-editor" element={<PDFEditorPage />} />
+
       </Routes>
     </BrowserRouter>
   );

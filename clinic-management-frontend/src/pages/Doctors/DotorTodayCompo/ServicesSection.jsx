@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Col, Card, Form, Button, Spinner, Badge, Row } from "react-bootstrap";
+import { Col, Card, Form, Button, Spinner, Badge, Row, Modal } from "react-bootstrap";
 import Pagination from "../../../Components/Pagination/Pagination";
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -25,6 +25,12 @@ const ServicesSection = ({
 
   // FIX: Tạo local state để quản lý riêng
   const [localServicesState, setLocalServicesState] = useState({});
+
+  // THÊM STATE CHO PDF PREVIEW
+  const [showPDFPreview, setShowPDFPreview] = useState(false);
+  const [pdfPreviewData, setPdfPreviewData] = useState(null);
+  const [previewHTML, setPreviewHTML] = useState('');
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
   // Đồng bộ state từ props khi component mount
   useEffect(() => {
@@ -75,7 +81,89 @@ const ServicesSection = ({
     fetchServices();
   }, []);
 
-  // THÊM FUNCTION printDocument VÀO ĐÂY
+  // FUNCTION PREVIEW PDF
+  const handlePreview = async (type) => {
+    if (!selectedTodayPatient) {
+      setToast({ show: true, message: "⚠️ Chưa chọn bệnh nhân.", variant: "warning" });
+      return;
+    }
+
+    // CHUYỂN ĐỔI services từ object {id: boolean} sang array
+    const selectedServices = Object.keys(localServicesState)
+      .filter(serviceId => localServicesState[serviceId])
+      .map(serviceId => {
+        const service = localServices.find(s => s.ServiceId == serviceId);
+        return service ? {
+          ServiceName: service.ServiceName,
+          Price: service.Price || 0,
+          Quantity: 1
+        } : null;
+      })
+      .filter(Boolean);
+
+    if (type === 'service' && selectedServices.length === 0) {
+      setToast({ show: true, message: "⚠️ Chưa chọn dịch vụ nào.", variant: "warning" });
+      return;
+    }
+
+    const previewData = {
+      type: type,
+      patient_name: selectedTodayPatient.name,
+      age: selectedTodayPatient.age,
+      gender: selectedTodayPatient.gender,
+      phone: selectedTodayPatient.phone,
+      appointment_date: selectedTodayPatient.date || new Date().toLocaleDateString('vi-VN'),
+      appointment_time: selectedTodayPatient.time,
+      doctor_name: "Bác sĩ điều trị",
+      services: selectedServices,
+      diagnoses: diagnoses.length > 0 ? diagnoses : [{ Symptoms: symptoms, Diagnosis: diagnosis }],
+    };
+
+    console.log('📤 Data preview gửi lên BE:', previewData);
+
+    setPdfPreviewData(previewData);
+    setShowPDFPreview(true);
+    loadPreviewHTML(previewData);
+  };
+
+  // LOAD PREVIEW HTML
+  const loadPreviewHTML = async (data) => {
+    setIsLoadingPreview(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/print/preview-html`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setPreviewHTML(result.html);
+      } else {
+        console.error('Preview error:', result.message);
+        setToast({
+          show: true,
+          message: `Lỗi tải preview: ${result.message}`,
+          variant: "danger",
+        });
+      }
+    } catch (error) {
+      console.error('Preview load error:', error);
+      setToast({
+        show: true,
+        message: `Lỗi tải preview: ${error.message}`,
+        variant: "danger",
+      });
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  };
+
+  // FUNCTION DOWNLOAD PDF
   const printDocument = async (type) => {
     if (!selectedTodayPatient) {
       setToast({ show: true, message: "⚠️ Chưa chọn bệnh nhân.", variant: "warning" });
@@ -116,8 +204,6 @@ const ServicesSection = ({
     }
 
     try {
-
-      // Trong function printDocument của ServicesSection
       const response = await fetch(`${API_BASE_URL}/api/print/prescription/preview`, {
         method: 'POST',
         headers: {
@@ -157,6 +243,13 @@ const ServicesSection = ({
         message: `Lỗi xuất PDF dịch vụ: ${error.message}`,
         variant: "danger",
       });
+    }
+  };
+
+  // RELOAD PREVIEW
+  const reloadPreview = () => {
+    if (pdfPreviewData) {
+      loadPreviewHTML(pdfPreviewData);
     }
   };
 
@@ -344,10 +437,6 @@ const ServicesSection = ({
     setCurrentPage(selected);
   }, []);
 
-  // Debug logs
-  useEffect(() => {
-  }, [localServicesState, services]);
-
   return (
     <Col md={12}>
       <Card className="mb-3 border-light shadow-sm">
@@ -446,6 +535,18 @@ const ServicesSection = ({
             >
               🧾 Yêu cầu thực hiện dịch vụ đã chọn ({Object.values(localServicesState).filter(v => v).length})
             </Button>
+            
+            {/* THÊM NÚT PREVIEW */}
+            <Button
+              variant="outline-info"
+              size="sm"
+              onClick={() => handlePreview('service')}
+              disabled={!selectedTodayPatient || !Object.values(localServicesState).some(Boolean)}
+              className="no-print ms-2"
+            >
+              👁️ Xem trước
+            </Button>
+
             <Button
               variant="outline-success"
               size="sm"
@@ -453,7 +554,7 @@ const ServicesSection = ({
               disabled={!selectedTodayPatient || !Object.values(localServicesState).some(Boolean)}
               className="no-print ms-2"
             >
-              🖨️ Xuất chỉ định dịch vụ
+              🖨️ Xuất PDF
             </Button>
           </div>
 
@@ -464,6 +565,51 @@ const ServicesSection = ({
           </p>
         </Card.Body>
       </Card>
+
+      {/* MODAL PREVIEW */}
+      <Modal show={showPDFPreview} onHide={() => setShowPDFPreview(false)} size="xl" centered>
+        <Modal.Header closeButton>
+          <Modal.Title>👁️ Xem trước Phiếu Dịch Vụ</Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{ minHeight: '500px' }}>
+          <div className="d-flex justify-content-between mb-3">
+            <Button variant="outline-primary" size="sm" onClick={reloadPreview}>
+              {isLoadingPreview ? <Spinner size="sm" /> : '🔄 Tải lại'}
+            </Button>
+          </div>
+          
+          {isLoadingPreview ? (
+            <div className="text-center py-5">
+              <Spinner animation="border" />
+              <p>Đang tải preview...</p>
+            </div>
+          ) : (
+            <div 
+              style={{ 
+                border: '1px solid #ddd', 
+                height: '500px', 
+                overflow: 'auto',
+                backgroundColor: 'white'
+              }}
+              dangerouslySetInnerHTML={{ __html: previewHTML }}
+            />
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowPDFPreview(false)}>
+            Đóng
+          </Button>
+          <Button 
+            variant="success" 
+            onClick={() => {
+              printDocument('service');
+              setShowPDFPreview(false);
+            }}
+          >
+            💾 Tải về PDF
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </Col>
   );
 };

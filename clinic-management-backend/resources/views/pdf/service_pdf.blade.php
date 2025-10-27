@@ -34,6 +34,24 @@
         .page-break { page-break-before: always; }
         .no-break { page-break-inside: avoid; }
         .note { font-style: italic; color: #666; margin-top: 10px; }
+        /* Preview mode styles */
+.preview-mode {
+    border: 2px dashed #007bff;
+    padding: 10px;
+    background-color: #f8f9fa;
+}
+
+@media screen {
+    /* Khi xem trên browser (preview) */
+    body {
+        background: white;
+        margin: 10px;
+    }
+    .page {
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        margin: 0 auto;
+    }
+}
     </style>
 </head>
 
