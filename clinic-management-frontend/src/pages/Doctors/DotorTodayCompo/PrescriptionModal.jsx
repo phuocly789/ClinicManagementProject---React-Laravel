@@ -36,7 +36,11 @@ const PrescriptionModal = ({ show, onHide, defaultData, onSubmit }) => {
     const delayDebounce = setTimeout(async () => {
       if (formData.medicine.trim().length >= 2) {
         try {
-          const response = await fetch(`${API_BASE_URL}/api/doctor/medicines/search?q=${encodeURIComponent(formData.medicine)}`);
+          const response = await fetch(`${API_BASE_URL}/api/doctor/medicines/search?q=${encodeURIComponent(formData.medicine)}`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+            }
+          });
           if (response.ok) {
             const data = await response.json();
             console.log('API response:', data); // Log dữ liệu từ API
@@ -77,17 +81,33 @@ const PrescriptionModal = ({ show, onHide, defaultData, onSubmit }) => {
     console.log('Quantity changed:', { quantity: newQuantity, totalPrice: newTotalPrice }); // Log khi thay đổi quantity
   };
 
+  const handleUnitPriceChange = (e) => {
+    const newUnitPrice = Number(e.target.value) || 0;
+    const newTotalPrice = formData.quantity ? formData.quantity * newUnitPrice : 0;
+    setFormData(prev => ({
+      ...prev,
+      unitPrice: newUnitPrice,
+      totalPrice: newTotalPrice
+    }));
+    console.log('Unit price changed:', { unitPrice: newUnitPrice, totalPrice: newTotalPrice }); // Log khi thay đổi unitPrice
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    if (!formData.medicine.trim() || !formData.quantity.trim() || !formData.dosage.trim()) {
+    if (!formData.medicine.trim() || !formData.quantity || !formData.dosage.trim()) {
       alert('Vui lòng điền đầy đủ thông tin thuốc!');
+      return;
+    }
+
+    if (formData.unitPrice < 0) {
+      alert('Đơn giá không được âm!');
       return;
     }
 
     onSubmit({
       medicine: formData.medicine,
-      quantity: formData.quantity,
+      quantity: Number(formData.quantity), // Chuyển sang number để đồng nhất
       dosage: formData.dosage,
       unitPrice: formData.unitPrice,
       totalPrice: formData.totalPrice
@@ -147,6 +167,18 @@ const PrescriptionModal = ({ show, onHide, defaultData, onSubmit }) => {
                   type="text"
                   value={formData.dosage}
                   onChange={(e) => setFormData({ ...formData, dosage: e.target.value })}
+                  required
+                />
+              </Form.Group>
+
+              <Form.Group className="mb-3">
+                <Form.Label>Đơn giá (VND)</Form.Label>
+                <Form.Control
+                  type="number"
+                  min="0"
+                  step="100"
+                  value={formData.unitPrice}
+                  onChange={handleUnitPriceChange}
                   required
                 />
               </Form.Group>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Col, Card, Form, Button, Spinner, Badge, Row } from "react-bootstrap";
 import Pagination from "../../../Components/Pagination/Pagination";
 
@@ -6,14 +6,15 @@ const API_BASE_URL = 'http://localhost:8000';
 
 const ServicesSection = ({
   services,
-  setservices,
-  requestedservices,
-  setRequestedservices,
+  setServices,
+  requestedServices,
+  setRequestedServices,
   diagnosis,
   isFormDisabled,
   setToast,
-  printDocument,
   selectedTodayPatient,
+  symptoms,
+  diagnoses = [],
 }) => {
   const [localServices, setLocalServices] = useState([]);
   const [localServicesLoading, setLocalServicesLoading] = useState(true);
@@ -22,20 +23,41 @@ const ServicesSection = ({
   const [currentPage, setCurrentPage] = useState(0);
   const itemsPerPage = 8;
 
-  // Fetch services on mount
+  // FIX: Tạo local state để quản lý riêng
+  const [localServicesState, setLocalServicesState] = useState({});
+
+  // Đồng bộ state từ props khi component mount
+  useEffect(() => {
+    if (services && Object.keys(services).length > 0) {
+      setLocalServicesState(services);
+    }
+  }, [services]);
+
+  // Fetch services
   useEffect(() => {
     const fetchServices = async () => {
       try {
         setLocalServicesLoading(true);
         const response = await fetch(`${API_BASE_URL}/api/doctor/services`);
-        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
         const data = await response.json();
-        setLocalServices(data || []);
 
-        // Initial services nếu chưa có
-        if (Object.keys(services).length === 0) {
-          const initialServices = data.reduce((acc, service) => ({ ...acc, [service.ServiceId]: false }), {});
-          setservices(initialServices);
+        if (Array.isArray(data)) {
+          setLocalServices(data);
+          // FIX: Khởi tạo cả local state và prop state
+          if (!services || Object.keys(services).length === 0) {
+            const initialServices = data.reduce((acc, service) => {
+              return { ...acc, [service.ServiceId]: false };
+            }, {});
+            setLocalServicesState(initialServices);
+            setServices(initialServices);
+          } else {
+            setLocalServicesState(services);
+          }
+        } else {
+          throw new Error("Dữ liệu từ API không phải mảng");
         }
       } catch (error) {
         console.error('Error fetching services:', error);
@@ -51,55 +73,113 @@ const ServicesSection = ({
     };
 
     fetchServices();
-  }, []); // Empty deps
+  }, []);
 
-  // Dynamic testLabels
-  const testLabels = localServices.reduce((acc, service) => ({ ...acc, [service.ServiceId]: service.ServiceName }), {});
-
-  const pageCount = Math.ceil(localServices.length / itemsPerPage);
-  const currentItems = localServices.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage);
-
-  const handlePageChange = ({ selected }) => {
-    setCurrentPage(selected);
-  };
-
-  // Match & find matching key (giữ nguyên)
-  const matchServiceName = (suggestedName, label) => {
-    if (!suggestedName || !label) return 0;
-    const lowerSuggested = suggestedName.toLowerCase();
-    const lowerLabel = label.toLowerCase();
-
-    if (lowerSuggested.includes(lowerLabel) || lowerLabel.includes(lowerSuggested)) {
-      return 1.0;
+  // THÊM FUNCTION printDocument VÀO ĐÂY
+  const printDocument = async (type) => {
+    if (!selectedTodayPatient) {
+      setToast({ show: true, message: "⚠️ Chưa chọn bệnh nhân.", variant: "warning" });
+      return;
     }
 
-    const wordsSuggested = lowerSuggested.split(/\s+/).filter(w => w.length > 0);
-    const wordsLabel = lowerLabel.split(/\s+/).filter(w => w.length > 0);
-    if (wordsSuggested.length === 0 || wordsLabel.length === 0) return 0;
+    let requestData = {
+      type: type,
+      patient_name: selectedTodayPatient.name,
+      age: selectedTodayPatient.age,
+      gender: selectedTodayPatient.gender,
+      phone: selectedTodayPatient.phone,
+      appointment_date: selectedTodayPatient.date || new Date().toLocaleDateString('vi-VN'),
+      appointment_time: selectedTodayPatient.time,
+      doctor_name: "Bác sĩ điều trị",
+      diagnoses: diagnoses.length > 0 ? diagnoses : [{ Symptoms: symptoms, Diagnosis: diagnosis }],
+    };
 
-    const commonWords = wordsSuggested.filter(word => wordsLabel.includes(word));
-    const overlapScore = commonWords.length / Math.max(wordsSuggested.length, wordsLabel.length);
+    if (type === 'service') {
+      // Data for service
+      const selectedServices = Object.keys(localServicesState)
+        .filter(serviceId => localServicesState[serviceId])
+        .map(serviceId => {
+          const service = localServices.find(s => s.ServiceId == serviceId);
+          return service ? {
+            ServiceName: service.ServiceName,
+            Price: service.Price || 0,
+            Quantity: 1
+          } : null;
+        })
+        .filter(Boolean);
 
-    return overlapScore;
-  };
-
-  const findMatchingKey = (serviceName, testLabels) => {
-    if (!serviceName) return null;
-    let bestKey = null;
-    let bestScore = 0;
-
-    Object.keys(testLabels).forEach(key => {
-      const score = matchServiceName(serviceName, testLabels[key]);
-      if (score > bestScore) {
-        bestScore = score;
-        bestKey = key;
+      if (selectedServices.length === 0) {
+        setToast({ show: true, message: "⚠️ Chưa chọn dịch vụ nào.", variant: "warning" });
+        return;
       }
-    });
+      requestData.services = selectedServices;
+    }
 
-    return bestScore > 0.5 ? bestKey : null;
+    try {
+      console.log('DEBUG - Sending service print data:', requestData);
+
+      // Trong function printDocument của ServicesSection
+      const response = await fetch(`${API_BASE_URL}/api/print/prescription/preview`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(requestData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      // Tạo blob và download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = 'PHIEU_DICH_VU.pdf';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      setToast({
+        show: true,
+        message: `✅ Đã xuất PDF phiếu dịch vụ với ${requestData.services.length} dịch vụ.`,
+        variant: "success",
+      });
+
+    } catch (error) {
+      console.error('Error printing service document:', error);
+      setToast({
+        show: true,
+        message: `Lỗi xuất PDF dịch vụ: ${error.message}`,
+        variant: "danger",
+      });
+    }
   };
 
-  // Gợi ý dịch vụ
+  // Memoize testLabels
+  const testLabels = useMemo(() => {
+    return localServices.reduce((acc, service) => ({
+      ...acc,
+      [service.ServiceId]: service.ServiceName
+    }), {});
+  }, [localServices]);
+
+  // Pagination
+  const { pageCount, currentItems } = useMemo(() => {
+    const pageCount = Math.ceil(localServices.length / itemsPerPage);
+    const currentItems = localServices.slice(
+      currentPage * itemsPerPage,
+      (currentPage + 1) * itemsPerPage
+    );
+    return { pageCount, currentItems };
+  }, [localServices, currentPage, itemsPerPage]);
+
+  // Service suggestions
   useEffect(() => {
     const trimmedDiagnosis = diagnosis?.trim();
     if (!trimmedDiagnosis || trimmedDiagnosis.length < 3) {
@@ -109,10 +189,10 @@ const ServicesSection = ({
 
     setServiceLoading(true);
     const timeout = setTimeout(async () => {
-      const fetchUrl = `${API_BASE_URL}/api/doctor/ai/suggestion?diagnosis=${encodeURIComponent(trimmedDiagnosis)}&type=service`;
-
       try {
+        const fetchUrl = `${API_BASE_URL}/api/doctor/ai/suggestion?diagnosis=${encodeURIComponent(trimmedDiagnosis)}&type=service`;
         const res = await fetch(fetchUrl);
+
         if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
         const data = await res.json();
 
@@ -127,11 +207,6 @@ const ServicesSection = ({
         }
       } catch (err) {
         console.error("Service suggestion error:", err);
-        setToast({
-          show: true,
-          message: `Lỗi gợi ý dịch vụ: ${err.message}`,
-          variant: "danger",
-        });
         setServiceSuggestions([]);
       } finally {
         setServiceLoading(false);
@@ -139,17 +214,74 @@ const ServicesSection = ({
     }, 800);
 
     return () => clearTimeout(timeout);
-  }, [diagnosis, setToast]);
+  }, [diagnosis]);
 
+  // Match function
+  const findMatchingKey = useCallback((serviceName, labels) => {
+    if (!serviceName) return null;
+
+    const matchServiceName = (suggestedName, label) => {
+      if (!suggestedName || !label) return 0;
+      const lowerSuggested = suggestedName.toLowerCase();
+      const lowerLabel = label.toLowerCase();
+
+      if (lowerSuggested.includes(lowerLabel) || lowerLabel.includes(lowerSuggested)) {
+        return 1.0;
+      }
+
+      const wordsSuggested = lowerSuggested.split(/\s+/).filter(w => w.length > 0);
+      const wordsLabel = lowerLabel.split(/\s+/).filter(w => w.length > 0);
+      if (wordsSuggested.length === 0 || wordsLabel.length === 0) return 0;
+
+      const commonWords = wordsSuggested.filter(word => wordsLabel.includes(word));
+      return commonWords.length / Math.max(wordsSuggested.length, wordsLabel.length);
+    };
+
+    let bestKey = null;
+    let bestScore = 0;
+
+    Object.keys(labels).forEach(key => {
+      const score = matchServiceName(serviceName, labels[key]);
+      if (score > bestScore) {
+        bestScore = score;
+        bestKey = key;
+      }
+    });
+
+    return bestScore > 0.5 ? bestKey : null;
+  }, []);
+
+  // FIX: Handle test change - sử dụng local state
   const handleTestChange = useCallback((serviceId) => (e) => {
-    console.log('DEBUG - Checkbox tick:', serviceId, 'Checked:', e.target.checked, 'Disabled:', isFormDisabled);
-    const newServices = { ...services, [serviceId]: e.target.checked };
-    setservices(newServices);
-    console.log('Services updated:', newServices);
-  }, [services, setservices, isFormDisabled]);
+    const isChecked = e.target.checked;
+    console.log('DEBUG - Checkbox changed:', serviceId, isChecked);
 
-  const handleRequestService = () => {
-    const selected = Object.keys(services).filter((k) => services[k]);
+    // Cập nhật local state ngay lập tức để UI phản hồi
+    setLocalServicesState(prev => {
+      const newState = {
+        ...prev,
+        [serviceId]: isChecked
+      };
+      console.log('DEBUG - New LOCAL services state:', newState);
+      return newState;
+    });
+
+    // Đồng bộ với prop state
+    setServices(prev => {
+      const newState = {
+        ...prev,
+        [serviceId]: isChecked
+      };
+      console.log('DEBUG - New PROP services state:', newState);
+      return newState;
+    });
+  }, [setServices]);
+
+  // Handle request service
+  const handleRequestService = useCallback(() => {
+    const selected = Object.keys(localServicesState).filter((k) => localServicesState[k]);
+    console.log('DEBUG - Selected services from LOCAL state:', selected);
+
     if (selected.length === 0) {
       setToast({
         show: true,
@@ -159,86 +291,70 @@ const ServicesSection = ({
       return;
     }
 
-    const updated = { ...requestedservices };
+    const updated = { ...requestedServices };
     selected.forEach((id) => (updated[id] = true));
-    setRequestedservices(updated);
+    setRequestedServices(updated);
 
     setToast({
       show: true,
-      message: "✅ Đã gửi yêu cầu thực hiện dịch vụ cận lâm sàng.",
+      message: `✅ Đã gửi yêu cầu thực hiện ${selected.length} dịch vụ cận lâm sàng.`,
       variant: "success",
     });
-  };
+  }, [localServicesState, requestedServices, setRequestedServices, setToast]);
 
-  // 🆕 Fixed renderServices: Native <input type="checkbox"> + <label> for visual sync, with key for re-mount
-  const renderServices = () => {
+  // FIX: Render services - sử dụng localServicesState
+  const renderServices = useCallback(() => {
     const half = Math.ceil(currentItems.length / 2);
     const leftColumn = currentItems.slice(0, half);
     const rightColumn = currentItems.slice(half);
 
+    const renderServiceColumn = (columnServices) =>
+      columnServices.map((service) => {
+        // Sử dụng localServicesState thay vì services prop
+        const checked = localServicesState[service.ServiceId] || false;
+        console.log(`DEBUG - Rendering service ${service.ServiceId}:`, checked);
+
+        return (
+          <div key={service.ServiceId} className="d-flex justify-content-between align-items-center mb-2">
+            <div className="form-check d-flex align-items-center">
+              <input
+                id={`checkbox-${service.ServiceId}`}
+                type="checkbox"
+                checked={checked}
+                onChange={handleTestChange(service.ServiceId)}
+                disabled={isFormDisabled}
+                className="form-check-input me-2"
+              />
+              <label htmlFor={`checkbox-${service.ServiceId}`} className="form-check-label mb-0">
+                {service.ServiceName} - {service.Price ? service.Price.toLocaleString() + ' VNĐ' : 'Giá chưa cập nhật'}
+              </label>
+            </div>
+            {requestedServices[service.ServiceId] && (
+              <Badge bg="success" pill className="ms-2">
+                ✅ Đã yêu cầu
+              </Badge>
+            )}
+          </div>
+        );
+      });
+
     return (
       <Row>
-        <Col md={6}>
-          {leftColumn.map((service) => {
-            const checked = services[service.ServiceId] || false;
-            const key = `${service.ServiceId}-${checked ? 'checked' : 'unchecked'}`; // 🆕 Key to re-mount on state change
-            return (
-              <div key={service.ServiceId} className="d-flex justify-content-between align-items-center mb-2">
-                <div className="form-check d-flex align-items-center">
-                  <input
-                    id={`checkbox-${service.ServiceId}`}
-                    type="checkbox"
-                    checked={checked}
-                    onChange={handleTestChange(service.ServiceId)}
-                    disabled={isFormDisabled}
-                    className="form-check-input me-2"
-                    style={{ pointerEvents: isFormDisabled ? 'none' : 'auto' }} // Explicit pointer-events
-                  />
-                  <label htmlFor={`checkbox-${service.ServiceId}`} className="form-check-label mb-0">
-                    {service.ServiceName} - {service.Price ? service.Price.toLocaleString() + ' VNĐ' : ''}
-                  </label>
-                </div>
-                {requestedservices[service.ServiceId] && (
-                  <Badge bg="success" pill className="ms-2">
-                    ✅ Đã yêu cầu
-                  </Badge>
-                )}
-              </div>
-            );
-          })}
-        </Col>
-        <Col md={6}>
-          {rightColumn.map((service) => {
-            const checked = services[service.ServiceId] || false;
-            const key = `${service.ServiceId}-${checked ? 'checked' : 'unchecked'}`;
-            return (
-              <div key={service.ServiceId} className="d-flex justify-content-between align-items-center mb-2">
-                <div className="form-check d-flex align-items-center">
-                  <input
-                    id={`checkbox-${service.ServiceId}`}
-                    type="checkbox"
-                    checked={checked}
-                    onChange={handleTestChange(service.ServiceId)}
-                    disabled={isFormDisabled}
-                    className="form-check-input me-2"
-                    style={{ pointerEvents: isFormDisabled ? 'none' : 'auto' }}
-                  />
-                  <label htmlFor={`checkbox-${service.ServiceId}`} className="form-check-label mb-0">
-                    {service.ServiceName} - {service.Price ? service.Price.toLocaleString() + ' VNĐ' : ''}
-                  </label>
-                </div>
-                {requestedservices[service.ServiceId] && (
-                  <Badge bg="success" pill className="ms-2">
-                    ✅ Đã yêu cầu
-                  </Badge>
-                )}
-              </div>
-            );
-          })}
-        </Col>
+        <Col md={6}>{renderServiceColumn(leftColumn)}</Col>
+        <Col md={6}>{renderServiceColumn(rightColumn)}</Col>
       </Row>
     );
-  };
+  }, [currentItems, localServicesState, requestedServices, isFormDisabled, handleTestChange]);
+
+  const handlePageChange = useCallback(({ selected }) => {
+    setCurrentPage(selected);
+  }, []);
+
+  // Debug logs
+  useEffect(() => {
+    console.log('DEBUG - LocalServicesState updated:', localServicesState);
+    console.log('DEBUG - Services prop updated:', services);
+  }, [localServicesState, services]);
 
   return (
     <Col md={12}>
@@ -247,7 +363,7 @@ const ServicesSection = ({
           2. Chỉ định dịch vụ cận lâm sàng
         </Card.Header>
         <Card.Body className="text-start">
-          <Form.Group className="mb-3" key={JSON.stringify(services)}> {/* Key to force re-render */}
+          <Form.Group className="mb-3">
             {serviceSuggestions.length > 0 && (
               <div className="ai-suggestions mb-3">
                 <h6>🩺 Gợi ý dịch vụ phù hợp (dựa trên chẩn đoán):</h6>
@@ -265,24 +381,34 @@ const ServicesSection = ({
                             size="sm"
                             onClick={() => {
                               if (serviceKey) {
-                                const isCurrentlyChecked = services[serviceKey];
-                                const newServices = { ...services, [serviceKey]: !isCurrentlyChecked };
-                                setservices(newServices);
+                                const isCurrentlyChecked = localServicesState[serviceKey] || false;
+                                const newValue = !isCurrentlyChecked;
+
+                                // Cập nhật cả local và prop state
+                                setLocalServicesState(prev => ({
+                                  ...prev,
+                                  [serviceKey]: newValue
+                                }));
+                                setServices(prev => ({
+                                  ...prev,
+                                  [serviceKey]: newValue
+                                }));
+
                                 setToast({
                                   show: true,
-                                  message: `✅ Đã ${!isCurrentlyChecked ? 'chọn' : 'bỏ chọn'} dịch vụ "${serviceName}" (match với ${testLabels[serviceKey]}).`,
+                                  message: `✅ Đã ${newValue ? 'chọn' : 'bỏ chọn'} dịch vụ "${serviceName}".`,
                                   variant: "success",
                                 });
                               } else {
                                 setToast({
                                   show: true,
-                                  message: `⚠️ Không tìm thấy dịch vụ tương ứng cho "${serviceName}". Vui lòng chọn thủ công.`,
+                                  message: `⚠️ Không tìm thấy dịch vụ tương ứng cho "${serviceName}".`,
                                   variant: "warning",
                                 });
                               }
                             }}
                           >
-                            {serviceKey ? (services[serviceKey] ? "✓ Đã chọn" : "+ Chọn") : "Không khả dụng"}
+                            {serviceKey ? (localServicesState[serviceKey] ? "✓ Đã chọn" : "+ Chọn") : "Không khả dụng"}
                           </Button>
                         </div>
                       </li>
@@ -291,11 +417,13 @@ const ServicesSection = ({
                 </ul>
               </div>
             )}
+
             {serviceLoading && (
               <div className="text-center mt-2">
                 <Spinner animation="border" size="sm" /> Đang tải gợi ý dịch vụ...
               </div>
             )}
+
             <h6>Danh sách dịch vụ khả dụng:</h6>
             {localServicesLoading ? (
               <div className="text-center">
@@ -321,16 +449,16 @@ const ServicesSection = ({
               variant="outline-primary"
               size="sm"
               onClick={handleRequestService}
-              disabled={isFormDisabled || Object.values(services).every(v => !v)}
+              disabled={isFormDisabled || !Object.values(localServicesState).some(v => v)}
               className="no-print"
             >
-              🧾 Yêu cầu thực hiện dịch vụ đã chọn
+              🧾 Yêu cầu thực hiện dịch vụ đã chọn ({Object.values(localServicesState).filter(v => v).length})
             </Button>
             <Button
               variant="outline-success"
               size="sm"
               onClick={() => printDocument('service')}
-              disabled={!selectedTodayPatient || !Object.values(services).some(Boolean)}
+              disabled={!selectedTodayPatient || !Object.values(localServicesState).some(Boolean)}
               className="no-print ms-2"
             >
               🖨️ Xuất chỉ định dịch vụ
@@ -348,4 +476,4 @@ const ServicesSection = ({
   );
 };
 
-export default ServicesSection;
+export default React.memo(ServicesSection);
