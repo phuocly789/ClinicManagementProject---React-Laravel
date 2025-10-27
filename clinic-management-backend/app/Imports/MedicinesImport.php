@@ -7,24 +7,34 @@ use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithValidation;
 use Maatwebsite\Excel\Concerns\SkipsOnFailure;
+use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
 use Maatwebsite\Excel\Validators\Failure;
 use Maatwebsite\Excel\Concerns\SkipsFailures;
+use Maatwebsite\Excel\Imports\HeadingRowFormatter;
 
-class MedicinesImport implements ToModel, WithHeadingRow, WithValidation, SkipsOnFailure
+class MedicinesImport implements ToModel, WithHeadingRow, WithValidation, SkipsOnFailure, SkipsEmptyRows
 {
     use SkipsFailures;
+
+    protected $mapping;  // THÊM: Property cho mapping
+
+    public function __construct($mapping = [])
+    {  // THÊM: Constructor nhận mapping (default rỗng)
+        $this->mapping = $mapping;
+        HeadingRowFormatter::default('none');
+    }
 
     public function model(array $row)
     {
         // Sử dụng đúng tên cột CHỮ HOA từ file Excel của bạn
         return new Medicine([
-            'MedicineId'    => $row['MedicineId'] ?? null,
+            'MedicineId'    => $row['MedicineId'] ?? null,  // camelCase
             'MedicineName'  => $row['MedicineName'] ?? '',
             'MedicineType'  => $row['MedicineType'] ?? '',
-            'Unit'          => $row['Unit'] ?? '',
-            'Price'         => $row['Price'] ?? 0,
+            'Unit'           => $row['Unit'] ?? '',
+            'Price'          => $row['Price'] ?? 0,
             'StockQuantity' => $row['StockQuantity'] ?? 0,
-            'Description'   => $row['Description'] ?? '',
+            'Description'    => $row['Description'] ?? '',
         ]);
     }
 
@@ -32,7 +42,7 @@ class MedicinesImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
     {
         return [
             'MedicineName'  => 'required|string|max:100',
-            'MedicineType'  => 'required|string|max:50', 
+            'MedicineType'  => 'required|string|max:50',
             'Unit'          => 'required|string|max:20',
             'Price'         => 'required|numeric|min:0',
             'StockQuantity' => 'required|integer|min:0',
@@ -60,6 +70,17 @@ class MedicinesImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
      */
     public function prepareForValidation($data, $index)
     {
+        // THÊM: Remap nếu có mapping
+        if (!empty($this->mapping)) {
+            $remapped = [];
+            foreach ($this->mapping as $fileHeader => $systemCol) {
+                if (isset($data[$fileHeader])) {
+                    $remapped[$systemCol] = $data[$fileHeader];
+                }
+            }
+            $data = $remapped;
+        }
+
         // Chuyển MedicineId thành string nếu có
         if (isset($data['MedicineId']) && is_numeric($data['MedicineId'])) {
             $data['MedicineId'] = (string) $data['MedicineId'];

@@ -196,14 +196,14 @@ class MedicinesController extends Controller
         }
 
         try {
+            $mapping = json_decode($request->input('mapping', '{}'), true);  // THÊM: Lấy mapping
             // CHỈ import sheet đầu tiên (DanhSachThuoc)
             $data = Excel::toArray([], $request->file('file'))[0];
 
             if (count($data) <= 1) {
                 return response()->json(['message' => 'File không có dữ liệu'], 422);
             }
-
-            Excel::import(new MedicinesImport, $request->file('file'));
+            Excel::import(new MedicinesImport($mapping), $request->file('file'));
             return response()->json(['message' => 'Import thành công'], 200);
         } catch (\Maatwebsite\Excel\Validators\ValidationException $e) {
             $failures = $e->failures();
@@ -236,6 +236,7 @@ class MedicinesController extends Controller
 
         try {
             $file = $request->file('file');
+            $mapping = json_decode($request->input('mapping', '{}'), true);  // Lấy mapping từ request
 
             // Đặt format header để khớp với file Excel
             \Maatwebsite\Excel\Imports\HeadingRowFormatter::default('none');
@@ -256,15 +257,38 @@ class MedicinesController extends Controller
 
             $totalRows = count($data) - 1; // Trừ header row
 
-            // Tạo import instance cho dry-run
-            $import = new class extends MedicinesImport {
+            // Tạo import instance cho dry-run - SỬA: Truyền $mapping trực tiếp vào new class($mapping)
+            $import = new class($mapping) extends MedicinesImport {
                 public $processedRows = 0;
+                public $mapping;
+
+                public function __construct($mapping)
+                {
+                    $this->mapping = $mapping;
+                }
 
                 public function model(array $row)
                 {
                     $this->processedRows++;
                     // Dry-run: chỉ validate, không lưu
                     return null;
+                }
+
+                public function prepareForValidation($data, $index)
+                {
+                    if (empty(array_filter($data))) {
+                        return null;  // THÊM: Skip empty rows
+                    }
+
+                    // Remap keys dựa trên mapping
+                    $remapped = [];
+                    foreach ($this->mapping as $fileHeader => $systemCol) {
+                        if (isset($data[$fileHeader])) {
+                            $remapped[$systemCol] = $data[$fileHeader];
+                        }
+                    }
+                    // Gọi parent để xử lý thêm (như chuyển kiểu dữ liệu)
+                    return parent::prepareForValidation($remapped, $index);
                 }
             };
 
