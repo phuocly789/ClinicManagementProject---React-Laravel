@@ -12,7 +12,8 @@ RUN apt-get update && apt-get install -y \
     zip \
     unzip \
     libpq-dev \
-    && docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd sodium
+    libzip-dev \
+    && docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd sodium zip
 
 # Cài Xdebug cho PHP
 RUN pecl install xdebug \
@@ -39,7 +40,6 @@ RUN composer install --no-dev --prefer-dist --no-interaction --no-progress --opt
 # Permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage
-
 
 
 
