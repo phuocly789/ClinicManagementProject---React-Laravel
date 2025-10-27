@@ -12,7 +12,7 @@ const DiagnosisSection = ({
   prescriptionRows,
   setPrescriptionRows,
   setToast,
-  onDiagnosisUpdate, // Callback mới để truyền diagnoses lên cha
+  onDiagnosisUpdate, // Callback để truyền diagnoses
 }) => {
   const [symptoms, setSymptoms] = useState(initialSymptoms || '');
   const [diagnosis, setDiagnosis] = useState(initialDiagnosis || '');
