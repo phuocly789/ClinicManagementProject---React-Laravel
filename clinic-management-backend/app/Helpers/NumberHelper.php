@@ -3,17 +3,17 @@
 namespace App\Helpers;
 
 class NumberHelper
-{
-    // Chuyển số nguyên (>=0) sang chữ tiếng Việt (không có hậu tố "đồng")
+{// Chuyển số nguyên (>=0) sang chữ tiếng Việt CÓ "đồng"
     public static function convertToWords($number): string
     {
         $number = (int) round($number);
-        if ($number === 0) return 'không';
+        if ($number === 0)
+            return 'không đồng';
 
         $units = ['', 'nghìn', 'triệu', 'tỷ', 'nghìn tỷ', 'triệu tỷ', 'tỷ tỷ'];
-        $digits = ['không','một','hai','ba','bốn','năm','sáu','bảy','tám','chín'];
+        $digits = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
 
-        $readThree = function($num) use ($digits) {
+        $readThree = function ($num) use ($digits) {
             $hundreds = intdiv($num, 100);
             $tens = intdiv($num % 100, 10);
             $ones = $num % 10;
@@ -28,15 +28,22 @@ class NumberHelper
 
             if ($tens > 1) {
                 $part .= ($part ? ' ' : '') . $digits[$tens] . ' mươi';
-                if ($ones == 1) $part .= ' mốt';
-                elseif ($ones == 4) $part .= ' bốn';
-                elseif ($ones == 5) $part .= ' lăm';
-                elseif ($ones > 1) $part .= ' ' . $digits[$ones];
+                if ($ones == 1)
+                    $part .= ' mốt';
+                elseif ($ones == 4)
+                    $part .= ' bốn';
+                elseif ($ones == 5)
+                    $part .= ' lăm';
+                elseif ($ones > 1)
+                    $part .= ' ' . $digits[$ones];
             } elseif ($tens == 1) {
                 $part .= ($part ? ' ' : '') . 'mười';
-                if ($ones == 1) $part .= ' một';
-                elseif ($ones == 5) $part .= ' lăm';
-                elseif ($ones > 1) $part .= ' ' . $digits[$ones];
+                if ($ones == 1)
+                    $part .= ' một';
+                elseif ($ones == 5)
+                    $part .= ' lăm';
+                elseif ($ones > 1)
+                    $part .= ' ' . $digits[$ones];
             } else { // tens == 0
                 if ($ones > 0 && $hundreds == 0) {
                     $part .= ($part ? ' ' : '') . $digits[$ones];
@@ -63,6 +70,8 @@ class NumberHelper
         $result = trim(implode(' ', array_reverse($parts)));
         // Tối giản khoảng trắng dư thừa
         $result = preg_replace('/\s+/', ' ', $result);
-        return $result;
+
+        // THÊM "đồng" VÀO CUỐI
+        return $result . ' đồng';
     }
 }

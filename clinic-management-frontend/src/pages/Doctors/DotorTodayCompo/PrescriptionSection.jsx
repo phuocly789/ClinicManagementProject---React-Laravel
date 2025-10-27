@@ -29,8 +29,9 @@ const PrescriptionSection = ({
 
     try {
       const printData = {
+        type: 'prescription', // THÊM TYPE NÀY
         patient_name: selectedTodayPatient.name || 'N/A',
-        age: selectedTodayPatient.age?.toString() || 'N/A',
+        age: String(selectedTodayPatient.age || 'N/A'), // ĐẢM BẢO LÀ STRING
         gender: selectedTodayPatient.gender || 'N/A',
         phone: selectedTodayPatient.phone || 'N/A',
         appointment_date: selectedTodayPatient.date
@@ -48,17 +49,17 @@ const PrescriptionSection = ({
             })),
           },
         ],
-        diagnoses: diagnoses || [], // Sử dụng diagnoses từ props
-        services: services || [], // Sử dụng services từ props
+        diagnoses: diagnoses || [],
+        services: services || [],
       };
 
-      console.log('Sending data to API:', printData);
+      console.log('Sending prescription data to API:', printData);
 
       const response = await fetch(`${API_BASE_URL}/api/print/prescription/preview`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
+          'Accept': 'application/json', // THAY ĐỔI HEADER NÀY
         },
         body: JSON.stringify(printData),
       });
@@ -68,7 +69,7 @@ const PrescriptionSection = ({
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'toa_thuoc_preview.pdf';
+        a.download = 'TOA_THUOC.pdf'; // ĐỔI TÊN FILE
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -81,7 +82,14 @@ const PrescriptionSection = ({
       } else {
         const errorText = await response.text();
         console.error('API error response:', errorText);
-        throw new Error(errorText || 'Lỗi server.');
+        
+        // THỬ PARSE LỖI ĐỂ HIỂN THỊ CHI TIẾT HƠN
+        try {
+          const errorData = JSON.parse(errorText);
+          throw new Error(errorData.message || `Lỗi server: ${response.status}`);
+        } catch {
+          throw new Error(errorText || `Lỗi server: ${response.status}`);
+        }
       }
     } catch (error) {
       console.error('Error exporting prescription:', error);
@@ -158,7 +166,7 @@ const PrescriptionSection = ({
         disabled={!selectedTodayPatient || prescriptionRows.length === 0}
         className="no-print"
       >
-        Xuất toa thuốc
+        🖨️ Xuất toa thuốc
       </Button>
     </Col>
   );

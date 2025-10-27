@@ -23,20 +23,20 @@ const API_BASE_URL = 'http://localhost:8000';
 const TodaySection = ({
   currentSection = "today",
   prescriptionRows = [],
-  setPrescriptionRows = () => {},
-  removePrescription = () => {},
-  editPrescription = () => {},
+  setPrescriptionRows = () => { },
+  removePrescription = () => { },
+  editPrescription = () => { },
   symptoms = "",
-  setSymptoms = () => {},
+  setSymptoms = () => { },
   diagnosis = "",
-  setDiagnosis = () => {},
+  setDiagnosis = () => { },
   services = {},
-  setServices = () => {},
+  setServices = () => { },
   requestedServices = {},
-  setRequestedServices = () => {},
-  openPrescriptionModal = () => {},
+  setRequestedServices = () => { },
+  openPrescriptionModal = () => { },
   selectedTodayPatient = null,
-  setSelectedTodayPatient = () => {},
+  setSelectedTodayPatient = () => { },
 }) => {
   const [todayPatients, setTodayPatients] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -117,14 +117,14 @@ const TodaySection = ({
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}: Không tải được hồ sơ`);
       const data = await response.json();
-      
+
       setSymptoms(data.symptoms || '');
       setDiagnosis(data.diagnosis || '');
       setServices(data.services || {});
       setRequestedServices(data.requestedServices || {});
       setPrescriptionRows(data.prescriptions || []);
       setDiagnoses(data.diagnoses ? [data.diagnoses] : []); // Chỉ cập nhật nếu có dữ liệu
-      
+
       setToast({ show: true, message: '✅ Đã tải hồ sơ cũ để xem.', variant: 'info' });
     } catch (error) {
       console.error('Error loading completed exam:', error);
@@ -145,15 +145,15 @@ const TodaySection = ({
         body: JSON.stringify({}),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}: Không thể bắt đầu khám`);
-      
+
       const result = await response.json();
       console.log('DEBUG - API start response:', result);
-      
+
       setSelectedTodayPatient(prev => prev ? { ...prev, status: 'Đang khám' } : null);
       setIsExamining(true);
       setViewMode(false);
       setToast({ show: true, message: '✅ Đã bắt đầu khám bệnh nhân.', variant: 'info' });
-      
+
       await fetchTodayPatients();
 
       return result.data;
@@ -180,7 +180,7 @@ const TodaySection = ({
       setDiagnoses([]);
       return;
     }
-    
+
     const currentStatus = getStatusText(patient.status);
     if (currentStatus === 'Đang khám') {
       setSelectedTodayPatient(patient);
@@ -395,10 +395,10 @@ const TodaySection = ({
     }
 
     try {
-      setToast({ 
-        show: true, 
-        message: "🖨️ Chức năng in đang được xử lý bởi PrescriptionSection.", 
-        variant: "info" 
+      setToast({
+        show: true,
+        message: "🖨️ Chức năng in đang được xử lý bởi PrescriptionSection.",
+        variant: "info"
       });
     } catch (error) {
       console.error('Error printing:', error);
@@ -493,12 +493,12 @@ const TodaySection = ({
                       <p>
                         Số bệnh nhân đang chờ: <strong>{todayPatients.filter(p => getStatusText(p.status) === 'Đang chờ').length}</strong>.
                         <br />
-                        Bệnh nhân tiếp theo: <strong>{todayPatients.find(p => getStatusText(p.status) === 'Đang chờ')?.name || todayPatients[0]?.name || 'Không có'}</strong> 
+                        Bệnh nhân tiếp theo: <strong>{todayPatients.find(p => getStatusText(p.status) === 'Đang chờ')?.name || todayPatients[0]?.name || 'Không có'}</strong>
                         ({todayPatients[0]?.time || 'N/A'}).
                       </p>
-                      <Button 
-                        variant="primary" 
-                        size="sm" 
+                      <Button
+                        variant="primary"
+                        size="sm"
                         onClick={() => {
                           const firstPatient = todayPatients.find(p => getStatusText(p.status) === 'Đang chờ') || todayPatients[0];
                           if (firstPatient) {
@@ -547,6 +547,7 @@ const TodaySection = ({
                       setToast={setToast}
                       printDocument={printDocument}
                       selectedTodayPatient={selectedTodayPatient}
+
                     />
 
                     <PrescriptionSection

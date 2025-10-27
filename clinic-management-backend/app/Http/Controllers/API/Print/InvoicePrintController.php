@@ -61,43 +61,70 @@ class InvoicePrintController extends Controller
         Log::info('Received previewPrescription data:', $request->all());
 
         $data = $request->validate([
+            'type' => 'required|string|in:prescription,service',
             'patient_name' => 'required|string',
-            'age' => 'nullable|string',
+            'age' => 'nullable', // SỬA: bỏ 'string' để nhận cả number và string
             'gender' => 'nullable|string',
             'phone' => 'nullable|string',
             'appointment_date' => 'required|string',
             'appointment_time' => 'required|string',
             'doctor_name' => 'nullable|string',
-            'prescriptions' => 'required|array',
-            'prescriptions.*.details' => 'required|array',
-            'prescriptions.*.details.*.medicine' => 'required|string',
-            'prescriptions.*.details.*.quantity' => 'required|integer|min:1',
-            'prescriptions.*.details.*.dosage' => 'required|string',
-            'prescriptions.*.details.*.unitPrice' => 'required|numeric|min:0',
+            'prescriptions' => 'required_if:type,prescription|array',
+            'prescriptions.*.details' => 'required_if:type,prescription|array',
+            'prescriptions.*.details.*.medicine' => 'required_if:type,prescription|string',
+            'prescriptions.*.details.*.quantity' => 'required_if:type,prescription|integer|min:1',
+            'prescriptions.*.details.*.dosage' => 'required_if:type,prescription|string',
+            'prescriptions.*.details.*.unitPrice' => 'required_if:type,prescription|numeric|min:0',
+            'services' => 'required_if:type,service|array',
+            'services.*.ServiceName' => 'required_if:type,service|string',
+            'services.*.Price' => 'required_if:type,service|numeric|min:0',
+            'services.*.Quantity' => 'nullable|integer|min:1',
             'diagnoses' => 'nullable|array',
             'diagnoses.*.Symptoms' => 'nullable|string',
             'diagnoses.*.Diagnosis' => 'nullable|string',
-            'services' => 'nullable|array',
         ], [
+            'type.required' => 'Loại PDF là bắt buộc.',
             'patient_name.required' => 'Tên bệnh nhân là bắt buộc.',
-            'prescriptions.required' => 'Đơn thuốc là bắt buộc.',
-            'prescriptions.*.details.required' => 'Chi tiết đơn thuốc là bắt buộc.',
+            'prescriptions.required_if' => 'Đơn thuốc là bắt buộc cho toa thuốc.',
+            'services.required_if' => 'Danh sách dịch vụ là bắt buộc cho phiếu dịch vụ.',
         ]);
 
+        // Xác định title và template dựa trên type
+        $typeConfig = [
+            'prescription' => [
+                'title' => 'TOA THUỐC',
+                'template' => 'pdf.invoice_pdf',
+                'filename' => 'TOA_THUOC.pdf'
+            ],
+            'service' => [
+                'title' => 'PHIẾU CHỈ ĐỊNH DỊCH VỤ',
+                'template' => 'pdf.service_pdf',
+                'filename' => 'PHIEU_DICH_VU.pdf'
+            ]
+        ];
+
+        $config = $typeConfig[$data['type']];
+
+        // Chuẩn bị dữ liệu chung
         $pdfData = [
-            'title' => 'TOA THUỐC',
+            'title' => $config['title'],
             'clinic_name' => 'PHÒNG KHÁM ĐA KHOA ABC',
-            'clinic_address' => 'Số 53 Võ Văn Ngân, TP. Thủ Đức', // Giá trị mặc định
-            'clinic_phone' => '0123 456 789', // Giá trị mặc định
-            'medical_record_code' => 'AUTO-' . Str::random(8), // Mã ngẫu nhiên
+            'clinic_address' => 'Số 53 Võ Văn Ngân, TP. Thủ Đức',
+            'clinic_phone' => '0123 456 789',
+            'medical_record_code' => strtoupper(substr($data['type'], 0, 3)) . '-' . Str::random(6),
             'doctor_name' => $data['doctor_name'] ?? 'Bác sĩ chưa rõ',
             'patient_name' => $data['patient_name'],
-            'age' => $data['age'] ?? 'N/A',
+            'age' => (string) ($data['age'] ?? 'N/A'), // ÉP KIỂU VỀ STRING
             'gender' => $data['gender'] ?? 'N/A',
             'phone' => $data['phone'] ?? 'N/A',
             'appointment_date' => $data['appointment_date'],
             'appointment_time' => $data['appointment_time'],
-            'prescriptions' => collect($data['prescriptions'])->map(function ($prescription) {
+            'diagnoses' => $data['diagnoses'] ?? [],
+        ];
+
+        // Thêm dữ liệu riêng theo type
+        if ($data['type'] === 'prescription') {
+            $pdfData['prescriptions'] = collect($data['prescriptions'])->map(function ($prescription) {
                 return (object) [
                     'prescription_details' => collect($prescription['details'])->map(function ($detail) {
                         return (object) [
@@ -110,16 +137,24 @@ class InvoicePrintController extends Controller
                         ];
                     })->toArray(),
                 ];
-            })->toArray(),
-            'diagnoses' => $data['diagnoses'] ?? [],
-            'services' => $data['services'] ?? [],
-        ];
+            })->toArray();
+            $pdfData['services'] = [];
+        } else if ($data['type'] === 'service') {
+            $pdfData['services'] = collect($data['services'])->map(function ($service) {
+                return [
+                    'ServiceName' => $service['ServiceName'],
+                    'Price' => $service['Price'],
+                    'Quantity' => $service['Quantity'] ?? 1,
+                ];
+            })->toArray();
+            $pdfData['prescriptions'] = [];
+        }
 
         try {
-            $pdf = Pdf::loadView('pdf.invoice_pdf', $pdfData)
+            $pdf = Pdf::loadView($config['template'], $pdfData)
                 ->setPaper('a4', 'portrait');
 
-            return $pdf->download('TOA_THUOC_PREVIEW.pdf');
+            return $pdf->download($config['filename']);
         } catch (\Exception $e) {
             Log::error('Error generating PDF: ' . $e->getMessage());
             return response()->json([
