@@ -6,24 +6,58 @@ use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
-use Illuminate\Http\Request; // Import đúng class Request từ Illuminate
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
-
 class InvoicePrintController extends Controller
 {
+    /**
+     * Map font family từ frontend sang font an toàn cho DomPDF
+     */
+    private function getSafeFontFamily($fontFamily)
+    {
+        $fontMap = [
+            'Times New Roman' => 'times',
+            'Arial' => 'arial',
+            'Helvetica' => 'helvetica',
+            'Verdana' => 'verdana',
+            'Georgia' => 'georgia',
+            'Courier New' => 'courier',
+            'DejaVu Sans' => 'dejavu sans', // Font mặc định an toàn nhất
+        ];
+        
+        return $fontMap[$fontFamily] ?? 'times'; // Mặc định là Times New Roman
+    }
+
+    /**
+     * Tạo safe font CSS cho template
+     */
+    private function getSafeFontCSS($fontFamily)
+    {
+        $fontMapping = [
+            'Times New Roman' => 'times, "Times New Roman", serif',
+            'Arial' => 'arial, "DejaVu Sans", sans-serif',
+            'Helvetica' => 'helvetica, "DejaVu Sans", sans-serif',
+            'Verdana' => 'verdana, "DejaVu Sans", sans-serif',
+            'Georgia' => 'georgia, serif',
+            'Courier New' => 'courier, monospace',
+            'DejaVu Sans' => '"DejaVu Sans", sans-serif',
+        ];
+        
+        return $fontMapping[$fontFamily] ?? 'times, "Times New Roman", serif';
+    }
+
     public function export($type, $appointment_id)
     {
         // ✅ Lấy dữ liệu chính xác với quan hệ có thật trong model
         $appointment = Appointment::with([
             'patient.user',
-            'prescriptions.prescription_details.medicine', // thêm .medicine vào đây
+            'prescriptions.prescription_details.medicine',
             'service_orders',
             'diagnoses',
             'medical_staff',
         ])->findOrFail($appointment_id);
-
 
         $patient = $appointment->patient?->user;
         $doctor = $appointment->medical_staff?->FullName ?? 'Bác sĩ chưa rõ';
@@ -46,9 +80,11 @@ class InvoicePrintController extends Controller
             'prescriptions' => $appointment->prescriptions,
             'services' => $appointment->service_orders,
             'diagnoses' => $appointment->diagnoses,
+            // Thêm safe font
+            'safe_font_family' => 'times', // Mặc định Times New Roman
         ];
 
-        // ✅ Render view PDF (tạo file resources/views/pdf/prescription.blade.php)
+        // ✅ Render view PDF
         $pdf = Pdf::loadView('pdf.invoice_pdf', $data)
             ->setPaper('a4', 'portrait');
 
@@ -122,6 +158,11 @@ class InvoicePrintController extends Controller
 
         $config = $typeConfig[$data['type']];
 
+        // Xử lý font chữ an toàn
+        $fontFamily = $data['pdf_settings']['fontFamily'] ?? 'Times New Roman';
+        $safeFontFamily = $this->getSafeFontFamily($fontFamily);
+        $safeFontCSS = $this->getSafeFontCSS($fontFamily);
+
         // Chuẩn bị dữ liệu chung
         $pdfData = [
             'title' => $config['title'],
@@ -140,6 +181,10 @@ class InvoicePrintController extends Controller
 
             // THÊM PDF SETTINGS VÀO DATA
             'pdf_settings' => $data['pdf_settings'] ?? [],
+            
+            // THÊM FONT AN TOÀN
+            'safe_font_family' => $safeFontFamily,
+            'safe_font_css' => $safeFontCSS,
         ];
 
         // Thêm dữ liệu riêng theo type
@@ -268,6 +313,11 @@ class InvoicePrintController extends Controller
             $config = $templateConfig[$data['type']];
             Log::info('Template config:', $config);
 
+            // Xử lý font chữ an toàn
+            $fontFamily = $data['pdf_settings']['fontFamily'] ?? 'Times New Roman';
+            $safeFontFamily = $this->getSafeFontFamily($fontFamily);
+            $safeFontCSS = $this->getSafeFontCSS($fontFamily);
+
             // Chuẩn bị dữ liệu cho template
             $pdfData = [
                 'title' => $config['title'],
@@ -286,6 +336,10 @@ class InvoicePrintController extends Controller
 
                 // THÊM PDF SETTINGS VÀO DATA
                 'pdf_settings' => $data['pdf_settings'] ?? [],
+                
+                // THÊM FONT AN TOÀN
+                'safe_font_family' => $safeFontFamily,
+                'safe_font_css' => $safeFontCSS,
             ];
 
             Log::info('Base PDF data prepared:', $pdfData);

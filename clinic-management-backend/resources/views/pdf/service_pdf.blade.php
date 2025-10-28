@@ -2,12 +2,40 @@
 <html lang="vi">
 <head>
     <meta charset="utf-8" />
-    <title>{{ $title ?? 'PHIẾU DỊCH VỤ' }}</title>
+    <title>{{ $pdf_settings['customTitle'] ?? $title ?? 'PHIẾU DỊCH VỤ' }}</title>
     <style>
         @page { size: A4; margin: 20px; }
-        body { font-family: "DejaVu Sans", "Times New Roman", serif; background: #fff; color: #000; font-size: 12px; line-height: 1.3; margin: 0; padding: 0; }
+        body { 
+            font-family: "{{ $pdf_settings['fontFamily'] ?? 'DejaVu Sans' }}", "Times New Roman", serif; 
+            background: #fff; 
+            color: #000; 
+            font-size: {{ $pdf_settings['fontSize'] ?? '12px' }}; 
+            line-height: 1.3; 
+            margin: 0; 
+            padding: 0; 
+        }
         .page { border: 1.5px solid #333; border-radius: 4px; padding: 15px 20px; position: relative; page-break-inside: avoid; }
-        .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 50px; color: rgba(0, 0, 0, 0.08); font-weight: bold; text-transform: uppercase; pointer-events: none; z-index: -1; white-space: nowrap; }
+        
+        /* WATERMARK CUSTOM */
+        @if(isset($pdf_settings['watermark']['enabled']) && $pdf_settings['watermark']['enabled'])
+        .watermark { 
+            position: absolute; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%) rotate({{ $pdf_settings['watermark']['rotation'] ?? -45 }}deg); 
+            font-size: {{ $pdf_settings['watermark']['fontSize'] ?? 50 }}px; 
+            color: {{ $pdf_settings['watermark']['color'] ?? 'rgba(0, 0, 0, 0.08)' }}; 
+            font-weight: bold; 
+            text-transform: uppercase; 
+            pointer-events: none; 
+            z-index: -1; 
+            white-space: nowrap; 
+            opacity: {{ $pdf_settings['watermark']['opacity'] ?? 0.08 }};
+        }
+        @else
+        .watermark { display: none; }
+        @endif
+        
         .header { text-align: center; border-bottom: 1.5px solid #000; padding-bottom: 5px; margin-bottom: 10px; }
         .header h2 { margin: 0; font-size: 16px; text-transform: uppercase; font-weight: bold; }
         .header p { margin: 2px 0; font-size: 11px; }
@@ -34,39 +62,44 @@
         .page-break { page-break-before: always; }
         .no-break { page-break-inside: avoid; }
         .note { font-style: italic; color: #666; margin-top: 10px; }
+        
         /* Preview mode styles */
-.preview-mode {
-    border: 2px dashed #007bff;
-    padding: 10px;
-    background-color: #f8f9fa;
-}
+        .preview-mode {
+            border: 2px dashed #007bff;
+            padding: 10px;
+            background-color: #f8f9fa;
+        }
 
-@media screen {
-    /* Khi xem trên browser (preview) */
-    body {
-        background: white;
-        margin: 10px;
-    }
-    .page {
-        box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        margin: 0 auto;
-    }
-}
+        @media screen {
+            body {
+                background: white;
+                margin: 10px;
+            }
+            .page {
+                box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                margin: 0 auto;
+            }
+        }
     </style>
 </head>
 
 <body>
     <div class="page no-break">
-        <div class="watermark">{{ $clinic_name ?? 'PHÒNG KHÁM' }}</div>
+        <!-- WATERMARK CUSTOM -->
+        @if(isset($pdf_settings['watermark']['enabled']) && $pdf_settings['watermark']['enabled'])
+        <div class="watermark">{{ $pdf_settings['watermark']['text'] ?? 'MẪU BẢN QUYỀN' }}</div>
+        @else
+        <div class="watermark">{{ $pdf_settings['clinicName'] ?? $clinic_name ?? 'PHÒNG KHÁM' }}</div>
+        @endif
 
         <div class="header">
-            <h2>{{ $clinic_name ?? 'PHÒNG KHÁM ĐA KHOA ABC' }}</h2>
-            <p>Địa chỉ: {{ $clinic_address ?? 'Số 53 Võ Văn Ngân, TP. Thủ Đức' }}</p>
-            <p>Điện thoại: {{ $clinic_phone ?? '0123 456 789' }}</p>
+            <h2>{{ $pdf_settings['clinicName'] ?? $clinic_name ?? 'PHÒNG KHÁM ĐA KHOA ABC' }}</h2>
+            <p>Địa chỉ: {{ $pdf_settings['clinicAddress'] ?? $clinic_address ?? 'Số 53 Võ Văn Ngân, TP. Thủ Đức' }}</p>
+            <p>Điện thoại: {{ $pdf_settings['clinicPhone'] ?? $clinic_phone ?? '0123 456 789' }}</p>
         </div>
 
         <div class="title">
-            <h3>{{ $title ?? 'PHIẾU CHỈ ĐỊNH DỊCH VỤ' }}</h3>
+            <h3>{{ $pdf_settings['customTitle'] ?? $title ?? 'PHIẾU CHỈ ĐỊNH DỊCH VỤ' }}</h3>
         </div>
 
         <div class="info">
@@ -81,7 +114,7 @@
                     <p><strong>Mã hồ sơ:</strong> {{ $medical_record_code ?? 'AUTO' }}</p>
                     <p><strong>Ngày khám:</strong> {{ $appointment_date ?? date('d/m/Y') }}</p>
                     <p><strong>Giờ khám:</strong> {{ $appointment_time ?? date('H:i') }}</p>
-                    <p><strong>Bác sĩ chỉ định:</strong> {{ $doctor_name ?? 'N/A' }}</p>
+                    <p><strong>Bác sĩ chỉ định:</strong> {{ $pdf_settings['doctorName'] ?? $doctor_name ?? 'N/A' }}</p>
                 </div>
             </div>
         </div>
@@ -175,6 +208,7 @@
                     <p><strong>Bác sĩ chỉ định</strong></p>
                     <p>(Ký và ghi rõ họ tên)</p>
                     <div class="signature"></div>
+                    <p style="margin-top: 10px; font-weight: bold;">{{ $pdf_settings['doctorName'] ?? $doctor_name ?? 'N/A' }}</p>
                 </div>
             </div>
         </div>

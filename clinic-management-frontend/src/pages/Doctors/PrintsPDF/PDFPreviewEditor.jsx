@@ -1,362 +1,95 @@
 // PDFEditorPage.jsx
-import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Form, Spinner, Alert, Modal } from 'react-bootstrap';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Container, Row, Col, Card, Button, Form, Spinner, Alert, Modal, Tab, Tabs } from 'react-bootstrap';
 
-// Utility function để tạo HTML cho in ấn
-const generatePrintHtml = (
-  type,
-  patient,
-  symptoms = '',
-  diagnosis = '',
-  tests = {},
-  prescriptionRows = [],
-  testLabels = {},
-  settings = {}
-) => {
-  if (!patient) {
-    throw new Error('Patient data is required for printing.');
-  }
+// Utility functions
+const numberToVietnameseWords = (num) => {
+  const ones = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
+  const tens = ['', 'mười', 'hai mươi', 'ba mươi', 'bốn mươi', 'năm mươi', 'sáu mươi', 'bảy mươi', 'tám mươi', 'chín mươi'];
+  const units = ['', 'nghìn', 'triệu', 'tỷ'];
 
-  console.log('Patient data in generatePrintHtml:', patient);
-  console.log('PrescriptionRows in generatePrintHtml:', prescriptionRows);
+  if (num === 0) return 'Không đồng';
 
-  const { name: patientName, age, gender, phone, address } = patient;
-  const codePrefix = type === 'service' ? 'DV' : 'TT';
-  const code = codePrefix + Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-  const date = new Date().toLocaleDateString('vi-VN');
-  const doctor = settings.doctorName || 'Trần Thị B';
+  let result = '';
+  let unitIndex = 0;
+  let numStr = Math.floor(num).toString();
 
-  // Function to convert number to Vietnamese text
-  const numberToVietnameseText = (num) => {
-    const units = ['', 'nghìn', 'triệu', 'tỷ'];
-    const numbers = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
-    const readThreeDigits = (num) => {
+  while (numStr.length > 0) {
+    let group = parseInt(numStr.slice(-3)) || 0;
+    numStr = numStr.slice(0, -3);
+    if (group > 0) {
       let str = '';
-      const hundred = Math.floor(num / 100);
-      const ten = Math.floor((num % 100) / 10);
-      const unit = num % 10;
-      if (hundred > 0) str += numbers[hundred] + ' trăm ';
-      if (ten > 1) str += numbers[ten] + ' mươi ';
-      else if (ten === 1) str += 'mười ';
-      if (unit > 0) {
-        if (ten === 0 && hundred > 0) str += 'lẻ ';
-        if (ten > 1 && unit === 5) str += 'lăm ';
-        else if (ten > 0 && unit === 1) str += 'mốt ';
-        else str += numbers[unit] + ' ';
+      let hundred = Math.floor(group / 100);
+      let ten = Math.floor((group % 100) / 10);
+      let one = group % 10;
+
+      if (hundred > 0) {
+        str += ones[hundred] + ' trăm';
       }
-      return str.trim();
-    };
-    if (num === 0) return 'không đồng';
-    let result = '';
-    let unitIndex = 0;
-    while (num > 0) {
-      const threeDigits = num % 1000;
-      if (threeDigits > 0) {
-        result = readThreeDigits(threeDigits) + ' ' + units[unitIndex] + ' ' + result;
+      if (ten > 1) {
+        str += (str ? ' ' : '') + tens[ten];
+        if (one > 0) str += ' ' + ones[one];
+      } else if (ten === 1) {
+        str += (str ? ' ' : '') + 'mười';
+        if (one > 0) str += ' ' + ones[one];
+      } else if (one > 0) {
+        str += (str ? ' ' : '') + ones[one];
       }
-      num = Math.floor(num / 1000);
-      unitIndex++;
+      str += ' ' + units[unitIndex];
+      result = (str.trim() + (result ? ' ' : '') + result).trim();
     }
-    return result.trim() + ' đồng';
-  };
-
-  let title = '';
-  let tableHtml = '';
-  let extraSection = '';
-  let footerLeft = 'Bệnh nhân';
-  let footerRight = 'Bác sĩ chỉ định';
-
-  if (type === 'service') {
-    title = 'PHIẾU CHỈ ĐỊNH DỊCH VỤ CẬN LÂM SÀNG';
-    const selectedTests = Object.entries(tests)
-      .filter(([key, value]) => value)
-      .map(([key]) => testLabels[key]);
-    tableHtml = `
-      <table>
-        <thead>
-          <tr>
-            <th>STT</th>
-            <th>Tên dịch vụ</th>
-            <th>Ghi chú</th>
-            <th>Đơn giá</th>
-            <th>Thành tiền</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${selectedTests.length > 0
-        ? selectedTests
-          .map((test, i) => `
-                  <tr>
-                    <td style="text-align:center;">${i + 1}</td>
-                    <td>${test}</td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                  </tr>
-                `)
-          .join('')
-        : '<tr><td colspan="4" style="text-align:center;">Không có dịch vụ nào được chọn</td></tr>'
-      }
-          ${selectedTests.length > 0
-        ? `
-              <tr>
-                <td colspan="4" style="text-align:right;">Cộng số tiền thanh toán:</td>
-                <td>${0} VNĐ</td>
-              </tr>
-              <tr>
-                <td colspan="5" style="text-align:left;">Số tiền viết thành chữ: ${numberToVietnameseText(0)}</td>
-              </tr>
-            `
-        : ''
-      }
-        </tbody>
-      </table>
-    `;
-  } else if (type === 'prescription') {
-    title = settings.customTitle || 'TOA THUỐC';
-    extraSection = `
-      <div class="diagnosis-section">
-        <p><strong>Triệu chứng:</strong> ${symptoms}</p>
-        <p><strong>Chẩn đoán:</strong> ${diagnosis}</p>
-      </div>
-    `;
-    const totalPayment = prescriptionRows.reduce((sum, row) => sum + (row.totalPrice || 0), 0);
-    console.log('Total Payment calculated:', totalPayment);
-    tableHtml = `
-      <table>
-        <thead>
-          <tr>
-            <th>STT</th>
-            <th>Tên thuốc</th>
-            <th>Số lượng</th>
-            <th>Liều dùng</th>
-            <th>Đơn giá</th>
-            <th>Thành tiền</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${prescriptionRows.length > 0
-        ? prescriptionRows
-          .map((row, i) => `
-                  <tr>
-                    <td style="text-align:center;">${i + 1}</td>
-                    <td>${row.medicine}</td>
-                    <td>${row.quantity}</td>
-                    <td>${row.dosage}</td>
-                    <td style="text-align:right;">${(row.unitPrice || 0).toLocaleString()} VNĐ</td>
-                    <td style="text-align:right;">${(row.totalPrice || 0).toLocaleString()} VNĐ</td>
-                  </tr>
-                `)
-          .join('')
-        : '<tr><td colspan="6" style="text-align:center;">Không có thuốc nào được kê</td></tr>'
-      }
-          ${prescriptionRows.length > 0
-        ? `
-              <tr>
-                <td colspan="5" style="text-align:right; font-weight:bold;">Cộng số tiền thanh toán:</td>
-                <td style="text-align:right; font-weight:bold;">${totalPayment.toLocaleString()} VNĐ</td>
-              </tr>
-              <tr>
-                <td colspan="6" style="text-align:left; font-style:italic;">Số tiền viết thành chữ: ${numberToVietnameseText(totalPayment)}</td>
-              </tr>
-            `
-        : ''
-      }
-        </tbody>
-      </table>
-    `;
-    footerRight = 'Bác sĩ kê đơn';
-  } else {
-    throw new Error('Invalid type: must be "service" or "prescription"');
+    unitIndex++;
   }
 
-  const html = `
-    <div class="container">
-      ${settings.watermark?.enabled ? `
-        <div class="watermark">
-          <div class="watermark-text">${settings.watermark.text}</div>
-        </div>
-      ` : ''}
-      <div class="header">
-        <h2>${settings.clinicName || 'PHÒNG KHÁM XYZ'}</h2>
-        <p>${settings.clinicAddress || 'Địa chỉ: Số 53 Võ Văn Ngân, TP. Thủ Đức, TP.HCM'}</p>
-        <p>${settings.clinicPhone || 'Điện thoại: 024.3574.7788'} — ${settings.clinicTax || 'MST: 0100688738'}</p>
-      </div>
-      <div class="title">
-        <h3>${title}</h3>
-      </div>
-      <div class="info">
-        <div>
-          <p><strong>Họ tên BN:</strong> ${patientName}</p>
-          <p><strong>Tuổi:</strong> ${age}</p>
-          <p><strong>Giới tính:</strong> ${gender}</p>
-          <p><strong>Địa chỉ:</strong> ${address || 'Chưa có thông tin'}</p>
-        </div>
-        <div>
-          <p><strong>Mã ${type === 'service' ? 'phiếu' : 'toa'}:</strong> ${code}</p>
-          <p><strong>Ngày lập:</strong> ${date}</p>
-          <p><strong>Bác sĩ:</strong> ${doctor}</p>
-        </div>
-      </div>
-      ${extraSection}
-      ${tableHtml}
-      <div class="footer">
-        <div>
-          <p><strong>${footerLeft}</strong></p>
-          <p>(Ký, ghi rõ họ tên)</p>
-          <p class="name">&nbsp;</p>
-        </div>
-        <div>
-          <p><strong>${footerRight}</strong></p>
-          <p>(Ký, ghi rõ họ tên)</p>
-          <p class="name">${doctor}</p>
-        </div>
-      </div>
-    </div>
-    <style>
-      body {
-        font-family: "${settings.fontFamily || 'Times New Roman'}", serif;
-        background: #fefefe;
-        margin: 40px;
-        color: #000;
-        font-size: ${settings.fontSize || '14px'};
-      }
-      .container {
-        border: 2px solid #000;
-        padding: 30px 40px;
-        border-radius: 6px;
-        max-width: 700px;
-        margin: auto;
-        background: #fff;
-        position: relative;
-        overflow: hidden;
-      }
-      .watermark {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%) rotate(${settings.watermark?.rotation || -45}deg);
-        opacity: ${settings.watermark?.opacity || 0.1};
-        z-index: 0;
-        pointer-events: none;
-      }
-      .watermark-text {
-        font-size: ${settings.watermark?.fontSize || 48}px;
-        color: ${settings.watermark?.color || '#cccccc'};
-        font-weight: bold;
-        white-space: nowrap;
-      }
-      .header {
-        text-align: center;
-        border-bottom: 2px solid #000;
-        padding-bottom: 10px;
-        margin-bottom: 20px;
-        position: relative;
-        z-index: 1;
-      }
-      .header h2 {
-        margin: 5px 0;
-        font-size: 22px;
-        text-transform: uppercase;
-      }
-      .header p {
-        margin: 2px 0;
-        font-size: 13px;
-        color: #333;
-      }
-      .title {
-        text-align: center;
-        margin: 25px 0;
-        position: relative;
-        z-index: 1;
-      }
-      .title h3 {
-        font-size: 20px;
-        margin: 0;
-        font-weight: bold;
-      }
-      .info {
-        font-size: 14px;
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 10px;
-        position: relative;
-        z-index: 1;
-      }
-      .info p { margin: 3px 0; }
-      .diagnosis-section {
-        margin-bottom: 20px;
-        font-size: 14px;
-        position: relative;
-        z-index: 1;
-      }
-      .diagnosis-section p {
-        margin: 5px 0;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 15px;
-        font-size: 14px;
-        position: relative;
-        z-index: 1;
-      }
-      th, td {
-        border: 1px solid #000;
-        padding: 8px 10px;
-        text-align: left;
-      }
-      th {
-        background: #f3f3f3;
-        text-align: center;
-      }
-      td {
-        text-align: right;
-      }
-      .footer {
-        display: flex;
-        justify-content: space-between;
-        margin-top: 40px;
-        font-size: 14px;
-        text-align: center;
-        position: relative;
-        z-index: 1;
-      }
-      .footer div {
-        width: 45%;
-      }
-      .footer p {
-        margin: 4px 0;
-      }
-      .footer .name {
-        margin-top: 50px;
-        font-style: italic;
-      }
-    </style>
-  `;
+  return result.charAt(0).toUpperCase() + result.slice(1) + ' đồng';
+};
 
-  return html;
+const formatNumber = (n) => {
+  return Number(n || 0).toLocaleString('vi-VN');
 };
 
 const PDFEditorPage = () => {
   const API_BASE_URL = 'http://localhost:8000';
 
-  const [pdfData, setPdfData] = useState(null);
-  const [previewHTML, setPreviewHTML] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  // State chính
+  const [type, setType] = useState('prescription');
+  const [formData, setFormData] = useState({
+    patientName: 'Nguyễn Văn A',
+    patientAge: '35',
+    patientGender: 'Nam',
+    patientAddress: '123 Nguyễn Trãi, Quận 5, TP.HCM',
+    patientPhone: '0909xxxxxx',
+    code: 'TT0123',
+    date: new Date().toISOString().split('T')[0],
+    doctor: 'Trần Thị B',
+    symptoms: 'Ho, sốt nhẹ',
+    diagnosis: 'Viêm họng cấp',
+    instructions: 'Uống thuốc theo chỉ dẫn. Tái khám nếu cần.'
+  });
+
+  const [prescriptionRows, setPrescriptionRows] = useState([
+    { id: 1, name: 'Paracetamol', quantity: 1, dosage: 'Uống 1 viên khi sốt', unitPrice: 5000, totalPrice: 5000 }
+  ]);
+
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Cài đặt PDF với các tùy chọn mới
+  // Cài đặt PDF đầy đủ với nhiều tính năng
   const [pdfSettings, setPdfSettings] = useState({
-    // Clinic information
-    clinicName: 'PHÒNG KHÁM XYZ',
-    clinicAddress: 'Địa chỉ: Số 53 Võ Văn Ngân, TP. Thủ Đức, TP.HCM',
-    clinicPhone: 'Điện thoại: 024.3574.7788',
+    // Thông tin phòng khám
+    clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
+    clinicAddress: 'Số 53 Võ Văn Ngân, TP. Thủ Đức, TP.HCM',
+    clinicPhone: '024.3574.7788',
     clinicTax: 'MST: 0100688738',
+    clinicEmail: 'contact@phongkhamxyz.com',
+    clinicWebsite: 'www.phongkhamxyz.com',
+    
+    // Thông tin bác sĩ
     doctorName: 'Trần Thị B',
-
+    doctorDegree: 'Bác sĩ Chuyên khoa II',
+    doctorSpecialty: 'Nội tổng quát',
+    
     // Watermark
     watermark: {
       text: 'MẪU BẢN QUYỀN',
@@ -366,122 +99,149 @@ const PDFEditorPage = () => {
       color: '#cccccc',
       rotation: -45
     },
-    // Font settings
+    
+    // Cài đặt font chữ
     fontFamily: 'Times New Roman',
     fontSize: '14px',
-
-    // Custom title
-    customTitle: 'TOA THUỐC'
+    lineHeight: 1.5,
+    fontColor: '#000000',
+    
+    // Layout và margin
+    marginTop: '15mm',
+    marginBottom: '15mm',
+    marginLeft: '20mm',
+    marginRight: '20mm',
+    pageOrientation: 'portrait', // portrait | landscape
+    pageSize: 'A4', // A4 | A5 | Letter
+    
+    // Màu sắc và theme
+    primaryColor: '#2c5aa0',
+    secondaryColor: '#f8f9fa',
+    borderColor: '#333333',
+    headerBgColor: '#f0f0f0',
+    
+    // Tiêu đề và nội dung
+    customTitle: 'TOA THUỐC',
+    showClinicLogo: false,
+    showDoctorSignature: true,
+    showPatientQRCode: false,
+    
+    // Nội dung tùy chỉnh
+    footerText: 'Cảm ơn quý khách đã sử dụng dịch vụ của chúng tôi',
+    disclaimer: 'Thuốc kê trong toa cần được sử dụng theo đúng hướng dẫn của bác sĩ',
+    
+    // Bảo mật
+    encryptPDF: false,
+    passwordProtect: false,
+    allowPrinting: true,
+    allowCopying: true,
+    
+    // Header/Footer
+    showHeader: true,
+    showFooter: true,
+    headerTemplate: '',
+    footerTemplate: '',
+    
+    // Advanced
+    compressionLevel: 'medium', // low | medium | high
+    imageQuality: 92,
+    pdfVersion: '1.7'
   });
 
-  // Form data state
-  const [formData, setFormData] = useState({
-    patient_name: '',
-    age: '',
-    gender: '',
-    phone: '',
-    address: '',
-    appointment_date: '',
-    appointment_time: '',
-    doctor_name: '',
-    diagnosis: '',
-    instructions: 'Uống thuốc theo chỉ dẫn. Tái khám nếu cần.'
-  });
-
-  // Load data từ sessionStorage khi component mount
+  // Load data từ sessionStorage
   useEffect(() => {
     const loadData = async () => {
       try {
         const savedData = sessionStorage.getItem('pdfPreviewData');
-        const prescriptionRows = sessionStorage.getItem('prescriptionRows');
+        const savedRows = sessionStorage.getItem('prescriptionRows');
         const selectedPatient = sessionStorage.getItem('selectedPatient');
+        const savedSettings = localStorage.getItem('pdfSettings');
 
-        if (!savedData) {
-          setError('Không tìm thấy dữ liệu để hiển thị');
-          setIsLoading(false);
-          return;
+        if (savedSettings) {
+          setPdfSettings(JSON.parse(savedSettings));
         }
 
-        const parsedData = JSON.parse(savedData);
-        setPdfData(parsedData);
+        if (savedRows) {
+          setPrescriptionRows(JSON.parse(savedRows));
+        }
 
-        // Khởi tạo form data
-        const patientData = JSON.parse(selectedPatient || '{}');
-        setFormData({
-          patient_name: parsedData.patient_name || patientData.name || '',
-          age: parsedData.age || patientData.age || '',
-          gender: parsedData.gender || patientData.gender || '',
-          phone: parsedData.phone || patientData.phone || '',
-          address: patientData.address || '',
-          appointment_date: parsedData.appointment_date || '',
-          appointment_time: parsedData.appointment_time || '',
-          doctor_name: parsedData.doctor_name || pdfSettings.doctorName,
-          diagnosis: parsedData.diagnoses?.[0]?.Diagnosis || parsedData.diagnosis || '',
-          instructions: 'Uống thuốc theo chỉ dẫn. Tái khám nếu cần.'
-        });
+        if (selectedPatient) {
+          const patientData = JSON.parse(selectedPatient);
+          setFormData(prev => ({
+            ...prev,
+            patientName: patientData.name || '',
+            patientAge: patientData.age || '',
+            patientGender: patientData.gender || '',
+            patientPhone: patientData.phone || '',
+            patientAddress: patientData.address || '',
+            doctor: pdfSettings.doctorName
+          }));
+        }
 
-        // Load preview HTML
-        await loadPreviewHTML(parsedData);
+        if (savedData) {
+          const parsedData = JSON.parse(savedData);
+          setFormData(prev => ({
+            ...prev,
+            diagnosis: parsedData.diagnoses?.[0]?.Diagnosis || parsedData.diagnosis || '',
+            doctor: parsedData.doctor_name || pdfSettings.doctorName,
+            symptoms: parsedData.symptoms || '',
+            instructions: parsedData.instructions || 'Uống thuốc theo chỉ dẫn. Tái khám nếu cần.'
+          }));
+        }
 
       } catch (err) {
         console.error('Error loading data:', err);
         setError('Lỗi khi tải dữ liệu: ' + err.message);
-        setIsLoading(false);
       }
     };
 
     loadData();
   }, []);
 
-  // Load preview HTML sử dụng generatePrintHtml
-  const loadPreviewHTML = async (data) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const prescriptionRows = JSON.parse(sessionStorage.getItem('prescriptionRows') || '[]');
-
-      const patientInfo = {
-        name: formData.patient_name,
-        age: formData.age,
-        gender: formData.gender,
-        phone: formData.phone,
-        address: formData.address
-      };
-
-      const html = generatePrintHtml(
-        'prescription',
-        patientInfo,
-        data.symptoms || '',
-        formData.diagnosis,
-        {},
-        prescriptionRows,
-        {},
-        pdfSettings
-      );
-
-      setPreviewHTML(html);
-
-    } catch (err) {
-      console.error('Error loading preview:', err);
-      setError('Lỗi tải preview: ' + err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Handle form input changes
+  // Xử lý thay đổi form
   const handleInputChange = (field, value) => {
-    const updatedFormData = {
-      ...formData,
+    setFormData(prev => ({
+      ...prev,
       [field]: value
-    };
-    setFormData(updatedFormData);
-
-    // Update preview với data mới
-    if (pdfData) {
-      loadPreviewHTML(pdfData);
-    }
+    }));
   };
+
+  // Xử lý hàng trong bảng
+  const addRow = () => {
+    const newRow = {
+      id: Date.now(),
+      name: '',
+      quantity: 1,
+      dosage: '',
+      unitPrice: 0,
+      totalPrice: 0
+    };
+    setPrescriptionRows(prev => [...prev, newRow]);
+  };
+
+  const removeRow = (id) => {
+    setPrescriptionRows(prev => prev.filter(row => row.id !== id));
+  };
+
+  const updateRow = (id, field, value) => {
+    setPrescriptionRows(prev => prev.map(row => {
+      if (row.id === id) {
+        const updatedRow = { ...row, [field]: value };
+        
+        if (field === 'quantity' || field === 'unitPrice') {
+          const quantity = field === 'quantity' ? value : row.quantity;
+          const unitPrice = field === 'unitPrice' ? value : row.unitPrice;
+          updatedRow.totalPrice = (parseFloat(quantity) || 0) * (parseFloat(unitPrice) || 0);
+        }
+        
+        return updatedRow;
+      }
+      return row;
+    }));
+  };
+
+  // Tính tổng tiền
+  const totalAmount = prescriptionRows.reduce((sum, row) => sum + (row.totalPrice || 0), 0);
 
   // Handle settings changes
   const handleSettingsChange = (category, field, value) => {
@@ -494,6 +254,18 @@ const PDFEditorPage = () => {
         }
       };
       setPdfSettings(updatedSettings);
+    } else if (category === 'clinic') {
+      const updatedSettings = {
+        ...pdfSettings,
+        [field]: value
+      };
+      setPdfSettings(updatedSettings);
+    } else if (category === 'doctor') {
+      const updatedSettings = {
+        ...pdfSettings,
+        [field]: value
+      };
+      setPdfSettings(updatedSettings);
     } else {
       const updatedSettings = {
         ...pdfSettings,
@@ -501,37 +273,58 @@ const PDFEditorPage = () => {
       };
       setPdfSettings(updatedSettings);
     }
+  };
 
-    // Reload preview với settings mới
-    if (pdfData) {
-      loadPreviewHTML(pdfData);
+  // Save settings
+  const handleSaveSettings = () => {
+    localStorage.setItem('pdfSettings', JSON.stringify(pdfSettings));
+    setShowSettings(false);
+    alert('✅ Đã lưu cài đặt PDF!');
+  };
+
+  // Reset settings
+  const handleResetSettings = () => {
+    if (window.confirm('Bạn có chắc muốn reset về cài đặt mặc định?')) {
+      const defaultSettings = {
+        clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
+        clinicAddress: 'Số 53 Võ Văn Ngân, TP. Thủ Đức, TP.HCM',
+        clinicPhone: '024.3574.7788',
+        clinicTax: 'MST: 0100688738',
+        doctorName: 'Trần Thị B',
+        watermark: { enabled: false, text: 'MẪU BẢN QUYỀN', opacity: 0.1, fontSize: 48, color: '#cccccc', rotation: -45 },
+        fontFamily: 'Times New Roman',
+        fontSize: '14px',
+        customTitle: 'TOA THUỐC',
+        showDoctorSignature: true,
+        pageOrientation: 'portrait',
+        pageSize: 'A4',
+        primaryColor: '#2c5aa0'
+      };
+      setPdfSettings(defaultSettings);
+      alert('✅ Đã reset cài đặt về mặc định!');
     }
   };
 
-  // Download PDF
-  // Download PDF - GỬI SETTINGS LÊN BACKEND
+  // Download PDF với đầy đủ settings
   const handleDownloadPDF = async () => {
-    if (!pdfData) return;
+    setIsLoading(true);
+    setError(null);
 
-    setIsSaving(true);
     try {
-      const prescriptionRows = JSON.parse(sessionStorage.getItem('prescriptionRows') || '[]');
-
-      // TẠO DATA GỬI LÊN BACKEND VỚI SETTINGS
       const printData = {
         type: 'prescription',
-        patient_name: formData.patient_name || 'N/A',
-        age: String(formData.age || 'N/A'),
-        gender: formData.gender || 'N/A',
-        phone: formData.phone || 'N/A',
-        address: formData.address || 'N/A',
-        appointment_date: formData.appointment_date || new Date().toLocaleDateString('vi-VN'),
-        appointment_time: formData.appointment_time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        doctor_name: formData.doctor_name || pdfSettings.doctorName,
+        patient_name: formData.patientName,
+        age: String(formData.patientAge),
+        gender: formData.patientGender,
+        phone: formData.patientPhone,
+        address: formData.patientAddress,
+        appointment_date: new Date().toLocaleDateString('vi-VN'),
+        appointment_time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        doctor_name: formData.doctor || pdfSettings.doctorName,
         prescriptions: [
           {
             details: prescriptionRows.map(row => ({
-              medicine: row.medicine || 'N/A',
+              medicine: row.name || 'N/A',
               quantity: parseInt(row.quantity) || 1,
               dosage: row.dosage || 'N/A',
               unitPrice: parseFloat(row.unitPrice) || 0,
@@ -539,15 +332,15 @@ const PDFEditorPage = () => {
           },
         ],
         diagnoses: formData.diagnosis ? [{ Diagnosis: formData.diagnosis }] : [],
-        symptoms: pdfData.symptoms || '',
+        symptoms: formData.symptoms || '',
+        instructions: formData.instructions || '',
 
-        // QUAN TRỌNG: GỬI SETTINGS LÊN BACKEND
+        // Gửi đầy đủ settings lên BE
         pdf_settings: pdfSettings
       };
 
-      console.log('🎨 Sending to backend with settings:', pdfSettings);
+      console.log('🎨 Sending to backend with full settings:', pdfSettings);
 
-      // GỬI REQUEST ĐẾN API CÓ THẬT
       const response = await fetch(`${API_BASE_URL}/api/print/prescription/preview`, {
         method: 'POST',
         headers: {
@@ -562,62 +355,68 @@ const PDFEditorPage = () => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `TOA_THUOC_${formData.patient_name || 'benh_nhan'}.pdf`;
+        a.download = `TOA_THUOC_${formData.patientName || 'benh_nhan'}_${new Date().getTime()}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
         alert('✅ Xuất toa thuốc thành công!');
-        console.log('✅ PDF downloaded with settings');
       } else {
         const errorText = await response.text();
-        console.error('❌ Server error:', errorText);
         throw new Error(errorText || `Lỗi server: ${response.status}`);
       }
     } catch (err) {
       console.error('Error downloading PDF:', err);
-      alert('❌ Lỗi khi xuất toa thuốc: ' + err.message);
+      setError('❌ Lỗi khi xuất toa thuốc: ' + err.message);
     } finally {
-      setIsSaving(false);
+      setIsLoading(false);
     }
   };
 
-  // Save settings
-  const handleSaveSettings = () => {
-    localStorage.setItem('pdfSettings', JSON.stringify(pdfSettings));
-    setShowSettings(false);
-    alert('✅ Đã lưu cài đặt!');
-
-    // Reload preview với settings mới
-    if (pdfData) {
-      loadPreviewHTML(pdfData);
-    }
+  // In trực tiếp
+  const handlePrint = () => {
+    window.print();
   };
 
-  // Load settings từ localStorage khi component mount
-  useEffect(() => {
-    const savedSettings = localStorage.getItem('pdfSettings');
-    if (savedSettings) {
-      setPdfSettings(JSON.parse(savedSettings));
-    }
-  }, []);
-
-  // Quay lại trang trước
+  // Quay lại
   const handleBack = () => {
-    window.close();
+    window.history.back();
   };
 
-  if (isLoading) {
-    return (
-      <Container fluid className="d-flex justify-content-center align-items-center min-vh-100">
-        <div className="text-center">
-          <Spinner animation="border" variant="primary" size="lg" />
-          <p className="mt-3">Đang tải editor PDF...</p>
-        </div>
-      </Container>
-    );
-  }
+  // Export settings
+  const handleExportSettings = () => {
+    const dataStr = JSON.stringify(pdfSettings, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pdf_settings_${new Date().getTime()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    alert('✅ Đã xuất cài đặt PDF!');
+  };
+
+  // Import settings
+  const handleImportSettings = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const settings = JSON.parse(e.target.result);
+          setPdfSettings(settings);
+          alert('✅ Đã nhập cài đặt PDF thành công!');
+        } catch (err) {
+          alert('❌ File không hợp lệ!');
+        }
+      };
+      reader.readAsText(file);
+    }
+    event.target.value = '';
+  };
 
   if (error) {
     return (
@@ -634,261 +433,826 @@ const PDFEditorPage = () => {
   }
 
   return (
-    <Container fluid className="py-4 bg-light min-vh-100">
-      {/* Header */}
-      <Row className="mb-4">
-        <Col>
-          <div className="d-flex justify-content-between align-items-center">
-            <div>
-              <h1 className="h3 mb-1">
-                <i className="bi bi-file-earmark-pdf text-primary"></i> Editor Toa Thuốc
-              </h1>
-              <p className="text-muted mb-0">Chỉnh sửa và tùy biến toa thuốc trước khi tải về</p>
-            </div>
-            <div className="d-flex gap-2">
-              <Button variant="outline-primary" onClick={() => setShowSettings(true)}>
-                <i className="bi bi-gear"></i> Cài đặt
-              </Button>
-              <Button variant="outline-secondary" onClick={handleBack}>
-                <i className="bi bi-arrow-left"></i> Quay lại
-              </Button>
-              <Button
-                variant="success"
-                onClick={handleDownloadPDF}
-                disabled={isSaving}
-              >
-                {isSaving ? (
-                  <>
-                    <Spinner animation="border" size="sm" className="me-2" />
-                    Đang xử lý...
-                  </>
-                ) : (
-                  <>
-                    <i className="bi bi-download me-2"></i>
-                    Tải PDF
-                  </>
-                )}
-              </Button>
-            </div>
+    <div className="app" style={{ 
+      display: 'flex', 
+      gap: '24px', 
+      alignItems: 'flex-start', 
+      maxWidth: '1400px', 
+      margin: '0 auto',
+      padding: '20px'
+    }}>
+      {/* Left Column - Controls */}
+      <div className="controls" style={{
+        width: '440px',
+        background: '#fff',
+        padding: '20px',
+        borderRadius: '8px',
+        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)'
+      }}>
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h3 style={{ margin: 0, fontSize: '20px', color: '#333', fontWeight: '600' }}>
+            Chỉnh sửa phiếu / toa
+          </h3>
+          <Button 
+            variant="outline-primary" 
+            size="sm"
+            onClick={() => setShowSettings(true)}
+          >
+            ⚙️ Cài đặt PDF
+          </Button>
+        </div>
+
+        <Form.Group className="mb-3">
+          <Form.Label>Loại</Form.Label>
+          <Form.Select 
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+          >
+            <option value="prescription">Toa thuốc</option>
+            <option value="service">Phiếu chỉ định dịch vụ</option>
+          </Form.Select>
+        </Form.Group>
+
+        <Form.Group className="mb-3">
+          <Form.Label>Họ tên bệnh nhân</Form.Label>
+          <Form.Control
+            type="text"
+            value={formData.patientName}
+            onChange={(e) => handleInputChange('patientName', e.target.value)}
+          />
+        </Form.Group>
+
+        <div className="row g-2 mb-3">
+          <div className="col-6">
+            <Form.Label>Tuổi</Form.Label>
+            <Form.Control
+              type="number"
+              value={formData.patientAge}
+              onChange={(e) => handleInputChange('patientAge', e.target.value)}
+            />
           </div>
-        </Col>
-      </Row>
+          <div className="col-6">
+            <Form.Label>Giới tính</Form.Label>
+            <Form.Select
+              value={formData.patientGender}
+              onChange={(e) => handleInputChange('patientGender', e.target.value)}
+            >
+              <option value="Nam">Nam</option>
+              <option value="Nữ">Nữ</option>
+              <option value="Khác">Khác</option>
+            </Form.Select>
+          </div>
+        </div>
 
-      {/* Main Content - 2 Columns */}
-      <Row className="g-4">
-        {/* Left Column - Controls */}
-        <Col md={4}>
-          <Card className="h-100 shadow">
-            <Card.Header className="bg-primary text-white">
-              <h5 className="mb-0">
-                <i className="bi bi-sliders"></i> Thông tin toa thuốc
-              </h5>
-            </Card.Header>
-            <Card.Body>
-              <div className="d-grid gap-3">
+        <Form.Group className="mb-3">
+          <Form.Label>Địa chỉ</Form.Label>
+          <Form.Control
+            type="text"
+            value={formData.patientAddress}
+            onChange={(e) => handleInputChange('patientAddress', e.target.value)}
+          />
+        </Form.Group>
 
-                {/* Patient Information */}
-                <div>
-                  <h6 className="fw-bold text-primary mb-3">
-                    <i className="bi bi-person-badge"></i> Thông tin bệnh nhân
-                  </h6>
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">Họ tên bệnh nhân</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={formData.patient_name}
-                      onChange={(e) => handleInputChange('patient_name', e.target.value)}
-                    />
-                  </div>
-                  <div className="row g-2 mb-3">
-                    <div className="col-6">
-                      <label className="form-label fw-semibold">Tuổi</label>
-                      <input
+        <Form.Group className="mb-3">
+          <Form.Label>Điện thoại</Form.Label>
+          <Form.Control
+            type="text"
+            value={formData.patientPhone}
+            onChange={(e) => handleInputChange('patientPhone', e.target.value)}
+          />
+        </Form.Group>
+
+        <div className="row g-2 mb-3">
+          <div className="col-6">
+            <Form.Label>Mã phiếu / toa</Form.Label>
+            <Form.Control
+              type="text"
+              value={formData.code}
+              onChange={(e) => handleInputChange('code', e.target.value)}
+            />
+          </div>
+          <div className="col-6">
+            <Form.Label>Ngày lập</Form.Label>
+            <Form.Control
+              type="date"
+              value={formData.date}
+              onChange={(e) => handleInputChange('date', e.target.value)}
+            />
+          </div>
+        </div>
+
+        <Form.Group className="mb-3">
+          <Form.Label>Bác sĩ</Form.Label>
+          <Form.Control
+            type="text"
+            value={formData.doctor}
+            onChange={(e) => handleInputChange('doctor', e.target.value)}
+          />
+        </Form.Group>
+
+        <Form.Group className="mb-3">
+          <Form.Label>Triệu chứng</Form.Label>
+          <Form.Control
+            as="textarea"
+            rows={2}
+            value={formData.symptoms}
+            onChange={(e) => handleInputChange('symptoms', e.target.value)}
+          />
+        </Form.Group>
+
+        <Form.Group className="mb-3">
+          <Form.Label>Chẩn đoán</Form.Label>
+          <Form.Control
+            as="textarea"
+            rows={2}
+            value={formData.diagnosis}
+            onChange={(e) => handleInputChange('diagnosis', e.target.value)}
+          />
+        </Form.Group>
+
+        <Form.Group className="mb-3">
+          <Form.Label>Hướng dẫn</Form.Label>
+          <Form.Control
+            as="textarea"
+            rows={2}
+            value={formData.instructions}
+            onChange={(e) => handleInputChange('instructions', e.target.value)}
+            placeholder="Uống thuốc theo chỉ dẫn..."
+          />
+        </Form.Group>
+
+        <h5>Danh sách thuốc / dịch vụ</h5>
+        
+        <table className="table-edit" style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          marginTop: '12px',
+          fontSize: '14px'
+        }}>
+          <thead>
+            <tr>
+              <th style={{ border: '1px solid #e0e0e0', padding: '8px', textAlign: 'center', background: '#f7f7f7' }}>#</th>
+              <th style={{ border: '1px solid #e0e0e0', padding: '8px', textAlign: 'center', background: '#f7f7f7' }}>Tên thuốc</th>
+              <th style={{ border: '1px solid #e0e0e0', padding: '8px', textAlign: 'center', background: '#f7f7f7' }}>SL</th>
+              <th style={{ border: '1px solid #e0e0e0', padding: '8px', textAlign: 'center', background: '#f7f7f7' }}>Liều dùng</th>
+              <th style={{ border: '1px solid #e0e0e0', padding: '8px', textAlign: 'center', background: '#f7f7f7' }}>Đơn giá</th>
+              <th style={{ border: '1px solid #e0e0e0', padding: '8px', textAlign: 'center', background: '#f7f7f7' }}>Thành tiền</th>
+              <th style={{ border: '1px solid #e0e0e0', padding: '8px', textAlign: 'center', background: '#f7f7f7' }}>Hành động</th>
+            </tr>
+          </thead>
+          <tbody>
+            {prescriptionRows.map((row, index) => (
+              <tr key={row.id}>
+                <td style={{ border: '1px solid #e0e0e0', padding: '8px', textAlign: 'center' }}>
+                  {index + 1}
+                </td>
+                <td style={{ border: '1px solid #e0e0e0', padding: '4px' }}>
+                  <Form.Control
+                    type="text"
+                    value={row.name}
+                    onChange={(e) => updateRow(row.id, 'name', e.target.value)}
+                    style={{ border: 'none', padding: '4px', fontSize: '14px' }}
+                    placeholder="Tên thuốc"
+                  />
+                </td>
+                <td style={{ border: '1px solid #e0e0e0', padding: '4px' }}>
+                  <Form.Control
+                    type="number"
+                    min="1"
+                    value={row.quantity}
+                    onChange={(e) => updateRow(row.id, 'quantity', e.target.value)}
+                    style={{ border: 'none', padding: '4px', fontSize: '14px' }}
+                  />
+                </td>
+                <td style={{ border: '1px solid #e0e0e0', padding: '4px' }}>
+                  <Form.Control
+                    type="text"
+                    value={row.dosage}
+                    onChange={(e) => updateRow(row.id, 'dosage', e.target.value)}
+                    style={{ border: 'none', padding: '4px', fontSize: '14px' }}
+                    placeholder="Liều dùng"
+                  />
+                </td>
+                <td style={{ border: '1px solid #e0e0e0', padding: '4px' }}>
+                  <Form.Control
+                    type="number"
+                    min="0"
+                    value={row.unitPrice}
+                    onChange={(e) => updateRow(row.id, 'unitPrice', e.target.value)}
+                    style={{ border: 'none', padding: '4px', fontSize: '14px' }}
+                  />
+                </td>
+                <td style={{ border: '1px solid #e0e0e0', padding: '4px' }}>
+                  <Form.Control
+                    type="number"
+                    value={row.totalPrice}
+                    readOnly
+                    style={{ border: 'none', padding: '4px', fontSize: '14px', background: '#e8e8e8' }}
+                  />
+                </td>
+                <td style={{ border: '1px solid #e0e0e0', padding: '8px', textAlign: 'center' }}>
+                  <Button
+                    variant="outline-danger"
+                    size="sm"
+                    onClick={() => removeRow(row.id)}
+                  >
+                    Xóa
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="d-flex gap-2 mt-3 flex-wrap">
+          <Button variant="outline-primary" onClick={addRow}>
+            + Thêm hàng
+          </Button>
+          <Button 
+            variant="success" 
+            onClick={handleDownloadPDF} 
+            disabled={isLoading}
+          >
+            {isLoading ? <Spinner animation="border" size="sm" /> : '📥 Tải PDF'}
+          </Button>
+          <Button variant="outline-secondary" onClick={handlePrint}>
+            🖨️ In
+          </Button>
+          <Button variant="outline-dark" onClick={handleBack}>
+            ↩️ Quay lại
+          </Button>
+        </div>
+      </div>
+
+      {/* Right Column - Preview */}
+      <div className="preview-wrap" style={{ flex: 1 }}>
+        <div className="page" style={{
+          width: pdfSettings.pageOrientation === 'landscape' ? '297mm' : '210mm',
+          minHeight: pdfSettings.pageOrientation === 'landscape' ? '210mm' : '297mm',
+          margin: '0 auto',
+          background: '#fff',
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+          padding: `${pdfSettings.marginTop} ${pdfSettings.marginRight} ${pdfSettings.marginBottom} ${pdfSettings.marginLeft}`,
+          boxSizing: 'border-box',
+          position: 'relative',
+          overflow: 'hidden',
+          fontFamily: pdfSettings.fontFamily,
+          fontSize: pdfSettings.fontSize,
+          color: pdfSettings.fontColor,
+          lineHeight: pdfSettings.lineHeight
+        }}>
+          {pdfSettings.watermark.enabled && (
+            <div className="watermark" style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: `translate(-50%, -50%) rotate(${pdfSettings.watermark.rotation}deg)`,
+              fontSize: `${pdfSettings.watermark.fontSize}px`,
+              color: pdfSettings.watermark.color,
+              opacity: pdfSettings.watermark.opacity,
+              fontWeight: '700',
+              textTransform: 'uppercase',
+              pointerEvents: 'none',
+              zIndex: 0,
+              whiteSpace: 'nowrap'
+            }}>
+              {pdfSettings.watermark.text}
+            </div>
+          )}
+          
+          <div className="print-container" style={{
+            border: `1.5px solid ${pdfSettings.borderColor}`,
+            height: '100%',
+            boxSizing: 'border-box',
+            padding: '12px',
+            borderRadius: '4px',
+            position: 'relative',
+            zIndex: 1
+          }}>
+            {/* Header */}
+            {pdfSettings.showHeader && (
+              <div className="header" style={{
+                textAlign: 'center',
+                borderBottom: `1.5px solid ${pdfSettings.borderColor}`,
+                paddingBottom: '12px',
+                marginBottom: '12px',
+                background: pdfSettings.headerBgColor,
+                padding: '10px',
+                borderRadius: '4px'
+              }}>
+                <h2 style={{ 
+                  margin: 0, 
+                  fontSize: '24px', 
+                  textTransform: 'uppercase', 
+                  color: pdfSettings.primaryColor, 
+                  fontWeight: '700' 
+                }}>
+                  {pdfSettings.clinicName}
+                </h2>
+                <p style={{ margin: '4px 0', fontSize: '14px', color: '#444' }}>
+                  {pdfSettings.clinicAddress}
+                </p>
+                <p style={{ margin: '2px 0', fontSize: '13px', color: '#666' }}>
+                  ĐT: {pdfSettings.clinicPhone} | {pdfSettings.clinicTax}
+                </p>
+                {pdfSettings.clinicEmail && (
+                  <p style={{ margin: '2px 0', fontSize: '13px', color: '#666' }}>
+                    Email: {pdfSettings.clinicEmail} | Website: {pdfSettings.clinicWebsite}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Title */}
+            <div className="title" style={{ textAlign: 'center', margin: '12px 0 16px' }}>
+              <h3 style={{ 
+                margin: 0, 
+                fontSize: '20px', 
+                fontWeight: '600', 
+                color: pdfSettings.primaryColor,
+                textTransform: 'uppercase'
+              }}>
+                {pdfSettings.customTitle}
+              </h3>
+            </div>
+
+            {/* Patient Info */}
+            <div className="info" style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: '14px',
+              marginBottom: '12px',
+              gap: '16px',
+              background: pdfSettings.secondaryColor,
+              padding: '10px',
+              borderRadius: '4px'
+            }}>
+              <div>
+                <p style={{ margin: '4px 0', color: '#333' }}>
+                  <strong>Họ tên BN:</strong> {formData.patientName}
+                </p>
+                <p style={{ margin: '4px 0', color: '#333' }}>
+                  <strong>Tuổi:</strong> {formData.patientAge}
+                </p>
+                <p style={{ margin: '4px 0', color: '#333' }}>
+                  <strong>Giới tính:</strong> {formData.patientGender}
+                </p>
+                <p style={{ margin: '4px 0', color: '#333' }}>
+                  <strong>Địa chỉ:</strong> {formData.patientAddress}
+                </p>
+              </div>
+              <div>
+                <p style={{ margin: '4px 0', color: '#333' }}>
+                  <strong>Mã toa:</strong> {formData.code}
+                </p>
+                <p style={{ margin: '4px 0', color: '#333' }}>
+                  <strong>Ngày lập:</strong> {new Date(formData.date).toLocaleDateString('vi-VN')}
+                </p>
+                <p style={{ margin: '4px 0', color: '#333' }}>
+                  <strong>Bác sĩ:</strong> {formData.doctor}
+                  {pdfSettings.doctorDegree && ` - ${pdfSettings.doctorDegree}`}
+                </p>
+                {pdfSettings.doctorSpecialty && (
+                  <p style={{ margin: '4px 0', color: '#333' }}>
+                    <strong>Chuyên khoa:</strong> {pdfSettings.doctorSpecialty}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Medical Information */}
+            <div className="diagnosis" style={{ 
+              fontSize: '14px', 
+              marginBottom: '12px',
+              background: '#f8f9fa',
+              padding: '10px',
+              borderRadius: '4px',
+              borderLeft: `4px solid ${pdfSettings.primaryColor}`
+            }}>
+              <p style={{ margin: '4px 0' }}>
+                <strong>Triệu chứng:</strong> {formData.symptoms}
+              </p>
+              <p style={{ margin: '4px 0' }}>
+                <strong>Chẩn đoán:</strong> {formData.diagnosis}
+              </p>
+              {formData.instructions && (
+                <p style={{ margin: '4px 0' }}>
+                  <strong>Hướng dẫn:</strong> {formData.instructions}
+                </p>
+              )}
+            </div>
+
+            {/* Prescription Table */}
+            <table className="print-table" style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: '14px',
+              marginBottom: '20px',
+              border: `1px solid ${pdfSettings.borderColor}`
+            }}>
+              <thead>
+                <tr>
+                  <th style={{ border: `1px solid ${pdfSettings.borderColor}`, padding: '8px 10px', textAlign: 'center', background: pdfSettings.headerBgColor, fontWeight: '600' }}>STT</th>
+                  <th style={{ border: `1px solid ${pdfSettings.borderColor}`, padding: '8px 10px', textAlign: 'center', background: pdfSettings.headerBgColor, fontWeight: '600' }}>Tên thuốc</th>
+                  <th style={{ border: `1px solid ${pdfSettings.borderColor}`, padding: '8px 10px', textAlign: 'center', background: pdfSettings.headerBgColor, fontWeight: '600' }}>Số lượng</th>
+                  <th style={{ border: `1px solid ${pdfSettings.borderColor}`, padding: '8px 10px', textAlign: 'center', background: pdfSettings.headerBgColor, fontWeight: '600' }}>Liều dùng</th>
+                  <th style={{ border: `1px solid ${pdfSettings.borderColor}`, padding: '8px 10px', textAlign: 'center', background: pdfSettings.headerBgColor, fontWeight: '600' }}>Đơn giá (VNĐ)</th>
+                  <th style={{ border: `1px solid ${pdfSettings.borderColor}`, padding: '8px 10px', textAlign: 'center', background: pdfSettings.headerBgColor, fontWeight: '600' }}>Thành tiền (VNĐ)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {prescriptionRows.map((row, index) => (
+                  <tr key={row.id}>
+                    <td style={{ border: `1px solid ${pdfSettings.borderColor}`, padding: '8px 10px', textAlign: 'center' }}>{index + 1}</td>
+                    <td style={{ border: `1px solid ${pdfSettings.borderColor}`, padding: '8px 10px' }}>{row.name}</td>
+                    <td style={{ border: `1px solid ${pdfSettings.borderColor}`, padding: '8px 10px', textAlign: 'center' }}>{row.quantity}</td>
+                    <td style={{ border: `1px solid ${pdfSettings.borderColor}`, padding: '8px 10px' }}>{row.dosage}</td>
+                    <td style={{ border: `1px solid ${pdfSettings.borderColor}`, padding: '8px 10px', textAlign: 'right' }}>{formatNumber(row.unitPrice)}</td>
+                    <td style={{ border: `1px solid ${pdfSettings.borderColor}`, padding: '8px 10px', textAlign: 'right' }}>{formatNumber(row.totalPrice)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="total-row" style={{ fontWeight: '600', background: pdfSettings.secondaryColor }}>
+                  <td colSpan="4" style={{ border: `1px solid ${pdfSettings.borderColor}`, padding: '8px 10px', textAlign: 'right', fontWeight: 'bold' }}>
+                    Tổng cộng:
+                  </td>
+                  <td style={{ border: `1px solid ${pdfSettings.borderColor}`, padding: '8px 10px', textAlign: 'right', fontWeight: 'bold' }}>
+                    {formatNumber(totalAmount)} VNĐ
+                  </td>
+                  <td style={{ border: `1px solid ${pdfSettings.borderColor}`, padding: '8px 10px', textAlign: 'right', fontWeight: 'bold' }}>
+                    {formatNumber(totalAmount)} VNĐ
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+
+            {/* Total in words */}
+            <div className="total-section" style={{
+              background: '#f8f9fa',
+              padding: '10px',
+              borderRadius: '4px',
+              marginBottom: '20px',
+              borderLeft: `4px solid ${pdfSettings.primaryColor}`
+            }}>
+              <p style={{ fontSize: '14px', margin: 0, color: '#222', fontWeight: 'bold' }}>
+                <strong>Số tiền viết bằng chữ:</strong> {numberToVietnameseWords(totalAmount)}
+              </p>
+            </div>
+
+            {/* Disclaimer */}
+            {pdfSettings.disclaimer && (
+              <div className="disclaimer" style={{
+                fontSize: '12px',
+                color: '#666',
+                fontStyle: 'italic',
+                textAlign: 'center',
+                marginBottom: '20px',
+                padding: '8px',
+                background: '#fff3cd',
+                borderRadius: '4px',
+                border: '1px solid #ffeaa7'
+              }}>
+                {pdfSettings.disclaimer}
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="footer" style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginTop: '40px',
+              fontSize: '14px',
+              color: '#333'
+            }}>
+              <div style={{ width: '45%', textAlign: 'center' }}>
+                <p><strong>Bệnh nhân</strong></p>
+                <p>(Ký và ghi rõ họ tên)</p>
+                <div className="signature" style={{
+                  marginTop: '60px',
+                  fontStyle: 'italic',
+                  borderTop: `1px solid ${pdfSettings.borderColor}`,
+                  paddingTop: '8px',
+                  width: '200px',
+                  marginLeft: 'auto',
+                  marginRight: 'auto'
+                }}></div>
+              </div>
+              <div style={{ width: '45%', textAlign: 'center' }}>
+                <p><strong>Bác sĩ kê toa</strong></p>
+                <p>(Ký và ghi rõ họ tên)</p>
+                <div className="signature" style={{
+                  marginTop: '60px',
+                  fontStyle: 'italic',
+                  borderTop: `1px solid ${pdfSettings.borderColor}`,
+                  paddingTop: '8px',
+                  width: '200px',
+                  marginLeft: 'auto',
+                  marginRight: 'auto'
+                }}>
+                  {pdfSettings.showDoctorSignature && formData.doctor}
+                </div>
+              </div>
+            </div>
+
+            {/* Custom Footer Text */}
+            {pdfSettings.footerText && pdfSettings.showFooter && (
+              <div className="custom-footer" style={{
+                textAlign: 'center',
+                marginTop: '20px',
+                paddingTop: '10px',
+                borderTop: `1px solid ${pdfSettings.borderColor}`,
+                fontSize: '12px',
+                color: '#666'
+              }}>
+                {pdfSettings.footerText}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Settings Modal với nhiều tabs */}
+      <Modal show={showSettings} onHide={() => setShowSettings(false)} size="xl" scrollable>
+        <Modal.Header closeButton>
+          <Modal.Title>⚙️ Cài đặt PDF Nâng cao</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Tabs defaultActiveKey="general" className="mb-3">
+            {/* Tab General */}
+            <Tab eventKey="general" title="📄 Chung">
+              <div className="row g-3">
+                <div className="col-12">
+                  <h6 className="fw-bold">Thông tin phòng khám</h6>
+                  <div className="row g-2">
+                    <div className="col-12">
+                      <Form.Label>Tên phòng khám</Form.Label>
+                      <Form.Control
                         type="text"
-                        className="form-control"
-                        value={formData.age}
-                        onChange={(e) => handleInputChange('age', e.target.value)}
+                        value={pdfSettings.clinicName}
+                        onChange={(e) => handleSettingsChange('clinic', 'clinicName', e.target.value)}
+                      />
+                    </div>
+                    <div className="col-12">
+                      <Form.Label>Địa chỉ</Form.Label>
+                      <Form.Control
+                        type="text"
+                        value={pdfSettings.clinicAddress}
+                        onChange={(e) => handleSettingsChange('clinic', 'clinicAddress', e.target.value)}
                       />
                     </div>
                     <div className="col-6">
-                      <label className="form-label fw-semibold">Giới tính</label>
-                      <select
-                        className="form-select"
-                        value={formData.gender}
-                        onChange={(e) => handleInputChange('gender', e.target.value)}
-                      >
-                        <option value="">Chọn giới tính</option>
-                        <option value="Nam">Nam</option>
-                        <option value="Nữ">Nữ</option>
-                      </select>
+                      <Form.Label>Điện thoại</Form.Label>
+                      <Form.Control
+                        type="text"
+                        value={pdfSettings.clinicPhone}
+                        onChange={(e) => handleSettingsChange('clinic', 'clinicPhone', e.target.value)}
+                      />
+                    </div>
+                    <div className="col-6">
+                      <Form.Label>Mã số thuế</Form.Label>
+                      <Form.Control
+                        type="text"
+                        value={pdfSettings.clinicTax}
+                        onChange={(e) => handleSettingsChange('clinic', 'clinicTax', e.target.value)}
+                      />
+                    </div>
+                    <div className="col-6">
+                      <Form.Label>Email</Form.Label>
+                      <Form.Control
+                        type="email"
+                        value={pdfSettings.clinicEmail}
+                        onChange={(e) => handleSettingsChange('clinic', 'clinicEmail', e.target.value)}
+                      />
+                    </div>
+                    <div className="col-6">
+                      <Form.Label>Website</Form.Label>
+                      <Form.Control
+                        type="text"
+                        value={pdfSettings.clinicWebsite}
+                        onChange={(e) => handleSettingsChange('clinic', 'clinicWebsite', e.target.value)}
+                      />
                     </div>
                   </div>
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">Số điện thoại</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={formData.phone}
-                      onChange={(e) => handleInputChange('phone', e.target.value)}
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">Địa chỉ</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={formData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                    />
-                  </div>
                 </div>
 
-                {/* Appointment Information */}
-                <div>
-                  <h6 className="fw-bold text-primary mb-3">
-                    <i className="bi bi-calendar-check"></i> Thông tin lịch hẹn
-                  </h6>
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">Ngày khám</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={formData.appointment_date}
-                      onChange={(e) => handleInputChange('appointment_date', e.target.value)}
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">Giờ khám</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={formData.appointment_time}
-                      onChange={(e) => handleInputChange('appointment_time', e.target.value)}
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">Bác sĩ điều trị</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={formData.doctor_name}
-                      onChange={(e) => handleInputChange('doctor_name', e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {/* Medical Information */}
-                <div>
-                  <h6 className="fw-bold text-primary mb-3">
-                    <i className="bi bi-clipboard-check"></i> Thông tin y tế
-                  </h6>
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">Chẩn đoán</label>
-                    <textarea
-                      className="form-control"
-                      rows="3"
-                      value={formData.diagnosis}
-                      onChange={(e) => handleInputChange('diagnosis', e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-
-        {/* Right Column - Preview */}
-        <Col md={8}>
-          <Card className="h-100 shadow">
-            <Card.Header className="bg-success text-white d-flex justify-content-between align-items-center">
-              <h5 className="mb-0">
-                <i className="bi bi-eye"></i> Preview Toa Thuốc
-              </h5>
-              <span className="badge bg-light text-dark">Real-time</span>
-            </Card.Header>
-            <Card.Body className="p-0">
-              {previewHTML ? (
-                <div
-                  className="pdf-preview-content"
-                  style={{
-                    height: 'calc(100vh - 200px)',
-                    overflow: 'auto',
-                    backgroundColor: 'white'
-                  }}
-                  dangerouslySetInnerHTML={{ __html: previewHTML }}
-                />
-              ) : (
-                <div className="text-center py-5">
-                  <i className="bi bi-file-earmark-pdf text-muted" style={{ fontSize: '3rem' }}></i>
-                  <p className="text-muted mt-3">Chưa có nội dung để hiển thị</p>
-                </div>
-              )}
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Settings Modal */}
-      <Modal show={showSettings} onHide={() => setShowSettings(false)} size="lg">
-        <Modal.Header closeButton>
-          <Modal.Title>
-            <i className="bi bi-gear"></i> Cài đặt PDF
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <div className="row g-3">
-            {/* Clinic Settings */}
-            <div className="col-12">
-              <h6 className="fw-bold">Thông tin phòng khám</h6>
-              <div className="row g-2">
                 <div className="col-12">
-                  <Form.Label>Tên phòng khám</Form.Label>
-                  <Form.Control
-                    type="text"
-                    value={pdfSettings.clinicName}
-                    onChange={(e) => handleSettingsChange('general', 'clinicName', e.target.value)}
-                  />
+                  <h6 className="fw-bold">Thông tin bác sĩ</h6>
+                  <div className="row g-2">
+                    <div className="col-6">
+                      <Form.Label>Tên bác sĩ</Form.Label>
+                      <Form.Control
+                        type="text"
+                        value={pdfSettings.doctorName}
+                        onChange={(e) => handleSettingsChange('doctor', 'doctorName', e.target.value)}
+                      />
+                    </div>
+                    <div className="col-6">
+                      <Form.Label>Học vị</Form.Label>
+                      <Form.Control
+                        type="text"
+                        value={pdfSettings.doctorDegree}
+                        onChange={(e) => handleSettingsChange('doctor', 'doctorDegree', e.target.value)}
+                        placeholder="Bác sĩ Chuyên khoa II"
+                      />
+                    </div>
+                    <div className="col-12">
+                      <Form.Label>Chuyên khoa</Form.Label>
+                      <Form.Control
+                        type="text"
+                        value={pdfSettings.doctorSpecialty}
+                        onChange={(e) => handleSettingsChange('doctor', 'doctorSpecialty', e.target.value)}
+                        placeholder="Nội tổng quát"
+                      />
+                    </div>
+                  </div>
                 </div>
+
                 <div className="col-12">
-                  <Form.Label>Địa chỉ</Form.Label>
+                  <Form.Label>Tiêu đề toa thuốc</Form.Label>
                   <Form.Control
                     type="text"
-                    value={pdfSettings.clinicAddress}
-                    onChange={(e) => handleSettingsChange('general', 'clinicAddress', e.target.value)}
-                  />
-                </div>
-                <div className="col-6">
-                  <Form.Label>Điện thoại</Form.Label>
-                  <Form.Control
-                    type="text"
-                    value={pdfSettings.clinicPhone}
-                    onChange={(e) => handleSettingsChange('general', 'clinicPhone', e.target.value)}
-                  />
-                </div>
-                <div className="col-6">
-                  <Form.Label>Mã số thuế</Form.Label>
-                  <Form.Control
-                    type="text"
-                    value={pdfSettings.clinicTax}
-                    onChange={(e) => handleSettingsChange('general', 'clinicTax', e.target.value)}
-                  />
-                </div>
-                <div className="col-12">
-                  <Form.Label>Tên bác sĩ</Form.Label>
-                  <Form.Control
-                    type="text"
-                    value={pdfSettings.doctorName}
-                    onChange={(e) => handleSettingsChange('general', 'doctorName', e.target.value)}
+                    value={pdfSettings.customTitle}
+                    onChange={(e) => handleSettingsChange('general', 'customTitle', e.target.value)}
                   />
                 </div>
               </div>
-            </div>
+            </Tab>
 
-            {/* Watermark Settings */}
-            <div className="col-12">
-              <h6 className="fw-bold">Watermark</h6>
-              <div className="row g-2">
+            {/* Tab Layout */}
+            <Tab eventKey="layout" title="📐 Layout">
+              <div className="row g-3">
+                <div className="col-6">
+                  <Form.Label>Hướng trang</Form.Label>
+                  <Form.Select
+                    value={pdfSettings.pageOrientation}
+                    onChange={(e) => handleSettingsChange('layout', 'pageOrientation', e.target.value)}
+                  >
+                    <option value="portrait">Portrait (Dọc)</option>
+                    <option value="landscape">Landscape (Ngang)</option>
+                  </Form.Select>
+                </div>
+                <div className="col-6">
+                  <Form.Label>Kích thước trang</Form.Label>
+                  <Form.Select
+                    value={pdfSettings.pageSize}
+                    onChange={(e) => handleSettingsChange('layout', 'pageSize', e.target.value)}
+                  >
+                    <option value="A4">A4</option>
+                    <option value="A5">A5</option>
+                    <option value="Letter">Letter</option>
+                  </Form.Select>
+                </div>
+                <div className="col-6">
+                  <Form.Label>Margin Top</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={pdfSettings.marginTop}
+                    onChange={(e) => handleSettingsChange('layout', 'marginTop', e.target.value)}
+                    placeholder="15mm"
+                  />
+                </div>
+                <div className="col-6">
+                  <Form.Label>Margin Bottom</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={pdfSettings.marginBottom}
+                    onChange={(e) => handleSettingsChange('layout', 'marginBottom', e.target.value)}
+                    placeholder="15mm"
+                  />
+                </div>
+                <div className="col-6">
+                  <Form.Label>Margin Left</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={pdfSettings.marginLeft}
+                    onChange={(e) => handleSettingsChange('layout', 'marginLeft', e.target.value)}
+                    placeholder="20mm"
+                  />
+                </div>
+                <div className="col-6">
+                  <Form.Label>Margin Right</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={pdfSettings.marginRight}
+                    onChange={(e) => handleSettingsChange('layout', 'marginRight', e.target.value)}
+                    placeholder="20mm"
+                  />
+                </div>
+                <div className="col-12">
+                  <Form.Check
+                    type="switch"
+                    label="Hiển thị header"
+                    checked={pdfSettings.showHeader}
+                    onChange={(e) => handleSettingsChange('layout', 'showHeader', e.target.checked)}
+                  />
+                </div>
+                <div className="col-12">
+                  <Form.Check
+                    type="switch"
+                    label="Hiển thị footer"
+                    checked={pdfSettings.showFooter}
+                    onChange={(e) => handleSettingsChange('layout', 'showFooter', e.target.checked)}
+                  />
+                </div>
+                <div className="col-12">
+                  <Form.Check
+                    type="switch"
+                    label="Hiển thị chữ ký bác sĩ"
+                    checked={pdfSettings.showDoctorSignature}
+                    onChange={(e) => handleSettingsChange('layout', 'showDoctorSignature', e.target.checked)}
+                  />
+                </div>
+              </div>
+            </Tab>
+
+            {/* Tab Font & Color */}
+            <Tab eventKey="font" title="🎨 Font & Màu sắc">
+              <div className="row g-3">
+                <div className="col-6">
+                  <Form.Label>Font family</Form.Label>
+                  <Form.Select
+                    value={pdfSettings.fontFamily}
+                    onChange={(e) => handleSettingsChange('font', 'fontFamily', e.target.value)}
+                  >
+                    <option value="Times New Roman">Times New Roman</option>
+                    <option value="Arial">Arial</option>
+                    <option value="Helvetica">Helvetica</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Georgia">Georgia</option>
+                    <option value="Courier New">Courier New</option>
+                  </Form.Select>
+                </div>
+                <div className="col-6">
+                  <Form.Label>Size chữ</Form.Label>
+                  <Form.Select
+                    value={pdfSettings.fontSize}
+                    onChange={(e) => handleSettingsChange('font', 'fontSize', e.target.value)}
+                  >
+                    <option value="12px">Nhỏ (12px)</option>
+                    <option value="13px">Vừa (13px)</option>
+                    <option value="14px">Trung bình (14px)</option>
+                    <option value="16px">Lớn (16px)</option>
+                    <option value="18px">Rất lớn (18px)</option>
+                  </Form.Select>
+                </div>
+                <div className="col-6">
+                  <Form.Label>Line height</Form.Label>
+                  <Form.Control
+                    type="number"
+                    step="0.1"
+                    min="1"
+                    max="2"
+                    value={pdfSettings.lineHeight}
+                    onChange={(e) => handleSettingsChange('font', 'lineHeight', parseFloat(e.target.value))}
+                  />
+                </div>
+                <div className="col-6">
+                  <Form.Label>Màu chữ</Form.Label>
+                  <Form.Control
+                    type="color"
+                    value={pdfSettings.fontColor}
+                    onChange={(e) => handleSettingsChange('font', 'fontColor', e.target.value)}
+                  />
+                </div>
+                <div className="col-6">
+                  <Form.Label>Màu chính</Form.Label>
+                  <Form.Control
+                    type="color"
+                    value={pdfSettings.primaryColor}
+                    onChange={(e) => handleSettingsChange('color', 'primaryColor', e.target.value)}
+                  />
+                </div>
+                <div className="col-6">
+                  <Form.Label>Màu nền phụ</Form.Label>
+                  <Form.Control
+                    type="color"
+                    value={pdfSettings.secondaryColor}
+                    onChange={(e) => handleSettingsChange('color', 'secondaryColor', e.target.value)}
+                  />
+                </div>
+                <div className="col-6">
+                  <Form.Label>Màu viền</Form.Label>
+                  <Form.Control
+                    type="color"
+                    value={pdfSettings.borderColor}
+                    onChange={(e) => handleSettingsChange('color', 'borderColor', e.target.value)}
+                  />
+                </div>
+                <div className="col-6">
+                  <Form.Label>Màu nền header</Form.Label>
+                  <Form.Control
+                    type="color"
+                    value={pdfSettings.headerBgColor}
+                    onChange={(e) => handleSettingsChange('color', 'headerBgColor', e.target.value)}
+                  />
+                </div>
+              </div>
+            </Tab>
+
+            {/* Tab Watermark */}
+            <Tab eventKey="watermark" title="💧 Watermark">
+              <div className="row g-3">
                 <div className="col-12">
                   <Form.Check
                     type="switch"
@@ -946,61 +1310,126 @@ const PDFEditorPage = () => {
                   />
                 </div>
               </div>
-            </div>
+            </Tab>
 
-            {/* Font Settings */}
-            <div className="col-12">
-              <h6 className="fw-bold">Font chữ</h6>
-              <div className="row g-2">
-                <div className="col-6">
-                  <Form.Label>Font family</Form.Label>
-                  <Form.Select
-                    value={pdfSettings.fontFamily}
-                    onChange={(e) => handleSettingsChange('general', 'fontFamily', e.target.value)}
-                  >
-                    <option value="Times New Roman">Times New Roman</option>
-                    <option value="Arial">Arial</option>
-                    <option value="Verdana">Verdana</option>
-                    <option value="Georgia">Georgia</option>
-                    <option value="Courier New">Courier New</option>
-                  </Form.Select>
+            {/* Tab Content */}
+            <Tab eventKey="content" title="📝 Nội dung">
+              <div className="row g-3">
+                <div className="col-12">
+                  <Form.Label>Text footer</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={2}
+                    value={pdfSettings.footerText}
+                    onChange={(e) => handleSettingsChange('content', 'footerText', e.target.value)}
+                    placeholder="Cảm ơn quý khách đã sử dụng dịch vụ..."
+                  />
                 </div>
-                <div className="col-6">
-                  <Form.Label>Size chữ</Form.Label>
-                  <Form.Select
-                    value={pdfSettings.fontSize}
-                    onChange={(e) => handleSettingsChange('general', 'fontSize', e.target.value)}
-                  >
-                    <option value="12px">Nhỏ (12px)</option>
-                    <option value="14px">Vừa (14px)</option>
-                    <option value="16px">Lớn (16px)</option>
-                    <option value="18px">Rất lớn (18px)</option>
-                  </Form.Select>
+                <div className="col-12">
+                  <Form.Label>Disclaimer/Cảnh báo</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={3}
+                    value={pdfSettings.disclaimer}
+                    onChange={(e) => handleSettingsChange('content', 'disclaimer', e.target.value)}
+                    placeholder="Thuốc kê trong toa cần được sử dụng theo đúng hướng dẫn của bác sĩ..."
+                  />
                 </div>
               </div>
-            </div>
+            </Tab>
 
-            {/* Custom Title */}
-            <div className="col-12">
-              <Form.Label>Tiêu đề toa thuốc</Form.Label>
-              <Form.Control
-                type="text"
-                value={pdfSettings.customTitle}
-                onChange={(e) => handleSettingsChange('general', 'customTitle', e.target.value)}
-              />
-            </div>
-          </div>
+            {/* Tab Advanced */}
+            <Tab eventKey="advanced" title="Nâng cao">
+              <div className="row g-3">
+                <div className="col-6">
+                  <Form.Label>Mức độ nén</Form.Label>
+                  <Form.Select
+                    value={pdfSettings.compressionLevel}
+                    onChange={(e) => handleSettingsChange('advanced', 'compressionLevel', e.target.value)}
+                  >
+                    <option value="low">Thấp (Chất lượng cao)</option>
+                    <option value="medium">Trung bình</option>
+                    <option value="high">Cao (Kích thước nhỏ)</option>
+                  </Form.Select>
+                </div>
+                <div className="col-6">
+                  <Form.Label>Chất lượng ảnh</Form.Label>
+                  <Form.Control
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={pdfSettings.imageQuality}
+                    onChange={(e) => handleSettingsChange('advanced', 'imageQuality', parseInt(e.target.value))}
+                  />
+                </div>
+                <div className="col-6">
+                  <Form.Label>Phiên bản PDF</Form.Label>
+                  <Form.Select
+                    value={pdfSettings.pdfVersion}
+                    onChange={(e) => handleSettingsChange('advanced', 'pdfVersion', e.target.value)}
+                  >
+                    <option value="1.4">PDF 1.4</option>
+                    <option value="1.5">PDF 1.5</option>
+                    <option value="1.6">PDF 1.6</option>
+                    <option value="1.7">PDF 1.7</option>
+                  </Form.Select>
+                </div>
+                <div className="col-12">
+                  <Form.Check
+                    type="switch"
+                    label="Cho phép in ấn"
+                    checked={pdfSettings.allowPrinting}
+                    onChange={(e) => handleSettingsChange('advanced', 'allowPrinting', e.target.checked)}
+                  />
+                </div>
+                <div className="col-12">
+                  <Form.Check
+                    type="switch"
+                    label="Cho phép sao chép nội dung"
+                    checked={pdfSettings.allowCopying}
+                    onChange={(e) => handleSettingsChange('advanced', 'allowCopying', e.target.checked)}
+                  />
+                </div>
+              </div>
+            </Tab>
+          </Tabs>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowSettings(false)}>
-            Hủy
-          </Button>
-          <Button variant="primary" onClick={handleSaveSettings}>
-            Lưu cài đặt
-          </Button>
+          <div className="d-flex justify-content-between w-100">
+            <div>
+              <Button variant="outline-secondary" onClick={handleResetSettings}>
+                Reset
+              </Button>
+              <Button variant="outline-info" onClick={handleExportSettings} className="ms-2">
+                Export
+              </Button>
+              <Form.Control
+                type="file"
+                accept=".json"
+                onChange={handleImportSettings}
+                style={{ display: 'none' }}
+                id="import-settings"
+              />
+              <Button 
+                variant="outline-warning" 
+                onClick={() => document.getElementById('import-settings').click()}
+                className="ms-2"
+              >
+                Import
+              </Button>
+            </div>
+            <div>
+              <Button variant="secondary" onClick={() => setShowSettings(false)}>
+                Hủy
+              </Button>
+              <Button variant="primary" onClick={handleSaveSettings} className="ms-2">
+                Lưu cài đặt
+              </Button>
+            </div>
+          </div>
         </Modal.Footer>
       </Modal>
-    </Container>
+    </div>
   );
 };
 

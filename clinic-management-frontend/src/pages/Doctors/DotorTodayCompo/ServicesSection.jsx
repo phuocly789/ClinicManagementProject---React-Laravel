@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Col, Card, Form, Button, Spinner, Badge, Row, Modal } from "react-bootstrap";
+import { Col, Card, Form, Button, Spinner, Badge, Row } from "react-bootstrap";
 import Pagination from "../../../Components/Pagination/Pagination";
+import { useNavigate } from "react-router-dom";
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -16,6 +17,7 @@ const ServicesSection = ({
   symptoms,
   diagnoses = [],
 }) => {
+  const navigate = useNavigate();
   const [localServices, setLocalServices] = useState([]);
   const [localServicesLoading, setLocalServicesLoading] = useState(true);
   const [serviceSuggestions, setServiceSuggestions] = useState([]);
@@ -25,12 +27,6 @@ const ServicesSection = ({
 
   // FIX: Tạo local state để quản lý riêng
   const [localServicesState, setLocalServicesState] = useState({});
-
-  // THÊM STATE CHO PDF PREVIEW
-  const [showPDFPreview, setShowPDFPreview] = useState(false);
-  const [pdfPreviewData, setPdfPreviewData] = useState(null);
-  const [previewHTML, setPreviewHTML] = useState('');
-  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
   // Đồng bộ state từ props khi component mount
   useEffect(() => {
@@ -81,10 +77,14 @@ const ServicesSection = ({
     fetchServices();
   }, []);
 
-  // FUNCTION PREVIEW PDF
-  const handlePreview = async (type) => {
+  // FUNCTION PREVIEW PDF - SỬA LẠI GIỐNG CODE TOA THUỐC
+  const handlePreview = async () => {
     if (!selectedTodayPatient) {
-      setToast({ show: true, message: "⚠️ Chưa chọn bệnh nhân.", variant: "warning" });
+      setToast({
+        show: true,
+        message: "⚠️ Vui lòng chọn bệnh nhân trước khi xem trước.",
+        variant: "warning"
+      });
       return;
     }
 
@@ -101,77 +101,104 @@ const ServicesSection = ({
       })
       .filter(Boolean);
 
-    if (type === 'service' && selectedServices.length === 0) {
-      setToast({ show: true, message: "⚠️ Chưa chọn dịch vụ nào.", variant: "warning" });
+    if (selectedServices.length === 0) {
+      setToast({
+        show: true,
+        message: "⚠️ Vui lòng chọn ít nhất một dịch vụ trước khi xem trước.",
+        variant: "warning"
+      });
       return;
     }
 
     const previewData = {
-      type: type,
-      patient_name: selectedTodayPatient.name,
-      age: selectedTodayPatient.age,
-      gender: selectedTodayPatient.gender,
-      phone: selectedTodayPatient.phone,
-      appointment_date: selectedTodayPatient.date || new Date().toLocaleDateString('vi-VN'),
-      appointment_time: selectedTodayPatient.time,
+      type: 'service',
+      patient_name: selectedTodayPatient.name || 'N/A',
+      age: String(selectedTodayPatient.age || 'N/A'),
+      gender: selectedTodayPatient.gender || 'N/A',
+      phone: selectedTodayPatient.phone || 'N/A',
+      appointment_date: selectedTodayPatient.date
+        ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
+        : new Date().toLocaleDateString('vi-VN'),
+      appointment_time: selectedTodayPatient.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
       doctor_name: "Bác sĩ điều trị",
       services: selectedServices,
-      diagnoses: diagnoses.length > 0 ? diagnoses : [{ Symptoms: symptoms, Diagnosis: diagnosis }],
+      diagnoses: diagnoses || [],
     };
 
-    console.log('📤 Data preview gửi lên BE:', previewData);
+    console.log('📤 Data preview dịch vụ gửi lên BE:', previewData);
 
-    setPdfPreviewData(previewData);
-    setShowPDFPreview(true);
-    loadPreviewHTML(previewData);
-  };
-
-  // LOAD PREVIEW HTML
-  const loadPreviewHTML = async (data) => {
-    setIsLoadingPreview(true);
+    // Lưu data vào sessionStorage để trang mới có thể truy cập - GIỐNG CODE TOA THUỐC
     try {
-      const response = await fetch(`${API_BASE_URL}/api/print/preview-html`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
+      sessionStorage.setItem('pdfPreviewData', JSON.stringify(previewData));
+      sessionStorage.setItem('prescriptionRows', JSON.stringify(
+        selectedServices.map((service, index) => ({
+          id: index + 1,
+          name: service.ServiceName,
+          quantity: service.Quantity || 1,
+          dosage: '', // Dịch vụ không có liều dùng
+          unitPrice: service.Price || 0,
+          totalPrice: (service.Price || 0) * (service.Quantity || 1)
+        }))
+      ));
+      sessionStorage.setItem('selectedPatient', JSON.stringify(selectedTodayPatient));
+      sessionStorage.setItem('diagnoses', JSON.stringify(diagnoses));
+      sessionStorage.setItem('services', JSON.stringify(selectedServices));
 
-      const result = await response.json();
-      
-      if (result.success) {
-        setPreviewHTML(result.html);
-      } else {
-        console.error('Preview error:', result.message);
+      // Mở trang mới trong tab mới - GIỐNG CODE TOA THUỐC
+      const newWindow = window.open('/pdf-editor', '_blank');
+
+      if (!newWindow) {
         setToast({
           show: true,
-          message: `Lỗi tải preview: ${result.message}`,
-          variant: "danger",
+          message: "⚠️ Trình duyệt đã chặn popup. Vui lòng cho phép popup để mở editor PDF.",
+          variant: "warning",
         });
+        return;
       }
-    } catch (error) {
-      console.error('Preview load error:', error);
+
       setToast({
         show: true,
-        message: `Lỗi tải preview: ${error.message}`,
+        message: "✅ Đang mở trình chỉnh sửa PDF trong tab mới...",
+        variant: "success",
+      });
+
+    } catch (error) {
+      console.error('Error opening new window:', error);
+      setToast({
+        show: true,
+        message: "❌ Lỗi khi mở trình chỉnh sửa PDF",
         variant: "danger",
       });
-    } finally {
-      setIsLoadingPreview(false);
     }
   };
 
-  // FUNCTION DOWNLOAD PDF
-  const printDocument = async (type) => {
+  // FUNCTION DOWNLOAD PDF - GIỮ NGUYÊN
+  const printDocument = async () => {
     if (!selectedTodayPatient) {
       setToast({ show: true, message: "⚠️ Chưa chọn bệnh nhân.", variant: "warning" });
       return;
     }
 
-    let requestData = {
-      type: type,
+    // Data for service
+    const selectedServices = Object.keys(localServicesState)
+      .filter(serviceId => localServicesState[serviceId])
+      .map(serviceId => {
+        const service = localServices.find(s => s.ServiceId == serviceId);
+        return service ? {
+          ServiceName: service.ServiceName,
+          Price: service.Price || 0,
+          Quantity: 1
+        } : null;
+      })
+      .filter(Boolean);
+
+    if (selectedServices.length === 0) {
+      setToast({ show: true, message: "⚠️ Chưa chọn dịch vụ nào.", variant: "warning" });
+      return;
+    }
+
+    const requestData = {
+      type: 'service',
       patient_name: selectedTodayPatient.name,
       age: selectedTodayPatient.age,
       gender: selectedTodayPatient.gender,
@@ -180,28 +207,8 @@ const ServicesSection = ({
       appointment_time: selectedTodayPatient.time,
       doctor_name: "Bác sĩ điều trị",
       diagnoses: diagnoses.length > 0 ? diagnoses : [{ Symptoms: symptoms, Diagnosis: diagnosis }],
+      services: selectedServices,
     };
-
-    if (type === 'service') {
-      // Data for service
-      const selectedServices = Object.keys(localServicesState)
-        .filter(serviceId => localServicesState[serviceId])
-        .map(serviceId => {
-          const service = localServices.find(s => s.ServiceId == serviceId);
-          return service ? {
-            ServiceName: service.ServiceName,
-            Price: service.Price || 0,
-            Quantity: 1
-          } : null;
-        })
-        .filter(Boolean);
-
-      if (selectedServices.length === 0) {
-        setToast({ show: true, message: "⚠️ Chưa chọn dịch vụ nào.", variant: "warning" });
-        return;
-      }
-      requestData.services = selectedServices;
-    }
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/print/prescription/preview`, {
@@ -243,13 +250,6 @@ const ServicesSection = ({
         message: `Lỗi xuất PDF dịch vụ: ${error.message}`,
         variant: "danger",
       });
-    }
-  };
-
-  // RELOAD PREVIEW
-  const reloadPreview = () => {
-    if (pdfPreviewData) {
-      loadPreviewHTML(pdfPreviewData);
     }
   };
 
@@ -535,22 +535,22 @@ const ServicesSection = ({
             >
               🧾 Yêu cầu thực hiện dịch vụ đã chọn ({Object.values(localServicesState).filter(v => v).length})
             </Button>
-            
-            {/* THÊM NÚT PREVIEW */}
+
+            {/* SỬA NÚT PREVIEW - GIỐNG CODE TOA THUỐC */}
             <Button
               variant="outline-info"
               size="sm"
-              onClick={() => handlePreview('service')}
+              onClick={handlePreview}
               disabled={!selectedTodayPatient || !Object.values(localServicesState).some(Boolean)}
               className="no-print ms-2"
             >
-              👁️ Xem trước
+              👁️ Xem trước PDF
             </Button>
 
             <Button
               variant="outline-success"
               size="sm"
-              onClick={() => printDocument('service')}
+              onClick={printDocument}
               disabled={!selectedTodayPatient || !Object.values(localServicesState).some(Boolean)}
               className="no-print ms-2"
             >
@@ -565,51 +565,6 @@ const ServicesSection = ({
           </p>
         </Card.Body>
       </Card>
-
-      {/* MODAL PREVIEW */}
-      <Modal show={showPDFPreview} onHide={() => setShowPDFPreview(false)} size="xl" centered>
-        <Modal.Header closeButton>
-          <Modal.Title>👁️ Xem trước Phiếu Dịch Vụ</Modal.Title>
-        </Modal.Header>
-        <Modal.Body style={{ minHeight: '500px' }}>
-          <div className="d-flex justify-content-between mb-3">
-            <Button variant="outline-primary" size="sm" onClick={reloadPreview}>
-              {isLoadingPreview ? <Spinner size="sm" /> : '🔄 Tải lại'}
-            </Button>
-          </div>
-          
-          {isLoadingPreview ? (
-            <div className="text-center py-5">
-              <Spinner animation="border" />
-              <p>Đang tải preview...</p>
-            </div>
-          ) : (
-            <div 
-              style={{ 
-                border: '1px solid #ddd', 
-                height: '500px', 
-                overflow: 'auto',
-                backgroundColor: 'white'
-              }}
-              dangerouslySetInnerHTML={{ __html: previewHTML }}
-            />
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowPDFPreview(false)}>
-            Đóng
-          </Button>
-          <Button 
-            variant="success" 
-            onClick={() => {
-              printDocument('service');
-              setShowPDFPreview(false);
-            }}
-          >
-            💾 Tải về PDF
-          </Button>
-        </Modal.Footer>
-      </Modal>
     </Col>
   );
 };
