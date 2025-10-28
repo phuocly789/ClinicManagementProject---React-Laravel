@@ -158,7 +158,7 @@ const HistorySection = ({
 
     return (
       <>
-        <Card.Header>
+        <Card.Header className ="bg-primary bg-opacity-25">
           <h5>Thông Tin Bệnh Nhân: {selectedPatient.name}</h5>
         </Card.Header>
         <Card.Body>
@@ -167,7 +167,7 @@ const HistorySection = ({
           <p><strong>Giới tính:</strong> {selectedPatient.gender}</p>
           <p><strong>SĐT:</strong> {selectedPatient.phone}</p>
           <p><strong>Địa chỉ:</strong> {selectedPatient.address || 'N/A'}</p>
-          <Card.Header className="mt-3">
+          <Card.Header className="mt-3 bg-primary bg-opacity-25">
             <h6>Lịch Sử Khám Bệnh</h6>
           </Card.Header>
           {history.length === 0 ? (
@@ -224,7 +224,7 @@ const HistorySection = ({
   return (
     <div className={`section ${currentSection === 'history' ? 'active' : ''}`} id="history">
       <Card>
-        <Card.Header>
+        <Card.Header className="bg-success text-light">
           <h5>Lịch Sử Bệnh Nhân</h5>
         </Card.Header>
         {!selectedPatient ? (

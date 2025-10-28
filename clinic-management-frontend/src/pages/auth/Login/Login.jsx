@@ -72,7 +72,6 @@ const LoginPage = () => {
         username: formData.username,
         password: formData.password,
       });
-      console.log("Check res: ", res);
       if (res?.success) {
         if (res?.user?.is_active === false) {
           showToast(

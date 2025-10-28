@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Constants\Errors\AuthMessages;
+use App\Exceptions\AppErrors;
 use App\Mail\AccountActivationMail;
 use App\Models\Role;
 use App\Models\User;
@@ -76,9 +78,9 @@ class AuthService
                 default => 'Khác',
             },
             'MustChangePassword' => false,
-            'IsActive' => true,
+            'IsActive' => false,
             'CodeId' => $code,
-            'CodeExpired' =>  Carbon::now('Asia/Ho_Chi_Minh')->addMinutes(5),
+            'CodeExpired' => Carbon::now('UTC')->addMinutes(5),
         ]);
         $user->roles()->attach(2);
         try {
@@ -99,7 +101,14 @@ class AuthService
 
         return [
             'status' => true,
-            'user' => $user,
+            'user' => [
+                "id" => $user->UserId,
+                "email" => $user->Email,
+                "is_active" => $user->IsActive,
+                "expired" => Carbon::parse($user->CodeExpired)
+                    ->setTimezone('Asia/Ho_Chi_Minh')
+                    ->format('Y-m-d H:i:s'),
+            ],
             'token' => $token,
         ];
     }
@@ -135,63 +144,147 @@ class AuthService
     /**
      * Đăng nhập
      */
-    public function login(array $data)
+    public function handleLogin(array $data)
     {
-        try {
-            $validated = validator($data, [
-                'username' => 'required|string',
-                'password' => 'required|string',
-            ])->validate();
+        // Validate dữ liệu đầu vào
+        $validated = validator($data, [
+            'username' => 'required|string|min:6|max:255|not_regex:/<[^>]*>/',
+            'password' => 'required|string|min:6|max:255|not_regex:/<[^>]*>/',
+        ], [
+            'username.required' => AuthMessages::VALIDATION['USERNAME_REQUIRED'],
+            'username.min' => AuthMessages::VALIDATION['USERNAME_MIN'],
+            'username.max' => AuthMessages::VALIDATION['USERNAME_MAX'],
+            'username.not_regex' => AuthMessages::VALIDATION['USERNAME_HTML'],
 
-            // Kiểm tra user có tồn tại không
-            $user = \App\Models\User::where('Username', $validated['username'])->first();
+            'password.required' => AuthMessages::VALIDATION['PASSWORD_REQUIRED'],
+            'password.min' => AuthMessages::VALIDATION['PASSWORD_MIN'],
+            'password.max' => AuthMessages::VALIDATION['PASSWORD_MAX'],
+            'password.not_regex' => AuthMessages::VALIDATION['PASSWORD_HTML'],
+        ])->validate();
 
-            if (!$user) {
-                throw ValidationException::withMessages([
-                    'username' => ['User không tồn tại trong hệ thống.'],
-                ]);
-            }
-
-            // Kiểm tra mật khẩu đúng không
-            if (!Hash::check($validated['password'], $user->PasswordHash)) {
-                throw ValidationException::withMessages([
-                    'password' => ['Mật khẩu không chính xác.'],
-                ]);
-            }
-
-            Auth::login($user);
-
-            // Tạo token Passport
-            $token = $user->createToken('auth_token')->accessToken;
-            $user_role = User::find($user->UserId);
-
-            $roles = $user_role->roles;
-
-            // Chỉ lấy RoleName
-            $roleNames = $roles->pluck('RoleName');
-            // Tạo mảng user mới giữ những field bạn muốn + roles đầy đủ
-            $userData = [
-                'full_name' => $user->FullName,
-                'email' => $user->Email,
-                'username' => $user->Username,
-                'must_change_password' => $user->MustChangePassword,
-                'is_active' => $user->IsActive,
-                'roles' => $roleNames
-            ];
-
-            return [
-                'success' => true,
-                'message' => 'Đăng nhập thành công.',
-                'user' => $userData,
-                'token' => $token,
-            ];
-        } catch (\Exception $e) {
-            return [
-                'success' => false,
-                'message' => "Đã xảy ra lỗi ở phía server. Vui lòng đăng nhập lại",
-            ];
+        // Kiểm tra user
+        $user = User::where('Username', $validated['username'])->first();
+        if (!$user) {
+            $msg = AuthMessages::AUTH['USER_NOT_FOUND'];
+            throw new AppErrors($msg['message'], $msg['status'], $msg['code']);
         }
+
+        // Kiểm tra mật khẩu
+        if (!Hash::check($validated['password'], $user->PasswordHash)) {
+            $msg = AuthMessages::AUTH['WRONG_PASSWORD'];
+            throw new AppErrors($msg['message'], $msg['status'], $msg['code']);
+        }
+
+        // Kiểm tra kích hoạt
+        if (!$user->IsActive) {
+            $msg = AuthMessages::AUTH['ACCOUNT_INACTIVE'];
+            throw new AppErrors($msg['message'], $msg['status'], $msg['code']);
+        }
+
+        // Đăng nhập thành công
+        Auth::login($user);
+        $token = $user->createToken('auth_token')->accessToken;
+
+        $userData = [
+            'full_name' => $user->FullName,
+            'email' => $user->Email,
+            'username' => $user->Username,
+            'must_change_password' => $user->MustChangePassword,
+            'is_active' => $user->IsActive,
+            'roles' => $user->roles()->pluck('RoleName'),
+        ];
+
+        // Trả dữ liệu thành công, middleware chỉ xử lý lỗi
+        return [
+            'user' => $userData,
+            'token' => $token,
+        ];
     }
+    public function handleVerifyEmail(array $data)
+    {
+        if (empty($data['email']) || empty($data['code'])) {
+            throw new AppErrors("Vui lòng nhập đầy đủ thông tin.", 400, 1);
+        }
+
+        $user = User::where('Email', $data['email'])->first();
+
+        if (!$user) {
+            throw new AppErrors("Email không tồn tại.", 404, 2);
+        }
+
+        if ($user->IsActive === true) {
+            throw new AppErrors("Tài khoản đã được kích hoạt.", 409, 3);
+        }
+
+        if ($user->CodeId !== $data['code']) {
+            throw new AppErrors("Mã xác thực không chính xác.", 400, 4);
+        }
+
+        if ($user->CodeExpired && now()->greaterThan($user->CodeExpired)) {
+            throw new AppErrors("Mã xác thực đã hết hạn.", 410, 5);
+        }
+
+        $user->IsActive = true;
+        $user->CodeExpired = null;
+        $user->CodeId = null;
+        $user->save();
+
+        // ✅ Trả data thuần, không dùng response()
+        return [
+            'success' => true,
+            'message' => 'Xác thực tài khoản thành công. Vui lòng đăng nhập lại',
+        ];
+    }
+    public function handleResendEmail(array $data)
+    {
+        if (empty($data['email'])) {
+            throw new AppErrors("Vui lòng nhập đầy đủ thông tin.", 400, 1);
+        }
+
+        $user = User::where('Email', $data['email'])->first();
+
+        if (!$user) {
+            throw new AppErrors("Email không tồn tại.", 404, 2);
+        }
+
+        if ($user->IsActive === true) {
+            throw new AppErrors("Tài khoản đã được kích hoạt.", 409, 3);
+        }
+        $code = rand(100000, 999999);
+
+        $user->IsActive = false;
+        $user->CodeExpired = Carbon::now('UTC')->addMinutes(5);
+        $user->CodeId = $code;
+        $user->save();
+
+        try {
+            Mail::to($user->Email)->send(
+                new AccountActivationMail($user->FullName, $user->CodeId, $user->CodeExpired)
+            );
+        } catch (\Exception $e) {
+            // Nếu gửi mail lỗi => rollback user và thông báo
+            $user->delete();
+            return response()->json([
+                'status' => false,
+                'error' => 'Không thể gửi email xác thực. Vui lòng thử lại sau.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+        // Tạo access token (Passport)
+
+        return [
+            'success' => true,
+            'user' => [
+                "id" => $user->UserId,
+                "email" => $user->Email,
+                "is_active" => $user->IsActive,
+                "expired" => $user->CodeExpired
+            ],
+        ];
+    }
+
+
+
 
 
     /**
