@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Col, Card, Form, Button, Spinner, Badge, Row } from "react-bootstrap";
 import Pagination from "../../../Components/Pagination/Pagination";
+import { useNavigate } from "react-router-dom";
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -16,6 +17,7 @@ const ServicesSection = ({
   symptoms,
   diagnoses = [],
 }) => {
+  const navigate = useNavigate();
   const [localServices, setLocalServices] = useState([]);
   const [localServicesLoading, setLocalServicesLoading] = useState(true);
   const [serviceSuggestions, setServiceSuggestions] = useState([]);
@@ -75,15 +77,128 @@ const ServicesSection = ({
     fetchServices();
   }, []);
 
-  // THÊM FUNCTION printDocument VÀO ĐÂY
-  const printDocument = async (type) => {
+  // FUNCTION PREVIEW PDF - SỬA LẠI GIỐNG CODE TOA THUỐC
+  const handlePreview = async () => {
+    if (!selectedTodayPatient) {
+      setToast({
+        show: true,
+        message: "⚠️ Vui lòng chọn bệnh nhân trước khi xem trước.",
+        variant: "warning"
+      });
+      return;
+    }
+
+    // CHUYỂN ĐỔI services từ object {id: boolean} sang array
+    const selectedServices = Object.keys(localServicesState)
+      .filter(serviceId => localServicesState[serviceId])
+      .map(serviceId => {
+        const service = localServices.find(s => s.ServiceId == serviceId);
+        return service ? {
+          ServiceName: service.ServiceName,
+          Price: service.Price || 0,
+          Quantity: 1
+        } : null;
+      })
+      .filter(Boolean);
+
+    if (selectedServices.length === 0) {
+      setToast({
+        show: true,
+        message: "⚠️ Vui lòng chọn ít nhất một dịch vụ trước khi xem trước.",
+        variant: "warning"
+      });
+      return;
+    }
+
+    const previewData = {
+      type: 'service',
+      patient_name: selectedTodayPatient.name || 'N/A',
+      age: String(selectedTodayPatient.age || 'N/A'),
+      gender: selectedTodayPatient.gender || 'N/A',
+      phone: selectedTodayPatient.phone || 'N/A',
+      appointment_date: selectedTodayPatient.date
+        ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
+        : new Date().toLocaleDateString('vi-VN'),
+      appointment_time: selectedTodayPatient.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      doctor_name: "Bác sĩ điều trị",
+      services: selectedServices,
+      diagnoses: diagnoses || [],
+    };
+
+    console.log('📤 Data preview dịch vụ gửi lên BE:', previewData);
+
+    // Lưu data vào sessionStorage để trang mới có thể truy cập - GIỐNG CODE TOA THUỐC
+    try {
+      sessionStorage.setItem('pdfPreviewData', JSON.stringify(previewData));
+      sessionStorage.setItem('prescriptionRows', JSON.stringify(
+        selectedServices.map((service, index) => ({
+          id: index + 1,
+          name: service.ServiceName,
+          quantity: service.Quantity || 1,
+          dosage: '', // Dịch vụ không có liều dùng
+          unitPrice: service.Price || 0,
+          totalPrice: (service.Price || 0) * (service.Quantity || 1)
+        }))
+      ));
+      sessionStorage.setItem('selectedPatient', JSON.stringify(selectedTodayPatient));
+      sessionStorage.setItem('diagnoses', JSON.stringify(diagnoses));
+      sessionStorage.setItem('services', JSON.stringify(selectedServices));
+
+      // Mở trang mới trong tab mới - GIỐNG CODE TOA THUỐC
+      const newWindow = window.open('/pdf-editor', '_blank');
+
+      if (!newWindow) {
+        setToast({
+          show: true,
+          message: "⚠️ Trình duyệt đã chặn popup. Vui lòng cho phép popup để mở editor PDF.",
+          variant: "warning",
+        });
+        return;
+      }
+
+      setToast({
+        show: true,
+        message: "✅ Đang mở trình chỉnh sửa PDF trong tab mới...",
+        variant: "success",
+      });
+
+    } catch (error) {
+      console.error('Error opening new window:', error);
+      setToast({
+        show: true,
+        message: "❌ Lỗi khi mở trình chỉnh sửa PDF",
+        variant: "danger",
+      });
+    }
+  };
+
+  // FUNCTION DOWNLOAD PDF - GIỮ NGUYÊN
+  const printDocument = async () => {
     if (!selectedTodayPatient) {
       setToast({ show: true, message: "⚠️ Chưa chọn bệnh nhân.", variant: "warning" });
       return;
     }
 
-    let requestData = {
-      type: type,
+    // Data for service
+    const selectedServices = Object.keys(localServicesState)
+      .filter(serviceId => localServicesState[serviceId])
+      .map(serviceId => {
+        const service = localServices.find(s => s.ServiceId == serviceId);
+        return service ? {
+          ServiceName: service.ServiceName,
+          Price: service.Price || 0,
+          Quantity: 1
+        } : null;
+      })
+      .filter(Boolean);
+
+    if (selectedServices.length === 0) {
+      setToast({ show: true, message: "⚠️ Chưa chọn dịch vụ nào.", variant: "warning" });
+      return;
+    }
+
+    const requestData = {
+      type: 'service',
       patient_name: selectedTodayPatient.name,
       age: selectedTodayPatient.age,
       gender: selectedTodayPatient.gender,
@@ -92,32 +207,10 @@ const ServicesSection = ({
       appointment_time: selectedTodayPatient.time,
       doctor_name: "Bác sĩ điều trị",
       diagnoses: diagnoses.length > 0 ? diagnoses : [{ Symptoms: symptoms, Diagnosis: diagnosis }],
+      services: selectedServices,
     };
 
-    if (type === 'service') {
-      // Data for service
-      const selectedServices = Object.keys(localServicesState)
-        .filter(serviceId => localServicesState[serviceId])
-        .map(serviceId => {
-          const service = localServices.find(s => s.ServiceId == serviceId);
-          return service ? {
-            ServiceName: service.ServiceName,
-            Price: service.Price || 0,
-            Quantity: 1
-          } : null;
-        })
-        .filter(Boolean);
-
-      if (selectedServices.length === 0) {
-        setToast({ show: true, message: "⚠️ Chưa chọn dịch vụ nào.", variant: "warning" });
-        return;
-      }
-      requestData.services = selectedServices;
-    }
-
     try {
-
-      // Trong function printDocument của ServicesSection
       const response = await fetch(`${API_BASE_URL}/api/print/prescription/preview`, {
         method: 'POST',
         headers: {
@@ -344,10 +437,6 @@ const ServicesSection = ({
     setCurrentPage(selected);
   }, []);
 
-  // Debug logs
-  useEffect(() => {
-  }, [localServicesState, services]);
-
   return (
     <Col md={12}>
       <Card className="mb-3 border-light shadow-sm">
@@ -446,14 +535,26 @@ const ServicesSection = ({
             >
               🧾 Yêu cầu thực hiện dịch vụ đã chọn ({Object.values(localServicesState).filter(v => v).length})
             </Button>
+
+            {/* SỬA NÚT PREVIEW - GIỐNG CODE TOA THUỐC */}
             <Button
-              variant="outline-success"
+              variant="outline-info"
               size="sm"
-              onClick={() => printDocument('service')}
+              onClick={handlePreview}
               disabled={!selectedTodayPatient || !Object.values(localServicesState).some(Boolean)}
               className="no-print ms-2"
             >
-              🖨️ Xuất chỉ định dịch vụ
+              👁️ Xem trước PDF
+            </Button>
+
+            <Button
+              variant="outline-success"
+              size="sm"
+              onClick={printDocument}
+              disabled={!selectedTodayPatient || !Object.values(localServicesState).some(Boolean)}
+              className="no-print ms-2"
+            >
+              🖨️ Xuất PDF
             </Button>
           </div>
 
