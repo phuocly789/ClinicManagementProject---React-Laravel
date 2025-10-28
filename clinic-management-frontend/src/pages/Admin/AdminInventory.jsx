@@ -136,11 +136,11 @@ const InventoryForm = memo(({ isEditMode, inventory, onSubmit, onCancel, isLoadi
     }
     return inventory?.details?.length > 0
       ? inventory.details.map(detail => ({
-          medicineId: detail.medicineId?.toString() || '',
-          quantity: detail.quantity || 0,
-          importPrice: detail.price || 0,
-          subTotal: detail.subTotal || detail.quantity * detail.price || 0,
-        }))
+        medicineId: detail.medicineId?.toString() || '',
+        quantity: detail.quantity || 0,
+        importPrice: detail.price || 0,
+        subTotal: detail.subTotal || detail.quantity * detail.price || 0,
+      }))
       : [{ medicineId: '', quantity: 0, importPrice: 0, subTotal: 0 }];
   });
 
@@ -417,108 +417,109 @@ const InventoryForm = memo(({ isEditMode, inventory, onSubmit, onCancel, isLoadi
 });
 
 const InventoryDetail = memo(({ inventory, details, supplier, isLoading, formatVND, onBack }) => {
-  const printableAreaRef = useRef(null);
 
-  const printPage = useCallback(() => {
-    window.print();
-  }, []);
-
-  const exportPDF = useCallback(async () => {
-    await loadHtml2Pdf();
-    const element = printableAreaRef.current;
-    const opt = {
-      margin: 0.5,
-      filename: `PhieuNhapKho_${inventory.id}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-    };
-    window.html2pdf().set(opt).from(element).save();
-  }, [inventory.id]);
-
-  if (isLoading) {
+  if (!inventory) {
     return (
       <div className="text-center py-5">
         <Spinner animation="border" variant="primary" />
         <p className="mt-2">Đang tải chi tiết phiếu nhập...</p>
       </div>
     );
+  } else {
+    const printableAreaRef = useRef(null);
+    console.log(inventory);
+    const printPage = useCallback(() => {
+      window.print();
+    }, []);
+
+    const exportPDF = useCallback(async () => {
+      await loadHtml2Pdf();
+      const element = printableAreaRef.current;
+      const opt = {
+        margin: 0.5,
+        filename: `PhieuNhapKho_${inventory.id}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+      };
+      window.html2pdf().set(opt).from(element).save();
+    }, [inventory.id]);
+    return (
+      <div style={{ padding: '20px', backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+        <h3 className="mb-4">Chi Tiết Phiếu Nhập Kho</h3>
+        <section ref={printableAreaRef}>
+          <div style={{ display: 'none', textAlign: 'center', marginBottom: '20px' }} className="print-only">
+            <h1 style={{ fontSize: '24px', color: '#00448D' }}>Phiếu Nhập Kho</h1>
+            <p>Phòng Khám XYZ</p>
+          </div>
+          <div className="mb-4">
+            <h4>Thông Tin Nhà Cung Cấp</h4>
+            <p><strong>Tên Nhà Cung Cấp:</strong> {supplier?.SupplierName || 'N/A'}</p>
+            <p><strong>Email:</strong> {supplier?.ContactEmail || 'N/A'}</p>
+            <p><strong>Số Điện Thoại:</strong> {supplier?.ContactPhone || 'N/A'}</p>
+            <p><strong>Địa Chỉ:</strong> {supplier?.Address || 'N/A'}</p>
+            <p><strong>Mô Tả:</strong> {supplier?.Description || 'Không có'}</p>
+          </div>
+          <div className="mb-4">
+            <h4>Thông Tin Phiếu</h4>
+            <p><strong>Mã Phiếu:</strong> {inventory?.id || 'N/A'}</p>
+            <p><strong>Ngày Nhập:</strong> {inventory?.date ? new Date(inventory.date).toLocaleDateString('vi-VN') : 'N/A'}</p>
+            <p><strong>Tổng Tiền:</strong> {formatVND(inventory?.total)}</p>
+            <p><strong>Ghi Chú:</strong> {inventory?.note || 'Không có'}</p>
+          </div>
+          <h4>Danh Sách Thuốc Đã Nhập</h4>
+          <Table striped bordered hover>
+            <thead>
+              <tr>
+                <th>Tên Thuốc</th>
+                <th>Số Lượng</th>
+                <th>Giá Nhập</th>
+                <th>Thành Tiền</th>
+              </tr>
+            </thead>
+            <tbody>
+              {details.length === 0 ? (
+                <tr>
+                  <td colSpan="4" className="text-center py-4">
+                    Không có dữ liệu
+                  </td>
+                </tr>
+              ) : (
+                details.map((detail) => (
+                  <tr key={detail.id}>
+                    <td>{detail.medicineName || 'N/A'}</td>
+                    <td>{detail.quantity}</td>
+                    <td>{formatVND(detail.price)}</td>
+                    <td>{formatVND(detail.subTotal)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </Table>
+        </section>
+        <div className="d-flex gap-2 mt-4">
+          <Button variant="primary" onClick={printPage}>
+            In
+          </Button>
+          <Button variant="success" onClick={exportPDF}>
+            Xuất PDF
+          </Button>
+          <Button variant="secondary" onClick={onBack}>
+            Quay Lại
+          </Button>
+        </div>
+        <style jsx>{`
+          @media print {
+            .print-only { display: block !important; }
+            .no-print { display: none !important; }
+            section { padding: 10px; }
+            table { font-size: 12px; }
+          }
+        `}</style>
+      </div>
+    );
   }
 
-  return (
-    <div style={{ padding: '20px', backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-      <h3 className="mb-4">Chi Tiết Phiếu Nhập Kho</h3>
-      <section ref={printableAreaRef}>
-        <div style={{ display: 'none', textAlign: 'center', marginBottom: '20px' }} className="print-only">
-          <h1 style={{ fontSize: '24px', color: '#00448D' }}>Phiếu Nhập Kho</h1>
-          <p>Phòng Khám XYZ</p>
-        </div>
-        <div className="mb-4">
-          <h4>Thông Tin Nhà Cung Cấp</h4>
-          <p><strong>Tên Nhà Cung Cấp:</strong> {supplier?.SupplierName || 'N/A'}</p>
-          <p><strong>Email:</strong> {supplier?.ContactEmail || 'N/A'}</p>
-          <p><strong>Số Điện Thoại:</strong> {supplier?.ContactPhone || 'N/A'}</p>
-          <p><strong>Địa Chỉ:</strong> {supplier?.Address || 'N/A'}</p>
-          <p><strong>Mô Tả:</strong> {supplier?.Description || 'Không có'}</p>
-        </div>
-        <div className="mb-4">
-          <h4>Thông Tin Phiếu</h4>
-          <p><strong>Mã Phiếu:</strong> {inventory?.id || 'N/A'}</p>
-          <p><strong>Ngày Nhập:</strong> {inventory?.date ? new Date(inventory.date).toLocaleDateString('vi-VN') : 'N/A'}</p>
-          <p><strong>Tổng Tiền:</strong> {formatVND(inventory?.total)}</p>
-          <p><strong>Ghi Chú:</strong> {inventory?.note || 'Không có'}</p>
-        </div>
-        <h4>Danh Sách Thuốc Đã Nhập</h4>
-        <Table striped bordered hover responsive>
-          <thead>
-            <tr>
-              <th>Tên Thuốc</th>
-              <th>Số Lượng</th>
-              <th>Giá Nhập</th>
-              <th>Thành Tiền</th>
-            </tr>
-          </thead>
-          <tbody>
-            {details.length === 0 ? (
-              <tr>
-                <td colSpan="4" className="text-center py-4">
-                  Không có dữ liệu
-                </td>
-              </tr>
-            ) : (
-              details.map((detail) => (
-                <tr key={detail.id}>
-                  <td>{detail.medicineName || 'N/A'}</td>
-                  <td>{detail.quantity}</td>
-                  <td>{formatVND(detail.price)}</td>
-                  <td>{formatVND(detail.subTotal)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </Table>
-      </section>
-      <div className="d-flex gap-2 mt-4">
-        <Button variant="primary" onClick={printPage}>
-          In
-        </Button>
-        <Button variant="success" onClick={exportPDF}>
-          Xuất PDF
-        </Button>
-        <Button variant="secondary" onClick={onBack}>
-          Quay Lại
-        </Button>
-      </div>
-      <style jsx>{`
-        @media print {
-          .print-only { display: block !important; }
-          .no-print { display: none !important; }
-          section { padding: 10px; }
-          table { font-size: 12px; }
-        }
-      `}</style>
-    </div>
-  );
 });
 
 const AdminInventory = () => {
@@ -628,12 +629,16 @@ const AdminInventory = () => {
     try {
       setIsLoading(true);
       setFormLoading(true);
+
       const response = await fetch(`${API_BASE_URL}/api/import-bills/${importId}`, {
         headers: { 'Accept': 'application/json' },
         credentials: 'include',
       });
+
       if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+
       const data = await response.json();
+
       const mappedInventory = {
         id: data.data.ImportId,
         supplierId: data.data.SupplierId,
@@ -642,6 +647,7 @@ const AdminInventory = () => {
         note: data.data.Notes || '',
         details: data.data.import_details || [],
       };
+
       const mappedDetails = (data.data.import_details || []).map(detail => ({
         id: detail.ImportDetailId,
         importId: detail.ImportId,
@@ -651,6 +657,7 @@ const AdminInventory = () => {
         price: detail.ImportPrice,
         subTotal: detail.SubTotal,
       }));
+
       const mappedSupplier = data.data.supplier ? {
         SupplierId: data.data.supplier.SupplierId,
         SupplierName: data.data.supplier.SupplierName,
@@ -660,18 +667,21 @@ const AdminInventory = () => {
         Description: data.data.supplier.Description
       } : {};
 
+      // CHỈ SET KHI CÓ DATA
       setSelectedInventory({
         inventory: mappedInventory,
         supplier: mappedSupplier,
         details: mappedDetails
       });
+
       setDetails(mappedDetails);
       setEditInventory(mappedInventory);
-      return mappedInventory;
+
+      return mappedInventory; // trả về để handleShowDetail biết thành công
     } catch (error) {
       console.error('Error fetching inventory details:', error);
       showToast('error', `Lỗi khi tải chi tiết phiếu nhập: ${error.message}`);
-      return null;
+      return null; // trả về null → handleShowDetail sẽ quay lại list
     } finally {
       setIsLoading(false);
       setFormLoading(false);
@@ -769,10 +779,20 @@ const AdminInventory = () => {
     }
   }, [fetchInventoryDetails, fetchSuppliers, fetchMedicines]);
 
-  const handleShowDetail = useCallback((inventoryId) => {
-    setCurrentView('detail');
-    fetchInventoryDetails(inventoryId);
-  }, [fetchInventoryDetails]);
+  const handleShowDetail = useCallback(async (inventoryId) => {
+    setIsLoading(true);                 // Hiển thị spinner toàn cục
+    setCurrentView('detail');           // Chuyển view (OK, sẽ render spinner)
+
+    try {
+      const data = await fetchInventoryDetails(inventoryId);
+      if (!data) {
+        showToast('error', 'Không tìm thấy phiếu nhập');
+        setCurrentView('list');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchInventoryDetails, showToast]);
 
   const handleCancelForm = useCallback(() => {
     setCurrentView('list');
