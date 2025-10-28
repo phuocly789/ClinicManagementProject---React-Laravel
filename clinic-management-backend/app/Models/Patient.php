@@ -11,10 +11,10 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Class Patient
- * 
+ *
  * @property int $PatientId
  * @property string|null $MedicalHistory
- * 
+ *
  * @property User $user
  * @property Collection|MedicalRecord[] $medical_records
  * @property Collection|Appointment[] $appointments
@@ -40,7 +40,7 @@ class Patient extends Model
 
 	public function user()
 	{
-		return $this->belongsTo(User::class, 'PatientId');
+		return $this->belongsTo(User::class, 'PatientId', 'UserId');
 	}
 
 	public function medical_records()

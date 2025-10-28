@@ -43,6 +43,13 @@ const AdminSidebar = () => {
           </li>
 
           <li>
+            <NavLink to="/admin/supplier" className="nav-item">
+              <i className="fa-solid fa-truck"></i>
+              Quản Lý Nhà Cung Cấp
+            </NavLink>
+          </li>
+
+          <li>
             <NavLink to="/admin/medicines" className="nav-item">
               <i className="fa-solid fa-pills"></i>
               Quản Lý Thuốc
@@ -50,7 +57,7 @@ const AdminSidebar = () => {
           </li>
 
           <li>
-            <NavLink to="/admin/import-report" className="nav-item">
+            <NavLink to="/admin/inventory" className="nav-item">
               <i className="fa-solid fa-boxes-packing"></i>
               Quản Lý Nhập Kho
             </NavLink>

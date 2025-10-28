@@ -69,6 +69,8 @@ a {
 
 .table-responsive {
   transition: opacity 0.3s ease;
+  overflow-x: auto;
+  height: calc(80vh - 100px);
 }
 
 .table-loading {
@@ -76,17 +78,24 @@ a {
   pointer-events: none;
 }
 
+.table>thead {
+  vertical-align: bottom;
+  position: sticky;
+  z-index: 1;
+  top: 0;
+}
+
 /* Print styles */
 @media print {
   .admin-layout {
     display: block;
   }
-  
+
   .admin-content {
     margin-left: 0;
     padding: 0;
   }
-  
+
   .no-print {
     display: none !important;
   }
@@ -99,5 +108,5 @@ a {
 
 .btn-hover:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }

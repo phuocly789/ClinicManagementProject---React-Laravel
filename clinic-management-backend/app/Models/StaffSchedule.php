@@ -12,14 +12,14 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Class StaffSchedule
- * 
+ *
  * @property int $ScheduleId
  * @property int|null $StaffId
  * @property Carbon $WorkDate
  * @property time without time zone $StartTime
  * @property time without time zone $EndTime
  * @property bool|null $IsAvailable
- * 
+ *
  * @property MedicalStaff|null $medical_staff
  * @property Collection|Appointment[] $appointments
  *
@@ -29,15 +29,15 @@ class StaffSchedule extends Model
 {
 	protected $table = 'StaffSchedules';
 	protected $primaryKey = 'ScheduleId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [
 		'ScheduleId' => 'int',
 		'StaffId' => 'int',
-		'WorkDate' => 'datetime',
-		'StartTime' => 'time without time zone',
-		'EndTime' => 'time without time zone',
+		'WorkDate' => 'date',
+		'StartTime' => 'string',
+		'EndTime' => 'string',
 		'IsAvailable' => 'bool'
 	];
 

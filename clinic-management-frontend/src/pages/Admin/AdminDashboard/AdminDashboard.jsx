@@ -1,81 +1,81 @@
 import './AdminDashboard.css';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import AdminSidebar from '../../../Components/Sidebar/AdminSidebar';
 import instance from '../../../axios';
 import Loading from '../../../Components/Loading/Loading';
 import CustomToast from '../../../Components/CustomToast/CustomToast';
-import NProgress from 'nprogress';
-import 'nprogress/nprogress.css';
+import { BiSolidDollarCircle, BiSolidCalendar, BiSolidUserCheck, BiSolidTimeFive } from 'react-icons/bi';
 Chart.register(...registerables, ChartDataLabels);
 
 const AdminDashboard = () => {
     const [stats, setStats] = useState(null);
     const [totalRevenue, setTotalRevenue] = useState(null);
-    const [lowStockMedicines, setLowStockMedicines] = useState(null);
+    const [lowStockMedicines, setLowStockMedicines] = useState([]);
     const [loading, setLoading] = useState(true);
     const [toast, setToast] = useState(null);
-    const [startDate, setStartDate] = useState(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+    const [startDate, setStartDate] = useState(
+        new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    );
     const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
-    const fetchData = async () => {
+    // Tải dữ liệu từ các API
+    const fetchData = useCallback(async (start, end) => {
         setLoading(true);
-        NProgress.start();
         try {
-            NProgress.set(0.4);
-            const [lowStockResponse, combinedResponse] = await Promise.all([
-                instance.get('/medicines/low-stock?threshold=200'),
-                instance.get(`/report-revenue/combined?startDate=${startDate}&endDate=${endDate}`),
+            const [lowStockRes, revenueRes] = await Promise.all([
+                instance.get('api/medicines/low-stock?threshold=200'),
+                instance.get(`api/report-revenue/combined?startDate=${start}&endDate=${end}`),
             ]);
-            NProgress.set(0.8);
 
-            if (!lowStockResponse.success) {
-                throw new Error(lowStockResponse.message || 'Lỗi khi tải danh sách thuốc!');
+            if (revenueRes.success) {
+                setStats({
+                    totalAppointmentsToday: revenueRes.data.totalAppointmentsToday,
+                    completedAppointmentsToday: revenueRes.data.completedAppointmentsToday,
+                    pendingInvoicesCount: revenueRes.data.pendingInvoicesCount,
+                });
+                setTotalRevenue({
+                    totalRevenue: revenueRes.data.totalRevenue,
+                    byDate: revenueRes.data.revenueByDate,
+                });
+            } else {
+                throw new Error(revenueRes.message || 'Lỗi khi lấy dữ liệu doanh thu');
             }
-            setLowStockMedicines(lowStockResponse.data);
 
-            if (!combinedResponse.success) {
-                throw new Error(combinedResponse.message || 'Lỗi khi tải thống kê!');
-            }
-            setStats({
-                totalAppointmentsToday: combinedResponse.data.totalAppointmentsToday,
-                completedAppointmentsToday: combinedResponse.data.completedAppointmentsToday,
-                pendingInvoicesCount: combinedResponse.data.pendingInvoicesCount,
-            });
-            setTotalRevenue({
-                totalRevenue: combinedResponse.data.totalRevenue,
-                byDate: combinedResponse.data.revenueByDate,
-            });
+       
+                setLowStockMedicines(lowStockRes.data || []);
+            
+
         } catch (error) {
-            console.error('Lỗi khi tải dữ liệu:', error);
-            setToast({ type: 'error', message: error.message || 'Không thể tải dữ liệu!' });
+            setToast({ type: 'error', message: error.message || 'Không thể tải dữ liệu dashboard!' });
         } finally {
             setLoading(false);
-            NProgress.done();
         }
-    };
+    }, []);
 
+    // Tải dữ liệu lần đầu
     useEffect(() => {
-        fetchData();
-    }, [startDate, endDate]);
+        fetchData(startDate, endDate);
+    }, []);
 
+    // Chuẩn bị dữ liệu cho biểu đồ
     const chartData = useMemo(() => ({
-        labels: totalRevenue?.byDate?.map(item => new Date(item.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })) || [],
-        datasets: [
-            {
-                label: 'Doanh thu (VNĐ)',
-                data: totalRevenue?.byDate?.map(item => item.revenue) || [],
-                backgroundColor: 'rgba(23, 162, 184, 0.6)',
-                borderColor: 'rgba(23, 162, 184, 1)',
-                borderWidth: 1,
-            },
-        ],
+        labels: totalRevenue?.byDate?.map((item) => new Date(item.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })) || [],
+        datasets: [{
+            label: 'Doanh thu',
+            data: totalRevenue?.byDate?.map((item) => item.revenue) || [],
+            backgroundColor: 'rgba(59, 113, 202, 0.6)',
+            borderColor: 'rgba(59, 113, 202, 1)',
+            borderWidth: 1,
+            borderRadius: 4,
+        }],
     }), [totalRevenue]);
 
+    // Render biểu đồ
     useEffect(() => {
         const ctx = document.getElementById('revenueChart');
-        if (!ctx) return;
+        if (!ctx || !totalRevenue) return;
 
         const chart = new Chart(ctx, {
             type: 'bar',
@@ -84,137 +84,103 @@ const AdminDashboard = () => {
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    x: {
-                        title: { display: true, text: 'Ngày', font: { size: 14, weight: 'bold' } },
-                    },
-                    y: {
-                        beginAtZero: true,
-                        title: { display: true, text: 'Doanh thu (VNĐ)', font: { size: 14, weight: 'bold' } },
-                        ticks: {
-                            callback: function (value) {
-                                return new Intl.NumberFormat('vi-VN').format(value);
-                            },
-                        },
-                    },
+                    y: { beginAtZero: true, ticks: { callback: value => new Intl.NumberFormat('vi-VN').format(value) } },
                 },
                 plugins: {
                     legend: { display: false },
-                    datalabels: {
-                        anchor: 'end',
-                        align: 'top',
-                        formatter: function (value) {
-                            return new Intl.NumberFormat('vi-VN').format(value);
-                        },
-                        font: { weight: 'bold', size: 12 },
-                        color: '#000',
-                    },
+                    tooltip: { callbacks: { label: context => `${context.dataset.label}: ${new Intl.NumberFormat('vi-VN').format(context.raw)} VND` } },
+                    datalabels: { display: false }, // Tắt label trên cột cho gọn
                 },
             },
         });
-
         return () => chart.destroy();
     }, [chartData]);
 
-    const handleFilter = async () => {
-        await fetchData();
+    const handleFilter = () => {
+        if (new Date(startDate) > new Date(endDate)) {
+            setToast({ type: 'error', message: 'Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc' });
+            return;
+        }
+        fetchData(startDate, endDate);
     };
 
     return (
-        <div style={{ display: 'flex', margin: 0, backgroundColor: '#f8f9fa' }}>
+        <div className="dashboard-layout">
             <AdminSidebar />
-            <div className="dashboard-container" style={{ position: 'relative', width: '100%', flexGrow: 1, marginLeft: '5px', padding: '30px' }}>
-                <header className="dashboard-header">
+            <main className="main-content">
+                <header className="page-header">
                     <h1>Dashboard Tổng Quan</h1>
-                    <div className="date-range-picker">
-                        <label htmlFor="startDate">Từ Ngày:</label>
-                        <input
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                        />
-                        <label htmlFor="endDate">Đến Ngày:</label>
-                        <input
-                            type="date"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                        />
-                        <button className="btn-success" disabled={loading} onClick={handleFilter}>
-                            Lọc
+                    <div className="date-filter">
+                        <label htmlFor="startDate">Từ:</label>
+                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                        <label htmlFor="endDate">Đến:</label>
+                        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                        <button className="btn btn-primary" disabled={loading} onClick={handleFilter}>
+                            Áp dụng
                         </button>
                     </div>
                 </header>
-                <hr />
-                {loading ? (
-                    <Loading isLoading={loading} />
-                ) : (
+
+                {toast && <CustomToast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
+
+                {loading ? <Loading isLoading={loading} /> : (
                     <>
-                        <div className="stat-cards">
-                            <div className="stat-card bg-primary">
-                                <i className="fa-solid fa-sack-dollar"></i>
-                                <div>
-                                    <h5>Doanh Thu</h5>
-                                    <p>
-                                        {totalRevenue?.totalRevenue
-                                            ? totalRevenue.totalRevenue.toLocaleString('vi-VN') + ' VND'
-                                            : '0 VND'}
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="stat-card bg-success">
-                                <i className="fa-solid fa-user-check"></i>
-                                <div>
-                                    <h5>Đã Khám</h5>
-                                    <p>{stats?.completedAppointmentsToday || 0}</p>
-                                </div>
-                            </div>
-                            <div className="stat-card bg-danger">
-                                <i className="fa-solid fa-file-invoice-dollar"></i>
-                                <div>
-                                    <h5>Hóa Đơn Chờ</h5>
-                                    <p>{stats?.pendingInvoicesCount || 0}</p>
-                                </div>
-                            </div>
-                            <div className="stat-card bg-info">
-                                <i className="fa-solid fa-calendar-check"></i>
-                                <div>
-                                    <h5>Lịch Hẹn Hôm Nay</h5>
-                                    <p>{stats?.totalAppointmentsToday || 0}</p>
-                                </div>
-                            </div>
+                        <div className="stat-cards-grid">
+                            <StatCard
+                                icon={<BiSolidDollarCircle />}
+                                label="Tổng Doanh Thu"
+                                value={totalRevenue?.totalRevenue ? `${totalRevenue.totalRevenue.toLocaleString('vi-VN')} VND` : '0 VND'}
+                                color="blue"
+                            />
+                            <StatCard
+                                icon={<BiSolidCalendar />}
+                                label="Lịch Hẹn Hôm Nay"
+                                value={stats?.totalAppointmentsToday || 0}
+                                color="sky"
+                            />
+                            <StatCard
+                                icon={<BiSolidUserCheck />}
+                                label="Lịch Hẹn Đã Khám"
+                                value={stats?.completedAppointmentsToday || 0}
+                                color="green"
+                            />
+                            <StatCard
+                                icon={<BiSolidTimeFive />}
+                                label="Hóa Đơn Chờ"
+                                value={stats?.pendingInvoicesCount || 0}
+                                color="orange"
+                            />
                         </div>
-                        <div className="dashboard-row">
-                            <div className="chart-container card">
+
+                        <div className="dashboard-grid">
+                            <div className="card-style chart-container">
                                 <div className="card-header">
                                     <h3>Biểu Đồ Doanh Thu</h3>
                                 </div>
-                                <canvas id="revenueChart"></canvas>
+                                <div className="card-body">
+                                    <canvas id="revenueChart"></canvas>
+                                </div>
                             </div>
-                            <div className="inventory-container card">
+                            <div className="card-style inventory-container">
                                 <div className="card-header">
                                     <h3>Cảnh Báo Tồn Kho (Dưới 200)</h3>
                                 </div>
-                                <div className="card-body">
-                                    <table className="table table-striped">
+                                <div className="table-responsive">
+                                    <table className="clinic-table">
                                         <thead>
                                             <tr>
                                                 <th>Tên Thuốc</th>
-                                                <th className="text-end">Số Lượng</th>
+                                                <th className="text-end">Hiện có</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {lowStockMedicines?.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan="2" className="text-center text-muted">
-                                                        Không có thuốc nào sắp hết hàng.
-                                                    </td>
-                                                </tr>
+                                            {lowStockMedicines.length === 0 ? (
+                                                <tr><td colSpan="2" className="no-data">Tồn kho an toàn</td></tr>
                                             ) : (
-                                                lowStockMedicines?.map((med) => (
+                                                lowStockMedicines.map((med) => (
                                                     <tr key={med.MedicineId}>
                                                         <td>{med.MedicineName}</td>
-                                                        <td
-                                                            className={`text-end ${med.StockQuantity < 200 ? 'text-danger fw-bold' : ''}`}
-                                                        >
+                                                        <td className="text-end fw-bold text-danger">
                                                             {med.StockQuantity} {med.Unit}
                                                         </td>
                                                     </tr>
@@ -227,16 +193,23 @@ const AdminDashboard = () => {
                         </div>
                     </>
                 )}
-                {toast && (
-                    <CustomToast
-                        type={toast.type}
-                        message={toast.message}
-                        onClose={() => setToast(null)}
-                    />
-                )}
-            </div>
+            </main>
         </div>
     );
 };
+
+// Component con cho thẻ thống kê, giúp code chính gọn hơn
+const StatCard = ({ icon, label, value, color }) => (
+    <div className="stat-card">
+        <div className={`stat-card__icon stat-card--${color}`}>
+            {icon}
+        </div>
+        <div className="stat-card__info">
+            <span className="label">{label}</span>
+            <span className="value">{value}</span>
+        </div>
+    </div>
+);
+
 
 export default AdminDashboard;

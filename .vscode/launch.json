@@ -1,0 +1,59 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Laravel (Xdebug Listen)",
+            "type": "php",
+            "request": "launch",
+            "port": 9003,
+            "pathMappings": {
+                "/var/www/html": "${workspaceFolder}/clinic-management-backend"
+            },
+            "hostname": "localhost",
+            "ignore": ["**/vendor/**"],
+            "log": true
+        },
+        {
+            "name": "Debug Laravel in Container",
+            "type": "php",
+            "request": "launch",
+            "port": 9003,
+            "pathMappings": {
+                "/var/www/html": "${workspaceFolder}/clinic-management-backend"
+            },
+            "hostname": "host.docker.internal"
+        },
+        {
+            "name": "Debug React (Chrome)",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://localhost:3000",
+            "webRoot": "${workspaceFolder}/clinic-management-frontend/src",
+            "sourceMaps": true,
+            "sourceMapPathOverrides": {
+                "vite:///*": "${webRoot}/*"
+            }
+        },
+        {
+            "name": "Debug React in Container (Attach)",
+            "type": "node",
+            "request": "attach",
+            "port": 5173,  // Port Vite debug
+            "address": "localhost",
+            "localRoot": "${workspaceFolder}/clinic-management-frontend",
+            "remoteRoot": "/app",
+            "skipFiles": ["<node_internals>/**"]
+        },
+        {
+            "name": "Debug React (Chrome) Host",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://localhost:5173",
+            "webRoot": "${workspaceFolder}/clinic-management-frontend/src",
+            "sourceMaps": true,
+            "sourceMapPathOverrides": {
+                "vite:///*": "${webRoot}/*"
+            }
+        }
+    ]
+}

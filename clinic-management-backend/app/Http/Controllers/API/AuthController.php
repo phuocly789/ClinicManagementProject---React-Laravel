@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Exceptions\AppErrors;
 use App\Http\Controllers\Controller;
 use App\Services\AuthService;
 use Illuminate\Http\Request;
@@ -25,9 +26,41 @@ class AuthController extends Controller
     }
     public function login(Request $request)
     {
-        $result = $this->authService->login($request->all());
-        return response()->json($result, 200);
+        $result = $this->authService->handleLogin($request->all());
+        return response()->json([
+            'success' => true,
+            'message' => 'Đăng nhập thành công',
+            'data' => $result,
+        ]);
     }
+
+    public function verificationEmail(Request $request)
+    {
+        try {
+            $result = $this->authService->handleVerifyEmail($request->all());
+            return response()->json($result, 200);
+        } catch (AppErrors $e) {
+            return response()->json([
+                "success" => false,
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ], $e->getStatusCode());
+        }
+    }
+    public function resendVerificationEmail(Request $request)
+    {
+        try {
+            $result = $this->authService->handleResendEmail($request->all());
+            return response()->json($result, 200);
+        } catch (AppErrors $e) {
+            return response()->json([
+                "success" => false,
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ], $e->getStatusCode());
+        }
+    }
+
     // public function logout(Request $request)
     // {
     // $result = $this->authService->logout();
