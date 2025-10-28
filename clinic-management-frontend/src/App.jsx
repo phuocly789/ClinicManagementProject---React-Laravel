@@ -9,11 +9,11 @@ import LoginPage from "./pages/auth/Login/Login";
 import AdminMedicine from "./pages/Admin/AdminMedicine.jsx";
 import AdminInventory from "./pages/Admin/AdminInventory.jsx";
 import DoctorDashboard from "./pages/Doctors/DoctorDashboard.jsx";
-import AdminDashboard from "./pages/Admin/AdminDashboard/AdminDashboard.jsx";
+import AdminDashboard from "./pages/Admin/AdminDashboard.jsx";
 import Register from "./pages/auth/Register/Register.jsx";
-import AdminRevenueReport from "./pages/Admin/AdminRevenueReport/AdminRevenueReport.jsx";
-import AdminScheduleManagement from "./pages/Admin/AdminScheduleManagement/AdminScheduleManagement.jsx";
-import AdminUserManagement from "./pages/Admin/AdminUserManagement/AdminUserManagement.jsx";
+import AdminRevenueReport from "./pages/Admin/AdminRevenueReport.jsx";
+import AdminScheduleManagement from "./pages/Admin/AdminScheduleManagement.jsx";
+import AdminUserManagement from "./pages/Admin/AdminUserManagement.jsx";
 import AdminSuppliers from "./pages/Admin/AdminSuppliers";
 function App() {
   return (
