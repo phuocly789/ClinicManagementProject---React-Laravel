@@ -24,6 +24,19 @@ export const path = {
             UPDATE: "/user/prescription-update/:id",
         },
     },
+    PATIENT: {
+        ROOT: "/patient",
+        APPOINTMENT: {
+            MANAGEMENT: "/patient/apppointment-management",
+            CREATE: "/patient/apppointment-create",
+            UPDATE: "/patient/apppointment-update",
+        },
+        PROFILE: {
+            MANAGEMENT: "/patient/profile-management",
+            CREATE: "/patient/profile-create",
+            UPDATE: "/patient/profile-update",
+        }
+    }
 };
 
 export const CRUD_ACTIONS = {

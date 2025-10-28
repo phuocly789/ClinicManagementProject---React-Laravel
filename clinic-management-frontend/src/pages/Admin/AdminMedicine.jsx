@@ -51,10 +51,7 @@ const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class
 const MedicineList = memo(({
   medicines, isLoading, formatVND, handleShowDeleteModal, handleShowEditForm,
   pageCount, currentPage, handlePageChange,
-  onDownloadTemplate, onExport, uploadErrors, previewData, headers,
-  dryRunResult, onDryRun, onConfirmImport, isProcessing,
-  selectedColumns, onColumnChange, filters, onFilterChange,
-  mapping, onMappingChange, getRootProps, getInputProps, importFile, onShowImport
+  onDownloadTemplate, onShowExportModal, onShowImport
 }) => {
   return (
     <div>
@@ -64,7 +61,7 @@ const MedicineList = memo(({
           <Button variant="outline-primary" onClick={onDownloadTemplate}>
             <Download size={16} className="me-1" /> Tải Template
           </Button>
-          <Button variant="success" onClick={onExport} disabled={isProcessing}>
+          <Button variant="success" onClick={onShowExportModal}>
             <FileSpreadsheet size={16} className="me-1" /> Export Excel
           </Button>
           <Button variant="info" onClick={onShowImport}>
@@ -73,39 +70,6 @@ const MedicineList = memo(({
           <Button variant="primary" onClick={() => handleShowEditForm(null)}>Thêm Thuốc Mới</Button>
         </div>
       </div>
-
-      {/* Export Options */}
-      <Card className="mb-3">
-        <Card.Header>Tùy Chọn Export</Card.Header>
-        <Card.Body>
-          <Row>
-            <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>Bộ Lọc Loại Thuốc</Form.Label>
-                <Form.Select value={filters.MedicineType || ''} onChange={(e) => onFilterChange('MedicineType', e.target.value)}>
-                  <option value="">Tất cả</option>
-                  {medicineTypes.map(type => <option key={type} value={type}>{type}</option>)}
-                </Form.Select>
-              </Form.Group>
-            </Col>
-            <Col md={6}>
-              <Form.Label>Chọn Cột</Form.Label>
-              <div className="d-flex flex-wrap gap-2">
-                {availableColumns.map(col => (
-                  <Form.Check
-                    type="checkbox"
-                    label={col.label}
-                    key={col.value}
-                    checked={selectedColumns.includes(col.value)}
-                    onChange={(e) => onColumnChange(col.value, e.target.checked)}
-                    disabled={selectedColumns.length >= 20 && !selectedColumns.includes(col.value)}
-                  />
-                ))}
-              </div>
-            </Col>
-          </Row>
-        </Card.Body>
-      </Card>
 
       {/* Main Table */}
       <div className="table-responsive" style={{ transition: 'opacity 0.3s ease' }}>
@@ -298,6 +262,55 @@ const ImportModal = ({ show, onHide, onDrop, uploadErrors, previewData, headers,
           Import
         </Button>
       </Modal.Body>
+    </Modal>
+  );
+};
+
+const ExportModal = ({ show, onHide, onExport, filters, onFilterChange, selectedColumns, onColumnChange }) => {
+  return (
+    <Modal show={show} onHide={onHide} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>Tùy Chọn Export</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <Row>
+          <Col md={6}>
+            <Form.Group className="mb-3">
+              <Form.Label>Bộ Lọc Loại Thuốc</Form.Label>
+              <Form.Select
+                value={filters.MedicineType || ''}
+                onChange={(e) => onFilterChange('MedicineType', e.target.value)}
+              >
+                <option value="">Tất cả</option>
+                {medicineTypes.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+          </Col>
+          <Col md={6}>
+            <Form.Label>Chọn Cột</Form.Label>
+            <div className="d-flex flex-wrap gap-2">
+              {availableColumns.map((col) => (
+                <Form.Check
+                  type="checkbox"
+                  label={col.label}
+                  key={col.value}
+                  checked={selectedColumns.includes(col.value)}
+                  onChange={(e) => onColumnChange(col.value, e.target.checked)}
+                  disabled={selectedColumns.length >= 20 && !selectedColumns.includes(col.value)}
+                />
+              ))}
+            </div>
+          </Col>
+        </Row>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onHide}>Hủy</Button>
+        <Button variant="success" onClick={onExport}>
+          <FileSpreadsheet size={16} className="me-1" /> Export Excel
+        </Button>
+      </Modal.Footer>
     </Modal>
   );
 };
@@ -515,6 +528,7 @@ const AdminMedicine = () => {
   const [toast, setToast] = useState({ show: false, type: 'info', message: '' });
   const [currentView, setCurrentView] = useState('list'); // list, add, edit
   const [editMedicine, setEditMedicine] = useState(null);
+  const [showExportModal, setShowExportModal] = useState(false);
   const cache = useRef(new Map());
   const debounceRef = useRef(null);
   const [importFile, setImportFile] = useState(null);
@@ -535,6 +549,15 @@ const AdminMedicine = () => {
   const hideToast = useCallback(() => {
     setToast({ show: false, type: 'info', message: '' });
   }, []);
+
+  const handleShowExportModal = useCallback(() => {
+    setShowExportModal(true);
+  }, []);
+
+  const handleCloseExportModal = useCallback(() => {
+    setShowExportModal(false);
+  }, []);
+
 
   const fetchMedicines = useCallback(async (page = 1) => {
     if (cache.current.has(page)) {
@@ -822,6 +845,7 @@ const AdminMedicine = () => {
       a.click();
       window.URL.revokeObjectURL(url);
       showToast('success', 'Export thành công');
+      setShowExportModal(false); // Ẩn modal sau khi export
     } catch (error) {
       showToast('error', 'Lỗi export: ' + error.message);
     }
@@ -1005,12 +1029,8 @@ const AdminMedicine = () => {
             currentPage={currentPage}
             handlePageChange={handlePageChange}
             onDownloadTemplate={handleDownloadTemplate}
-            onExport={handleExport}
+            onShowExportModal={handleShowExportModal}
             onShowImport={handleShowImport}
-            selectedColumns={selectedColumns}
-            onColumnChange={handleColumnChange}
-            filters={filters}
-            onFilterChange={handleFilterChange}
           />
         )}
         {currentView === 'add' && (
@@ -1030,6 +1050,15 @@ const AdminMedicine = () => {
             isLoading={isLoading}
           />
         )}
+        <ExportModal
+          show={showExportModal}
+          onHide={handleCloseExportModal}
+          onExport={handleExport}
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          selectedColumns={selectedColumns}
+          onColumnChange={handleColumnChange}
+        />
         <ConfirmDeleteModal
           isOpen={showDeleteModal}
           title="Xác nhận xóa"
