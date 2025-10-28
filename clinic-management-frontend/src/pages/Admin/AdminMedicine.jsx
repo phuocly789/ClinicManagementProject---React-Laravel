@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
-import { Table, Button, Spinner, Form, Row, Col } from 'react-bootstrap';
-
+import { Table, Button, Spinner, Form, Row, Col, Card, Badge, ProgressBar, Alert, Modal } from 'react-bootstrap';
+import { useDropzone } from 'react-dropzone';
+import * as XLSX from 'xlsx';
 import Pagination from '../../Components/Pagination/Pagination';
 import ConfirmDeleteModal from '../../Components/CustomToast/DeleteConfirmModal';
 import CustomToast from '../../Components/CustomToast/CustomToast';
-import { PencilIcon, Trash } from 'lucide-react';
+import { PencilIcon, Trash, Download, Upload, FileSpreadsheet, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -29,17 +30,48 @@ const units = [
   'Lọ',
 ];
 
+// Required columns cho mapping
+const requiredColumns = ['MedicineName', 'MedicineType', 'Unit', 'Price', 'StockQuantity'];
+
+// Available columns cho export và mapping
+const availableColumns = [
+  { value: 'MedicineId', label: 'Mã Thuốc' },
+  { value: 'MedicineName', label: 'Tên Thuốc' },
+  { value: 'MedicineType', label: 'Loại Thuốc' },
+  { value: 'Unit', label: 'Đơn Vị' },
+  { value: 'Price', label: 'Giá Bán' },
+  { value: 'StockQuantity', label: 'Tồn Kho' },
+  { value: 'Description', label: 'Mô Tả' },
+];
+
 // Regex kiểm tra ký tự đặc biệt và ngôn ngữ code
 const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
 const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class|import|export|\$\w+)/i;
 
-const MedicineList = memo(({ medicines, isLoading, formatVND, handleShowDeleteModal, handleShowEditForm, pageCount, currentPage, handlePageChange }) => {
+const MedicineList = memo(({
+  medicines, isLoading, formatVND, handleShowDeleteModal, handleShowEditForm,
+  pageCount, currentPage, handlePageChange,
+  onDownloadTemplate, onShowExportModal, onShowImport
+}) => {
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h3>Danh Sách Thuốc</h3>
-        <Button variant="primary" onClick={() => handleShowEditForm(null)}>Thêm Thuốc Mới</Button>
+        <div className="d-flex gap-2">
+          <Button variant="outline-primary" onClick={onDownloadTemplate}>
+            <Download size={16} className="me-1" /> Tải Template
+          </Button>
+          <Button variant="success" onClick={onShowExportModal}>
+            <FileSpreadsheet size={16} className="me-1" /> Export Excel
+          </Button>
+          <Button variant="info" onClick={onShowImport}>
+            <Upload size={16} className="me-1" /> Import Excel
+          </Button>
+          <Button variant="primary" onClick={() => handleShowEditForm(null)}>Thêm Thuốc Mới</Button>
+        </div>
       </div>
+
+      {/* Main Table */}
       <div className="table-responsive" style={{ transition: 'opacity 0.3s ease' }}>
         <Table striped bordered hover responsive className={isLoading ? 'opacity-50' : ''}>
           <thead>
@@ -84,7 +116,7 @@ const MedicineList = memo(({ medicines, isLoading, formatVND, handleShowDeleteMo
                         href="#"
                         onClick={() => handleShowEditForm(medicine)}
                       >
-                        <PencilIcon />
+                        <PencilIcon size={16} />
                       </a>
                     </span>
                     <span className="px-1">/</span>
@@ -94,7 +126,7 @@ const MedicineList = memo(({ medicines, isLoading, formatVND, handleShowDeleteMo
                         href="#"
                         onClick={() => handleShowDeleteModal(medicine.MedicineId)}
                       >
-                        <Trash />
+                        <Trash size={16} />
                       </a>
                     </span>
                   </td>
@@ -115,6 +147,173 @@ const MedicineList = memo(({ medicines, isLoading, formatVND, handleShowDeleteMo
     </div>
   );
 });
+
+const ImportModal = ({ show, onHide, onDrop, uploadErrors, previewData, headers, mapping, onMappingChange, onDryRun, dryRunResult, onConfirmImport, isProcessing, getRootProps, getInputProps, importFile }) => {
+  return (
+    <Modal show={show} onHide={onHide} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>Import Excel</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        {/* Drag & Drop + Preview */}
+        <Card className="mb-3">
+          <Card.Body {...getRootProps({ className: 'dropzone p-4 border-dashed border-2 text-center cursor-pointer' })}>
+            <input {...getInputProps()} />
+            <Upload size={48} className="mb-2" />
+            <p>Kéo thả file hoặc click để chọn (.xlsx, .xls, .csv)</p>
+            {uploadErrors.map(err => <Alert variant="danger" key={err}>{err}</Alert>)}
+          </Card.Body>
+        </Card>
+
+        {/* Preview Table */}
+        {previewData.length > 0 && (
+          <Card className="mb-3">
+            <Card.Header>Preview 50 Dòng Đầu</Card.Header>
+            <div className="table-responsive">
+              <Table striped bordered hover>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    {headers.map(h => <th key={h}>{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewData.map((row, idx) => (
+                    <tr key={idx} className={dryRunResult?.errors?.some(e => e.row === idx + 2) ? 'table-danger' : ''}>
+                      <td>{idx + 1}</td>
+                      {row.map((cell, cIdx) => (
+                        <td key={cIdx}>
+                          {cell}
+                          {dryRunResult?.errors?.filter(e => e.row === idx + 2 && e.attribute === headers[cIdx]).map(e => (
+                            <Badge bg="danger" className="ms-1" key={e.errors[0]} title={e.errors.join(', ')}><XCircle size={12} /></Badge>
+                          ))}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          </Card>
+        )}
+
+        {/* Mapping */}
+        {headers.length > 0 && (
+          <Card className="mb-3">
+            <Card.Header>Mapping Cột</Card.Header>
+            <Table>
+              <thead>
+                <tr>
+                  <th>Cột Từ File</th>
+                  <th>Cột Hệ Thống</th>
+                </tr>
+              </thead>
+              <tbody>
+                {headers.map(h => (
+                  <tr key={h}>
+                    <td>{h}</td>
+                    <td>
+                      <Form.Select value={mapping[h] || ''} onChange={(e) => onMappingChange(h, e.target.value)}>
+                        <option value="">Chọn cột</option>
+                        {availableColumns.map(col => <option key={col.value} value={col.value}>{col.label}</option>)}
+                      </Form.Select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </Card>
+        )}
+
+        {/* Dry-run Button */}
+        <Button variant="info" onClick={onDryRun} disabled={!importFile || isProcessing} className="me-3">
+          Dry-run Kiểm Tra
+        </Button>
+
+        {/* Dry-run Result */}
+        {dryRunResult && (
+          <Card className="mb-3">
+            <Card.Header>Kết Quả Dry-run</Card.Header>
+            <Card.Body>
+              <div className="d-flex gap-3 mb-2">
+                <Badge bg="success" className="d-flex align-items-center"><CheckCircle size={16} className="me-1" /> Thành công: {dryRunResult.success_count}</Badge>
+                <Badge bg="danger" className="d-flex align-items-center"><XCircle size={16} className="me-1" /> Lỗi: {dryRunResult.error_count}</Badge>
+              </div>
+              <ProgressBar
+                now={(dryRunResult.success_count / (dryRunResult.success_count + dryRunResult.error_count)) * 100}
+                variant="success"
+                label={`${Math.round((dryRunResult.success_count / (dryRunResult.success_count + dryRunResult.error_count)) * 100)}%`}
+              />
+              {dryRunResult.errors.length > 0 && (
+                <div className="mt-3">
+                  <h6>Lỗi Mẫu (5 đầu):</h6>
+                  {dryRunResult.errors.slice(0, 5).map((err, idx) => (
+                    <Alert variant="danger" key={idx} className="small mb-1">
+                      Hàng {err.row}: {err.errors.join(', ')} (Cột: {err.attribute})
+                    </Alert>
+                  ))}
+                </div>
+              )}
+            </Card.Body>
+          </Card>
+        )}
+
+        <Button variant="primary" onClick={onConfirmImport} disabled={!dryRunResult || dryRunResult.success_count === 0 || isProcessing}>
+          Import
+        </Button>
+      </Modal.Body>
+    </Modal>
+  );
+};
+
+const ExportModal = ({ show, onHide, onExport, filters, onFilterChange, selectedColumns, onColumnChange }) => {
+  return (
+    <Modal show={show} onHide={onHide} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>Tùy Chọn Export</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <Row>
+          <Col md={6}>
+            <Form.Group className="mb-3">
+              <Form.Label>Bộ Lọc Loại Thuốc</Form.Label>
+              <Form.Select
+                value={filters.MedicineType || ''}
+                onChange={(e) => onFilterChange('MedicineType', e.target.value)}
+              >
+                <option value="">Tất cả</option>
+                {medicineTypes.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+          </Col>
+          <Col md={6}>
+            <Form.Label>Chọn Cột</Form.Label>
+            <div className="d-flex flex-wrap gap-2">
+              {availableColumns.map((col) => (
+                <Form.Check
+                  type="checkbox"
+                  label={col.label}
+                  key={col.value}
+                  checked={selectedColumns.includes(col.value)}
+                  onChange={(e) => onColumnChange(col.value, e.target.checked)}
+                  disabled={selectedColumns.length >= 20 && !selectedColumns.includes(col.value)}
+                />
+              ))}
+            </div>
+          </Col>
+        </Row>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onHide}>Hủy</Button>
+        <Button variant="success" onClick={onExport}>
+          <FileSpreadsheet size={16} className="me-1" /> Export Excel
+        </Button>
+      </Modal.Footer>
+    </Modal>
+  );
+};
 
 const MedicineForm = memo(({ isEditMode, medicine, onSubmit, onCancel, isLoading }) => {
   const [errors, setErrors] = useState({
@@ -303,21 +502,17 @@ const MedicineForm = memo(({ isEditMode, medicine, onSubmit, onCancel, isLoading
                 as="textarea"
                 name="Description"
                 defaultValue={isEditMode ? medicine?.Description : ''}
-                placeholder="Nhập mô tả (tùy chọn)"
+                placeholder="Nhập mô tả"
                 isInvalid={!!errors.Description}
               />
               <Form.Text className="text-danger">{errors.Description}</Form.Text>
             </Form.Group>
           </Col>
         </Row>
-        <div className="d-flex justify-content-end gap-2">
-          <Button variant="secondary" onClick={onCancel} disabled={isLoading}>
-            Hủy
-          </Button>
-          <Button variant="primary" type="submit" disabled={isLoading}>
-            {isLoading ? <Spinner size="sm" /> : isEditMode ? 'Lưu' : 'Thêm'}
-          </Button>
-        </div>
+        <Button variant="primary" type="submit" disabled={isLoading}>
+          {isLoading ? 'Đang lưu...' : isEditMode ? 'Sửa' : 'Thêm'}
+        </Button>
+        <Button variant="secondary" onClick={onCancel} className="ms-2">Hủy</Button>
       </Form>
     </div>
   );
@@ -333,8 +528,19 @@ const AdminMedicine = () => {
   const [toast, setToast] = useState({ show: false, type: 'info', message: '' });
   const [currentView, setCurrentView] = useState('list'); // list, add, edit
   const [editMedicine, setEditMedicine] = useState(null);
+  const [showExportModal, setShowExportModal] = useState(false);
   const cache = useRef(new Map());
   const debounceRef = useRef(null);
+  const [importFile, setImportFile] = useState(null);
+  const [previewData, setPreviewData] = useState([]); // 50 dòng đầu
+  const [headers, setHeaders] = useState([]); // Auto detect header
+  const [dryRunResult, setDryRunResult] = useState(null);
+  const [selectedColumns, setSelectedColumns] = useState(availableColumns.map(col => col.value)); // Default all
+  const [filters, setFilters] = useState({});
+  const [mapping, setMapping] = useState({});
+  const [uploadErrors, setUploadErrors] = useState([]);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showConfirmImportModal, setShowConfirmImportModal] = useState(false);
 
   const showToast = useCallback((type, message) => {
     setToast({ show: true, type, message });
@@ -343,6 +549,15 @@ const AdminMedicine = () => {
   const hideToast = useCallback(() => {
     setToast({ show: false, type: 'info', message: '' });
   }, []);
+
+  const handleShowExportModal = useCallback(() => {
+    setShowExportModal(true);
+  }, []);
+
+  const handleCloseExportModal = useCallback(() => {
+    setShowExportModal(false);
+  }, []);
+
 
   const fetchMedicines = useCallback(async (page = 1) => {
     if (cache.current.has(page)) {
@@ -569,6 +784,235 @@ const AdminMedicine = () => {
     return Number(price).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
   }, []);
 
+  // Download Template
+  const handleDownloadTemplate = useCallback(async () => {
+    try {
+      const token = await getCsrfToken();
+      const response = await fetch(`${API_BASE_URL}/api/medicines/template`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'X-XSRF-TOKEN': token,
+        },
+        credentials: 'include',
+      });
+      if (response.status === 404) {
+        showToast('error', 'Không tìm thấy file template. Vui lòng liên hệ quản trị viên.');
+        return;
+      }
+      if (response.status === 403) {
+        showToast('error', 'Bạn không có quyền tải mẫu này.');
+        return;
+      }
+      if (!response.ok) {
+        throw new Error('Tải template thất bại');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'medicines_template.xlsx';
+      a.click();
+      window.URL.revokeObjectURL(url);
+      showToast('success', 'Tải template thành công');
+    } catch (error) {
+      showToast('error', 'Tải file thất bại. Kiểm tra kết nối Internet của bạn.');
+    }
+  }, [getCsrfToken, showToast]);
+
+  // Export
+  const handleExport = useCallback(async () => {
+    try {
+      const token = await getCsrfToken();
+      const response = await fetch(`${API_BASE_URL}/api/medicines/export?filters=${JSON.stringify(filters)}&columns=${selectedColumns.join(',')}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'X-XSRF-TOKEN': token,
+        },
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        showToast('error', errorData.message || 'Export thất bại');
+        return;
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'medicines.xlsx';
+      a.click();
+      window.URL.revokeObjectURL(url);
+      showToast('success', 'Export thành công');
+      setShowExportModal(false); // Ẩn modal sau khi export
+    } catch (error) {
+      showToast('error', 'Lỗi export: ' + error.message);
+    }
+  }, [filters, selectedColumns, getCsrfToken, showToast]);
+
+  // Drop File
+  const onDrop = useCallback((acceptedFiles, fileRejections) => {
+    setUploadErrors([]);
+    if (fileRejections.length > 0) {
+      fileRejections.forEach(rej => {
+        rej.errors.forEach(err => {
+          if (err.code === 'file-too-large') setUploadErrors(prev => [...prev, 'File vượt quá dung lượng tối đa (10MB).']);
+          if (err.code === 'file-invalid-type') setUploadErrors(prev => [...prev, 'Định dạng file không hợp lệ. Chỉ chấp nhận Excel (.xlsx, .xls, .csv).']);
+        });
+      });
+      return;
+    }
+    const file = acceptedFiles[0];
+    setImportFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = e.target.result;
+        const workbook = XLSX.read(data, { type: 'binary' });
+        if (workbook.SheetNames.length === 0) {
+          setUploadErrors(['File không chứa dữ liệu nào để xem trước.']);
+          return;
+        }
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+        if (rows.length < 1) {
+          setUploadErrors(['File không chứa dữ liệu nào để xem trước.']);
+          return;
+        }
+        const headerRow = rows[0];
+        if (headerRow.length === 0) {
+          setUploadErrors(['Không tìm thấy dòng tiêu đề (header). Vui lòng thêm dòng tiêu đề ở hàng đầu tiên.']);
+          return;
+        }
+        setHeaders(headerRow);
+        setPreviewData(rows.slice(1, 51)); // 50 dòng data
+        // Auto map nếu match
+        const autoMapping = {};
+        headerRow.forEach((h) => {
+          const lowerH = h.toLowerCase();
+          availableColumns.forEach(col => {
+            if (lowerH.includes(col.value.toLowerCase())) autoMapping[h] = col.value;
+          });
+        });
+        setMapping(autoMapping);
+      } catch (err) {
+        setUploadErrors(['Không thể đọc nội dung file. Vui lòng kiểm tra lại file Excel của bạn.']);
+      }
+    };
+    reader.readAsBinaryString(file);
+  }, []);
+
+  // Dry-run
+  const handleDryRun = useCallback(async () => {
+    if (!importFile) {
+      showToast('error', 'Vui lòng chọn file trước khi thực hiện kiểm tra.');
+      return;
+    }
+    // Kiểm tra mapping required
+    const mappedRequired = requiredColumns.every(req => Object.values(mapping).includes(req));
+    if (!mappedRequired) {
+      showToast('error', 'Vui lòng map đầy đủ các cột bắt buộc trước khi kiểm tra.');
+      return;
+    }
+
+    try {
+      const token = await getCsrfToken();
+      const formData = new FormData();
+      formData.append('file', importFile);
+      formData.append('mapping', JSON.stringify(mapping));
+      const response = await fetch(`${API_BASE_URL}/api/medicines/dry-run`, {
+        method: 'POST',
+        headers: {
+          'X-XSRF-TOKEN': token,
+        },
+        credentials: 'include',
+        body: formData,
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (response.status === 429) showToast('error', 'Bạn đã vượt giới hạn thao tác. Vui lòng thử lại sau 5 phút.');
+        else if (response.status === 403) showToast('error', 'Bạn không có quyền thực hiện hành động này.');
+        else if (response.status === 500) showToast('error', 'Không thể xử lý file do lỗi hệ thống. Vui lòng thử lại sau.');
+        else throw new Error(errorData.message || 'Dry-run thất bại');
+      }
+      const data = await response.json();
+      setDryRunResult(data);
+      showToast('success', 'Dry-run hoàn tất');
+    } catch (error) {
+      showToast('error', 'Hệ thống đang xử lý lâu hơn dự kiến. Vui lòng thử lại sau ít phút.');
+    }
+  }, [importFile, mapping, getCsrfToken, showToast]);
+
+  // Confirm Import
+  const handleConfirmImport = useCallback(async () => {
+    setShowConfirmImportModal(true);
+  }, []);
+
+  // Import
+  const handleImport = useCallback(async () => {
+    setShowConfirmImportModal(false);
+    try {
+      const token = await getCsrfToken();
+      const formData = new FormData();
+      formData.append('file', importFile);
+      formData.append('mapping', JSON.stringify(mapping));
+      const response = await fetch(`${API_BASE_URL}/api/medicines/import`, {
+        method: 'POST',
+        headers: {
+          'X-XSRF-TOKEN': token,
+        },
+        credentials: 'include',
+        body: formData,
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        showToast('error', errorData.message || 'Import thất bại');
+        return;
+      }
+      showToast('success', 'Import thành công');
+      cache.current.clear();
+      fetchMedicines(1);
+      setShowImportModal(false);
+      setImportFile(null);
+      setPreviewData([]);
+      setHeaders([]);
+      setDryRunResult(null);
+      setMapping({});
+      setUploadErrors([]);
+    } catch (error) {
+      showToast('error', 'Lỗi import: ' + error.message);
+    }
+  }, [importFile, mapping, getCsrfToken, showToast, fetchMedicines]);
+
+  const handleColumnChange = useCallback((value, checked) => {
+    setSelectedColumns(prev => checked ? [...prev, value] : prev.filter(v => v !== value));
+  }, []);
+
+  const handleFilterChange = useCallback((key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  }, []);
+
+  const handleMappingChange = useCallback((userHeader, systemCol) => {
+    setMapping(prev => ({ ...prev, [userHeader]: systemCol }));
+  }, []);
+
+  const handleShowImport = useCallback(() => {
+    setShowImportModal(true);
+  }, []);
+
+  const handleCloseImport = useCallback(() => {
+    setShowImportModal(false);
+    setImportFile(null);
+    setPreviewData([]);
+    setHeaders([]);
+    setDryRunResult(null);
+    setMapping({});
+    setUploadErrors([]);
+  }, []);
+
+  const { getRootProps, getInputProps } = useDropzone({ onDrop, noClick: !showImportModal }); // Chỉ active drop khi modal open
+
   return (
     <div className="d-flex">
       <AdminSidebar />
@@ -584,6 +1028,9 @@ const AdminMedicine = () => {
             pageCount={pageCount}
             currentPage={currentPage}
             handlePageChange={handlePageChange}
+            onDownloadTemplate={handleDownloadTemplate}
+            onShowExportModal={handleShowExportModal}
+            onShowImport={handleShowImport}
           />
         )}
         {currentView === 'add' && (
@@ -603,6 +1050,15 @@ const AdminMedicine = () => {
             isLoading={isLoading}
           />
         )}
+        <ExportModal
+          show={showExportModal}
+          onHide={handleCloseExportModal}
+          onExport={handleExport}
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          selectedColumns={selectedColumns}
+          onColumnChange={handleColumnChange}
+        />
         <ConfirmDeleteModal
           isOpen={showDeleteModal}
           title="Xác nhận xóa"
@@ -610,6 +1066,33 @@ const AdminMedicine = () => {
           onConfirm={() => handleDelete(medicineToDelete)}
           onCancel={handleCancelDelete}
         />
+        <ImportModal
+          show={showImportModal}
+          onHide={handleCloseImport}
+          onDrop={onDrop}
+          uploadErrors={uploadErrors}
+          previewData={previewData}
+          headers={headers}
+          mapping={mapping}
+          onMappingChange={handleMappingChange}
+          onDryRun={handleDryRun}
+          dryRunResult={dryRunResult}
+          onConfirmImport={handleConfirmImport}
+          isProcessing={isLoading}
+          getRootProps={getRootProps}
+          getInputProps={getInputProps}
+          importFile={importFile}
+        />
+        <Modal show={showConfirmImportModal} onHide={() => setShowConfirmImportModal(false)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Xác Nhận Import</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>Bạn chắc chắn muốn import {dryRunResult?.success_count} bản ghi?</Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowConfirmImportModal(false)}>Hủy</Button>
+            <Button variant="primary" onClick={handleImport}>Import</Button>
+          </Modal.Footer>
+        </Modal>
         {toast.show && (
           <CustomToast
             type={toast.type}
