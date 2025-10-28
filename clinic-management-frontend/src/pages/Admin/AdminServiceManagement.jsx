@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import Pagination from '../../../Components/Pagination/Pagination';
-import AdminSidebar from '../../../Components/Sidebar/AdminSidebar';
-import CustomToast from '../../../Components/CustomToast/CustomToast';
-import Loading from '../../../Components/Loading/Loading';
-import adminService from '../../../services/adminService';
+import Pagination from '../../Components/Pagination/Pagination';
+import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
+import CustomToast from '../../Components/CustomToast/CustomToast';
+import Loading from '../../Components/Loading/Loading';
+import adminService from '../../services/adminService';
 import { BiPlus, BiEdit, BiTrash, BiShow, BiSearch, BiRefresh } from 'react-icons/bi';
 import { useDebounce } from 'use-debounce';
 
