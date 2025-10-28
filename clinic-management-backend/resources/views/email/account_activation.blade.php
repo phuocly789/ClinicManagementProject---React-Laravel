@@ -29,7 +29,7 @@
 
             <p style="font-size: 14px; color: #444;">
                 <strong>Note:</strong> This code is valid for
-                <span style="color: red; font-weight: bold;">{{ $codeExpired }}</span>.
+                <span style="color: red; font-weight: bold;">5 minutes</span> from the time this email was sent.
             </p>
 
             <p style="font-size: 13px; color: #777;">
