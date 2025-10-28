@@ -78,9 +78,9 @@ class AuthService
                 default => 'Khác',
             },
             'MustChangePassword' => false,
-            'IsActive' => true,
+            'IsActive' => false,
             'CodeId' => $code,
-            'CodeExpired' =>  Carbon::now('Asia/Ho_Chi_Minh')->addMinutes(5),
+            'CodeExpired' => Carbon::now('UTC')->addMinutes(5),
         ]);
         $user->roles()->attach(2);
         try {
@@ -101,7 +101,14 @@ class AuthService
 
         return [
             'status' => true,
-            'user' => $user,
+            'user' => [
+                "id" => $user->UserId,
+                "email" => $user->Email,
+                "is_active" => $user->IsActive,
+                "expired" => Carbon::parse($user->CodeExpired)
+                    ->setTimezone('Asia/Ho_Chi_Minh')
+                    ->format('Y-m-d H:i:s'),
+            ],
             'token' => $token,
         ];
     }
@@ -193,6 +200,90 @@ class AuthService
             'token' => $token,
         ];
     }
+    public function handleVerifyEmail(array $data)
+    {
+        if (empty($data['email']) || empty($data['code'])) {
+            throw new AppErrors("Vui lòng nhập đầy đủ thông tin.", 400, 1);
+        }
+
+        $user = User::where('Email', $data['email'])->first();
+
+        if (!$user) {
+            throw new AppErrors("Email không tồn tại.", 404, 2);
+        }
+
+        if ($user->IsActive === true) {
+            throw new AppErrors("Tài khoản đã được kích hoạt.", 409, 3);
+        }
+
+        if ($user->CodeId !== $data['code']) {
+            throw new AppErrors("Mã xác thực không chính xác.", 400, 4);
+        }
+
+        if ($user->CodeExpired && now()->greaterThan($user->CodeExpired)) {
+            throw new AppErrors("Mã xác thực đã hết hạn.", 410, 5);
+        }
+
+        $user->IsActive = true;
+        $user->CodeExpired = null;
+        $user->CodeId = null;
+        $user->save();
+
+        // ✅ Trả data thuần, không dùng response()
+        return [
+            'success' => true,
+            'message' => 'Xác thực tài khoản thành công. Vui lòng đăng nhập lại',
+        ];
+    }
+    public function handleResendEmail(array $data)
+    {
+        if (empty($data['email'])) {
+            throw new AppErrors("Vui lòng nhập đầy đủ thông tin.", 400, 1);
+        }
+
+        $user = User::where('Email', $data['email'])->first();
+
+        if (!$user) {
+            throw new AppErrors("Email không tồn tại.", 404, 2);
+        }
+
+        if ($user->IsActive === true) {
+            throw new AppErrors("Tài khoản đã được kích hoạt.", 409, 3);
+        }
+        $code = rand(100000, 999999);
+
+        $user->IsActive = false;
+        $user->CodeExpired = Carbon::now('UTC')->addMinutes(5);
+        $user->CodeId = $code;
+        $user->save();
+
+        try {
+            Mail::to($user->Email)->send(
+                new AccountActivationMail($user->FullName, $user->CodeId, $user->CodeExpired)
+            );
+        } catch (\Exception $e) {
+            // Nếu gửi mail lỗi => rollback user và thông báo
+            $user->delete();
+            return response()->json([
+                'status' => false,
+                'error' => 'Không thể gửi email xác thực. Vui lòng thử lại sau.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+        // Tạo access token (Passport)
+
+        return [
+            'success' => true,
+            'user' => [
+                "id" => $user->UserId,
+                "email" => $user->Email,
+                "is_active" => $user->IsActive,
+                "expired" => $user->CodeExpired
+            ],
+        ];
+    }
+
+
 
 
 
