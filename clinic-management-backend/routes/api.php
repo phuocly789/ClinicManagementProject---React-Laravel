@@ -34,7 +34,7 @@ Route::get('/medicines/ping', [MedicinesController::class, 'ping']);
 Route::post('/medicines', [MedicinesController::class, 'store']);
 Route::put('/medicines/{id}', [MedicinesController::class, 'update']);
 Route::delete('/medicines/{id}', [MedicinesController::class, 'destroy']);
-Route::get('/medicines/all',[MedicinesController::class, 'all']);
+Route::get('/medicines/all', [MedicinesController::class, 'all']);
 
 Route::get('/import-bills', [ImportBillController::class, 'index']);
 Route::post('/import-bills', [ImportBillController::class, 'store']);
@@ -57,7 +57,8 @@ Route::delete('/schedules/{scheduleId}', [ScheduleController::class, 'deleteSche
 
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/register', [AuthController::class, 'register']);
-
+Route::post("/verification-email", [AuthController::class, 'verificationEmail']);
+Route::post("/resend-verification-email", [AuthController::class, 'resendVerificationEmail']);
 //admin-revenue
 Route::get('/report-revenue/combined', [ReportRevenueController::class, 'getCombinedStatistics']);
 Route::get('/report-revenue/detail-revenue', [ReportRevenueController::class, 'getDetailRevenueReport']);
@@ -70,7 +71,7 @@ Route::prefix('doctor')->group(function () {
     Route::apiResource('appointments', AppointmentsController::class);
 
     // Gợi ý chẩn đoán & thuốc
-    
+
     //Gợi ý lấy từ lịch sử bệnh trước đó
     Route::get('/diagnoses/suggestions', [DiagnosisSuggestionController::class, 'suggestions']);
     // Tìm kiếm thuốc theo tên, loại
@@ -85,7 +86,7 @@ Route::prefix('doctor')->group(function () {
 
     // Lấy danh sách tất cả bệnh nhân 
     Route::get('/patients', [PatientsController::class, 'index']);
-    
+
     // Lịch sử bệnh nhân
     Route::get('/patients/{patientId}/history', [PatientsController::class, 'getPatientHistory']);
 
