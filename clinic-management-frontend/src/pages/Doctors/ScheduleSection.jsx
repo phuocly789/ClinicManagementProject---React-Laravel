@@ -10,6 +10,7 @@ import {
   Row,
   Col,
   Modal,
+  Container
 } from "react-bootstrap";
 
 const API_BASE_URL = "http://localhost:8000";
@@ -108,14 +109,13 @@ const ScheduleSection = ({ currentSection, currentDate, prevMonth, nextMonth }) 
   const renderWeekHeaders = () => {
     const days = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
     return (
-      <Row className="g-0 border-bottom border-top mb-0">
+      <Row className="g-0">
         {days.map((day, idx) => (
           <Col
             key={idx}
-            className="month-grid-col text-center fw-bold text-primary py-2 border-start border-end"
-            style={{ minHeight: "40px" }}
+            className="text-center fw-bold py-3 border-end bg-light bg-gradient"
           >
-            {day}
+            <small className="text-dark">{day}</small>
           </Col>
         ))}
       </Row>
@@ -157,125 +157,179 @@ const ScheduleSection = ({ currentSection, currentDate, prevMonth, nextMonth }) 
     const todayDay = String(today.getDate()).padStart(2, '0');
     const todayStr = `${todayYear}-${todayMonth}-${todayDay}`;
 
-    return cells.map((dayNum, i) => {
-      if (dayNum === null) {
-        return (
-          <Col
-            key={i}
-            className="month-grid-col p-2 border-start border-end border-bottom bg-light text-muted"
-            style={{ minHeight: "100px" }}
-          >
-            <div className="h-100 d-flex align-items-center justify-content-center">
-              <small>&nbsp;</small>
-            </div>
-          </Col>
-        );
-      }
+    // Chia cells thành 6 hàng (tuần)
+    const weeks = [];
+    for (let i = 0; i < 6; i++) {
+      weeks.push(cells.slice(i * 7, (i + 1) * 7));
+    }
 
-      const currentDateObj = new Date(year, month, dayNum);
-      const yearStr = currentDateObj.getFullYear();
-      const monthStr = String(currentDateObj.getMonth() + 1).padStart(2, '0');
-      const dayStr = String(currentDateObj.getDate()).padStart(2, '0');
-      const isoDate = `${yearStr}-${monthStr}-${dayStr}`;
-      const dailyEvents = events.filter((e) => e.date === isoDate);
-      const isToday = isoDate === todayStr;
+    return weeks.map((week, weekIndex) => (
+      <Row key={weekIndex} className="g-0 border-bottom">
+        {week.map((dayNum, dayIndex) => {
+          if (dayNum === null) {
+            return (
+              <Col
+                key={dayIndex}
+                className="p-2 border-end bg-light bg-opacity-25"
+                style={{ minHeight: '120px' }}
+              >
+                <div className="h-100 d-flex align-items-center justify-content-center">
+                  <small className="text-muted opacity-50">&nbsp;</small>
+                </div>
+              </Col>
+            );
+          }
 
-      return (
-        <Col
-          key={i}
-          className={`month-grid-col p-2 border-start border-end border-bottom d-flex flex-column ${isToday ? "border-info" : ""} ${dailyEvents.length > 0 ? "border-primary" : ""}`}
-          style={{ 
-            minHeight: "100px", 
-            cursor: dailyEvents.length > 0 ? "pointer" : "default"
-          }}
-          onClick={() => dailyEvents.length > 0 && openModal(isoDate, dailyEvents)}
-        >
-          <div className="d-flex justify-content-between align-items-start mb-1">
-            <strong className={`mb-0 ${isToday ? "text-primary fw-bold" : ""}`}>{dayNum}</strong>
-            <small className="text-muted">
-              {currentDateObj.toLocaleDateString("vi-VN", { weekday: "short" })}
-            </small>
-          </div>
-          {dailyEvents.length > 0 ? (
-            <div className="flex-grow-1 small overflow-auto">
-              {dailyEvents.slice(0, 2).map((e, idx) => (
-                <div key={idx} className="mb-1 p-1 bg-light rounded small">
-                  <div className="fw-bold text-truncate d-block" title={e.title || `${e.StartTime} - ${e.EndTime}`}>
-                    {e.title ? e.title : `${e.StartTime} - ${e.EndTime}`}
-                  </div>
-                  {e.IsAvailable !== undefined && (
-                    <Badge 
-                      bg={e.IsAvailable ? "secondary" : "success"} 
-                      className="mt-1 small d-block"
-                      style={{ fontSize: "0.7em" }}
-                    >
-                      {e.IsAvailable ? "Trống" : "Lịch khám"}
-                    </Badge>
+          const currentDateObj = new Date(year, month, dayNum);
+          const yearStr = currentDateObj.getFullYear();
+          const monthStr = String(currentDateObj.getMonth() + 1).padStart(2, '0');
+          const dayStr = String(currentDateObj.getDate()).padStart(2, '0');
+          const isoDate = `${yearStr}-${monthStr}-${dayStr}`;
+          const dailyEvents = events.filter((e) => e.date === isoDate);
+          const isToday = isoDate === todayStr;
+
+          return (
+            <Col
+              key={dayIndex}
+              className={`p-2 border-end d-flex flex-column ${
+                isToday ? "bg-primary bg-opacity-10 border-start border-primary border-3" : ""
+              } ${
+                dailyEvents.length > 0 ? "cursor-pointer" : ""
+              }`}
+              style={{ minHeight: '120px' }}
+              onClick={() => dailyEvents.length > 0 && openModal(isoDate, dailyEvents)}
+            >
+              <div className="d-flex justify-content-between align-items-start mb-2">
+                <span className={`fw-bold ${
+                  isToday ? "text-primary" : "text-dark"
+                }`}>
+                  {dayNum}
+                </span>
+                <small className="text-muted text-uppercase">
+                  {currentDateObj.toLocaleDateString("vi-VN", { weekday: "narrow" })}
+                </small>
+              </div>
+              
+              {dailyEvents.length > 0 ? (
+                <div className="flex-grow-1">
+                  {dailyEvents.slice(0, 2).map((e, idx) => (
+                    <div key={idx} className="mb-2">
+                      <div className="bg-white rounded border-0 p-2 shadow-sm">
+                        <div className="d-flex justify-content-between align-items-center">
+                          <small className="fw-semibold text-dark text-truncate">
+                            {e.StartTime}
+                          </small>
+                          <Badge 
+                            bg={e.IsAvailable ? "outline-secondary" : "success"} 
+                            className="ms-1"
+                          >
+                            {e.IsAvailable ? "Trống" : "Lịch khám"}
+                          </Badge>
+                        </div>
+                        {e.title && (
+                          <small className="text-muted d-block mt-1 text-truncate">
+                            {e.title}
+                          </small>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {dailyEvents.length > 2 && (
+                    <div className="text-center mt-2">
+                      <Badge bg="light" text="dark" className="px-2">
+                        +{dailyEvents.length - 2} lịch
+                      </Badge>
+                    </div>
                   )}
                 </div>
-              ))}
-              {dailyEvents.length > 2 && (
-                <small className="text-muted d-block">+{dailyEvents.length - 2} lịch khác</small>
+              ) : (
+                <div className="flex-grow-1 d-flex align-items-center justify-content-center">
+                  <small className="text-muted opacity-75">Trống</small>
+                </div>
               )}
-            </div>
-          ) : (
-            <div className="flex-grow-1 d-flex align-items-end pb-1">
-              <small className="text-muted">Không có lịch</small>
-            </div>
-          )}
-        </Col>
-      );
-    });
+            </Col>
+          );
+        })}
+      </Row>
+    ));
   };
 
+  if (currentSection !== "schedule") return null;
+
   return (
-    <div className={`section ${currentSection === "schedule" ? "active" : ""}`} id="schedule">
-      <Card className="shadow-sm">
-        <Card.Header className="d-flex justify-content-between align-items-center bg-primary text-white">
-          <h5 className="mb-0">📅 Lịch Làm Việc Bác sĩ ID {DOCTOR_ID}</h5>
+    <Container fluid className="py-3">
+      <Card className="border-0 shadow-lg">
+        <Card.Header className="bg-primary text-white py-3">
+          <div className="d-flex align-items-center justify-content-between">
+            <div className="d-flex align-items-center">
+              <i className="bi bi-calendar3 me-3 fs-4"></i>
+              <div>
+                <h4 className="mb-0 fw-bold">Lịch Làm Việc</h4>
+                <small className="opacity-75">Bác sĩ ID {DOCTOR_ID}</small>
+              </div>
+            </div>
+            <Badge bg="light" text="dark" className="fs-6 px-3 py-2">
+              {events.length} lịch
+            </Badge>
+          </div>
         </Card.Header>
 
-        <Card.Body className="p-0">
+        <Card.Body className="p-4">
           {loading ? (
-            <div className="text-center py-4">
-              <Spinner animation="border" size="sm" />
-              <p className="mt-2 text-muted">Đang tải lịch làm việc...</p>
+            <div className="text-center py-5">
+              <Spinner animation="border" variant="primary" size="lg" />
+              <p className="text-muted mt-3 fs-5">Đang tải lịch làm việc...</p>
             </div>
           ) : (
             <>
               {/* Bộ lọc */}
-              <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap px-3 pt-3">
-                <ButtonGroup className="mb-2">
+              <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+                <ButtonGroup>
                   <Button
                     variant={filterMode === "today" ? "primary" : "outline-primary"}
+                    size="sm"
                     onClick={() => setFilterMode("today")}
                   >
                     Hôm nay
                   </Button>
                   <Button
                     variant={filterMode === "week" ? "primary" : "outline-primary"}
+                    size="sm"
                     onClick={() => setFilterMode("week")}
                   >
                     Tuần này
                   </Button>
                   <Button
                     variant={filterMode === "month" ? "primary" : "outline-primary"}
+                    size="sm"
                     onClick={() => setFilterMode("month")}
                   >
-                    Cả tháng
+                    Tháng này
                   </Button>
                 </ButtonGroup>
 
                 {filterMode === "month" && (
-                  <div className="d-flex align-items-center">
-                    <Button variant="outline-primary me-2" onClick={prevMonth} size="sm">
-                      &lt; Tháng trước
+                  <div className="d-flex align-items-center gap-2">
+                    <Button 
+                      variant="outline-primary" 
+                      size="sm"
+                      onClick={prevMonth}
+                      className="d-flex align-items-center justify-content-center border"
+                      style={{ width: '40px', height: '40px' }}
+                    >
+                     &lt; <i className="bi bi-chevron-left"></i>
                     </Button>
-                    <h6 className="mb-0 mx-3">
-                      Tháng {currentDate.getMonth() + 1}, {currentDate.getFullYear()}
-                    </h6>
-                    <Button variant="outline-primary" onClick={nextMonth} size="sm">
-                      Tháng sau &gt;
+                    <h5 className="mb-0 mx-3 text-primary fw-bold">
+                      Tháng {currentDate.getMonth() + 1}/{currentDate.getFullYear()}
+                    </h5>
+                    <Button 
+                      variant="outline-primary" 
+                      size="sm"
+                      onClick={nextMonth}
+                      className="d-flex align-items-center justify-content-center border"
+                      style={{ width: '40px', height: '40px' }}
+                    >
+                      &gt;<i className="bi bi-chevron-right"></i> 
                     </Button>
                   </div>
                 )}
@@ -283,71 +337,102 @@ const ScheduleSection = ({ currentSection, currentDate, prevMonth, nextMonth }) 
 
               {/* Danh sách lịch */}
               {filterMode === "month" ? (
-                // 🗓 Dạng lưới cả tháng với 7 cột
-                <div className="border rounded overflow-hidden">
-                  {renderWeekHeaders()}
-                  <Row className="g-0 mb-0">
+                <Card className="border-0 shadow-sm">
+                  <Card.Body className="p-0">
+                    {/* Week Headers */}
+                    {renderWeekHeaders()}
+                    
+                    {/* Calendar Grid */}
                     {renderMonthGrid()}
-                  </Row>
-                </div>
+                  </Card.Body>
+                </Card>
               ) : groupedEvents.length === 0 ? (
-                <p className="text-muted text-center mt-4">
-                  Không có lịch làm việc trong khoảng thời gian này.
-                </p>
+                <div className="text-center py-5">
+                  <i className="bi bi-calendar-x text-muted mb-3" style={{ fontSize: '4rem' }}></i>
+                  <h5 className="text-muted">Không có lịch làm việc</h5>
+                  <p className="text-muted">Không có lịch làm việc trong khoảng thời gian này</p>
+                </div>
               ) : (
-                groupedEvents.map(({ date, events }) => (
-                  <Card key={date} className="mb-3 border-0 shadow-sm">
-                    <Card.Header
-                      className="bg-light d-flex justify-content-between align-items-center"
-                      style={{ cursor: "pointer" }}
-                      onClick={() => setSelectedDate(selectedDate === date ? null : date)}
-                    >
-                      <strong>
-                        {new Date(date).toLocaleDateString("vi-VN", {
-                          weekday: "long",
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                        })}
-                      </strong>
-                      <Button
-                        variant="outline-primary"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedDate(selectedDate === date ? null : date);
-                        }}
-                      >
-                        {selectedDate === date ? "Ẩn" : "Xem"}
-                      </Button>
-                    </Card.Header>
-
-                    <Collapse in={selectedDate === date}>
-                      <div>
-                        <ListGroup variant="flush">
-                          {events.map((event, idx) => (
-                            <ListGroup.Item
-                              key={idx}
-                              className="d-flex justify-content-between align-items-center"
-                            >
+                <div className="row g-3">
+                  {groupedEvents.map(({ date, events }) => (
+                    <div key={date} className="col-12">
+                      <Card className="border-0 shadow-sm">
+                        <Card.Header 
+                          className="bg-light bg-gradient"
+                          onClick={() => setSelectedDate(selectedDate === date ? null : date)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <div className="d-flex justify-content-between align-items-center">
+                            <div className="d-flex align-items-center">
+                              <i className="bi bi-calendar-date text-primary me-3"></i>
                               <div>
-                                <h6 className="mb-1">
-                                  🕓 {event.StartTime || event.time} - {event.EndTime || event.title}
+                                <h6 className="mb-0 fw-bold text-dark">
+                                  {new Date(date).toLocaleDateString("vi-VN", {
+                                    weekday: "long",
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    year: "numeric",
+                                  })}
                                 </h6>
                                 <small className="text-muted">
-                                  {event.title ? `Tên: ${event.title}` : event.description}
+                                  {events.length} lịch làm việc
                                 </small>
                               </div>
-                              <Badge bg={event.IsAvailable ? "secondary" : "success"}>
-                                {event.IsAvailable ? "Trống" : "Lịch khám"}
-                              </Badge>
-                            </ListGroup.Item>
-                          ))}
-                        </ListGroup>
-                      </div>
-                    </Collapse>
-                  </Card>
-                ))
+                            </div>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedDate(selectedDate === date ? null : date);
+                              }}
+                              className="d-flex align-items-center justify-content-center rounded-pill"
+                              style={{ width: '36px', height: '36px' }}
+                            >
+                              {selectedDate === date ? (
+                                <i className="bi bi-chevron-up text-white"></i>
+                              ) : (
+                                <i className="bi bi-chevron-down text-white"></i>
+                              )}
+                              Xem
+                            </Button>
+                          </div>
+                        </Card.Header>
+
+                        <Collapse in={selectedDate === date}>
+                          <div>
+                            <ListGroup variant="flush">
+                              {events.map((event, idx) => (
+                                <ListGroup.Item
+                                  key={idx}
+                                  className="d-flex justify-content-between align-items-center py-3 border-bottom"
+                                >
+                                  <div className="d-flex align-items-center">
+                                    <i className="bi bi-clock text-primary me-3"></i>
+                                    <div>
+                                      <h6 className="mb-1 fw-semibold">
+                                        {event.StartTime || event.time} - {event.EndTime}
+                                      </h6>
+                                      <small className="text-muted">
+                                        {event.title || 'Lịch làm việc'}
+                                      </small>
+                                    </div>
+                                  </div>
+                                  <Badge 
+                                    bg={event.IsAvailable ? "outline-secondary" : "success"}
+                                    className="px-3"
+                                  >
+                                    {event.IsAvailable ? "Trống" : "Lịch khám"}
+                                  </Badge>
+                                </ListGroup.Item>
+                              ))}
+                            </ListGroup>
+                          </div>
+                        </Collapse>
+                      </Card>
+                    </div>
+                  ))}
+                </div>
               )}
             </>
           )}
@@ -355,49 +440,58 @@ const ScheduleSection = ({ currentSection, currentDate, prevMonth, nextMonth }) 
       </Card>
 
       {/* Modal chi tiết ngày */}
-      <Modal 
-        show={showModal} 
-        onHide={closeModal} 
-        centered 
-        size="lg"
-        dialogClassName="modal-dialog-centered"
-        contentClassName="modal-content-centered"
-      >
-        <Modal.Header closeButton className="bg-light border-bottom">
+      <Modal show={showModal} onHide={closeModal} centered size="lg">
+        <Modal.Header closeButton className="bg-light">
           <Modal.Title className="w-100 text-center">
-            📅 Chi tiết ngày {selectedDate && new Date(selectedDate).toLocaleDateString("vi-VN")}
+            <i className="bi bi-calendar-date text-primary me-2"></i>
+            Chi tiết ngày {selectedDate && new Date(selectedDate).toLocaleDateString("vi-VN")}
           </Modal.Title>
         </Modal.Header>
-        <Modal.Body className="p-3">
+        <Modal.Body className="p-0">
           {selectedEvents.length > 0 ? (
-            <ListGroup className="w-100">
-              {selectedEvents.map((e, idx) => (
-                <ListGroup.Item key={idx} className="d-flex justify-content-between align-items-start">
-                  <div className="flex-grow-1 pe-2">
-                    <h6 className="mb-1">
-                      🕓 {e.StartTime || e.time} - {e.EndTime || e.title}
-                    </h6>
-                    <small className="text-muted d-block mb-1">
-                      {e.title ? `Tên: ${e.title}` : ""} {e.IsAvailable ? "Trống" : "Lịch khám"}
-                    </small>
+            <ListGroup variant="flush">
+              {selectedEvents.map((event, idx) => (
+                <ListGroup.Item key={idx} className="p-4 border-bottom">
+                  <div className="d-flex justify-content-between align-items-start">
+                    <div className="flex-grow-1">
+                      <div className="d-flex align-items-center mb-3">
+                        <i className="bi bi-clock-fill text-primary me-3 fs-4"></i>
+                        <div>
+                          <h5 className="mb-1 fw-bold">
+                            {event.StartTime || event.tme} - {event.EndTime || event.title}
+                          </h5>
+                          <Badge bg={event.IsAvailable ? "outline-secondary" : "success"} className="fs-6">
+                            {event.IsAvailable ? "Trống" : "Lịch khám"}
+                          </Badge>
+                        </div>
+                      </div>
+                      {event.title && (
+                        <div className="bg-light rounded p-3">
+                          <h6 className="text-muted mb-2">Thông tin:</h6>
+                          <p className="mb-0">{event.time}</p>
+                          <p className="mb-0">{event.title}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <Badge bg={e.IsAvailable ? "secondary" : "success"} className="flex-shrink-0">
-                    {e.IsAvailable ? "Trống" : "Lịch khám"}
-                  </Badge>
                 </ListGroup.Item>
               ))}
             </ListGroup>
           ) : (
-            <p className="text-muted mb-0 text-center">Không có lịch trong ngày này.</p>
+            <div className="text-center py-5">
+              <i className="bi bi-calendar-x text-muted mb-3" style={{ fontSize: '4rem' }}></i>
+              <h5 className="text-muted">Không có lịch</h5>
+              <p className="text-muted">Không có lịch trong ngày này</p>
+            </div>
           )}
         </Modal.Body>
-        <Modal.Footer className="border-top justify-content-center">
+        <Modal.Footer>
           <Button variant="secondary" onClick={closeModal} className="px-4">
             Đóng
           </Button>
         </Modal.Footer>
       </Modal>
-    </div>
+    </Container>
   );
 };
 

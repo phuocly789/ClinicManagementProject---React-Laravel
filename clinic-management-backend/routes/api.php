@@ -21,6 +21,7 @@ use App\Http\Controllers\API\Doctor\PatientsController;
 
 //----------------------------------------------Hết-------------------------------
 use App\Http\Controllers\API\User\UserControllers;
+use App\Http\Controllers\API\Print\InvoicePrintController;
 
 
 
@@ -116,3 +117,8 @@ Route::prefix('users')->group(function () {
 });
 
 Route::get('/roles', [UserControllers::class, 'roles']);
+
+
+// Route::post('/print/export', [InvoicePrintController::class, 'export']); // POST để pass appointment_id + type
+Route::get('/print/{type}/{appointment_id}', [InvoicePrintController::class, 'export']);
+Route::post('/print/prescription/preview', [InvoicePrintController::class, 'previewPrescription']);
