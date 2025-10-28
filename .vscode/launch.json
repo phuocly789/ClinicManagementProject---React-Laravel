@@ -43,6 +43,17 @@
             "localRoot": "${workspaceFolder}/clinic-management-frontend",
             "remoteRoot": "/app",
             "skipFiles": ["<node_internals>/**"]
+        },
+        {
+            "name": "Debug React (Chrome) Host",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://localhost:5173",
+            "webRoot": "${workspaceFolder}/clinic-management-frontend/src",
+            "sourceMaps": true,
+            "sourceMapPathOverrides": {
+                "vite:///*": "${webRoot}/*"
+            }
         }
     ]
 }
