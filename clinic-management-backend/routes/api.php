@@ -134,15 +134,4 @@ Route::prefix('technician')->group(function () {
     // Danh sách dịch vụ
     Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
 
-    // Dịch vụ theo trạng thái
-    Route::get('/servicesv1/status/{status}', [TestResultsController::class, 'getServicesByStatus']);
-
-    // Tìm kiếm
-    Route::get('/servicesv1/search', [TestResultsController::class, 'searchServices']);
-
-    // Thống kê
-    Route::get('/dashboard/stats', [TestResultsController::class, 'getDashboardStats']);
-
-    Route::get('/debus', [TestResultsController::class, 'debugData']);
-
 });
