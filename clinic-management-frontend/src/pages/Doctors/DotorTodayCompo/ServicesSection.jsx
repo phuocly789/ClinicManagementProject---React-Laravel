@@ -366,8 +366,7 @@ const ServicesSection = ({
     });
   }, [setServices]);
 
-  // Handle request service - GỌI API CHỈ ĐỊNH DỊCH VỤ
-  // FUNCTION FIXED: Handle request service - GỌI API CHỈ ĐỊNH DỊCH VỤ
+  // FUNCTION FIXED: Handle request service - GỌI API CHỈ ĐỊNH DỊCH VỊ
   const handleRequestService = useCallback(async () => {
     console.log('🔍 DEBUG selectedTodayPatient:', selectedTodayPatient);
 
@@ -419,10 +418,9 @@ const ServicesSection = ({
         patient: selectedTodayPatient
       });
 
-      // ✅ FIX: ĐỔI TÊN FIELD 'services' THÀNH 'selectedServices'
+      // ✅ FIX: CHỈ GỬI selectedServices (backend đã sửa)
       const requestData = {
-        services: selected.map(id => parseInt(id)), // ✅ THÊM FIELD NÀY
-        selectedServices: selected.map(id => parseInt(id)), // ✅ GIỮ NGUYÊN
+        selectedServices: selected.map(id => parseInt(id)), // ✅ CHỈ GỬI FIELD NÀY
         diagnosis: diagnosis || '',
         symptoms: symptoms || '',
         notes: "Chỉ định từ bác sĩ"
@@ -441,14 +439,50 @@ const ServicesSection = ({
         }
       );
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Backend error response:', errorText);
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      const responseText = await response.text();
+      console.log('📥 Backend raw response:', responseText);
+
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('❌ JSON parse error:', parseError);
+        throw new Error(`Lỗi định dạng từ server: ${responseText.substring(0, 100)}...`);
       }
 
-      const result = await response.json();
-      console.log('✅ Backend response:', result);
+      if (!response.ok) {
+        console.error('❌ Backend error:', result);
+
+        // ✅ HIỂN THỊ THÔNG BÁO TỪ BACKEND DỄ ĐỌC
+        let userMessage = 'Lỗi hệ thống';
+
+        if (result && result.message) {
+          // Lấy message từ backend và làm sạch
+          userMessage = result.message
+            .replace(/Lỗi hệ thống khi chỉ định dịch vụ: /g, '') // Xóa prefix lỗi
+            .replace(/SQLSTATE.*$/g, '') // Xóa thông tin SQL
+            .replace(/\(Connection:.*$/g, '') // Xóa connection info
+            .trim();
+
+          // Nếu message rỗng sau khi làm sạch, dùng message gốc
+          if (!userMessage) {
+            userMessage = result.message;
+          }
+        } else if (response.status === 404) {
+          userMessage = 'Không tìm thấy API. Vui lòng kiểm tra kết nối server.';
+        } else if (response.status === 500) {
+          userMessage = 'Lỗi server. Vui lòng thử lại sau.';
+        }
+
+        setToast({
+          show: true,
+          message: `❌ ${userMessage}`,
+          variant: "danger",
+        });
+        return;
+      }
+
+      console.log('✅ Backend success response:', result);
 
       if (result.success) {
         setToast({
@@ -464,19 +498,32 @@ const ServicesSection = ({
         });
         setRequestedServices(updatedRequestedServices);
 
-        // Reset form sau khi gửi thành công (tuỳ chọn)
-        // setServices({});
-        // setLocalServicesState({});
-
       } else {
-        throw new Error(result.message || 'Lỗi không xác định từ server');
+        // ✅ HIỂN THỊ LỖI TỪ BACKEND (success: false)
+        setToast({
+          show: true,
+          message: `⚠️ ${result.message || 'Lỗi không xác định từ server'}`,
+          variant: "warning",
+        });
       }
 
     } catch (error) {
       console.error('❌ Error:', error);
+
+      // ✅ HIỂN THỊ LỖI MẠNG HOẶC LỖI KHÁC
+      let userMessage = error.message;
+
+      if (error.message.includes('Failed to fetch') || error.message.includes('Network')) {
+        userMessage = 'Lỗi kết nối mạng. Vui lòng kiểm tra kết nối internet.';
+      } else if (error.message.includes('404')) {
+        userMessage = 'Không tìm thấy API. Vui lòng kiểm tra lại đường dẫn.';
+      } else if (error.message.includes('500')) {
+        userMessage = 'Lỗi server. Vui lòng thử lại sau.';
+      }
+
       setToast({
         show: true,
-        message: `❌ Lỗi: ${error.message}`,
+        message: `❌ ${userMessage}`,
         variant: "danger",
       });
     } finally {
