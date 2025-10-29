@@ -105,6 +105,9 @@ Route::prefix('doctor')->group(function () {
         Route::get('{appointmentId}', [DoctorExaminationsController::class, 'show']);
         Route::post('{appointmentId}/temp-save', [DoctorExaminationsController::class, 'tempSave']);
     });
+
+    // Chỉ định dịch vụ
+    Route::post('/appointments/{appointmentId}/assign-services', [ServiceController::class, 'assignServices']);
 });
 
 //Nhóm route cho User
