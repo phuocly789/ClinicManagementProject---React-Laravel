@@ -366,8 +366,11 @@ const ServicesSection = ({
     });
   }, [setServices]);
 
-  // Handle request service
-  const handleRequestService = useCallback(() => {
+  // Handle request service - GỌI API CHỈ ĐỊNH DỊCH VỤ
+  // FUNCTION FIXED: Handle request service - GỌI API CHỈ ĐỊNH DỊCH VỤ
+  const handleRequestService = useCallback(async () => {
+    console.log('🔍 DEBUG selectedTodayPatient:', selectedTodayPatient);
+
     const selected = Object.keys(localServicesState).filter((k) => localServicesState[k]);
 
     if (selected.length === 0) {
@@ -379,16 +382,107 @@ const ServicesSection = ({
       return;
     }
 
-    const updated = { ...requestedServices };
-    selected.forEach((id) => (updated[id] = true));
-    setRequestedServices(updated);
+    if (!selectedTodayPatient) {
+      setToast({
+        show: true,
+        message: "⚠️ Chưa chọn bệnh nhân.",
+        variant: "warning",
+      });
+      return;
+    }
 
-    setToast({
-      show: true,
-      message: `✅ Đã gửi yêu cầu thực hiện ${selected.length} dịch vụ cận lâm sàng.`,
-      variant: "success",
-    });
-  }, [localServicesState, requestedServices, setRequestedServices, setToast]);
+    // TÌM appointment_id TRONG NHIỀU TRƯỜNG CÓ THỂ
+    const appointmentId = selectedTodayPatient.appointment_id ||
+      selectedTodayPatient.AppointmentId ||
+      selectedTodayPatient.appointmentId ||
+      selectedTodayPatient.id ||
+      selectedTodayPatient.AppointmentID;
+
+    console.log('🔍 DEBUG appointmentId found:', appointmentId);
+
+    if (!appointmentId) {
+      console.log('❌ No appointmentId found in:', selectedTodayPatient);
+      setToast({
+        show: true,
+        message: `⚠️ Không tìm thấy ID cuộc hẹn. Vui lòng chọn bệnh nhân từ danh sách hôm nay.`,
+        variant: "warning",
+      });
+      return;
+    }
+
+    try {
+      setServiceLoading(true);
+
+      console.log('🔄 Đang gửi yêu cầu chỉ định dịch vụ...', {
+        appointmentId: appointmentId,
+        selectedServices: selected,
+        patient: selectedTodayPatient
+      });
+
+      // ✅ FIX: ĐỔI TÊN FIELD 'services' THÀNH 'selectedServices'
+      const requestData = {
+        services: selected.map(id => parseInt(id)), // ✅ THÊM FIELD NÀY
+        selectedServices: selected.map(id => parseInt(id)), // ✅ GIỮ NGUYÊN
+        diagnosis: diagnosis || '',
+        symptoms: symptoms || '',
+        notes: "Chỉ định từ bác sĩ"
+      };
+
+      console.log('📤 Request data gửi đi:', requestData);
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/doctor/appointments/${appointmentId}/assign-services`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestData),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Backend error response:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Backend response:', result);
+
+      if (result.success) {
+        setToast({
+          show: true,
+          message: result.message || `✅ Đã chỉ định ${selected.length} dịch vụ thành công!`,
+          variant: "success",
+        });
+
+        // Cập nhật trạng thái đã yêu cầu
+        const updatedRequestedServices = { ...requestedServices };
+        selected.forEach(serviceId => {
+          updatedRequestedServices[serviceId] = true;
+        });
+        setRequestedServices(updatedRequestedServices);
+
+        // Reset form sau khi gửi thành công (tuỳ chọn)
+        // setServices({});
+        // setLocalServicesState({});
+
+      } else {
+        throw new Error(result.message || 'Lỗi không xác định từ server');
+      }
+
+    } catch (error) {
+      console.error('❌ Error:', error);
+      setToast({
+        show: true,
+        message: `❌ Lỗi: ${error.message}`,
+        variant: "danger",
+      });
+    } finally {
+      setServiceLoading(false);
+    }
+  }, [localServicesState, selectedTodayPatient, diagnosis, symptoms, requestedServices, setRequestedServices, setToast, setServices]);
 
   // FIX: Render services - sử dụng localServicesState
   const renderServices = useCallback(() => {
@@ -530,10 +624,17 @@ const ServicesSection = ({
               variant="outline-primary"
               size="sm"
               onClick={handleRequestService}
-              disabled={isFormDisabled || !Object.values(localServicesState).some(v => v)}
+              disabled={isFormDisabled || !Object.values(localServicesState).some(v => v) || serviceLoading}
               className="no-print"
             >
-              🧾 Yêu cầu thực hiện dịch vụ đã chọn ({Object.values(localServicesState).filter(v => v).length})
+              {serviceLoading ? (
+                <>
+                  <Spinner animation="border" size="sm" className="me-2" />
+                  Đang gửi...
+                </>
+              ) : (
+                `🧾 Yêu cầu thực hiện dịch vụ đã chọn (${Object.values(localServicesState).filter(v => v).length})`
+              )}
             </Button>
 
             {/* SỬA NÚT PREVIEW - GIỐNG CODE TOA THUỐC */}
