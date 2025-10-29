@@ -22,6 +22,7 @@ use App\Http\Controllers\API\Doctor\PatientsController;
 //----------------------------------------------Hết-------------------------------
 use App\Http\Controllers\API\User\UserControllers;
 use App\Http\Controllers\API\Print\InvoicePrintController;
+use App\Http\Controllers\API\Technician\TestResultsController;
 
 
 
@@ -126,3 +127,11 @@ Route::get('/print/{type}/{appointment_id}', [InvoicePrintController::class, 'ex
 Route::post('/print/prescription/preview', [InvoicePrintController::class, 'previewPrescription']);
 // Route cho PDF Preview
 Route::post('/print/preview-html', [InvoicePrintController::class, 'previewHTML']);
+
+
+// Technician Routes
+Route::prefix('technician')->group(function () {
+    // Danh sách dịch vụ
+    Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
+
+});
