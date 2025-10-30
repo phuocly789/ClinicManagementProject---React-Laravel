@@ -63,9 +63,8 @@ function App() {
         <Route path={path.REGISTER} element={<Register />} />{" "}
         <Route
           path={path.VERIFICATION_EMAIL}
-          element={<VerifyEmailPage />
+          element={<VerifyEmailPage />}
         />
-        ></Route>
         {/* Trang mặc định */}
         <Route path="/pdf-editor" element={<PDFEditorPage />} />
         <Route path="/technician" element={<TechnicianDashboard />} />
