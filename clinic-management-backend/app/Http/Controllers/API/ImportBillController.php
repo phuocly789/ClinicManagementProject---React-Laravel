@@ -31,9 +31,9 @@ class ImportBillController extends Controller
 
         // 1. TÌM KIẾM (search)
         if ($search = $request->get('search')) {
-            $query->whereHas('supplier', function ($sq) use ($search) {
-                $sq->where('SupplierName', 'like', "%{$search}%");
-            });
+            $search = trim($search);
+            $like = "%" . mb_strtolower($search) . "%";
+            $query->whereRaw("search_text ILIKE ?", [$like]);
         }
 
         // 2. LỌC THEO NGÀY (date range)

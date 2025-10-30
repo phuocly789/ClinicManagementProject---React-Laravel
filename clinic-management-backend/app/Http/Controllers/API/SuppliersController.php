@@ -29,27 +29,26 @@ class SuppliersController extends Controller
     public function index(Request $request)
     {
         $perPage = $request->query('per_page', 10);
-
         $query = Supplier::query();
 
-        // 1. TÌM KIẾM THEO TÊN
+        // 1. TÌM KIẾM CHUNG (search_text)
         if ($search = $request->get('search')) {
-            $query->where('SupplierName', 'like', "%{$search}%");
+            $search = trim($search);
+            $like = "%" . mb_strtolower($search) . "%";
+            $query->whereRaw("search_text ILIKE ?", [$like]);
         }
 
-        // 2. LỌC THEO EMAIL
+        // 2. LỌC EMAIL
         if ($email = $request->get('email')) {
             $query->where('ContactEmail', 'like', "%{$email}%");
         }
 
-        // 3. LỌC THEO SỐ ĐIỆN THOẠI
+        // 3. LỌC SỐ ĐIỆN THOẠI
         if ($phone = $request->get('phone')) {
             $query->where('ContactPhone', 'like', "%{$phone}%");
         }
 
-        // SẮP XẾP
         $query->orderBy('SupplierId', 'asc');
-
         $suppliers = $query->paginate($perPage);
 
         return response()->json([
@@ -59,7 +58,7 @@ class SuppliersController extends Controller
             'last_page' => $suppliers->lastPage(),
             'per_page' => $suppliers->perPage(),
             'total' => $suppliers->total(),
-            'filters' => $request->only(['search', 'email', 'phone']) // Trả về để frontend giữ filter
+            'filters' => $request->only(['search', 'email', 'phone'])
         ], 200);
     }
 
