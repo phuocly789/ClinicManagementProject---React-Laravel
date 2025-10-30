@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
-import { Table, Button, Spinner, Form, Row, Col } from 'react-bootstrap';
+import { Table, Button, Spinner, Form, Row, Col, InputGroup } from 'react-bootstrap';
 import Pagination from '../../Components/Pagination/Pagination';
 import ConfirmDeleteModal from '../../Components/CustomToast/DeleteConfirmModal';
 import CustomToast from '../../Components/CustomToast/CustomToast';
 import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
-import { PencilIcon, Trash } from 'lucide-react';
+import { Eye, PencilIcon, Trash, Search, Filter, Calendar, DollarSign, X } from 'lucide-react';
 
 // ErrorBoundary
 class ErrorBoundary extends React.Component {
@@ -45,89 +45,298 @@ const loadHtml2Pdf = () => {
 const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
 const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class|import|export|\$\w+)/i;
 
-const InventoryList = memo(({ inventories, isLoading, formatVND, handleShowDeleteModal, handleShowDetail, handleShowAddInventory, handleShowEditForm, pageCount, currentPage, handlePageChange, suppliers }) => {
-  return (
-    <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h3 style={{ fontSize: '1.5rem', fontWeight: '600' }}>Danh Sách Phiếu Nhập Kho</h3>
-        <Button variant="primary" onClick={handleShowAddInventory} style={{ padding: '8px 16px' }}>
-          + Thêm Phiếu Nhập
-        </Button>
-      </div>
-      <div className="table-responsive" style={{ transition: 'opacity 0.3s ease' }}>
-        <Table striped bordered hover responsive className={isLoading ? 'opacity-50' : ''}>
-          <thead>
-            <tr>
-              <th>Mã Phiếu</th>
-              <th>Nhà Cung Cấp</th>
-              <th>Ngày Nhập</th>
-              <th>Tổng Tiền</th>
-              <th>Ghi Chú</th>
-              <th>Hành Động</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
+const InventoryList = memo(
+  ({
+    inventories,
+    isLoading,
+    formatVND,
+    handleShowDeleteModal,
+    handleShowDetail,
+    handleShowAddInventory,
+    handleShowEditForm,
+    pageCount,
+    currentPage,
+    handlePageChange,
+    suppliers,
+    fetchInventories, // Thêm prop để gọi lại API với filter
+  }) => {
+
+    // --- FILTER STATES ---
+    const [search, setSearch] = useState('');
+    const [supplierFilter, setSupplierFilter] = useState('');
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
+    const [minAmount, setMinAmount] = useState('');
+    const [maxAmount, setMaxAmount] = useState('');
+
+    // --- ÁP DỤNG LỌC ---
+    const applyFilters = useCallback(() => {
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (supplierFilter) params.append('supplier_id', supplierFilter);
+      if (dateFrom) params.append('date_from', dateFrom);
+      if (dateTo) params.append('date_to', dateTo);
+      if (minAmount) params.append('min_amount', minAmount);
+      if (maxAmount) params.append('max_amount', maxAmount);
+
+      fetchInventories(1, params.toString());
+    }, [
+      search,
+      supplierFilter,
+      dateFrom,
+      dateTo,
+      minAmount,
+      maxAmount,
+      fetchInventories,
+    ]);
+
+    // --- XÓA LỌC ---
+    const clearFilters = useCallback(() => {
+      setSearch('');
+      setSupplierFilter('');
+      setDateFrom('');
+      setDateTo('');
+      setMinAmount('');
+      setMaxAmount('');
+      fetchInventories(1);
+    }, [fetchInventories]);
+
+    const handleRowClick = useCallback((inventoryId, e) => {
+      // Ngăn click vào các nút hành động lan ra
+      if (e.target.closest('button')) return;
+      handleShowDetail(inventoryId);
+    }, [handleShowDetail]);
+
+    const debounceSearchRef = useRef(null);
+    return (
+      <div>
+        {/* ==================== HEADER + ADD BUTTON ==================== */}
+        <div className="d-flex justify-content-between align-items-center mb-4">
+          <h3 style={{ fontSize: '1.5rem', fontWeight: '600' }}>
+            Danh Sách Phiếu Nhập Kho
+          </h3>
+          <Button variant="primary" onClick={handleShowAddInventory}>
+            + Thêm Phiếu Nhập
+          </Button>
+        </div>
+
+        {/* ==================== FILTER BAR ==================== */}
+        <div className="mb-4 p-3 bg-light rounded border">
+          <Row className="g-3 align-items-end">
+            {/* TÌM KIẾM */}
+            <Col md={4}>
+              <InputGroup>
+                <InputGroup.Text>
+                  <Search size={16} />
+                </InputGroup.Text>
+                <Form.Control
+                  placeholder="Tìm mã phiếu, nhà cung cấp, ghi chú..."
+                  value={search}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSearch(value);
+
+                    // DEBOUNCE CHỈ CHO TÌM KIẾM
+                    if (debounceSearchRef.current) clearTimeout(debounceSearchRef.current);
+                    debounceSearchRef.current = setTimeout(() => {
+                      applyFilters(); // Gọi lọc sau 500ms
+                    }, 500);
+                  }}
+                  onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                />
+              </InputGroup>
+            </Col>
+
+            {/* NHÀ CUNG CẤP */}
+            <Col md={3}>
+              <Form.Select
+                value={supplierFilter}
+                onChange={(e) => setSupplierFilter(e.target.value)}
+              >
+                <option value="">Tất cả nhà cung cấp</option>
+                {suppliers.map((s) => (
+                  <option key={s.SupplierId} value={s.SupplierId}>
+                    {s.SupplierName}
+                  </option>
+                ))}
+              </Form.Select>
+            </Col>
+
+            {/* NGÀY TỪ */}
+            <Col md={2}>
+              <InputGroup>
+                <InputGroup.Text>
+                  <Calendar size={16} />
+                </InputGroup.Text>
+                <Form.Control
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                />
+              </InputGroup>
+            </Col>
+
+            {/* NGÀY ĐẾN */}
+            <Col md={2}>
+              <InputGroup>
+                <InputGroup.Text>
+                  <Calendar size={16} />
+                </InputGroup.Text>
+                <Form.Control
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                />
+              </InputGroup>
+            </Col>
+
+            {/* NÚT LỌC */}
+            <Col md={1}>
+              <Button variant="primary" onClick={applyFilters} className="w-100">
+                <Filter size={16} />
+              </Button>
+            </Col>
+          </Row>
+
+          {/* LỌC TIỀN (dòng 2) */}
+          <Row className="g-3 mt-2">
+            <Col md={3}>
+              <InputGroup size="sm">
+                <InputGroup.Text>
+                  <DollarSign size={14} />
+                </InputGroup.Text>
+                <Form.Control
+                  type="number"
+                  placeholder="Tổng tiền từ"
+                  value={minAmount}
+                  onChange={(e) => setMinAmount(e.target.value)}
+                />
+              </InputGroup>
+            </Col>
+            <Col md={3}>
+              <InputGroup size="sm">
+                <InputGroup.Text>
+                  <DollarSign size={14} />
+                </InputGroup.Text>
+                <Form.Control
+                  type="number"
+                  placeholder="Tổng tiền đến"
+                  value={maxAmount}
+                  onChange={(e) => setMaxAmount(e.target.value)}
+                />
+              </InputGroup>
+            </Col>
+            <Col md={6} className="d-flex justify-content-end">
+              <Button variant="outline-secondary" size="sm" onClick={clearFilters}>
+                <X size={16} /> Xóa bộ lọc
+              </Button>
+            </Col>
+          </Row>
+        </div>
+
+        {/* ==================== TABLE ==================== */}
+        <div className="table-responsive">
+          <Table striped bordered hover responsive className={isLoading ? 'opacity-50' : ''}>
+            <thead className="table-light">
               <tr>
-                <td colSpan="6" className="text-center py-4">
-                  <Spinner animation="border" variant="primary" />
-                </td>
+                <th>Mã Phiếu</th>
+                <th>Nhà Cung Cấp</th>
+                <th>Ngày Nhập</th>
+                <th>Tổng Tiền</th>
+                <th>Ghi Chú</th>
+                <th>Hành Động</th>
               </tr>
-            ) : inventories.length === 0 ? (
-              <tr>
-                <td colSpan="6" className="text-center py-4">
-                  Không có dữ liệu
-                </td>
-              </tr>
-            ) : (
-              inventories.map((inventory) => (
-                <tr key={inventory.id}>
-                  <td>
-                    <span
-                      style={{ cursor: 'pointer', color: '#00448D', textDecoration: 'underline' }}
-                      onClick={() => handleShowDetail(inventory.id)}
-                    >
-                      {inventory.id}
-                    </span>
-                  </td>
-                  <td>{suppliers.find(s => s.SupplierId === inventory.supplierId)?.SupplierName || 'N/A'}</td>
-                  <td>{new Date(inventory.date).toLocaleDateString('vi-VN')}</td>
-                  <td>{formatVND(inventory.total)}</td>
-                  <td>{inventory.note || 'Không có'}</td>
-                  <td>
-                    <Button
-                      variant="link"
-                      className="text-success p-0 me-2"
-                      onClick={() => handleShowEditForm(inventory)}
-                    >
-                      <PencilIcon />
-                    </Button>
-                    <span>|</span>
-                    <Button
-                      variant="link"
-                      className="text-danger p-0 ms-2"
-                      onClick={() => handleShowDeleteModal(inventory.id)}
-                    >
-                      <Trash />
-                    </Button>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr>
+                  <td colSpan="6" className="text-center py-4">
+                    <Spinner animation="border" variant="primary" />
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </Table>
+              ) : inventories.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="text-center py-4 text-muted">
+                    Không có dữ liệu
+                  </td>
+                </tr>
+              ) : (
+                inventories.map((inventory) => (
+                  <tr
+                    key={inventory.id}
+                    onClick={(e) => handleRowClick(inventory.id, e)}
+                    style={{ cursor: 'pointer' }}
+                    className="table-row-hover"
+                  >
+                    <td>
+                      <strong>{inventory.id}</strong>
+                    </td>
+                    <td>
+                      {suppliers.find((s) => s.SupplierId === inventory.supplierId)?.SupplierName ||
+                        'N/A'}
+                    </td>
+                    <td>{new Date(inventory.date).toLocaleDateString('vi-VN')}</td>
+                    <td>{formatVND(inventory.total)}</td>
+                    <td>
+                      {inventory.note ? (
+                        <span title={inventory.note}>
+                          {inventory.note.length > 30
+                            ? inventory.note.substring(0, 30) + '...'
+                            : inventory.note}
+                        </span>
+                      ) : (
+                        'Không có'
+                      )}
+                    </td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="text-info p-0 me-2"
+                        onClick={() => handleShowDetail(inventory.id)}
+                        title="Xem chi tiết"
+                      >
+                        <Eye size={18} />
+                      </Button>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="text-success p-0 me-2"
+                        onClick={() => handleShowEditForm(inventory)}
+                        title="Sửa"
+                      >
+                        <PencilIcon size={18} />
+                      </Button>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="text-danger p-0"
+                        onClick={() => handleShowDeleteModal(inventory.id)}
+                        title="Xóa"
+                      >
+                        <Trash size={18} />
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </Table>
+        </div>
+
+        {/* ==================== PAGINATION ==================== */}
+        {pageCount > 1 && (
+          <Pagination
+            pageCount={pageCount}
+            onPageChange={handlePageChange}
+            currentPage={currentPage}
+            isLoading={isLoading}
+          />
+        )}
       </div>
-      {pageCount > 1 && (
-        <Pagination
-          pageCount={pageCount}
-          onPageChange={handlePageChange}
-          currentPage={currentPage}
-          isLoading={isLoading}
-        />
-      )}
-    </div>
-  );
-});
+    );
+  }
+);
 
 const InventoryForm = memo(({ isEditMode, inventory, onSubmit, onCancel, isLoading, suppliers, medicines, formLoading }) => {
   const [items, setItems] = useState(() => {
@@ -539,6 +748,7 @@ const AdminInventory = () => {
   const [formLoading, setFormLoading] = useState(false);
   const cache = useRef(new Map());
   const debounceRef = useRef(null);
+  const [filterParams, setFilterParams] = useState('');
 
   const showToast = useCallback((type, message) => {
     setToast({ show: true, type, message });
@@ -586,43 +796,42 @@ const AdminInventory = () => {
     }
   }, [medicines.length, showToast]);
 
-  const fetchInventories = useCallback(async (page = 1) => {
-    if (cache.current.has(page)) {
-      const { data, last_page } = cache.current.get(page);
+  const fetchInventories = useCallback(async (page = 1, queryString = '') => {
+    setFilterParams(queryString);
+    const cacheKey = `${page}_${queryString}`;
+    if (cache.current.has(cacheKey)) {
+      const { data, last_page } = cache.current.get(cacheKey);
       setInventories(data);
       setPageCount(last_page);
       setCurrentPage(page - 1);
       return;
     }
 
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch(`${API_BASE_URL}/api/import-bills?page=${page}`, {
-          headers: { 'Accept': 'application/json' },
-          credentials: 'include',
-        });
-        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-        const paginator = await response.json();
-        const mappedData = paginator.data.map(item => ({
-          id: item.ImportId,
-          supplierId: item.SupplierId,
-          date: item.ImportDate,
-          total: item.TotalAmount,
-          note: item.Notes || '',
-        }));
-        cache.current.set(page, { data: mappedData, last_page: paginator.last_page });
-        setInventories(mappedData);
-        setPageCount(paginator.last_page);
-        setCurrentPage(page - 1);
-      } catch (error) {
-        console.error('Error fetching inventories:', error);
-        showToast('error', `Lỗi khi tải danh sách phiếu nhập kho: ${error.message}`);
-      } finally {
-        setIsLoading(false);
-      }
-    }, 300);
+    try {
+      setIsLoading(true);
+      const response = await fetch(`${API_BASE_URL}/api/import-bills?page=${page}${queryString ? '&' + queryString : ''}`, {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+      const paginator = await response.json();
+      const mappedData = paginator.data.map(item => ({
+        id: item.ImportId,
+        supplierId: item.SupplierId,
+        date: item.ImportDate,
+        total: item.TotalAmount,
+        note: item.Notes || '',
+      }));
+      cache.current.set(cacheKey, { data: mappedData, last_page: paginator.last_page });
+      setInventories(mappedData);
+      setPageCount(paginator.last_page);
+      setCurrentPage(page - 1);
+    } catch (error) {
+      console.error('Error fetching inventories:', error);
+      showToast('error', `Lỗi khi tải danh sách phiếu nhập kho: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
   }, [showToast]);
 
   const fetchInventoryDetails = useCallback(async (importId) => {
@@ -929,7 +1138,10 @@ const AdminInventory = () => {
 
   const handlePageChange = useCallback(({ selected }) => {
     const nextPage = selected + 1;
-    fetchInventories(nextPage);
+    // Lấy queryString hiện tại từ state hoặc URL
+    const currentParams = new URLSearchParams();
+    // (Bạn có thể lưu params vào state nếu muốn giữ khi đổi trang)
+    fetchInventories(nextPage, filterParams);
   }, [fetchInventories]);
 
   const formatVND = useCallback((value) => {
@@ -954,6 +1166,7 @@ const AdminInventory = () => {
             currentPage={currentPage}
             handlePageChange={handlePageChange}
             suppliers={suppliers}
+            fetchInventories={fetchInventories}
           />
         )}
         {currentView === 'add' && (

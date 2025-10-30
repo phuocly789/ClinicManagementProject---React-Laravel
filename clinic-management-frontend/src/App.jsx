@@ -18,6 +18,8 @@ import AdminSuppliers from "./pages/Admin/AdminSuppliers";
 import VerifyEmailPage from "./pages/auth/VerifyEmail/EmailVerification.jsx";
 import PatientProfile from "./pages/Patient/PatientProfile.jsx";
 import PatientLayout from "./Components/Patient/PatientLayout.jsx";
+import PDFEditorPage from './pages/Doctors/PrintsPDF/PDFPreviewEditor.jsx';
+import TechnicianDashboard from "./pages/Technician/TechnicianDashboard.jsx";
 function App() {
   return (
     <BrowserRouter>
@@ -50,6 +52,9 @@ function App() {
         ></Route>
         {/* Trang mặc định */}
         <Route path="/doctor" element={<DoctorDashboard />} />
+        <Route path="/pdf-editor" element={<PDFEditorPage />} />
+        <Route path="/technician" element={<TechnicianDashboard />} />
+
       </Routes>
     </BrowserRouter>
   );
