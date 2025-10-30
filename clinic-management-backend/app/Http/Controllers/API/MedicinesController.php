@@ -12,6 +12,8 @@ use App\Imports\MedicinesImport;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\HeadingRowImport;
 use Maatwebsite\Excel\Imports\HeadingRowFormatter;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class MedicinesController extends Controller
 {
@@ -33,10 +35,53 @@ class MedicinesController extends Controller
 
     public function index(Request $request)
     {
-        $perPage = $request->get('per_page', 10); // Mặc định 10 items/page, có thể override qua query param
-        $medicines = Medicine::orderBy('MedicineId', 'asc')->paginate($perPage);
+        $perPage = $request->get('per_page', 10);
+        $query = Medicine::query();
 
-        return response()->json($medicines); // Trả về paginator: { data: [...], current_page: 1, last_page: X, ... }
+        // 1. TÌM KIẾM KHÔNG DẤU + KHÔNG PHÂN BIỆT HOA THƯỜNG
+        if ($search = $request->get('search')) {
+            $search = trim($search);
+            $like = "%" . mb_strtolower($search) . "%";
+        
+            $query->whereRaw("search_text ILIKE ?", [$like]);
+        }
+
+        // 2. LỌC LOẠI THUỐC
+        if ($type = $request->get('type')) {
+            $query->where('MedicineType', $type);
+        }
+
+        // 3. LỌC ĐƠN VỊ
+        if ($unit = $request->get('unit')) {
+            $query->where('Unit', $unit);
+        }
+
+        // 4. KHOẢNG GIÁ
+        if ($minPrice = $request->get('min_price')) {
+            $query->where('Price', '>=', $minPrice);
+        }
+        if ($maxPrice = $request->get('max_price')) {
+            $query->where('Price', '<=', $maxPrice);
+        }
+
+        // 5. TỒN KHO THẤP
+        if ($request->get('low_stock') === '1') {
+            $threshold = $request->get('threshold', 100);
+            $query->where('StockQuantity', '<', $threshold);
+        }
+
+        $query->orderBy('MedicineId', 'asc');
+        $medicines = $query->paginate($perPage);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $medicines->items(),
+            'current_page' => $medicines->currentPage(),
+            'last_page' => $medicines->lastPage(),
+            'per_page' => $medicines->perPage(),
+            'total' => $medicines->total(),
+            'filters' => $request->only(['search', 'type', 'unit', 'min_price', 'max_price', 'low_stock', 'threshold'])
+        ]);
     }
 
     public function ping()
@@ -258,7 +303,8 @@ class MedicinesController extends Controller
             $totalRows = count($data) - 1; // Trừ header row
 
             // Tạo import instance cho dry-run - SỬA: Truyền $mapping trực tiếp vào new class($mapping)
-            $import = new class($mapping) extends MedicinesImport {
+            $import = new class($mapping) extends MedicinesImport
+            {
                 public $processedRows = 0;
                 public $mapping;
 
@@ -344,7 +390,7 @@ class MedicinesController extends Controller
                 'errors' => $formattedErrors
             ], 422);
         } catch (\Exception $e) {
-            \Log::error('Dry-run import error: ' . $e->getMessage(), [
+            Log::error('Dry-run import error: ' . $e->getMessage(), [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString()

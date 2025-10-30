@@ -58,7 +58,7 @@ const InventoryList = memo(
     currentPage,
     handlePageChange,
     suppliers,
-    fetchInventories, // Thêm prop để gọi lại API với filter
+    fetchInventories,
   }) => {
 
     // --- FILTER STATES ---
@@ -90,6 +90,14 @@ const InventoryList = memo(
       fetchInventories,
     ]);
 
+    // Tự apply khi filter thay đổi (debounce 500ms, trừ search đã có riêng)
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        applyFilters();
+      }, 500);
+      return () => clearTimeout(timer);
+    }, [supplierFilter, dateFrom, dateTo, minAmount, maxAmount, applyFilters]);
+
     // --- XÓA LỌC ---
     const clearFilters = useCallback(() => {
       setSearch('');
@@ -102,7 +110,6 @@ const InventoryList = memo(
     }, [fetchInventories]);
 
     const handleRowClick = useCallback((inventoryId, e) => {
-      // Ngăn click vào các nút hành động lan ra
       if (e.target.closest('button')) return;
       handleShowDetail(inventoryId);
     }, [handleShowDetail]);
@@ -123,23 +130,21 @@ const InventoryList = memo(
         {/* ==================== FILTER BAR ==================== */}
         <div className="mb-4 p-3 bg-light rounded border">
           <Row className="g-3 align-items-end">
-            {/* TÌM KIẾM */}
+            {/* TÌM KIẾM (chỉ cho tên supplier) */}
             <Col md={4}>
               <InputGroup>
                 <InputGroup.Text>
                   <Search size={16} />
                 </InputGroup.Text>
                 <Form.Control
-                  placeholder="Tìm mã phiếu, nhà cung cấp, ghi chú..."
+                  placeholder="Tìm tên nhà cung cấp..."
                   value={search}
                   onChange={(e) => {
                     const value = e.target.value;
                     setSearch(value);
-
-                    // DEBOUNCE CHỈ CHO TÌM KIẾM
                     if (debounceSearchRef.current) clearTimeout(debounceSearchRef.current);
                     debounceSearchRef.current = setTimeout(() => {
-                      applyFilters(); // Gọi lọc sau 500ms
+                      applyFilters();
                     }, 500);
                   }}
                   onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
@@ -1138,11 +1143,9 @@ const AdminInventory = () => {
 
   const handlePageChange = useCallback(({ selected }) => {
     const nextPage = selected + 1;
-    // Lấy queryString hiện tại từ state hoặc URL
-    const currentParams = new URLSearchParams();
-    // (Bạn có thể lưu params vào state nếu muốn giữ khi đổi trang)
+    console.log('Changing to page:', nextPage, 'with filters:', filterParams); // Debug để check filter có giữ không
     fetchInventories(nextPage, filterParams);
-  }, [fetchInventories]);
+  }, [fetchInventories, filterParams]); // Thêm filterParams vào dependency để update khi thay đổi
 
   const formatVND = useCallback((value) => {
     return Number(value).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });

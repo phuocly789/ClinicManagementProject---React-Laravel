@@ -28,12 +28,29 @@ class SuppliersController extends Controller
      */
     public function index(Request $request)
     {
-        // Số lượng bản ghi trên mỗi trang, mặc định là 10
         $perPage = $request->query('per_page', 10);
 
-        // Lấy danh sách nhà cung cấp với phân trang
-        $suppliers = Supplier::orderBy('SupplierId', 'asc')
-            ->paginate($perPage);
+        $query = Supplier::query();
+
+        // 1. TÌM KIẾM THEO TÊN
+        if ($search = $request->get('search')) {
+            $query->where('SupplierName', 'like', "%{$search}%");
+        }
+
+        // 2. LỌC THEO EMAIL
+        if ($email = $request->get('email')) {
+            $query->where('ContactEmail', 'like', "%{$email}%");
+        }
+
+        // 3. LỌC THEO SỐ ĐIỆN THOẠI
+        if ($phone = $request->get('phone')) {
+            $query->where('ContactPhone', 'like', "%{$phone}%");
+        }
+
+        // SẮP XẾP
+        $query->orderBy('SupplierId', 'asc');
+
+        $suppliers = $query->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
@@ -42,6 +59,7 @@ class SuppliersController extends Controller
             'last_page' => $suppliers->lastPage(),
             'per_page' => $suppliers->perPage(),
             'total' => $suppliers->total(),
+            'filters' => $request->only(['search', 'email', 'phone']) // Trả về để frontend giữ filter
         ], 200);
     }
 
