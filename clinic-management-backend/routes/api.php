@@ -109,6 +109,7 @@ Route::prefix('doctor')->group(function () {
 
     // Chỉ định dịch vụ
     Route::post('/appointments/{appointmentId}/assign-services', [ServiceController::class, 'assignServices']);
+    Route::get('/doctor/check-roles', [ServiceController::class, 'checkRolesAndTechnicians']);
 });
 
 //Nhóm route cho User
