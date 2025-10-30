@@ -548,7 +548,7 @@ const AdminSuppliers = () => {
 
   return (
     <div className="d-flex">
-      <AdminSidebar />
+      
       <div className="position-relative w-100 flex-grow-1 ms-5 p-4">
         <h1 className="mb-4" style={{ fontSize: '1.8rem', fontWeight: '600' }}>Quản Lý Nhà Cung Cấp</h1>
 

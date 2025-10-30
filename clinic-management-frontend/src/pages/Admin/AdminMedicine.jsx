@@ -1122,8 +1122,7 @@ const AdminMedicine = () => {
   const { getRootProps, getInputProps } = useDropzone({ onDrop, noClick: !showImportModal }); // Chỉ active drop khi modal open
 
   return (
-    <div className="d-flex">
-      <AdminSidebar />
+    <div className="d-flex"> 
       <div className="position-relative w-100 flex-grow-1 ms-5 p-4">
         <h1 className="mb-4">Quản Lý Thuốc</h1>
         {currentView === 'list' && (
