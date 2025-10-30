@@ -106,70 +106,91 @@ const AdminDashboard = () => {
     };
 
     return (
-        <div className="d-flex w-100">
-            <AdminSidebar />
+        <main className="main-content flex-grow-1 p-4 d-flex flex-column gap-4">
             {/* Thẻ main-content đã có height: 100vh và d-flex flex-column từ CSS */}
-            <main className="main-content flex-grow-1 p-4 d-flex flex-column gap-4">
-                {toast && <CustomToast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
 
-                {/* Header không co giãn */}
-                <header className="d-flex justify-content-between align-items-center flex-shrink-0">
-                    <h1 className="h4 mb-0 fw-bold">Dashboard Tổng Quan</h1>
-                    <div className="d-flex align-items-center gap-2">
-                        <label className="form-label mb-0  text-muted">Từ:</label>
-                        <input type="date" className="form-control " style={{ width: 'auto' }} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                        <label className="form-label mb-0  text-muted">Đến:</label>
-                        <input type="date" className="form-control " style={{ width: 'auto' }} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-                        <button className="btn btn-primary" disabled={loading} onClick={handleFilter}>Áp dụng</button>
+            {toast && (
+                <CustomToast
+                    type={toast.type}
+                    message={toast.message}
+                    onClose={() => setToast(null)}
+                />
+            )}
+
+            {/* Header */}
+            <header className="d-flex justify-content-between align-items-center flex-shrink-0">
+                <h1 className="h4 mb-0 fw-bold">Dashboard Tổng Quan</h1>
+                <div className="d-flex align-items-center gap-2">
+                    <label className="form-label mb-0 text-muted">Từ:</label>
+                    <input type="date" className="form-control" style={{ width: 'auto' }} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+
+                    <label className="form-label mb-0 text-muted">Đến:</label>
+                    <input type="date" className="form-control" style={{ width: 'auto' }} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+
+                    <button className="btn btn-primary" disabled={loading} onClick={handleFilter}>
+                        Áp dụng
+                    </button>
+                </div>
+            </header>
+
+            {loading ? (
+                <div className="flex-grow-1 d-flex align-items-center justify-content-center">
+                    <Loading isLoading={loading} />
+                </div>
+            ) : (
+                <>
+                    {/* Stat cards */}
+                    <div className="stat-cards-grid flex-shrink-0">
+                        <StatCard icon={<BiSolidDollarCircle />} label="Tổng Doanh Thu" value={totalRevenue?.totalRevenue ? `${totalRevenue.totalRevenue.toLocaleString('vi-VN')} đ` : '0 đ'} color="blue" />
+                        <StatCard icon={<BiSolidCalendar />} label="Lịch Hẹn Hôm Nay" value={stats?.totalAppointmentsToday || 0} color="sky" />
+                        <StatCard icon={<BiSolidUserCheck />} label="Lịch Hẹn Đã Khám" value={stats?.completedAppointmentsToday || 0} color="green" />
+                        <StatCard icon={<BiSolidTimeFive />} label="Hóa Đơn Chờ" value={stats?.pendingInvoicesCount || 0} color="orange" />
                     </div>
-                </header>
 
-                {loading ? <div className="flex-grow-1 d-flex align-items-center justify-content-center"><Loading isLoading={loading} /></div> : (
-                    <>
-                        {/* Stat cards không co giãn */}
-                        <div className="stat-cards-grid flex-shrink-0">
-                            <StatCard icon={<BiSolidDollarCircle />} label="Tổng Doanh Thu" value={totalRevenue?.totalRevenue ? `${totalRevenue.totalRevenue.toLocaleString('vi-VN')} đ` : '0 đ'} color="blue" />
-                            <StatCard icon={<BiSolidCalendar />} label="Lịch Hẹn Hôm Nay" value={stats?.totalAppointmentsToday || 0} color="sky" />
-                            <StatCard icon={<BiSolidUserCheck />} label="Lịch Hẹn Đã Khám" value={stats?.completedAppointmentsToday || 0} color="green" />
-                            <StatCard icon={<BiSolidTimeFive />} label="Hóa Đơn Chờ" value={stats?.pendingInvoicesCount || 0} color="orange" />
-                        </div>
-
-                        {/* ===== KHỐI NÀY ĐÃ ĐƯỢC SỬA LẠI ĐỂ FIT MÀN HÌNH ===== */}
-                        {/* dashboard-grid đã có flex-grow: 1 và min-height: 0 từ app.css */}
-                        <div className="dashboard-grid">
-                            <div className="card shadow-sm border-0 d-flex flex-column">
-                                <div className="card-header bg-transparent border-0"><h3 className="h6 mb-0">Biểu Đồ Doanh Thu</h3></div>
-                                <div className="card-body flex-grow-1 p-3">
-                                    <canvas id="revenueChart"></canvas>
-                                </div>
+                    {/* Dashboard */}
+                    <div className="dashboard-grid">
+                        <div className="card shadow-sm border-0 d-flex flex-column">
+                            <div className="card-header bg-transparent border-0">
+                                <h3 className="h6 mb-0">Biểu Đồ Doanh Thu</h3>
                             </div>
-                            {/* table-panel giúp cho bảng bên trong co giãn đúng */}
-                            <div className="card shadow-sm border-0 table-panel">
-                                <div className="card-header bg-transparent border-0"><h3 className="h6 mb-0">Cảnh Báo Tồn Kho (Dưới 200)</h3></div>
-                                <div className="table-responsive-container">
-                                    <table className="table table-hover table-striped clinic-table mb-0">
-                                        <thead><tr><th className="px-3">Tên Thuốc</th><th className="text-end px-3">Hiện có</th></tr></thead>
-                                        <tbody>
-                                            {lowStockMedicines.length === 0 ? (
-                                                <tr><td colSpan="2" className="text-center p-4 text-muted">Tồn kho an toàn</td></tr>
-                                            ) : (
-                                                lowStockMedicines.map((med) => (
-                                                    <tr key={med.MedicineId}>
-                                                        <td className="px-3">{med.MedicineName}</td>
-                                                        <td className="text-end px-3 fw-bold text-danger">{med.StockQuantity} {med.Unit}</td>
-                                                    </tr>
-                                                ))
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
+                            <div className="card-body flex-grow-1 p-3">
+                                <canvas id="revenueChart"></canvas>
                             </div>
                         </div>
-                    </>
-                )}
-            </main>
-        </div>
+
+                        <div className="card shadow-sm border-0 table-panel">
+                            <div className="card-header bg-transparent border-0">
+                                <h3 className="h6 mb-0">Cảnh Báo Tồn Kho (Dưới 200)</h3>
+                            </div>
+                            <div className="table-responsive-container">
+                                <table className="table table-hover table-striped clinic-table mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th className="px-3">Tên Thuốc</th>
+                                            <th className="text-end px-3">Hiện có</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {lowStockMedicines.length === 0 ? (
+                                            <tr><td colSpan="2" className="text-center p-4 text-muted">Tồn kho an toàn</td></tr>
+                                        ) : (
+                                            lowStockMedicines.map((med) => (
+                                                <tr key={med.MedicineId}>
+                                                    <td className="px-3">{med.MedicineName}</td>
+                                                    <td className="text-end px-3 fw-bold text-danger">{med.StockQuantity} {med.Unit}</td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
+        </main>
     );
+
 };
 
 export default AdminDashboard;

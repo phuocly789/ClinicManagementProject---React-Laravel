@@ -371,6 +371,11 @@ ul{
   color: var(--danger-color);
 }
 
+
+.table-row-hover:hover {
+  background-color: #f8f9fa !important;
+  transition: background-color 0.2s ease;
+}
 .event-technician .event-icon {
   color: var(--grey-color);
 }
