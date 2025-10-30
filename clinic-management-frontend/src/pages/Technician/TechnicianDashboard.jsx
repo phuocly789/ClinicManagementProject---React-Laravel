@@ -25,24 +25,24 @@ const TechnicianDashboard = () => {
       setLoading(true);
       setError('');
 
-      console.log('🔄 Đang gọi API getAssignedServices...');
+      console.log('🔄 [TechnicianDashboard] Đang gọi API getAssignedServices...');
       const servicesResponse = await technicianService.getAssignedServices(1);
 
-      console.log('📦 API Response:', servicesResponse);
-      console.log('📊 Response data:', servicesResponse.data);
+      console.log('📦 [TechnicianDashboard] API Response:', servicesResponse);
+      console.log('📊 [TechnicianDashboard] Response data:', servicesResponse.data);
 
       if (servicesResponse && servicesResponse.success && Array.isArray(servicesResponse.data)) {
-        console.log('✅ Data nhận được:', servicesResponse.data);
-        console.log('📋 Số lượng items:', servicesResponse.data.length);
+        console.log('✅ [TechnicianDashboard] Data nhận được:', servicesResponse.data);
+        console.log('📋 [TechnicianDashboard] Số lượng items:', servicesResponse.data.length);
 
         setTestResultsData(servicesResponse.data);
       } else {
-        console.log('❌ Cấu trúc response không đúng');
+        console.log('❌ [TechnicianDashboard] Cấu trúc response không đúng');
         setTestResultsData([]);
       }
 
     } catch (err) {
-      console.error('💥 Error fetching data:', err);
+      console.error('💥 [TechnicianDashboard] Error fetching data:', err);
       setError('Không thể tải dữ liệu. Vui lòng thử lại sau.');
       setTestResultsData([]);
     } finally {
@@ -51,13 +51,19 @@ const TechnicianDashboard = () => {
   };
 
   const switchSection = (sectionId) => {
-    console.log('🔄 Switching to section:', sectionId);
+    console.log('🔄 [TechnicianDashboard] Switching to section:', sectionId);
     setCurrentSection(sectionId);
     setError('');
     setSuccess('');
+    
+    // Fetch data mới khi chuyển section nếu cần
+    if (sectionId === 'test-results') {
+      fetchInitialData();
+    }
   };
 
   const confirmAction = (action, ...params) => {
+    console.log('🔍 [TechnicianDashboard] confirmAction called:', { action, params });
     setCurrentAction(action);
     setActionParams(params);
     setShowConfirmModal(true);
@@ -67,6 +73,11 @@ const TechnicianDashboard = () => {
     try {
       setLoading(true);
       setError('');
+      
+      console.log('🚀 [TechnicianDashboard] executeAction:', { 
+        currentAction, 
+        actionParams 
+      });
 
       switch (currentAction) {
         case 'updateTestResult':
@@ -76,13 +87,16 @@ const TechnicianDashboard = () => {
           await editTestResult(actionParams[0], actionParams[1], actionParams[2], actionParams[3]);
           break;
         default:
+          console.warn('⚠️ [TechnicianDashboard] Action không xác định:', currentAction);
           break;
       }
 
       setSuccess('Thao tác thành công!');
+      console.log('✅ [TechnicianDashboard] Action completed successfully');
+      
     } catch (err) {
+      console.error('❌ [TechnicianDashboard] Error executing action:', err);
       setError('Thao tác thất bại. Vui lòng thử lại.');
-      console.error('Error executing action:', err);
     } finally {
       setLoading(false);
       setShowConfirmModal(false);
@@ -91,24 +105,38 @@ const TechnicianDashboard = () => {
     }
   };
 
-  const updateTestResult = (testId, patient, service) => {
-    console.log('Cập nhật kết quả:', testId, patient, service);
+  const updateTestResult = async (testId, patient, service) => {
+    console.log('📝 [TechnicianDashboard] updateTestResult:', { testId, patient, service });
+    // Thêm logic update thực tế ở đây
     setSuccess(`Đã cập nhật kết quả cho ${patient}`);
   };
 
-  const editTestResult = (testId, patient, service, result) => {
-    console.log('Chỉnh sửa kết quả:', testId, patient, service, result);
+  const editTestResult = async (testId, patient, service, result) => {
+    console.log('✏️ [TechnicianDashboard] editTestResult:', { testId, patient, service, result });
+    // Thêm logic edit thực tế ở đây
     setSuccess(`Đã chỉnh sửa kết quả cho ${patient}`);
   };
 
+  // ✅ THÊM DEBUG CHO updateStats
   const updateStats = () => {
-    // Cập nhật thống kê nếu cần
+    console.log('📊 [TechnicianDashboard] updateStats called - refreshing data...');
+    fetchInitialData(); // Refresh data khi cần
   };
 
   const clearMessages = () => {
+    console.log('🧹 [TechnicianDashboard] Clearing messages');
     setError('');
     setSuccess('');
   };
+
+  // ✅ THÊM DEBUG RENDER
+  console.log('🎯 [TechnicianDashboard] Rendering with:', {
+    currentSection,
+    testResultsDataLength: testResultsData.length,
+    loading,
+    error: !!error,
+    success: !!success
+  });
 
   return (
     <div className="d-flex min-vh-100 bg-light">
@@ -142,12 +170,11 @@ const TechnicianDashboard = () => {
             </Alert>
           )}
 
-          {/* ✅ QUAN TRỌNG: THÊM RENDER SCHEDULE SECTION */}
+          {/* Render Sections */}
           {currentSection === 'schedule' && (
             <ScheduleSection />
           )}
 
-          {/* Render Technician Section */}
           {currentSection === 'test-results' && (
             <TechnicianSection
               testResultsData={testResultsData}
@@ -160,7 +187,9 @@ const TechnicianDashboard = () => {
           {/* Debug current section */}
           <div className="mt-3 text-center">
             <small className="text-muted">
-              Section hiện tại: <strong>{currentSection}</strong>
+              Section hiện tại: <strong>{currentSection}</strong> | 
+              Data items: <strong>{testResultsData.length}</strong> | 
+              Loading: <strong>{loading ? 'Yes' : 'No'}</strong>
             </small>
           </div>
         </Container>
