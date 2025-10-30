@@ -9,7 +9,7 @@ import {
   ButtonGroup,
 } from "react-bootstrap";
 
-const ScheduleSection = () => {
+const TechSchedule = () => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [viewMode, setViewMode] = useState("month"); // today | week | month
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -533,4 +533,4 @@ const ScheduleSection = () => {
   );
 };
 
-export default ScheduleSection;
+export default TechSchedule;

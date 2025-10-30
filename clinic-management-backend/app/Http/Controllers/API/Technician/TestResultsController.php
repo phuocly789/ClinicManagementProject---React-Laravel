@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use App\Models\ServiceOrder;
 use Illuminate\Support\Facades\Log;
 use App\Helpers\PaginationHelper;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 
 class TestResultsController extends Controller
 {
@@ -32,33 +34,12 @@ class TestResultsController extends Controller
                 ->orderBy('OrderDate', 'desc')
                 ->paginate(10);
 
-            Log::info('🔍 SQL Query Result:', [
-                'total' => $services->total(),
-                'count' => $services->count(),
-                'has_data' => !$services->isEmpty()
-            ]);
-
-            // Debug first item
-            if (!$services->isEmpty()) {
-                $firstItem = $services->first();
-                Log::info('📋 First Item Debug:', [
-                    'ServiceOrderId' => $firstItem->ServiceOrderId,
-                    'AssignedStaffId' => $firstItem->AssignedStaffId,
-                    'Status' => $firstItem->Status,
-                    'has_appointment' => !is_null($firstItem->appointment),
-                    'has_patient' => !is_null($firstItem->appointment?->patient),
-                    'has_service' => !is_null($firstItem->service)
-                ]);
-            }
-
             // Format data
             $formattedServices = $services->map(function ($order) {
                 return $this->formatServiceData($order);
             });
 
-            Log::info('📊 Formatted Data:', $formattedServices->toArray());
-
-            // ✅ SỬA: Kiểm tra nếu không có dữ liệu
+            // ✅ Kiểm tra nếu không có dữ liệu
             if ($formattedServices->isEmpty()) {
                 return response()->json([
                     'success' => true,
@@ -94,20 +75,111 @@ class TestResultsController extends Controller
     }
 
     /**
+     * Cập nhật trạng thái dịch vụ
+     */
+    public function updateServiceStatus(Request $request, $serviceOrderId)
+    {
+        DB::beginTransaction();
+
+        try {
+            // ✅ DEBUG: Xem chính xác dữ liệu nhận được
+            Log::info('🔄 updateServiceStatus - SUPPORT BOTH PUT/POST', [
+                'method' => $request->method(),
+                'service_order_id' => $serviceOrderId
+            ]);
+
+            // ✅ XỬ LÝ RAW JSON BODY
+            $rawContent = $request->getContent();
+            $data = [];
+
+            if (!empty($rawContent)) {
+                $data = json_decode($rawContent, true) ?? [];
+            }
+
+            // ✅ KẾT HỢP DỮ LIỆU TỪ NHIỀU NGUỒN
+            $status = $data['status'] ?? $request->input('status');
+
+            Log::info('🔍 Status extracted:', ['status' => $status]);
+
+            if (!$status) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Thiếu trường status trong request body',
+                    'debug' => [
+                        'raw_content' => $rawContent,
+                        'request_all' => $request->all()
+                    ]
+                ], 400);
+            }
+            $serviceOrder = ServiceOrder::where('ServiceOrderId', $serviceOrderId)
+                ->where('AssignedStaffId', $this->technicianId)
+                ->first();
+
+            if (!$serviceOrder) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không tìm thấy dịch vụ được chỉ định'
+                ], 404);
+            }
+
+            $oldStatus = $serviceOrder->Status;
+            $newStatus = $request->status;
+
+            // ✅ LOGIC CHUYỂN TRẠNG THÁI
+            $validTransitions = [
+                'Đã chỉ định' => ['Đang thực hiện', 'Đang chờ', 'Đã hủy'],
+                'Đang chờ' => ['Đang thực hiện', 'Đã chỉ định', 'Đã hủy'],
+                'Đang thực hiện' => ['Hoàn thành', 'Đang chờ', 'Đã hủy'],
+                'Hoàn thành' => []
+            ];
+
+            if (!isset($validTransitions[$oldStatus]) || !in_array($newStatus, $validTransitions[$oldStatus])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Không thể chuyển từ '$oldStatus' sang '$newStatus'"
+                ], 400);
+            }
+
+            // ✅ Cập nhật status
+            $serviceOrder->update([
+                'Status' => $newStatus
+            ]);
+
+            DB::commit();
+
+            Log::info("✅ Status updated SUCCESS", [
+                'service_order_id' => $serviceOrderId,
+                'old_status' => $oldStatus,
+                'new_status' => $newStatus
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Đã cập nhật trạng thái từ '$oldStatus' sang '$newStatus'",
+                'data' => [
+                    'service_order_id' => $serviceOrderId,
+                    'old_status' => $oldStatus,
+                    'new_status' => $newStatus,
+                    'timestamp' => now()->format('d/m/Y H:i')
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollback();
+            Log::error('❌ ERROR in updateServiceStatus: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi hệ thống: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Hàm format dữ liệu dịch vụ 
      */
     private function formatServiceData($order)
     {
-        // ✅ DEBUG ĐỂ XÁC NHẬN CẤU TRÚC
-        Log::info('🔍 Formatting Service Order:', [
-            'service_order_id' => $order->ServiceOrderId,
-            'has_appointment' => !is_null($order->appointment),
-            'has_patient' => !is_null($order->appointment?->patient),
-            'has_patient_user' => !is_null($order->appointment?->patient?->user),
-            'patient_user_fields' => $order->appointment?->patient?->user ? array_keys($order->appointment->patient->user->getAttributes()) : 'no user'
-        ]);
-
-        // ✅ LẤY USER TỪ PATIENT (THEO CẤU TRÚC todayPatients)
         $user = $order->appointment->patient->user ?? null;
 
         return [
@@ -118,7 +190,7 @@ class TestResultsController extends Controller
                 ? \Carbon\Carbon::parse($user->DateOfBirth)->age
                 : 'N/A',
             'patient_gender' => $user->Gender ?? 'N/A',
-            'patient_phone' => $user->Phone ?? 'N/A', // ✅ SỬA: Phone (không phải PhoneNumber)
+            'patient_phone' => $user->Phone ?? 'N/A',
             'service_name' => $order->service->ServiceName ?? 'N/A',
             'service_type' => $order->service->ServiceType ?? 'N/A',
             'price' => $order->service->Price ?? 0,
@@ -131,6 +203,4 @@ class TestResultsController extends Controller
             'completed_at' => $order->CompletedAt?->format('d/m/Y H:i')
         ];
     }
-
-
 }

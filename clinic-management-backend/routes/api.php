@@ -134,5 +134,6 @@ Route::post('/print/preview-html', [InvoicePrintController::class, 'previewHTML'
 Route::prefix('technician')->group(function () {
     // Danh sách dịch vụ
     Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
-
+    // thay đổi trạng thái dịch vụ
+    Route::post('/services/{serviceOrderId}/status', [TestResultsController::class, 'updateServiceStatus']);
 });

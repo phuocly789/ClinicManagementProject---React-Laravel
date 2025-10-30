@@ -7,6 +7,11 @@ const technicianService = {
             params: { page }
         });
     },
+
+    // ✅ POST - Cập nhật dữ liệu (thay vì PUT)
+    updateServiceStatus: (serviceOrderId, status) => {
+        return axios.post(`/api/technician/services/${serviceOrderId}/status`, { status });
+    },
 };
 
 export default technicianService;

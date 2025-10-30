@@ -22,6 +22,8 @@ import AdminSidebar from "./Components/Sidebar/AdminSidebar.jsx";
 import DoctorSidebar from "./Components/Sidebar/DoctorSidebar.jsx";
 import Home from "./pages/Home.jsx";
 import PDFEditorPage from './pages/Doctors/PrintsPDF/PDFPreviewEditor.jsx';
+import TechnicianSidebar from "./Components/Sidebar/TechnicianSidebar.jsx";
+import TechSchedule from "./pages/Technician/TechSchedule.jsx";
 import TechnicianDashboard from "./pages/Technician/TechnicianDashboard.jsx";
 
 function App() {
@@ -46,10 +48,10 @@ function App() {
         </Route>
 
         {/* Receptionist */}
-        {/* Doctor */ }
+        {/* Doctor */}
         <Route path={path.DOCTOR.ROOT} element={<DoctorSidebar />} />
-          <Route path={path.DOCTOR.DASHBOARD} element={<DoctorDashboard />} />
-        {/* Technician */ }
+        <Route path={path.DOCTOR.DASHBOARD} element={<DoctorDashboard />} />
+        {/* Technician */}
         {/* Patient */}
         <Route path={path.PATIENT.ROOT} element={<PatientLayout />}>
           <Route
@@ -67,7 +69,12 @@ function App() {
         />
         {/* Trang mặc định */}
         <Route path="/pdf-editor" element={<PDFEditorPage />} />
-        <Route path="/technician" element={<TechnicianDashboard />} />
+        {/* Technician */}
+        <Route path={path.TECHNICIAN.ROOT} element={<TechnicianSidebar />}>
+          <Route index element={<TechSchedule />} />
+          <Route path={path.TECHNICIAN.SCHEDULE} element={<TechSchedule />} />
+          <Route path={path.TECHNICIAN.TEST_RESULTS} element={<TechnicianDashboard />} />
+        </Route>
       </Routes>
     </BrowserRouter >
   );
