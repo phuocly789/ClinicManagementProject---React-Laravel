@@ -141,7 +141,7 @@ const TechnicianSection = ({ testResultsData, confirmAction, updateStats, loadin
           </Row>
         </Col>
 
-        {/* Main Services Table */}
+        {/* Main Services Table - DANH SÁCH CHỈ ĐỊNH */}
         <Col xl={12}>
           <Card className="border-0 shadow-sm">
             <Card.Header className="bg-white py-3 border-bottom">
@@ -325,6 +325,200 @@ const TechnicianSection = ({ testResultsData, confirmAction, updateStats, loadin
                 </div>
               </Card.Footer>
             )}
+          </Card>
+        </Col>
+
+         {/* PHẦN KẾT QUẢ XÉT NGHIỆM */}
+        <Col xl={12} className="mb-4">
+          <Card className="border-0 shadow-sm">
+            <Card.Header className="bg-success bg-gradient text-white py-3">
+              <div className="d-flex justify-content-between align-items-center">
+                <h4 className="mb-0 fw-bold">
+                  <i className="fas fa-vials me-2"></i> 
+                  Kết Quả Xét Nghiệm
+                </h4>
+                <Badge bg="light" text="dark" className="fs-6">
+                  <i className="fas fa-list me-1"></i>
+                  Tổng: 5 kết quả
+                </Badge>
+              </div>
+            </Card.Header>
+            <Card.Body className="p-0">
+              <div className="table-responsive">
+                <Table hover className="mb-0 align-middle">
+                  <thead className="table-light">
+                    <tr>
+                      <th width="80" className="text-center py-3">Mã Lịch</th>
+                      <th width="120" className="py-3">Mã Bệnh Nhân</th>
+                      <th className="py-3">Tên Bệnh Nhân</th>
+                      <th className="py-3">Dịch Vụ</th>
+                      <th width="140" className="text-center py-3">Ngày Xét Nghiệm</th>
+                      <th width="120" className="text-center py-3">Trạng Thái</th>
+                      <th width="200" className="text-center py-3">Hành Động</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Kết quả đã hoàn thành */}
+                    <tr className="border-bottom">
+                      <td className="text-center">
+                        <Badge bg="primary" className="fs-7">#45</Badge>
+                      </td>
+                      <td>
+                        <span className="text-muted fw-semibold">#BN001</span>
+                      </td>
+                      <td>
+                        <div className="fw-semibold text-dark">Hoàng Văn Khánh</div>
+                        <small className="text-muted">42 tuổi - Nam</small>
+                      </td>
+                      <td>
+                        <div className="fw-semibold text-dark">Xét nghiệm máu</div>
+                        <small className="text-muted">Huyết học</small>
+                      </td>
+                      <td className="text-center">
+                        <small className="text-muted">30/10/2024</small>
+                      </td>
+                      <td className="text-center">
+                        <Badge bg="success" className="fs-7 px-3 py-2">
+                          <i className="fas fa-check me-1"></i>
+                          Hoàn thành
+                        </Badge>
+                      </td>
+                      <td className="text-center">
+                        <div className="d-flex justify-content-center gap-2">
+                          <Button 
+                            variant="outline-primary" 
+                            size="sm"
+                            className="px-3"
+                          >
+                            <i className="fas fa-eye me-1"></i>
+                            Xem
+                          </Button>
+                          <Button 
+                            variant="outline-success" 
+                            size="sm"
+                            className="px-3"
+                          >
+                            <i className="fas fa-print me-1"></i>
+                            In
+                          </Button>
+                          <Button 
+                            variant="outline-warning" 
+                            size="sm"
+                            className="px-3"
+                          >
+                            <i className="fas fa-edit me-1"></i>
+                            Sửa
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* Kết quả đang chờ */}
+                    <tr className="border-bottom">
+                      <td className="text-center">
+                        <Badge bg="primary" className="fs-7">#46</Badge>
+                      </td>
+                      <td>
+                        <span className="text-muted fw-semibold">#BN002</span>
+                      </td>
+                      <td>
+                        <div className="fw-semibold text-dark">Nguyễn Thị Mai</div>
+                        <small className="text-muted">35 tuổi - Nữ</small>
+                      </td>
+                      <td>
+                        <div className="fw-semibold text-dark">Xét nghiệm nước tiểu</div>
+                        <small className="text-muted">Hóa sinh</small>
+                      </td>
+                      <td className="text-center">
+                        <small className="text-muted">29/10/2024</small>
+                      </td>
+                      <td className="text-center">
+                        <Badge bg="warning" className="fs-7 px-3 py-2">
+                          <i className="fas fa-clock me-1"></i>
+                          Đang chờ
+                        </Badge>
+                      </td>
+                      <td className="text-center">
+                        <div className="d-flex justify-content-center gap-2">
+                          <Button 
+                            variant="success" 
+                            size="sm"
+                            className="px-3"
+                          >
+                            <i className="fas fa-check me-1"></i>
+                            Nhập kết quả
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* Kết quả đang xử lý */}
+                    <tr className="border-bottom">
+                      <td className="text-center">
+                        <Badge bg="primary" className="fs-7">#47</Badge>
+                      </td>
+                      <td>
+                        <span className="text-muted fw-semibold">#BN003</span>
+                      </td>
+                      <td>
+                        <div className="fw-semibold text-dark">Trần Văn Minh</div>
+                        <small className="text-muted">28 tuổi - Nam</small>
+                      </td>
+                      <td>
+                        <div className="fw-semibold text-dark">Xét nghiệm sinh hóa</div>
+                        <small className="text-muted">Gan mật</small>
+                      </td>
+                      <td className="text-center">
+                        <small className="text-muted">28/10/2024</small>
+                      </td>
+                      <td className="text-center">
+                        <Badge bg="info" className="fs-7 px-3 py-2">
+                          <i className="fas fa-spinner me-1"></i>
+                          Đang xử lý
+                        </Badge>
+                      </td>
+                      <td className="text-center">
+                        <div className="d-flex justify-content-center gap-2">
+                          <Button 
+                            variant="outline-info" 
+                            size="sm"
+                            className="px-3"
+                          >
+                            <i className="fas fa-play me-1"></i>
+                            Tiếp tục
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </Table>
+              </div>
+
+              {/* Footer với thống kê */}
+              <Card.Footer className="bg-light py-3">
+                <div className="row align-items-center">
+                  <div className="col-md-6">
+                    <small className="text-muted">
+                      Hiển thị <strong>3</strong> kết quả xét nghiệm • 
+                      Cập nhật: <strong>{new Date().toLocaleTimeString('vi-VN')}</strong>
+                    </small>
+                  </div>
+                  <div className="col-md-6 text-md-end">
+                    <div className="d-flex justify-content-end gap-3">
+                      <small className="text-muted">
+                        <Badge bg="success" className="me-1">1</Badge> Hoàn thành
+                      </small>
+                      <small className="text-muted">
+                        <Badge bg="warning" className="me-1">1</Badge> Đang chờ
+                      </small>
+                      <small className="text-muted">
+                        <Badge bg="info" className="me-1">1</Badge> Đang xử lý
+                      </small>
+                    </div>
+                  </div>
+                </div>
+              </Card.Footer>
+            </Card.Body>
           </Card>
         </Col>
       </Row>

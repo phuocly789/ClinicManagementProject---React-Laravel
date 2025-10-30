@@ -3,6 +3,7 @@ import { Container, Button, Modal, Alert, Spinner } from 'react-bootstrap';
 import TechnicianSidebar from '../../Components/Sidebar/TechnicianSidebar';
 import TechnicianSection from '../../pages/Technician/TechnicianSection';
 import technicianService from '../../services/technicianService';
+import ScheduleSection from './ScheduleSection';
 
 const TechnicianDashboard = () => {
   const [currentSection, setCurrentSection] = useState('test-results');
@@ -30,15 +31,10 @@ const TechnicianDashboard = () => {
       console.log('📦 API Response:', servicesResponse);
       console.log('📊 Response data:', servicesResponse.data);
 
-      // ✅ SỬA LẠI THEO CẤU TRÚC THỰC TẾ
-      // servicesResponse = {success: true, data: Array(3), pagination: {...}}
-      // servicesResponse.data = Array(3) - ĐÂY CHÍNH LÀ DATA CẦN LẤY!
-
       if (servicesResponse && servicesResponse.success && Array.isArray(servicesResponse.data)) {
         console.log('✅ Data nhận được:', servicesResponse.data);
         console.log('📋 Số lượng items:', servicesResponse.data.length);
 
-        // ✅ SET DATA VÀO STATE - ĐÚNG CẤU TRÚC!
         setTestResultsData(servicesResponse.data);
       } else {
         console.log('❌ Cấu trúc response không đúng');
@@ -55,6 +51,7 @@ const TechnicianDashboard = () => {
   };
 
   const switchSection = (sectionId) => {
+    console.log('🔄 Switching to section:', sectionId);
     setCurrentSection(sectionId);
     setError('');
     setSuccess('');
@@ -71,7 +68,6 @@ const TechnicianDashboard = () => {
       setLoading(true);
       setError('');
 
-      // Xử lý các action ở đây
       switch (currentAction) {
         case 'updateTestResult':
           await updateTestResult(actionParams[0], actionParams[1], actionParams[2]);
@@ -117,7 +113,7 @@ const TechnicianDashboard = () => {
   return (
     <div className="d-flex min-vh-100 bg-light">
       <TechnicianSidebar currentSection={currentSection} switchSection={switchSection} />
-      <div className="flex-grow-1 p-4" style={{ marginLeft: '250px' }}>
+      <div className="flex-grow-1 p-4" style={{ marginLeft: '280px' }}>
         <Container fluid>
           {/* Alert Messages */}
           {error && (
@@ -131,20 +127,27 @@ const TechnicianDashboard = () => {
             </Alert>
           )}
 
+          {/* Loading Spinner */}
           {loading && (
             <div className="text-center mb-3">
-              <Spinner animation="border" variant="success" />
-              <span className="ms-2">Đang xử lý...</span>
+              <Spinner animation="border" variant="primary" />
+              <span className="ms-2">Đang tải dữ liệu...</span>
             </div>
           )}
 
-          {/* Test Component để debug */}
+          {/* Debug Info */}
           {currentSection === 'test-results' && testResultsData.length > 0 && (
             <Alert variant="info" className="mb-3">
               <strong>Debug:</strong> Đã tải {testResultsData.length} dịch vụ từ API
             </Alert>
           )}
 
+          {/* ✅ QUAN TRỌNG: THÊM RENDER SCHEDULE SECTION */}
+          {currentSection === 'schedule' && (
+            <ScheduleSection />
+          )}
+
+          {/* Render Technician Section */}
           {currentSection === 'test-results' && (
             <TechnicianSection
               testResultsData={testResultsData}
@@ -153,6 +156,13 @@ const TechnicianDashboard = () => {
               loading={loading}
             />
           )}
+
+          {/* Debug current section */}
+          <div className="mt-3 text-center">
+            <small className="text-muted">
+              Section hiện tại: <strong>{currentSection}</strong>
+            </small>
+          </div>
         </Container>
       </div>
 
