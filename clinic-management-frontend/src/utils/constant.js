@@ -77,6 +77,12 @@ export const path = {
             CREATE: "/doctor/apppointment-create",
             UPDATE: "/doctor/apppointment-update",
         },
+    },
+
+     TECHNICIAN:{
+        ROOT: "/technician",
+        SCHEDULE: "schedule",
+        TEST_RESULTS: "test-results",
     }
 };
 

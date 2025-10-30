@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Button, Modal, Alert, Spinner } from 'react-bootstrap';
-import TechnicianSidebar from '../../Components/Sidebar/TechnicianSidebar';
 import TechnicianSection from '../../pages/Technician/TechnicianSection';
 import technicianService from '../../services/technicianService';
-import ScheduleSection from './ScheduleSection';
+import TechSchedule from './TechSchedule';
 
 const TechnicianDashboard = () => {
   const [currentSection, setCurrentSection] = useState('test-results');
@@ -140,8 +139,7 @@ const TechnicianDashboard = () => {
 
   return (
     <div className="d-flex min-vh-100 bg-light">
-      <TechnicianSidebar currentSection={currentSection} switchSection={switchSection} />
-      <div className="flex-grow-1 p-4" style={{ marginLeft: '280px' }}>
+      <div className="flex-grow-1 p-4">
         <Container fluid>
           {/* Alert Messages */}
           {error && (
@@ -172,7 +170,7 @@ const TechnicianDashboard = () => {
 
           {/* Render Sections */}
           {currentSection === 'schedule' && (
-            <ScheduleSection />
+            <TechSchedule />
           )}
 
           {currentSection === 'test-results' && (
