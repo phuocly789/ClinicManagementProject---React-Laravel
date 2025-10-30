@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Container, Modal, Button, Toast, ToastContainer, Spinner } from 'react-bootstrap';
 import Sidebar from '../../Components/Sidebar/DoctorSidebar';
 import TodaySection from './TodaySection';
-import ScheduleSection from './ScheduleSection';
+import DoctorSchedule from './DoctorSchedule';
 import HistorySection from './HistorySection';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -207,8 +207,7 @@ const DoctorDashboard = () => {
 
   return (
     <div className="d-flex min-vh-100 bg-light">
-      <Sidebar currentSection={currentSection} switchSection={switchSection} />
-      <div className="flex-grow-1 p-4" style={{ marginLeft: '250px' }}>
+      <div className="flex-grow-1 p-4">
         <Container fluid>
           <div className="alert alert-success mb-4 tab-container">
             <h2 className="alert-heading mb-0">Bảng Điều Khiển Của Bác Sĩ</h2>
@@ -240,7 +239,7 @@ const DoctorDashboard = () => {
           )}
 
           {currentSection === 'schedule' && (
-            <ScheduleSection
+            <DoctorSchedule
               currentSection={currentSection}
               events={events}
               currentDate={currentDate}

@@ -25,6 +25,9 @@ import PDFEditorPage from './pages/Doctors/PrintsPDF/PDFPreviewEditor.jsx';
 import TechnicianSidebar from "./Components/Sidebar/TechnicianSidebar.jsx";
 import TechSchedule from "./pages/Technician/TechSchedule.jsx";
 import TechnicianDashboard from "./pages/Technician/TechnicianDashboard.jsx";
+import DoctorSchedule from "./pages/Doctors/DoctorSchedule.jsx";
+import HistorySection from "./pages/Doctors/HistorySection.jsx";
+import TodaySection from "./pages/Doctors/TodaySection.jsx";
 
 function App() {
   return (
@@ -49,9 +52,14 @@ function App() {
 
         {/* Receptionist */}
         {/* Doctor */}
-        <Route path={path.DOCTOR.ROOT} element={<DoctorSidebar />} />
-        <Route path={path.DOCTOR.DASHBOARD} element={<DoctorDashboard />} />
-        {/* Technician */}
+        <Route path={path.DOCTOR.ROOT} element={<DoctorSidebar />}>
+          <Route index element={<TodaySection />} />
+          <Route path={path.DOCTOR.TODAY_APPOINTMENTS} element={<TodaySection />} />
+          <Route path={path.DOCTOR.SCHEDULE} element={<DoctorSchedule />} />
+          <Route path={path.DOCTOR.PATIENT_HISTORY} element={<HistorySection />} />
+             <Route path={path.DOCTOR.DOCTOR_PRINT_PDF} element={<PDFEditorPage />} />
+        </Route>
+    
         {/* Patient */}
         <Route path={path.PATIENT.ROOT} element={<PatientLayout />}>
           <Route
@@ -67,8 +75,7 @@ function App() {
           path={path.VERIFICATION_EMAIL}
           element={<VerifyEmailPage />}
         />
-        {/* Trang mặc định */}
-        <Route path="/pdf-editor" element={<PDFEditorPage />} />
+     
         {/* Technician */}
         <Route path={path.TECHNICIAN.ROOT} element={<TechnicianSidebar />}>
           <Route index element={<TechSchedule />} />
