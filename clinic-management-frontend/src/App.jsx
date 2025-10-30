@@ -18,21 +18,35 @@ import AdminSuppliers from "./pages/Admin/AdminSuppliers";
 import VerifyEmailPage from "./pages/auth/VerifyEmail/EmailVerification.jsx";
 import PatientProfile from "./pages/Patient/PatientProfile.jsx";
 import PatientLayout from "./Components/Patient/PatientLayout.jsx";
+import AdminSidebar from "./Components/Sidebar/AdminSidebar.jsx";
+import DoctorSidebar from "./Components/Sidebar/DoctorSidebar.jsx";
+import Home from "./pages/Home.jsx";
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/admin/dashboard" element={<AdminDashboard />} />
-        <Route path="/admin/revenue-report" element={<AdminRevenueReport />} />
-        <Route
-          path="/admin/schedule-management"
-          element={<AdminScheduleManagement />}
-        />
-        <Route path="/admin/users" element={<AdminUserManagement />} />
-        <Route path="/admin/medicines" element={<AdminMedicine />} />
-        <Route path="/admin/inventory" element={<AdminInventory />} />
-        <Route path="/admin/supplier" element={<AdminSuppliers />} />
-        <Route path="/" element={<AdminMedicine />} /> {/* Trang mặc địnhs */}
+        {/* Home */}
+        <Route path={path.HOME} element={<Home />} />
+        {/* Admin */}
+        <Route path={path.ADMIN.ROOT} element={<AdminSidebar />} >
+          <Route path={path.ADMIN.DASHBOARD} element={<AdminDashboard />} />
+          <Route path={path.ADMIN.REVENUE_REPORT} element={<AdminRevenueReport />} />
+          <Route
+            path={path.ADMIN.SCHEDULE.MANAGEMENT}
+            element={<AdminScheduleManagement />}
+          />
+          <Route path={path.ADMIN.USER.MANAGEMENT} element={<AdminUserManagement />} />
+          <Route path={path.ADMIN.MEDICINE.MANAGEMENT} element={<AdminMedicine />} />
+          <Route path={path.ADMIN.INVENTORY} element={<AdminInventory />} />
+          <Route path={path.ADMIN.SUPPLIERS.MANAGEMENT} element={<AdminSuppliers />} />
+          <Route path={path.ADMIN.MEDICINE.MANAGEMENT} element={<AdminMedicine />} />
+        </Route>
+
+        {/* Receptionist */}
+        {/* Doctor */ }
+        <Route path={path.DOCTOR.ROOT} element={<DoctorSidebar />} />
+          <Route path={path.DOCTOR.DASHBOARD} element={<DoctorDashboard />} />
+        {/* Technician */ }
         {/* Patient */}
         <Route path={path.PATIENT.ROOT} element={<PatientLayout />}>
           <Route
@@ -47,11 +61,9 @@ function App() {
         <Route
           path={path.VERIFICATION_EMAIL}
           element={<VerifyEmailPage />}
-        ></Route>
-        {/* Trang mặc định */}
-        <Route path="/doctor" element={<DoctorDashboard />} />
+        />
       </Routes>
-    </BrowserRouter>
+    </BrowserRouter >
   );
 }
 

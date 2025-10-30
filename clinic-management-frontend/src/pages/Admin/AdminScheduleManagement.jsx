@@ -240,7 +240,6 @@ const AdminScheduleManagement = () => {
 
     return (
         <div className="d-flex w-100">
-            <AdminSidebar />
             <main className="main-content flex-grow-1 p-4 d-flex flex-column gap-4">
                 {toast && <CustomToast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
                 <header className="d-flex justify-content-between align-items-center flex-shrink-0">
