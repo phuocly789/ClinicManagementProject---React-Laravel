@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Log;
 
 class ImportBillController extends Controller
 {
@@ -30,13 +31,9 @@ class ImportBillController extends Controller
 
         // 1. TÌM KIẾM (search)
         if ($search = $request->get('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('ImportId', 'like', "%{$search}%")
-                ->orWhere('Notes', 'like', "%{$search}%")
-                ->orWhereHas('supplier', function ($sq) use ($search) {
-                    $sq->where('SupplierName', 'like', "%{$search}%");
-                });
-            });
+            $search = trim($search);
+            $like = "%" . mb_strtolower($search) . "%";
+            $query->whereRaw("search_text ILIKE ?", [$like]);
         }
 
         // 2. LỌC THEO NGÀY (date range)
@@ -139,7 +136,7 @@ class ImportBillController extends Controller
                     'Notes' => $request->Notes,
                     'CreatedBy' => Auth::check() ? Auth::user()->id : 1,
                 ]);
-                \Log::info('ImportId sau create: ' . $importBill->ImportId); // Kiểm tra trong storage/logs/laravel.log
+                Log::info('ImportId sau create: ' . $importBill->ImportId); // Kiểm tra trong storage/logs/laravel.log
                 foreach ($request->import_details as $detail) {
                     ImportDetail::create([
                         'ImportId' => $importBill->ImportId,

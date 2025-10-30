@@ -6,7 +6,6 @@ import CustomToast from '../../Components/CustomToast/CustomToast';
 import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
 import { Eye, PencilIcon, Trash, Search, Filter, Calendar, DollarSign, X } from 'lucide-react';
 
-// ErrorBoundary
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -25,7 +24,6 @@ class ErrorBoundary extends React.Component {
 
 const API_BASE_URL = 'http://localhost:8000';
 
-// Load html2pdf.js lazily
 const loadHtml2Pdf = () => {
   return new Promise((resolve) => {
     const existingScript = document.querySelector('script[src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"]');
@@ -41,7 +39,6 @@ const loadHtml2Pdf = () => {
   });
 };
 
-// Regex for validation
 const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
 const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class|import|export|\$\w+)/i;
 
@@ -58,7 +55,7 @@ const InventoryList = memo(
     currentPage,
     handlePageChange,
     suppliers,
-    fetchInventories, // Thêm prop để gọi lại API với filter
+    fetchInventories
   }) => {
 
     // --- FILTER STATES ---
@@ -69,7 +66,7 @@ const InventoryList = memo(
     const [minAmount, setMinAmount] = useState('');
     const [maxAmount, setMaxAmount] = useState('');
 
-    // --- ÁP DỤNG LỌC ---
+    // --- ÁP DỤNG LỌC - CHỈ KHI NHẤN NÚT HOẶC ENTER ---
     const applyFilters = useCallback(() => {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
@@ -102,15 +99,13 @@ const InventoryList = memo(
     }, [fetchInventories]);
 
     const handleRowClick = useCallback((inventoryId, e) => {
-      // Ngăn click vào các nút hành động lan ra
       if (e.target.closest('button')) return;
       handleShowDetail(inventoryId);
     }, [handleShowDetail]);
 
-    const debounceSearchRef = useRef(null);
     return (
       <div>
-        {/* ==================== HEADER + ADD BUTTON ==================== */}
+        {/* HEADER + ADD BUTTON */}
         <div className="d-flex justify-content-between align-items-center mb-4">
           <h3 style={{ fontSize: '1.5rem', fontWeight: '600' }}>
             Danh Sách Phiếu Nhập Kho
@@ -120,7 +115,7 @@ const InventoryList = memo(
           </Button>
         </div>
 
-        {/* ==================== FILTER BAR ==================== */}
+        {/* FILTER BAR */}
         <div className="mb-4 p-3 bg-light rounded border">
           <Row className="g-3 align-items-end">
             {/* TÌM KIẾM */}
@@ -130,19 +125,9 @@ const InventoryList = memo(
                   <Search size={16} />
                 </InputGroup.Text>
                 <Form.Control
-                  placeholder="Tìm mã phiếu, nhà cung cấp, ghi chú..."
+                  placeholder="Tìm tên nhà cung cấp..."
                   value={search}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setSearch(value);
-
-                    // DEBOUNCE CHỈ CHO TÌM KIẾM
-                    if (debounceSearchRef.current) clearTimeout(debounceSearchRef.current);
-                    debounceSearchRef.current = setTimeout(() => {
-                      applyFilters(); // Gọi lọc sau 500ms
-                    }, 500);
-                  }}
-                  onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                  onChange={(e) => setSearch(e.target.value)}
                 />
               </InputGroup>
             </Col>
@@ -152,6 +137,7 @@ const InventoryList = memo(
               <Form.Select
                 value={supplierFilter}
                 onChange={(e) => setSupplierFilter(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
               >
                 <option value="">Tất cả nhà cung cấp</option>
                 {suppliers.map((s) => (
@@ -172,6 +158,7 @@ const InventoryList = memo(
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
                 />
               </InputGroup>
             </Col>
@@ -186,6 +173,7 @@ const InventoryList = memo(
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
                 />
               </InputGroup>
             </Col>
@@ -198,7 +186,7 @@ const InventoryList = memo(
             </Col>
           </Row>
 
-          {/* LỌC TIỀN (dòng 2) */}
+          {/* LỌC TIỀN */}
           <Row className="g-3 mt-2">
             <Col md={3}>
               <InputGroup size="sm">
@@ -210,6 +198,7 @@ const InventoryList = memo(
                   placeholder="Tổng tiền từ"
                   value={minAmount}
                   onChange={(e) => setMinAmount(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
                 />
               </InputGroup>
             </Col>
@@ -223,6 +212,7 @@ const InventoryList = memo(
                   placeholder="Tổng tiền đến"
                   value={maxAmount}
                   onChange={(e) => setMaxAmount(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
                 />
               </InputGroup>
             </Col>
@@ -234,7 +224,7 @@ const InventoryList = memo(
           </Row>
         </div>
 
-        {/* ==================== TABLE ==================== */}
+        {/* TABLE */}
         <div className="table-responsive">
           <Table striped bordered hover responsive className={isLoading ? 'opacity-50' : ''}>
             <thead className="table-light">
@@ -324,7 +314,7 @@ const InventoryList = memo(
           </Table>
         </div>
 
-        {/* ==================== PAGINATION ==================== */}
+        {/* PAGINATION */}
         {pageCount > 1 && (
           <Pagination
             pageCount={pageCount}
@@ -1138,11 +1128,9 @@ const AdminInventory = () => {
 
   const handlePageChange = useCallback(({ selected }) => {
     const nextPage = selected + 1;
-    // Lấy queryString hiện tại từ state hoặc URL
-    const currentParams = new URLSearchParams();
-    // (Bạn có thể lưu params vào state nếu muốn giữ khi đổi trang)
+    console.log('Changing to page:', nextPage, 'with filters:', filterParams); // Debug để check filter có giữ không
     fetchInventories(nextPage, filterParams);
-  }, [fetchInventories]);
+  }, [fetchInventories, filterParams]); // Thêm filterParams vào dependency để update khi thay đổi
 
   const formatVND = useCallback((value) => {
     return Number(value).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
@@ -1150,7 +1138,7 @@ const AdminInventory = () => {
 
   return (
     <div className='d-flex'>
-      <AdminSidebar />
+      
       <div className='position-relative w-100 flex-grow-1 ms-5 p-4'>
         <h1 className="mb-4" style={{ fontSize: '1.8rem', fontWeight: '600' }}>Quản Lý Kho</h1>
         {currentView === 'list' && (
