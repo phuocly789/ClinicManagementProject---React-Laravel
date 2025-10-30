@@ -22,6 +22,7 @@ use App\Http\Controllers\API\Doctor\PatientsController;
 //----------------------------------------------Hết-------------------------------
 use App\Http\Controllers\API\User\UserControllers;
 use App\Http\Controllers\API\Print\InvoicePrintController;
+use App\Http\Controllers\API\Technician\TestResultsController;
 
 
 
@@ -105,6 +106,10 @@ Route::prefix('doctor')->group(function () {
         Route::get('{appointmentId}', [DoctorExaminationsController::class, 'show']);
         Route::post('{appointmentId}/temp-save', [DoctorExaminationsController::class, 'tempSave']);
     });
+
+    // Chỉ định dịch vụ
+    Route::post('/appointments/{appointmentId}/assign-services', [ServiceController::class, 'assignServices']);
+    Route::get('/doctor/check-roles', [ServiceController::class, 'checkRolesAndTechnicians']);
 });
 
 //Nhóm route cho User
@@ -121,3 +126,13 @@ Route::get('/roles', [UserControllers::class, 'roles']);
 // Route::post('/print/export', [InvoicePrintController::class, 'export']); // POST để pass appointment_id + type
 Route::get('/print/{type}/{appointment_id}', [InvoicePrintController::class, 'export']);
 Route::post('/print/prescription/preview', [InvoicePrintController::class, 'previewPrescription']);
+// Route cho PDF Preview
+Route::post('/print/preview-html', [InvoicePrintController::class, 'previewHTML']);
+
+
+// Technician Routes
+Route::prefix('technician')->group(function () {
+    // Danh sách dịch vụ
+    Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
+
+});

@@ -21,6 +21,9 @@ import PatientLayout from "./Components/Patient/PatientLayout.jsx";
 import AdminSidebar from "./Components/Sidebar/AdminSidebar.jsx";
 import DoctorSidebar from "./Components/Sidebar/DoctorSidebar.jsx";
 import Home from "./pages/Home.jsx";
+import PDFEditorPage from './pages/Doctors/PrintsPDF/PDFPreviewEditor.jsx';
+import TechnicianDashboard from "./pages/Technician/TechnicianDashboard.jsx";
+
 function App() {
   return (
     <BrowserRouter>
@@ -60,8 +63,12 @@ function App() {
         <Route path={path.REGISTER} element={<Register />} />{" "}
         <Route
           path={path.VERIFICATION_EMAIL}
-          element={<VerifyEmailPage />}
+          element={<VerifyEmailPage />
         />
+        ></Route>
+        {/* Trang mặc định */}
+        <Route path="/pdf-editor" element={<PDFEditorPage />} />
+        <Route path="/technician" element={<TechnicianDashboard />} />
       </Routes>
     </BrowserRouter >
   );
