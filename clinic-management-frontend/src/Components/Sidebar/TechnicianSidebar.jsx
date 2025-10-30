@@ -23,7 +23,7 @@ const TechnicianSidebar = ({ currentSection, switchSection }) => {
         position: 'fixed',
         top: 0,
         left: 0,
-        background: 'linear-gradient(to bottom, #28a745, #218838)',
+        background: 'linear-gradient(to bottom, #4e8cb1, #795548)',
         padding: '2rem 1rem',
         overflowY: 'auto',
         zIndex: 1000,
