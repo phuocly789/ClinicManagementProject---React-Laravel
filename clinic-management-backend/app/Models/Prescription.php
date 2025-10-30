@@ -31,7 +31,7 @@ class Prescription extends Model
 {
 	protected $table = 'Prescriptions';
 	protected $primaryKey = 'PrescriptionId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [

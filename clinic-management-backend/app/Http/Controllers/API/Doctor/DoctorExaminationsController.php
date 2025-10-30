@@ -48,14 +48,17 @@ class DoctorExaminationsController extends Controller
             'instructions' => 'nullable|string',
         ]);
 
-        $appointment = Appointment::findOrFail($appointmentId);
+        // SỬA: Thêm eager loading để lấy thông tin patient và user
+        $appointment = Appointment::with(['patient.user'])->findOrFail($appointmentId);
 
         $staffId = 4;
 
-        $patient = Patient::find($appointment->PatientId);
+        // SỬA: Lấy patient từ relationship đã eager load
+        $patient = $appointment->patient;
         if (!$patient) {
             return response()->json(['error' => 'Không tìm thấy bệnh nhân'], 400);
         }
+
         $staff = MedicalStaff::find($staffId);
         if (!$staff) {
             return response()->json(['error' => 'Không tìm thấy thông tin bác sĩ'], 400);
@@ -117,11 +120,20 @@ class DoctorExaminationsController extends Controller
             }
 
             if ($request->prescriptions && count($request->prescriptions) > 0) {
+                // SỬA: Lấy tên bệnh nhân từ relationship
+                $patientName = 'Bệnh nhân';
+                if ($patient->user && $patient->user->FullName) {
+                    $patientName = $patient->user->FullName;
+                }
+
+                // SỬA: Tạo instructions tự động với tên bệnh nhân
+                $instructions = $request->instructions ?? "Đơn thuốc cho bệnh nhân {$patientName}";
+
                 $prescription = Prescription::create([
                     'AppointmentId' => $appointmentId,
                     'StaffId' => $staffId,
                     'RecordId' => $recordId,
-                    'Instructions' => $request->instructions,
+                    'Instructions' => $instructions, // SỬA: Dùng instructions đã tạo
                     'PrescriptionDate' => now(),
                 ]);
 
