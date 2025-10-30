@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
-import { Table, Button, Spinner, Form, Row, Col, Card, Badge, ProgressBar, Alert, Modal } from 'react-bootstrap';
+import { Table, Button, Spinner, Form, Row, Col, Card, Badge, ProgressBar, Alert, Modal, InputGroup } from 'react-bootstrap';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import Pagination from '../../Components/Pagination/Pagination';
 import ConfirmDeleteModal from '../../Components/CustomToast/DeleteConfirmModal';
 import CustomToast from '../../Components/CustomToast/CustomToast';
-import { PencilIcon, Trash, Download, Upload, FileSpreadsheet, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { PencilIcon, Trash, Download, Upload, FileSpreadsheet, AlertCircle, CheckCircle, XCircle, Search, X } from 'lucide-react';
 import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -51,84 +51,163 @@ const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class
 const MedicineList = memo(({
   medicines, isLoading, formatVND, handleShowDeleteModal, handleShowEditForm,
   pageCount, currentPage, handlePageChange,
-  onDownloadTemplate, onShowExportModal, onShowImport
+  onDownloadTemplate, onShowExportModal, onShowImport,
+  applyFilters, clearFilters, filters, setFilters, debounceRef
 }) => {
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h3>Danh Sách Thuốc</h3>
+      {/* HEADER */}
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h3 style={{ fontSize: '1.5rem', fontWeight: '600' }}>
+          Danh Sách Thuốc
+        </h3>
         <div className="d-flex gap-2">
           <Button variant="outline-primary" onClick={onDownloadTemplate}>
             <Download size={16} className="me-1" /> Tải Template
           </Button>
           <Button variant="success" onClick={onShowExportModal}>
-            <FileSpreadsheet size={16} className="me-1" /> Export Excel
+            <FileSpreadsheet size={16} className="me-1" /> Export
           </Button>
           <Button variant="info" onClick={onShowImport}>
-            <Upload size={16} className="me-1" /> Import Excel
+            <Upload size={16} className="me-1" /> Import
           </Button>
-          <Button variant="primary" onClick={() => handleShowEditForm(null)}>Thêm Thuốc Mới</Button>
+          <Button variant="primary" onClick={() => handleShowEditForm(null)}>
+            + Thêm Thuốc
+          </Button>
         </div>
       </div>
 
-      {/* Main Table */}
-      <div className="table-responsive" style={{ transition: 'opacity 0.3s ease' }}>
+      {/* FILTER BAR */}
+      <Card className="mb-4 p-3 bg-light border">
+        <Form onSubmit={(e) => { e.preventDefault(); applyFilters(); }}>
+          <Row className="g-3 align-items-end">
+            {/* TÌM KIẾM TÊN - DEBOUNCE */}
+            <Col md={4}>
+              <InputGroup>
+                <InputGroup.Text><Search size={16} /></InputGroup.Text>
+                <Form.Control
+                  placeholder="Tìm tên thuốc..."
+                  value={filters.search || ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFilters(prev => ({ ...prev, search: value }));
+                    // Debounce: chỉ gọi API sau 500ms không gõ
+                    if (debounceRef.current) clearTimeout(debounceRef.current);
+                    debounceRef.current = setTimeout(() => {
+                      applyFilters({ search: value });
+                    }, 500);
+                  }}
+                />
+              </InputGroup>
+            </Col>
+
+            {/* LỌC LOẠI */}
+            <Col md={2}>
+              <Form.Select
+                value={filters.type || ''}
+                onChange={(e) => applyFilters({ type: e.target.value })}
+              >
+                <option value="">Loại</option>
+                {medicineTypes.map(t => <option key={t} value={t}>{t}</option>)}
+              </Form.Select>
+            </Col>
+
+            {/* LỌC ĐƠN VỊ */}
+            <Col md={2}>
+              <Form.Select
+                value={filters.unit || ''}
+                onChange={(e) => applyFilters({ unit: e.target.value })}
+              >
+                <option value="">Đơn vị</option>
+                {units.map(u => <option key={u} value={u}>{u}</option>)}
+              </Form.Select>
+            </Col>
+
+            {/* KHOẢNG GIÁ */}
+            <Col md={3}>
+              <InputGroup size="sm">
+                <Form.Control
+                  type="number"
+                  placeholder="Giá từ"
+                  value={filters.min_price || ''}
+                  onChange={(e) => setFilters(prev => ({ ...prev, min_price: e.target.value }))}
+                />
+                <InputGroup.Text>→</InputGroup.Text>
+                <Form.Control
+                  type="number"
+                  placeholder="Giá đến"
+                  value={filters.max_price || ''}
+                  onChange={(e) => setFilters(prev => ({ ...prev, max_price: e.target.value }))}
+                />
+              </InputGroup>
+            </Col>
+
+            {/* TỒN KHO THẤP */}
+            <Col md={2}>
+              <Form.Check
+                type="switch"
+                label="Tồn thấp"
+                checked={filters.low_stock === '1'}
+                onChange={(e) => setFilters(prev => ({ ...prev, low_stock: e.target.checked ? '1' : '' }))}
+              />
+            </Col>
+
+            {/* NÚT TÌM KIẾM & XÓA */}
+            <Col md={12} className="d-flex gap-2 mt-2">
+              <Button type="submit" variant="primary">
+                <Search size={16} className="me-1" /> Tìm kiếm
+              </Button>
+              <Button variant="outline-danger" onClick={clearFilters}>
+                <X size={16} className="me-1" /> Xóa bộ lọc
+              </Button>
+            </Col>
+          </Row>
+        </Form>
+      </Card>
+
+      {/* TABLE */}
+      <div className="table-responsive">
         <Table striped bordered hover responsive className={isLoading ? 'opacity-50' : ''}>
-          <thead>
+          <thead className="table-light">
             <tr>
-              <th>Mã Thuốc</th>
+              <th>Mã</th>
               <th>Tên Thuốc</th>
-              <th>Loại Thuốc</th>
-              <th>Đơn Vị</th>
-              <th>Giá Bán</th>
-              <th>Tồn Kho</th>
+              <th>Loại</th>
+              <th>ĐV</th>
+              <th>Giá</th>
+              <th>Tồn</th>
               <th>Mô Tả</th>
               <th>Hành Động</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
-              <tr>
-                <td colSpan="8" className="text-center">
-                  <Spinner animation="border" variant="primary" />
-                </td>
-              </tr>
+              <tr><td colSpan="8" className="text-center py-4"><Spinner animation="border" /></td></tr>
             ) : medicines.length === 0 ? (
-              <tr>
-                <td colSpan="8" className="text-center">
-                  Trống
-                </td>
-              </tr>
+              <tr><td colSpan="8" className="text-center py-4 text-muted">Không có dữ liệu</td></tr>
             ) : (
-              medicines.map((medicine) => (
-                <tr key={medicine.MedicineId}>
-                  <td>{medicine.MedicineId}</td>
-                  <td>{medicine.MedicineName}</td>
-                  <td>{medicine.MedicineType}</td>
-                  <td>{medicine.Unit}</td>
-                  <td>{formatVND(medicine.Price)}</td>
-                  <td>{medicine.StockQuantity}</td>
-                  <td>{medicine.Description}</td>
+              medicines.map((m) => (
+                <tr key={m.MedicineId}>
+                  <td><strong>{m.MedicineId}</strong></td>
+                  <td>{m.MedicineName}</td>
+                  <td>{m.MedicineType}</td>
+                  <td>{m.Unit}</td>
+                  <td>{formatVND(m.Price)}</td>
                   <td>
-                    <span>
-                      <a
-                        className="text-success"
-                        href="#"
-                        onClick={() => handleShowEditForm(medicine)}
-                      >
-                        <PencilIcon size={16} />
-                      </a>
-                    </span>
-                    <span className="px-1">/</span>
-                    <span>
-                      <a
-                        className="text-danger"
-                        href="#"
-                        onClick={() => handleShowDeleteModal(medicine.MedicineId)}
-                      >
-                        <Trash size={16} />
-                      </a>
-                    </span>
+                    <Badge bg={m.StockQuantity < 100 ? 'danger' : m.StockQuantity < 500 ? 'warning' : 'success'}>
+                      {m.StockQuantity}
+                    </Badge>
+                  </td>
+                  <td title={m.Description}>
+                    {m.Description?.length > 30 ? m.Description.substring(0, 30) + '...' : m.Description || '—'}
+                  </td>
+                  <td>
+                    <Button variant="link" size="sm" className="text-success p-0 me-2" onClick={() => handleShowEditForm(m)}>
+                      <PencilIcon size={18} />
+                    </Button>
+                    <Button variant="link" size="sm" className="text-danger p-0" onClick={() => handleShowDeleteModal(m.MedicineId)}>
+                      <Trash size={18} />
+                    </Button>
                   </td>
                 </tr>
               ))
@@ -136,6 +215,7 @@ const MedicineList = memo(({
           </tbody>
         </Table>
       </div>
+
       {pageCount > 1 && (
         <Pagination
           pageCount={pageCount}
@@ -536,14 +616,80 @@ const AdminMedicine = () => {
   const [headers, setHeaders] = useState([]); // Auto detect header
   const [dryRunResult, setDryRunResult] = useState(null);
   const [selectedColumns, setSelectedColumns] = useState(availableColumns.map(col => col.value)); // Default all
-  const [filters, setFilters] = useState({});
   const [mapping, setMapping] = useState({});
   const [uploadErrors, setUploadErrors] = useState([]);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showConfirmImportModal, setShowConfirmImportModal] = useState(false);
 
+  const [filters, setFilters] = useState({
+    search: '',
+    type: '',
+    unit: '',
+    min_price: '',
+    max_price: '',
+    low_stock: '',
+    threshold: 100
+  });
+  const [filterParams, setFilterParams] = useState('');
+
   const showToast = useCallback((type, message) => {
     setToast({ show: true, type, message });
+  }, []);
+
+
+  const fetchMedicines = useCallback(async (page = 1, queryString = '') => {
+    const cacheKey = `${page}_${queryString || 'none'}`;
+    if (cache.current.has(cacheKey)) {
+      const { data, last_page } = cache.current.get(cacheKey);
+      setMedicines(data);
+      setPageCount(last_page);
+      setCurrentPage(page - 1);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const url = `${API_BASE_URL}/api/medicines?page=${page}${queryString ? '&' + queryString : ''}`;
+      const response = await fetch(url, {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const res = await response.json();
+      cache.current.set(cacheKey, { data: res.data, last_page: res.last_page });
+      setMedicines(res.data);
+      setPageCount(res.last_page);
+      setCurrentPage(page - 1);
+    } catch (error) {
+      showToast('error', `Lỗi tải dữ liệu: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast]);
+
+  // ÁP DỤNG LỌC
+  const applyFilters = useCallback((updates = {}) => {
+    const newFilters = { ...filters, ...updates };
+    setFilters(newFilters);
+
+    const params = new URLSearchParams();
+    Object.entries(newFilters).forEach(([key, value]) => {
+      if (value !== '' && value !== null && value !== undefined) {
+        params.append(key, value);
+      }
+    });
+
+    const query = params.toString();
+    setFilterParams(query);
+    fetchMedicines(1, query); // Gọi ngay khi nhấn nút hoặc debounce kết thúc
+  }, [filters, fetchMedicines]);
+
+  // XÓA LỌC
+  const clearFilters = useCallback(() => {
+    const reset = { search: '', type: '', unit: '', min_price: '', max_price: '', low_stock: '', threshold: 100 };
+    setFilters(reset);
+    setFilterParams('');
+    fetchMedicines(1);
   }, []);
 
   const hideToast = useCallback(() => {
@@ -557,43 +703,6 @@ const AdminMedicine = () => {
   const handleCloseExportModal = useCallback(() => {
     setShowExportModal(false);
   }, []);
-
-
-  const fetchMedicines = useCallback(async (page = 1) => {
-    if (cache.current.has(page)) {
-      const { data, last_page } = cache.current.get(page);
-      setMedicines(data);
-      setPageCount(last_page);
-      setCurrentPage(page - 1);
-      return;
-    }
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch(`${API_BASE_URL}/api/medicines?page=${page}`, {
-          headers: {
-            'Accept': 'application/json',
-          },
-          credentials: 'include',
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        const paginator = await response.json();
-        cache.current.set(page, { data: paginator.data, last_page: paginator.last_page });
-        setMedicines(paginator.data);
-        setPageCount(paginator.last_page);
-        setCurrentPage(page - 1);
-      } catch (error) {
-        console.error('Error fetching medicines:', error);
-        showToast('error', `Lỗi khi tải danh sách thuốc: ${error.message}`);
-      } finally {
-        setIsLoading(false);
-      }
-    }, 300);
-  }, [showToast]);
 
   const getCsrfToken = useCallback(async (retries = 3) => {
     for (let attempt = 1; attempt <= retries; attempt++) {
@@ -768,17 +877,16 @@ const AdminMedicine = () => {
 
   useEffect(() => {
     if (currentView === 'list') {
-      fetchMedicines(1);
+      fetchMedicines(1, filterParams);
     }
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [currentView, fetchMedicines]);
+  }, [currentView, fetchMedicines, filterParams]);
 
   const handlePageChange = useCallback(({ selected }) => {
-    const nextPage = selected + 1;
-    fetchMedicines(nextPage);
-  }, [fetchMedicines]);
+    fetchMedicines(selected + 1, filterParams);
+  }, [fetchMedicines, filterParams]);
 
   const formatVND = useCallback((price) => {
     return Number(price).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
@@ -1031,6 +1139,11 @@ const AdminMedicine = () => {
             onDownloadTemplate={handleDownloadTemplate}
             onShowExportModal={handleShowExportModal}
             onShowImport={handleShowImport}
+            applyFilters={applyFilters}
+            clearFilters={clearFilters}
+            filters={filters}
+            setFilters={setFilters}
+            debounceRef={debounceRef}
           />
         )}
         {currentView === 'add' && (
