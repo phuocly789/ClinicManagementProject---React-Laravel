@@ -20,16 +20,53 @@ class ImportBillController extends Controller
      */
     public function index(Request $request)
     {
-        $perPage = 10;
-        $importBills = ImportBill::with([
+        $perPage = $request->get('per_page', 10);
+
+        $query = ImportBill::with([
             'supplier',
             'user',
-            'import_details' => function ($query) {
-                $query->with('medicine');
-            }
-        ])
-            ->orderBy('ImportDate', 'desc')
-            ->paginate($perPage);
+            'import_details' => fn($q) => $q->with('medicine')
+        ]);
+
+        // 1. TÌM KIẾM (search)
+        if ($search = $request->get('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('ImportId', 'like', "%{$search}%")
+                ->orWhere('Notes', 'like', "%{$search}%")
+                ->orWhereHas('supplier', function ($sq) use ($search) {
+                    $sq->where('SupplierName', 'like', "%{$search}%");
+                });
+            });
+        }
+
+        // 2. LỌC THEO NGÀY (date range)
+        if ($dateFrom = $request->get('date_from')) {
+            $query->whereDate('ImportDate', '>=', $dateFrom);
+        }
+        if ($dateTo = $request->get('date_to')) {
+            $query->whereDate('ImportDate', '<=', $dateTo);
+        }
+
+        // 3. LỌC THEO NHÀ CUNG CẤP
+        if ($supplierId = $request->get('supplier_id')) {
+            $query->where('SupplierId', $supplierId);
+        }
+
+        // 4. LỌC THEO KHOẢNG TIỀN
+        if ($minAmount = $request->get('min_amount')) {
+            $query->where('TotalAmount', '>=', $minAmount);
+        }
+        if ($maxAmount = $request->get('max_amount')) {
+            $query->where('TotalAmount', '<=', $maxAmount);
+        }
+
+        // 5. SẮP XẾP
+        $sortBy = $request->get('sort_by', 'ImportDate');
+        $sortDir = $request->get('sort_dir', 'desc');
+        $query->orderBy($sortBy, $sortDir);
+
+        // 6. PHÂN TRANG
+        $importBills = $query->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
@@ -38,6 +75,11 @@ class ImportBillController extends Controller
             'last_page' => $importBills->lastPage(),
             'per_page' => $importBills->perPage(),
             'total' => $importBills->total(),
+            'filters' => $request->only([
+                'search', 'date_from', 'date_to', 
+                'supplier_id', 'min_amount', 'max_amount',
+                'sort_by', 'sort_dir'
+            ])
         ], 200);
     }
 
