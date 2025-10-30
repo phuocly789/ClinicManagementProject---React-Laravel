@@ -21,7 +21,8 @@ const SupplierList = memo(({
   handlePageChange,
   applyFilters,
   clearFilters,
-  filters
+  filters,
+  setFilters
 }) => {
   return (
     <div>
@@ -45,8 +46,7 @@ const SupplierList = memo(({
               <Form.Control
                 placeholder="Tìm tên nhà cung cấp..."
                 value={filters.search}
-                onChange={(e) => applyFilters({ search: e.target.value })}
-                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
               />
             </InputGroup>
           </Col>
@@ -56,7 +56,7 @@ const SupplierList = memo(({
             <Form.Control
               placeholder="Lọc theo email..."
               value={filters.email}
-              onChange={(e) => applyFilters({ email: e.target.value })}
+              onChange={(e) => setFilters({ ...filters, email: e.target.value })}
             />
           </Col>
 
@@ -65,7 +65,7 @@ const SupplierList = memo(({
             <Form.Control
               placeholder="Lọc theo số điện thoại..."
               value={filters.phone}
-              onChange={(e) => applyFilters({ phone: e.target.value })}
+              onChange={(e) => setFilters({ ...filters, phone: e.target.value })}
             />
           </Col>
 
@@ -305,7 +305,6 @@ const AdminSuppliers = () => {
   const [filters, setFilters] = useState({ search: '', email: '', phone: '' });
   const [filterParams, setFilterParams] = useState('');
   const cache = useRef(new Map());
-  const debounceRef = useRef(null);
 
   const showToast = useCallback((type, message) => {
     setToast({ show: true, type, message });
@@ -313,28 +312,6 @@ const AdminSuppliers = () => {
 
   const hideToast = useCallback(() => {
     setToast({ show: false, type: 'info', message: '' });
-  }, []);
-
-  // ÁP DỤNG LỌC
-  const applyFilters = useCallback((updates = {}) => {
-    const newFilters = { ...filters, ...updates };
-    setFilters(newFilters);
-
-    const params = new URLSearchParams();
-    if (newFilters.search) params.append('search', newFilters.search);
-    if (newFilters.email) params.append('email', newFilters.email);
-    if (newFilters.phone) params.append('phone', newFilters.phone);
-
-    const query = params.toString();
-    setFilterParams(query);
-    fetchSuppliers(1, query);
-  }, [filters]);
-
-  // XÓA LỌC
-  const clearFilters = useCallback(() => {
-    setFilters({ search: '', email: '', phone: '' });
-    setFilterParams('');
-    fetchSuppliers(1);
   }, []);
 
   // FETCH + CACHE
@@ -367,6 +344,28 @@ const AdminSuppliers = () => {
     }
   }, [showToast]);
 
+
+  // ÁP DỤNG LỌC - CHỈ KHI NHẤN NÚT
+  const applyFilters = useCallback((updates = {}) => {
+    const newFilters = { ...filters, ...updates };
+    setFilters(newFilters);
+
+    const params = new URLSearchParams();
+    if (newFilters.search) params.append('search', newFilters.search);
+    if (newFilters.email) params.append('email', newFilters.email);
+    if (newFilters.phone) params.append('phone', newFilters.phone);
+
+    const query = params.toString();
+    setFilterParams(query);
+    fetchSuppliers(1, query);
+  }, [filters, fetchSuppliers]);
+
+  // XÓA LỌC
+  const clearFilters = useCallback(() => {
+    setFilters({ search: '', email: '', phone: '' });
+    setFilterParams('');
+    fetchSuppliers(1);
+  }, [fetchSuppliers]);
   const getCsrfToken = useCallback(async (retries = 3) => {
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
@@ -374,22 +373,16 @@ const AdminSuppliers = () => {
           method: 'GET',
           credentials: 'include',
         });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch CSRF token: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`Failed to fetch CSRF token: ${response.status}`);
         const token = document.cookie
           .split('; ')
           .find((row) => row.startsWith('XSRF-TOKEN='))
           ?.split('=')[1];
-        if (!token) {
-          throw new Error('CSRF token not found in cookies');
-        }
+        if (!token) throw new Error('CSRF token not found in cookies');
         return decodeURIComponent(token);
       } catch (error) {
         console.error(`Attempt ${attempt} to fetch CSRF token failed:`, error);
-        if (attempt === retries) {
-          throw new Error(`Không thể lấy CSRF token sau ${retries} lần thử: ${error.message}`);
-        }
+        if (attempt === retries) throw new Error(`Không thể lấy CSRF token sau ${retries} lần thử: ${error.message}`);
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
     }
@@ -551,7 +544,6 @@ const AdminSuppliers = () => {
 
   useEffect(() => {
     if (currentView === 'list') fetchSuppliers(1);
-    return () => debounceRef.current && clearTimeout(debounceRef.current);
   }, [currentView, fetchSuppliers]);
 
   return (
@@ -559,6 +551,7 @@ const AdminSuppliers = () => {
       <AdminSidebar />
       <div className="position-relative w-100 flex-grow-1 ms-5 p-4">
         <h1 className="mb-4" style={{ fontSize: '1.8rem', fontWeight: '600' }}>Quản Lý Nhà Cung Cấp</h1>
+
         {currentView === 'list' && (
           <SupplierList
             suppliers={suppliers}
@@ -571,13 +564,13 @@ const AdminSuppliers = () => {
             applyFilters={applyFilters}
             clearFilters={clearFilters}
             filters={filters}
+            setFilters={setFilters}
           />
         )}
         {currentView === 'add' && (
           <SupplierForm
-            isEditMode={currentView === 'edit'}
-            supplier={editSupplier}
-            onSubmit={currentView === 'add' ? handleAddSupplier : handleEditSupplier}
+            isEditMode={false}
+            onSubmit={handleAddSupplier}
             onCancel={handleCancelForm}
             isLoading={isLoading}
           />
