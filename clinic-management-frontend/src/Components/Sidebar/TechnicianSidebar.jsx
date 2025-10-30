@@ -88,38 +88,7 @@ const TechnicianSidebar = ({ currentSection, switchSection }) => {
         </Nav.Item>
       </Nav>
 
-      {/* Custom CSS */}
-      <style jsx>{`
-        .transition-all {
-          transition: all 0.3s ease;
-        }
-        
-        .nav-link {
-          margin-bottom: 4px;
-          border-radius: 8px !important;
-        }
-        
-        .nav-link:hover:not(.active-tech-nav) {
-          background: rgba(255, 255, 255, 0.15) !important;
-          transform: translateX(5px);
-        }
-        
-        .active-tech-nav {
-          background: #fff !important;
-          color: #218838 !important;
-          font-weight: 600 !important;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-        
-        .active-tech-nav i {
-          color: #218838 !important;
-        }
-        
-        .logout-nav:hover {
-          background: rgba(220, 53, 69, 0.2) !important;
-          transform: translateX(5px);
-        }
-      `}</style>
+     
     </div>
   );
 };

@@ -18,22 +18,45 @@ class TestResultsController extends Controller
     public function getAssignedServices(Request $request)
     {
         try {
-            // Query lấy dịch vụ - ĐÃ SỬA QUAN HỆ
+            Log::info('🔄 Technician ID:', ['technician_id' => $this->technicianId]);
+
+            // Query lấy dịch vụ
             $services = ServiceOrder::with([
-                'appointment.patient.user',    // ✅
-                'service',                     // ✅
-                'medical_staff.user',          // ✅ SỬA: 'doctor.user' -> 'medical_staff.user'
-                'appointment.medical_staff.user' // ✅ THÊM: để lấy thông tin bác sĩ chỉ định
+                'appointment.patient.user',
+                'service',
+                'medical_staff.user',
+                'appointment.medical_staff.user'
             ])
                 ->where('AssignedStaffId', $this->technicianId)
                 ->whereIn('Status', ['Đã chỉ định', 'Đang chờ', 'Đang thực hiện'])
                 ->orderBy('OrderDate', 'desc')
                 ->paginate(10);
 
+            Log::info('🔍 SQL Query Result:', [
+                'total' => $services->total(),
+                'count' => $services->count(),
+                'has_data' => !$services->isEmpty()
+            ]);
+
+            // Debug first item
+            if (!$services->isEmpty()) {
+                $firstItem = $services->first();
+                Log::info('📋 First Item Debug:', [
+                    'ServiceOrderId' => $firstItem->ServiceOrderId,
+                    'AssignedStaffId' => $firstItem->AssignedStaffId,
+                    'Status' => $firstItem->Status,
+                    'has_appointment' => !is_null($firstItem->appointment),
+                    'has_patient' => !is_null($firstItem->appointment?->patient),
+                    'has_service' => !is_null($firstItem->service)
+                ]);
+            }
+
             // Format data
             $formattedServices = $services->map(function ($order) {
                 return $this->formatServiceData($order);
             });
+
+            Log::info('📊 Formatted Data:', $formattedServices->toArray());
 
             // ✅ SỬA: Kiểm tra nếu không có dữ liệu
             if ($formattedServices->isEmpty()) {
@@ -62,7 +85,7 @@ class TestResultsController extends Controller
             );
 
         } catch (\Exception $e) {
-            Log::error('Error getting assigned services: ' . $e->getMessage());
+            Log::error('❌ Error getting assigned services: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Lỗi khi lấy danh sách dịch vụ: ' . $e->getMessage()
@@ -75,27 +98,39 @@ class TestResultsController extends Controller
      */
     private function formatServiceData($order)
     {
+        // ✅ DEBUG ĐỂ XÁC NHẬN CẤU TRÚC
+        Log::info('🔍 Formatting Service Order:', [
+            'service_order_id' => $order->ServiceOrderId,
+            'has_appointment' => !is_null($order->appointment),
+            'has_patient' => !is_null($order->appointment?->patient),
+            'has_patient_user' => !is_null($order->appointment?->patient?->user),
+            'patient_user_fields' => $order->appointment?->patient?->user ? array_keys($order->appointment->patient->user->getAttributes()) : 'no user'
+        ]);
+
+        // ✅ LẤY USER TỪ PATIENT (THEO CẤU TRÚC todayPatients)
+        $user = $order->appointment->patient->user ?? null;
+
         return [
             'service_order_id' => $order->ServiceOrderId,
             'appointment_id' => $order->AppointmentId,
-            'patient_name' => $order->appointment->patient->user->FullName ?? 'N/A',
-            'patient_age' => $order->appointment->patient->DateOfBirth
-                ? now()->diffInYears($order->appointment->patient->DateOfBirth)
+            'patient_name' => $user->FullName ?? 'N/A',
+            'patient_age' => !empty($user->DateOfBirth)
+                ? \Carbon\Carbon::parse($user->DateOfBirth)->age
                 : 'N/A',
-            'patient_gender' => $order->appointment->patient->Gender ?? 'N/A',
-            'patient_phone' => $order->appointment->patient->PhoneNumber ?? 'N/A',
+            'patient_gender' => $user->Gender ?? 'N/A',
+            'patient_phone' => $user->Phone ?? 'N/A', // ✅ SỬA: Phone (không phải PhoneNumber)
             'service_name' => $order->service->ServiceName ?? 'N/A',
             'service_type' => $order->service->ServiceType ?? 'N/A',
             'price' => $order->service->Price ?? 0,
             'order_date' => $order->OrderDate?->format('d/m/Y H:i'),
             'status' => $order->Status,
-            'assigned_technician_name' => $order->medical_staff->user->FullName ?? 'N/A', // ✅ SỬA
-            'referring_doctor_name' => $order->appointment->medical_staff->user->FullName ?? 'N/A', // ✅ THÊM: Bác sĩ chỉ định
+            'assigned_technician_name' => $order->medical_staff->user->FullName ?? 'N/A',
+            'referring_doctor_name' => $order->appointment->medical_staff->user->FullName ?? 'N/A',
             'notes' => $order->Notes,
             'result' => $order->Result,
             'completed_at' => $order->CompletedAt?->format('d/m/Y H:i')
         ];
     }
 
-  
+
 }

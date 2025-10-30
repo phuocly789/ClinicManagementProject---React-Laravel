@@ -1,258 +1,330 @@
-import React, { useEffect, useState } from 'react';
-import { Card, Table, Button, Row, Col, Badge, Spinner, Alert, Pagination } from 'react-bootstrap';
-import technicianService from '../../services/technicianService'; // ✅ IMPORT SERVICE
+import React from 'react';
+import { Card, Table, Button, Row, Col, Badge, Alert, Spinner } from 'react-bootstrap';
 
-const TechnicianSection = ({ testResultsData, confirmAction, updateStats }) => {
-  const [doctorServices, setDoctorServices] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pagination, setPagination] = useState({});
-
-  // ✅ Lấy danh sách chỉ định từ API SERVICE
-  const fetchAssignedServices = async (page = 1) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // ✅ SỬ DỤNG SERVICE - CODE NGẮN GỌN
-      const response = await technicianService.getAssignedServices(page);
-      
-      if (response.data.success) {
-        setDoctorServices(response.data.data);
-        setPagination(response.data.pagination);
-      }
-    } catch (err) {
-      console.error('Error fetching assigned services:', err);
-      setError(err.response?.data?.message || err.message || 'Lỗi kết nối');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchAssignedServices(currentPage);
-  }, [currentPage]);
-
-  useEffect(() => {
-    updateStats();
-  }, [testResultsData, updateStats]);
+const TechnicianSection = ({ testResultsData, confirmAction, updateStats, loading }) => {
+  console.log('🎯 TechnicianSection rendered');
+  console.log('📥 testResultsData từ props:', testResultsData);
+  console.log('🔢 Số lượng items:', testResultsData?.length || 0);
 
   const getStatusVariant = (status) => {
-    switch (status) {
-      case 'Hoàn thành': return 'success';
-      case 'Đang thực hiện': return 'warning';
-      case 'Đã chỉ định':
-      case 'Đang chờ': return 'secondary';
-      default: return 'secondary';
-    }
+    if (!status) return 'secondary';
+    
+    const statusLower = status.toLowerCase();
+    if (statusLower.includes('hoàn thành')) return 'success';
+    if (statusLower.includes('đang thực hiện')) return 'warning';
+    if (statusLower.includes('đã chỉ định')) return 'primary';
+    if (statusLower.includes('đang chờ')) return 'secondary';
+    return 'secondary';
   };
 
-  // ✅ Xử lý phân trang - ĐƠN GIẢN
-  const handlePageChange = (pageNumber) => {
-    setCurrentPage(pageNumber);
+  const formatPrice = (price) => {
+    if (!price) return '0 ₫';
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    }).format(price);
   };
 
-  // ✅ Render phân trang - ĐƠN GIẢN
-  const renderPagination = () => {
-    if (!pagination || pagination.last_page <= 1) return null;
-
-    return (
-      <div className="d-flex justify-content-center mt-3">
-        <Pagination>
-          <Pagination.Prev 
-            disabled={currentPage === 1}
-            onClick={() => handlePageChange(currentPage - 1)}
-          />
-          
-          {[...Array(pagination.last_page)].map((_, index) => (
-            <Pagination.Item
-              key={index + 1}
-              active={index + 1 === currentPage}
-              onClick={() => handlePageChange(index + 1)}
-            >
-              {index + 1}
-            </Pagination.Item>
-          ))}
-          
-          <Pagination.Next 
-            disabled={currentPage === pagination.last_page}
-            onClick={() => handlePageChange(currentPage + 1)}
-          />
-        </Pagination>
-      </div>
-    );
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return dateString;
   };
+
+  // Thống kê
+  const totalServices = testResultsData.length;
+  const completedServices = testResultsData.filter(s => 
+    s.status && s.status.toLowerCase().includes('hoàn thành')
+  ).length;
+  const inProgressServices = testResultsData.filter(s => 
+    s.status && s.status.toLowerCase().includes('đang thực hiện')
+  ).length;
+  const assignedServices = testResultsData.filter(s => 
+    s.status && s.status.toLowerCase().includes('đã chỉ định')
+  ).length;
+  const totalRevenue = testResultsData.reduce((total, service) => total + (service.price || 0), 0);
+  const averagePrice = totalServices > 0 ? totalRevenue / totalServices : 0;
 
   return (
     <div className="section active" id="test-results">
+      {/* Header Stats */}
+      <Row className="mb-4">
+        <Col>
+          <div className="d-flex justify-content-between align-items-center">
+            <div>
+              <h2 className="fw-bold text-dark mb-1">
+                <i className="fas fa-vials text-primary me-2"></i>
+                Quản Lý Dịch Vụ
+              </h2>
+              <p className="text-muted mb-0">Danh sách dịch vụ được chỉ định và kết quả xét nghiệm</p>
+            </div>
+            {totalServices > 0 && (
+              <Badge bg="primary" className="fs-6 px-3 py-2">
+                <i className="fas fa-list-check me-2"></i>
+                {totalServices} dịch vụ
+              </Badge>
+            )}
+          </div>
+        </Col>
+      </Row>
+
       <Row>
-        <Col md={12}>
-          <Card className="mb-4">
-            <Card.Header className="bg-success text-white">
-              <h3 className="mb-0"><i className="fas fa-vials me-2"></i> Kết Quả Xét Nghiệm</h3>
-            </Card.Header>
-            <Card.Body>
-              <Table striped responsive>
-                <thead>
-                  <tr>
-                    <th>Mã lịch</th>
-                    <th>Mã Bệnh Nhân</th>
-                    <th>Tên bệnh nhân</th>
-                    <th>Dịch vụ</th>
-                    <th>Trạng thái</th>
-                    <th>Hành động</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {testResultsData.map((item, index) => (
-                    <tr key={index}>
-                      <td>{item.id}</td>
-                      <td>{item.id}</td>
-                      <td>{item.patient}</td>
-                      <td>{item.service}</td>
-                      <td>
-                        <Badge bg={getStatusVariant(item.status)}>
-                          {item.status}
-                        </Badge>
-                      </td>
-                      <td>
-                        {item.status === 'Đang xử lý' ? (
-                          <Button variant="success" size="sm"
-                            onClick={() => confirmAction('updateTestResult', item.id, item.patient, item.service)}>
-                            <i className="fas fa-check me-1"></i> Cập nhật kết quả
-                          </Button>
-                        ) : (
-                          <div className="d-flex gap-2">
-                            <Button variant="warning" size="sm"
-                              onClick={() => confirmAction('editTestResult', item.id, item.patient, item.service, item.result)}>
-                              <i className="fas fa-edit me-1"></i> Chỉnh sửa
-                            </Button>
-                            <Button variant="primary" size="sm"
-                              onClick={() => printTestResult(item.id, item.patient, item.service, item.result)}>
-                              <i className="fas fa-print me-1"></i> Xuất phiếu
-                            </Button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </Card.Body>
-          </Card>
+        {/* Statistics Cards */}
+        <Col xl={12} className="mb-4">
+          <Row className="g-3">
+            <Col xxl={3} lg={6}>
+              <Card className="border-0 shadow-sm h-100">
+                <Card.Body className="p-4">
+                  <div className="d-flex justify-content-between align-items-center">
+                    <div>
+                      <h6 className="card-title text-muted mb-2">Tổng Dịch Vụ</h6>
+                      <h2 className="fw-bold text-primary mb-0">{totalServices}</h2>
+                      <small className="text-muted">Đang quản lý</small>
+                    </div>
+                    <div className="bg-primary bg-opacity-10 p-3 rounded">
+                      <i className="fas fa-layer-group fa-2x text-primary"></i>
+                    </div>
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
+
+            <Col xxl={3} lg={6}>
+              <Card className="border-0 shadow-sm h-100">
+                <Card.Body className="p-4">
+                  <div className="d-flex justify-content-between align-items-center">
+                    <div>
+                      <h6 className="card-title text-muted mb-2">Hoàn Thành</h6>
+                      <h2 className="fw-bold text-success mb-0">{completedServices}</h2>
+                      <small className="text-muted">Đã xử lý xong</small>
+                    </div>
+                    <div className="bg-success bg-opacity-10 p-3 rounded">
+                      <i className="fas fa-check-circle fa-2x text-success"></i>
+                    </div>
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
+
+            <Col xxl={3} lg={6}>
+              <Card className="border-0 shadow-sm h-100">
+                <Card.Body className="p-4">
+                  <div className="d-flex justify-content-between align-items-center">
+                    <div>
+                      <h6 className="card-title text-muted mb-2">Đang Thực Hiện</h6>
+                      <h2 className="fw-bold text-warning mb-0">{inProgressServices}</h2>
+                      <small className="text-muted">Đang xử lý</small>
+                    </div>
+                    <div className="bg-warning bg-opacity-10 p-3 rounded">
+                      <i className="fas fa-spinner fa-2x text-warning"></i>
+                    </div>
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
+
+            <Col xxl={3} lg={6}>
+              <Card className="border-0 shadow-sm h-100">
+                <Card.Body className="p-4">
+                  <div className="d-flex justify-content-between align-items-center">
+                    <div>
+                      <h6 className="card-title text-muted mb-2">Đã Chỉ Định</h6>
+                      <h2 className="fw-bold text-info mb-0">{assignedServices}</h2>
+                      <small className="text-muted">Chờ xử lý</small>
+                    </div>
+                    <div className="bg-info bg-opacity-10 p-3 rounded">
+                      <i className="fas fa-clock fa-2x text-info"></i>
+                    </div>
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
         </Col>
 
-        {/* ✅ BẢNG DANH SÁCH CHỈ ĐỊNH - SERVICE */}
-        <Col md={12}>
-          <Card className="mb-4">
-            <Card.Header className="bg-info text-white">
-              <h3 className="mb-0">
-                <i className="fas fa-stethoscope me-2"></i> 
-                Danh Sách Chỉ Định Dịch Vụ
-                {pagination.total > 0 && (
-                  <Badge bg="light" text="dark" className="ms-2">
-                    Tổng: {pagination.total}
-                  </Badge>
-                )}
-              </h3>
-            </Card.Header>
-            <Card.Body>
-              {loading && (
-                <div className="text-center">
-                  <Spinner animation="border" variant="primary" />
-                  <p className="mt-2">Đang tải danh sách dịch vụ...</p>
+        {/* Main Services Table */}
+        <Col xl={12}>
+          <Card className="border-0 shadow-sm">
+            <Card.Header className="bg-white py-3 border-bottom">
+              <div className="d-flex justify-content-between align-items-center">
+                <h5 className="mb-0 fw-bold text-dark">
+                  <i className="fas fa-list-check text-primary me-2"></i>
+                  Danh Sách Dịch Vụ Được Chỉ Định
+                </h5>
+                <div className="text-muted">
+                  <small>
+                    <i className="fas fa-sync-alt me-1"></i>
+                    Cập nhật: {new Date().toLocaleTimeString('vi-VN')}
+                  </small>
                 </div>
-              )}
-
-              {error && (
-                <Alert variant="danger">
-                  <i className="fas fa-exclamation-triangle me-2"></i>
-                  {error}
-                  <Button 
-                    variant="outline-danger" 
-                    size="sm" 
-                    className="ms-2"
-                    onClick={() => fetchAssignedServices(currentPage)}
-                  >
-                    Thử lại
-                  </Button>
-                </Alert>
-              )}
-
-              {!loading && !error && doctorServices.length > 0 && (
-                <>
-                  <Table bordered hover responsive>
-                    <thead>
+              </div>
+            </Card.Header>
+            
+            <Card.Body className="p-0">
+              {loading ? (
+                <div className="text-center py-5">
+                  <Spinner animation="border" variant="primary" size="lg" />
+                  <p className="mt-3 text-muted fs-5">Đang tải dữ liệu...</p>
+                </div>
+              ) : testResultsData.length > 0 ? (
+                <div className="table-responsive">
+                  <Table hover className="mb-0 align-middle">
+                    <thead className="table-light">
                       <tr>
-                        <th>STT</th>
-                        <th>Mã Dịch Vụ</th>
-                        <th>Tên Bệnh Nhân</th>
-                        <th>Tuổi</th>
-                        <th>Giới tính</th>
-                        <th>Dịch Vụ</th>
-                        <th>Ngày Chỉ Định</th>
-                        <th>Trạng Thái</th>
+                        <th width="60" className="text-center py-3">#</th>
+                        <th width="120" className="py-3">Mã Dịch Vụ</th>
+                        <th width="120" className="py-3">Mã Lịch</th>
+                        <th className="py-3">Bệnh Nhân</th>
+                        <th width="80" className="text-center py-3">Tuổi</th>
+                        <th width="100" className="text-center py-3">Giới Tính</th>
+                        <th className="py-3">Dịch Vụ</th>
+                        <th width="150" className="text-center py-3">Bác Sĩ Chỉ Định</th>
+                        <th width="120" className="text-center py-3">Giá</th>
+                        <th width="140" className="text-center py-3">Ngày Chỉ Định</th>
+                        <th width="140" className="text-center py-3">Trạng Thái</th>
+                        <th width="180" className="text-center py-3">Thao Tác</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {doctorServices.map((srv, index) => (
-                        <tr key={srv.service_order_id}>
-                          <td>{(currentPage - 1) * 10 + index + 1}</td>
-                          <td>{srv.service_order_id}</td>
-                          <td>
-                            <strong>{srv.patient_name}</strong>
-                            {srv.patient_phone && (
-                              <div className="text-muted small">{srv.patient_phone}</div>
-                            )}
+                      {testResultsData.map((service, index) => (
+                        <tr key={service.service_order_id} className="border-bottom">
+                          <td className="text-center">
+                            <span className="fw-semibold text-muted">{index + 1}</span>
                           </td>
-                          <td>{srv.patient_age}</td>
-                          <td>{srv.patient_gender}</td>
+                          
                           <td>
-                            {srv.service_name}
-                            <div className="text-muted small">{srv.service_type}</div>
-                          </td>
-                          <td>{srv.order_date}</td>
-                          <td>
-                            <Badge bg={getStatusVariant(srv.status)}>
-                              {srv.status}
+                            <Badge bg="primary" className="fs-7 w-100">
+                              #{service.service_order_id}
                             </Badge>
+                          </td>
+                          
+                          <td>
+                            <span className="text-muted fw-semibold">#{service.appointment_id}</span>
+                          </td>
+                          
+                          <td>
+                            <div>
+                              <div className="fw-semibold text-dark">{service.patient_name}</div>
+                              {service.patient_phone && service.patient_phone !== 'N/A' && (
+                                <small className="text-muted">
+                                  <i className="fas fa-phone me-1"></i>
+                                  {service.patient_phone}
+                                </small>
+                              )}
+                            </div>
+                          </td>
+                          
+                          <td className="text-center">
+                            <span className="fw-semibold">{service.patient_age}</span>
+                          </td>
+                          
+                          <td className="text-center">
+                            <Badge 
+                              bg={service.patient_gender === 'Nam' ? 'info' : 'danger'}
+                              className="fs-7"
+                            >
+                              {service.patient_gender}
+                            </Badge>
+                          </td>
+                          
+                          <td>
+                            <div className="fw-semibold text-dark">{service.service_name}</div>
+                            <small className="text-muted">{service.service_type}</small>
+                          </td>
+                          
+                          <td className="text-center">
+                            <small className="text-dark fw-semibold">
+                              {service.referring_doctor_name}
+                            </small>
+                          </td>
+                          
+                          <td className="text-center">
+                            <Badge bg="outline-success" className="border text-success fs-7">
+                              {formatPrice(service.price)}
+                            </Badge>
+                          </td>
+                          
+                          <td className="text-center">
+                            <small className="text-muted">{formatDate(service.order_date)}</small>
+                          </td>
+                          
+                          <td className="text-center">
+                            <Badge 
+                              bg={getStatusVariant(service.status)} 
+                              className="fs-7 px-3 py-2"
+                            >
+                              {service.status}
+                            </Badge>
+                          </td>
+                          
+                          <td className="text-center">
+                            <div className="d-flex justify-content-center gap-2">
+                              <Button 
+                                variant="success" 
+                                size="sm"
+                                className="px-3"
+                                onClick={() => confirmAction(
+                                  'updateTestResult', 
+                                  service.service_order_id, 
+                                  service.patient_name, 
+                                  service.service_name
+                                )}
+                              >
+                                <i className="fas fa-check me-1"></i>
+                                Kết quả
+                              </Button>
+                              <Button 
+                                variant="outline-warning" 
+                                size="sm"
+                                className="px-3"
+                                onClick={() => confirmAction(
+                                  'editTestResult', 
+                                  service.service_order_id, 
+                                  service.patient_name, 
+                                  service.service_name,
+                                  service.result || 'Chưa có kết quả'
+                                )}
+                              >
+                                <i className="fas fa-edit me-1"></i>
+                                Sửa
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </Table>
-
-                  {renderPagination()}
-
-                  {pagination && (
-                    <div className="text-center text-muted mt-2">
-                      Hiển thị {pagination.from} đến {pagination.to} trong tổng số {pagination.total} dịch vụ
-                    </div>
-                  )}
-                </>
-              )}
-
-              {!loading && !error && doctorServices.length === 0 && (
-                <Alert variant="info" className="text-center">
-                  <i className="fas fa-info-circle me-2"></i>
-                  Không có dịch vụ nào được chỉ định
-                </Alert>
+                </div>
+              ) : (
+                <div className="text-center py-5">
+                  <div className="py-4">
+                    <i className="fas fa-clipboard-list fa-4x text-muted mb-3 opacity-50"></i>
+                    <h4 className="text-muted fw-light mb-3">Không có dịch vụ nào được chỉ định</h4>
+                    <p className="text-muted mb-0">
+                      Hiện tại không có dịch vụ xét nghiệm nào được chỉ định cho bạn.
+                    </p>
+                  </div>
+                </div>
               )}
             </Card.Body>
-          </Card>
-        </Col>
 
-        <Col md={12}>
-          <Card>
-            <Card.Header className="bg-success text-white">
-              <h3 className="mb-0"><i className="fas fa-chart-line me-2"></i> Thống Kê</h3>
-            </Card.Header>
-            <Card.Body>
-              <p><strong>Số lượng dịch vụ đã chỉ định:</strong> {pagination.total || 0}</p>
-              <p><strong>Trang hiện tại:</strong> {currentPage}</p>
-              <p><strong>Thời gian cập nhật:</strong> {new Date().toLocaleString('vi-VN')}</p>
-            </Card.Body>
+            {/* Footer Summary */}
+            {testResultsData.length > 0 && (
+              <Card.Footer className="bg-light py-3">
+                <div className="row align-items-center">
+                  <div className="col-md-6">
+                    <small className="text-muted">
+                      Hiển thị <strong>{testResultsData.length}</strong> dịch vụ • 
+                      Tổng giá trị: <strong className="text-success">{formatPrice(totalRevenue)}</strong>
+                    </small>
+                  </div>
+                  <div className="col-md-6 text-md-end">
+                    <small className="text-muted">
+                      Giá trung bình: <strong>{formatPrice(averagePrice)}</strong>
+                    </small>
+                  </div>
+                </div>
+              </Card.Footer>
+            )}
           </Card>
         </Col>
       </Row>
