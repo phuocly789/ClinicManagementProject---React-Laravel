@@ -1,27 +1,90 @@
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
-import { Table, Button, Spinner, Form, Row, Col } from 'react-bootstrap';
+import { Table, Button, Spinner, Form, Row, Col, InputGroup } from 'react-bootstrap';
 import Pagination from '../../Components/Pagination/Pagination';
 import ConfirmDeleteModal from '../../Components/CustomToast/DeleteConfirmModal';
 import CustomToast from '../../Components/CustomToast/CustomToast';
-import { PencilIcon, Trash } from 'lucide-react';
+import { PencilIcon, Trash, Search, Filter, X } from 'lucide-react';
 import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
 
 const API_BASE_URL = 'http://localhost:8000';
 
-// Regex kiểm tra ký tự đặc biệt và mã code
 const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
 const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class|import|export|\$\w+)/i;
 
-const SupplierList = memo(({ suppliers, isLoading, handleShowDeleteModal, handleShowEditForm, pageCount, currentPage, handlePageChange }) => {
+const SupplierList = memo(({
+  suppliers,
+  isLoading,
+  handleShowDeleteModal,
+  handleShowEditForm,
+  pageCount,
+  currentPage,
+  handlePageChange,
+  applyFilters,
+  clearFilters,
+  filters,
+  setFilters
+}) => {
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h3>Danh Sách Nhà Cung Cấp</h3>
-        <Button variant="primary" onClick={() => handleShowEditForm(null)}>Thêm Nhà Cung Cấp</Button>
+      {/* HEADER */}
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h3 style={{ fontSize: '1.5rem', fontWeight: '600' }}>
+          Danh Sách Nhà Cung Cấp
+        </h3>
+        <Button variant="primary" onClick={() => handleShowEditForm(null)}>
+          + Thêm Nhà Cung Cấp
+        </Button>
       </div>
-      <div className="table-responsive" style={{ transition: 'opacity 0.3s ease' }}>
+
+      {/* FILTER BAR */}
+      <div className="mb-4 p-3 bg-light rounded border">
+        <Row className="g-3 align-items-center">
+          {/* TÌM KIẾM TÊN */}
+          <Col md={4}>
+            <InputGroup>
+              <InputGroup.Text><Search size={16} /></InputGroup.Text>
+              <Form.Control
+                placeholder="Tìm tên nhà cung cấp..."
+                value={filters.search}
+                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              />
+            </InputGroup>
+          </Col>
+
+          {/* LỌC EMAIL */}
+          <Col md={3}>
+            <Form.Control
+              placeholder="Lọc theo email..."
+              value={filters.email}
+              onChange={(e) => setFilters({ ...filters, email: e.target.value })}
+            />
+          </Col>
+
+          {/* LỌC SỐ ĐIỆN THOẠI */}
+          <Col md={3}>
+            <Form.Control
+              placeholder="Lọc theo số điện thoại..."
+              value={filters.phone}
+              onChange={(e) => setFilters({ ...filters, phone: e.target.value })}
+            />
+          </Col>
+
+          {/* NÚT LỌC & XÓA */}
+          <Col md={2} className="d-flex gap-1">
+            <Button variant="primary" size="sm" onClick={applyFilters} className="flex-fill">
+              <Filter size={16} />
+            </Button>
+            <Button variant="outline-secondary" size="sm" onClick={clearFilters} className="flex-fill">
+              <X size={16} />
+            </Button>
+          </Col>
+        </Row>
+      </div>
+
+      {/* TABLE */}
+      <div className="table-responsive">
         <Table striped bordered hover responsive className={isLoading ? 'opacity-50' : ''}>
-          <thead>
+          <thead className="table-light">
             <tr>
               <th>Mã NCC</th>
               <th>Tên Nhà Cung Cấp</th>
@@ -34,46 +97,41 @@ const SupplierList = memo(({ suppliers, isLoading, handleShowDeleteModal, handle
           </thead>
           <tbody>
             {isLoading ? (
-              <tr>
-                <td colSpan="7" className="text-center">
-                  <Spinner animation="border" variant="primary" />
-                </td>
-              </tr>
+              <tr><td colSpan="7" className="text-center py-4"><Spinner animation="border" /></td></tr>
             ) : suppliers.length === 0 ? (
-              <tr>
-                <td colSpan="7" className="text-center">
-                  Trống
-                </td>
-              </tr>
+              <tr><td colSpan="7" className="text-center py-4 text-muted">Không có dữ liệu</td></tr>
             ) : (
               suppliers.map((supplier) => (
                 <tr key={supplier.SupplierId}>
-                  <td>{supplier.SupplierId}</td>
+                  <td><strong>{supplier.SupplierId}</strong></td>
                   <td>{supplier.SupplierName}</td>
-                  <td>{supplier.ContactEmail}</td>
-                  <td>{supplier.ContactPhone}</td>
-                  <td>{supplier.Address}</td>
-                  <td>{supplier.Description}</td>
-                  <td>
-                    <span>
-                      <a
-                        className="text-success"
-                        href="#"
-                        onClick={() => handleShowEditForm(supplier)}
-                      >
-                        <PencilIcon />
-                      </a>
-                    </span>
-                    <span className="px-1">/</span>
-                    <span>
-                      <a
-                        className="text-danger"
-                        href="#"
-                        onClick={() => handleShowDeleteModal(supplier.SupplierId)}
-                      >
-                        <Trash />
-                      </a>
-                    </span>
+                  <td>{supplier.ContactEmail || '—'}</td>
+                  <td>{supplier.ContactPhone || '—'}</td>
+                  <td>{supplier.Address || '—'}</td>
+                  <td title={supplier.Description}>
+                    {supplier.Description?.length > 40
+                      ? supplier.Description.substring(0, 40) + '...'
+                      : supplier.Description || '—'}
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="text-success p-0 me-2"
+                      onClick={() => handleShowEditForm(supplier)}
+                      title="Sửa"
+                    >
+                      <PencilIcon size={18} />
+                    </Button>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="text-danger p-0"
+                      onClick={() => handleShowDeleteModal(supplier.SupplierId)}
+                      title="Xóa"
+                    >
+                      <Trash size={18} />
+                    </Button>
                   </td>
                 </tr>
               ))
@@ -81,6 +139,8 @@ const SupplierList = memo(({ suppliers, isLoading, handleShowDeleteModal, handle
           </tbody>
         </Table>
       </div>
+
+      {/* PAGINATION */}
       {pageCount > 1 && (
         <Pagination
           pageCount={pageCount}
@@ -95,114 +155,87 @@ const SupplierList = memo(({ suppliers, isLoading, handleShowDeleteModal, handle
 
 const SupplierForm = memo(({ isEditMode, supplier, onSubmit, onCancel, isLoading }) => {
   const [errors, setErrors] = useState({
-    SupplierName: '',
-    ContactEmail: '',
-    ContactPhone: '',
-    Address: '',
-    Description: '',
+    SupplierName: '', ContactEmail: '', ContactPhone: '', Address: '', Description: '',
   });
 
   const validateForm = useCallback((formData) => {
     const newErrors = {};
     let isValid = true;
 
-    // Validate SupplierName
-    const supplierName = formData.get('SupplierName')?.trim();
-    if (!supplierName) {
+    const name = formData.get('SupplierName')?.trim();
+    if (!name) {
       newErrors.SupplierName = 'Vui lòng nhập tên nhà cung cấp';
       isValid = false;
-    } else if (supplierName.length > 255) {
-      newErrors.SupplierName = 'Tên nhà cung cấp không được vượt quá 255 ký tự';
+    } else if (name.length > 255) {
+      newErrors.SupplierName = 'Tên không được vượt quá 255 ký tự';
       isValid = false;
-    } else if (specialCharRegex.test(supplierName) || codePatternRegex.test(supplierName)) {
-      newErrors.SupplierName = 'Vui lòng không nhập ký tự đặc biệt hoặc ngôn ngữ code';
+    } else if (specialCharRegex.test(name) || codePatternRegex.test(name)) {
+      newErrors.SupplierName = 'Không được chứa ký tự đặc biệt hoặc mã code';
       isValid = false;
     }
 
-    // Validate ContactEmail
-    const contactEmail = formData.get('ContactEmail')?.trim();
-    if (contactEmail && contactEmail.length > 255) {
-      newErrors.ContactEmail = 'Email không được vượt quá 255 ký tự';
-      isValid = false;
-    } else if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
+    const email = formData.get('ContactEmail')?.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       newErrors.ContactEmail = 'Email không hợp lệ';
       isValid = false;
     }
 
-    // Validate ContactPhone
-    const contactPhone = formData.get('ContactPhone')?.trim();
-    if (contactPhone && contactPhone.length > 20) {
-      newErrors.ContactPhone = 'Số điện thoại không được vượt quá 20 ký tự';
-      isValid = false;
-    } else if (contactPhone && !/^\+?\d{9,15}$/.test(contactPhone)) {
+    const phone = formData.get('ContactPhone')?.trim();
+    if (phone && !/^\+?\d{9,15}$/.test(phone)) {
       newErrors.ContactPhone = 'Số điện thoại không hợp lệ';
       isValid = false;
     }
 
-    // Validate Address
-    const address = formData.get('Address')?.trim();
-    if (address && address.length > 255) {
-      newErrors.Address = 'Địa chỉ không được vượt quá 255 ký tự';
-      isValid = false;
-    } else if (address && (specialCharRegex.test(address) || codePatternRegex.test(address))) {
-      newErrors.Address = 'Vui lòng không nhập ký tự đặc biệt hoặc ngôn ngữ code';
-      isValid = false;
-    }
-
-    // Validate Description
-    const description = formData.get('Description')?.trim();
-    if (description && description.length > 500) {
-      newErrors.Description = 'Mô tả không được vượt quá 500 ký tự';
-      isValid = false;
-    } else if (description && (specialCharRegex.test(description) || codePatternRegex.test(description))) {
-      newErrors.Description = 'Vui lòng không nhập ký tự đặc biệt hoặc ngôn ngữ code';
-      isValid = false;
-    }
+    ['Address', 'Description'].forEach(field => {
+      const value = formData.get(field)?.trim();
+      const max = field === 'Address' ? 255 : 500;
+      if (value && value.length > max) {
+        newErrors[field] = `${field === 'Address' ? 'Địa chỉ' : 'Mô tả'} không được vượt quá ${max} ký tự`;
+        isValid = false;
+      } else if (value && (specialCharRegex.test(value) || codePatternRegex.test(value))) {
+        newErrors[field] = 'Không được chứa ký tự đặc biệt hoặc mã code';
+        isValid = false;
+      }
+    });
 
     setErrors(newErrors);
     return isValid;
   }, []);
 
-  const handleSubmit = useCallback(
-    (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      if (validateForm(formData)) {
-        onSubmit(e);
-      }
-    },
-    [onSubmit, validateForm]
-  );
+  const handleSubmit = useCallback((e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    if (validateForm(formData)) onSubmit(e);
+  }, [onSubmit, validateForm]);
 
   return (
-    <div>
-      <h3>{isEditMode ? 'Sửa Nhà Cung Cấp' : 'Thêm Nhà Cung Cấp'}</h3>
+    <div style={{ padding: '20px', backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+      <h2 className="mb-4">{isEditMode ? 'Sửa Nhà Cung Cấp' : 'Thêm Nhà Cung Cấp'}</h2>
       <Form onSubmit={handleSubmit}>
         <Row>
           <Col md={6}>
             <Form.Group className="mb-3">
-              <Form.Label>Tên Nhà Cung Cấp</Form.Label>
+              <Form.Label>Tên Nhà Cung Cấp <span className="text-danger">*</span></Form.Label>
               <Form.Control
-                type="text"
                 name="SupplierName"
                 defaultValue={isEditMode ? supplier?.SupplierName : ''}
-                placeholder="Nhập tên nhà cung cấp"
+                placeholder="Nhập tên"
                 isInvalid={!!errors.SupplierName}
               />
-              <Form.Text className="text-danger">{errors.SupplierName}</Form.Text>
+              <Form.Control.Feedback type="invalid">{errors.SupplierName}</Form.Control.Feedback>
             </Form.Group>
           </Col>
           <Col md={6}>
             <Form.Group className="mb-3">
               <Form.Label>Email</Form.Label>
               <Form.Control
-                type="email"
                 name="ContactEmail"
+                type="email"
                 defaultValue={isEditMode ? supplier?.ContactEmail : ''}
-                placeholder="Nhập email (tùy chọn)"
+                placeholder="email@example.com"
                 isInvalid={!!errors.ContactEmail}
               />
-              <Form.Text className="text-danger">{errors.ContactEmail}</Form.Text>
+              <Form.Control.Feedback type="invalid">{errors.ContactEmail}</Form.Control.Feedback>
             </Form.Group>
           </Col>
         </Row>
@@ -211,26 +244,24 @@ const SupplierForm = memo(({ isEditMode, supplier, onSubmit, onCancel, isLoading
             <Form.Group className="mb-3">
               <Form.Label>Số Điện Thoại</Form.Label>
               <Form.Control
-                type="text"
                 name="ContactPhone"
                 defaultValue={isEditMode ? supplier?.ContactPhone : ''}
-                placeholder="Nhập số điện thoại (tùy chọn)"
+                placeholder="0901234567"
                 isInvalid={!!errors.ContactPhone}
               />
-              <Form.Text className="text-danger">{errors.ContactPhone}</Form.Text>
+              <Form.Control.Feedback type="invalid">{errors.ContactPhone}</Form.Control.Feedback>
             </Form.Group>
           </Col>
           <Col md={6}>
             <Form.Group className="mb-3">
               <Form.Label>Địa Chỉ</Form.Label>
               <Form.Control
-                type="text"
                 name="Address"
                 defaultValue={isEditMode ? supplier?.Address : ''}
-                placeholder="Nhập địa chỉ (tùy chọn)"
+                placeholder="Nhập địa chỉ"
                 isInvalid={!!errors.Address}
               />
-              <Form.Text className="text-danger">{errors.Address}</Form.Text>
+              <Form.Control.Feedback type="invalid">{errors.Address}</Form.Control.Feedback>
             </Form.Group>
           </Col>
         </Row>
@@ -241,18 +272,17 @@ const SupplierForm = memo(({ isEditMode, supplier, onSubmit, onCancel, isLoading
               <Form.Control
                 as="textarea"
                 name="Description"
+                rows={3}
                 defaultValue={isEditMode ? supplier?.Description : ''}
-                placeholder="Nhập mô tả (tùy chọn)"
+                placeholder="Mô tả nhà cung cấp..."
                 isInvalid={!!errors.Description}
               />
-              <Form.Text className="text-danger">{errors.Description}</Form.Text>
+              <Form.Control.Feedback type="invalid">{errors.Description}</Form.Control.Feedback>
             </Form.Group>
           </Col>
         </Row>
-        <div className="d-flex justify-content-end gap-2">
-          <Button variant="secondary" onClick={onCancel} disabled={isLoading}>
-            Hủy
-          </Button>
+        <div className="d-flex justify-content-end gap-2 mt-4">
+          <Button variant="secondary" onClick={onCancel} disabled={isLoading}>Hủy</Button>
           <Button variant="primary" type="submit" disabled={isLoading}>
             {isLoading ? <Spinner size="sm" /> : isEditMode ? 'Lưu' : 'Thêm'}
           </Button>
@@ -270,10 +300,11 @@ const AdminSuppliers = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState(null);
   const [toast, setToast] = useState({ show: false, type: 'info', message: '' });
-  const [currentView, setCurrentView] = useState('list'); // list, add, edit
+  const [currentView, setCurrentView] = useState('list');
   const [editSupplier, setEditSupplier] = useState(null);
+  const [filters, setFilters] = useState({ search: '', email: '', phone: '' });
+  const [filterParams, setFilterParams] = useState('');
   const cache = useRef(new Map());
-  const debounceRef = useRef(null);
 
   const showToast = useCallback((type, message) => {
     setToast({ show: true, type, message });
@@ -283,45 +314,58 @@ const AdminSuppliers = () => {
     setToast({ show: false, type: 'info', message: '' });
   }, []);
 
-  const fetchSuppliers = useCallback(
-    async (page = 1) => {
-      if (cache.current.has(page)) {
-        const { data, last_page } = cache.current.get(page);
-        setSuppliers(data);
-        setPageCount(last_page);
-        setCurrentPage(page - 1);
-        return;
-      }
+  // FETCH + CACHE
+  const fetchSuppliers = useCallback(async (page = 1, queryString = '') => {
+    const cacheKey = `${page}_${queryString}`;
+    if (cache.current.has(cacheKey)) {
+      const { data, last_page } = cache.current.get(cacheKey);
+      setSuppliers(data);
+      setPageCount(last_page);
+      setCurrentPage(page - 1);
+      return;
+    }
 
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(async () => {
-        try {
-          setIsLoading(true);
-          const response = await fetch(`${API_BASE_URL}/api/suppliers?page=${page}`, {
-            headers: {
-              Accept: 'application/json',
-            },
-            credentials: 'include',
-          });
-          if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-          }
-          const paginator = await response.json();
-          cache.current.set(page, { data: paginator.data, last_page: paginator.last_page });
-          setSuppliers(paginator.data);
-          setPageCount(paginator.last_page);
-          setCurrentPage(page - 1);
-        } catch (error) {
-          console.error('Error fetching suppliers:', error);
-          showToast('error', `Lỗi khi tải danh sách nhà cung cấp: ${error.message}`);
-        } finally {
-          setIsLoading(false);
-        }
-      }, 300);
-    },
-    [showToast]
-  );
+    try {
+      setIsLoading(true);
+      const response = await fetch(`${API_BASE_URL}/api/suppliers?page=${page}${queryString ? '&' + queryString : ''}`, {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const res = await response.json();
+      cache.current.set(cacheKey, { data: res.data, last_page: res.last_page });
+      setSuppliers(res.data);
+      setPageCount(res.last_page);
+      setCurrentPage(page - 1);
+    } catch (error) {
+      showToast('error', `Lỗi tải dữ liệu: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast]);
 
+
+  // ÁP DỤNG LỌC - CHỈ KHI NHẤN NÚT
+  const applyFilters = useCallback((updates = {}) => {
+    const newFilters = { ...filters, ...updates };
+    setFilters(newFilters);
+
+    const params = new URLSearchParams();
+    if (newFilters.search) params.append('search', newFilters.search);
+    if (newFilters.email) params.append('email', newFilters.email);
+    if (newFilters.phone) params.append('phone', newFilters.phone);
+
+    const query = params.toString();
+    setFilterParams(query);
+    fetchSuppliers(1, query);
+  }, [filters, fetchSuppliers]);
+
+  // XÓA LỌC
+  const clearFilters = useCallback(() => {
+    setFilters({ search: '', email: '', phone: '' });
+    setFilterParams('');
+    fetchSuppliers(1);
+  }, [fetchSuppliers]);
   const getCsrfToken = useCallback(async (retries = 3) => {
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
@@ -329,22 +373,16 @@ const AdminSuppliers = () => {
           method: 'GET',
           credentials: 'include',
         });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch CSRF token: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`Failed to fetch CSRF token: ${response.status}`);
         const token = document.cookie
           .split('; ')
           .find((row) => row.startsWith('XSRF-TOKEN='))
           ?.split('=')[1];
-        if (!token) {
-          throw new Error('CSRF token not found in cookies');
-        }
+        if (!token) throw new Error('CSRF token not found in cookies');
         return decodeURIComponent(token);
       } catch (error) {
         console.error(`Attempt ${attempt} to fetch CSRF token failed:`, error);
-        if (attempt === retries) {
-          throw new Error(`Không thể lấy CSRF token sau ${retries} lần thử: ${error.message}`);
-        }
+        if (attempt === retries) throw new Error(`Không thể lấy CSRF token sau ${retries} lần thử: ${error.message}`);
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
     }
@@ -383,73 +421,6 @@ const AdminSuppliers = () => {
       }
     },
     [currentPage, fetchSuppliers, getCsrfToken, showToast]
-  );
-
-  const handleShowDeleteModal = useCallback((supplierId) => {
-    setSupplierToDelete(supplierId);
-    setShowDeleteModal(true);
-  }, []);
-
-  const handleCancelDelete = useCallback(() => {
-    setShowDeleteModal(false);
-    setSupplierToDelete(null);
-  }, []);
-
-  const handleShowEditForm = useCallback((supplier) => {
-    setEditSupplier(supplier);
-    setCurrentView(supplier ? 'edit' : 'add');
-  }, []);
-
-  const handleCancelForm = useCallback(() => {
-    setCurrentView('list');
-    setEditSupplier(null);
-  }, []);
-
-  const handleAddSupplier = useCallback(
-    async (e) => {
-      try {
-        setIsLoading(true);
-        const token = await getCsrfToken();
-        const formData = new FormData(e.target);
-        const data = {
-          SupplierName: formData.get('SupplierName'),
-          ContactEmail: formData.get('ContactEmail') || null,
-          ContactPhone: formData.get('ContactPhone') || null,
-          Address: formData.get('Address') || null,
-          Description: formData.get('Description') || null,
-        };
-
-        const response = await fetch(`${API_BASE_URL}/api/suppliers`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-XSRF-TOKEN': token,
-          },
-          credentials: 'include',
-          body: JSON.stringify(data),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
-        }
-        const result = await response.json();
-        showToast('success', result.message || 'Thêm nhà cung cấp thành công');
-        cache.current.clear();
-        await fetchSuppliers(1);
-        setCurrentView('list');
-      } catch (error) {
-        console.error('Error adding supplier:', error);
-        showToast('error', error.message.includes('CSRF token')
-          ? 'Thêm thất bại: Không thể lấy CSRF token. Vui lòng kiểm tra backend.'
-          : `Thêm thất bại: ${error.message}`);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [fetchSuppliers, getCsrfToken, showToast]
   );
 
   const handleEditSupplier = useCallback(
@@ -500,28 +471,87 @@ const AdminSuppliers = () => {
     [currentPage, editSupplier, fetchSuppliers, getCsrfToken, showToast]
   );
 
-  useEffect(() => {
-    if (currentView === 'list') {
-      fetchSuppliers(1);
-    }
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [currentView, fetchSuppliers]);
+  const handleAddSupplier = useCallback(
+    async (e) => {
+      try {
+        setIsLoading(true);
+        const token = await getCsrfToken();
+        const formData = new FormData(e.target);
+        const data = {
+          SupplierName: formData.get('SupplierName'),
+          ContactEmail: formData.get('ContactEmail') || null,
+          ContactPhone: formData.get('ContactPhone') || null,
+          Address: formData.get('Address') || null,
+          Description: formData.get('Description') || null,
+        };
 
-  const handlePageChange = useCallback(
-    ({ selected }) => {
-      const nextPage = selected + 1;
-      fetchSuppliers(nextPage);
+        const response = await fetch(`${API_BASE_URL}/api/suppliers`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-XSRF-TOKEN': token,
+          },
+          credentials: 'include',
+          body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
+        }
+        const result = await response.json();
+        showToast('success', result.message || 'Thêm nhà cung cấp thành công');
+        cache.current.clear();
+        await fetchSuppliers(1);
+        setCurrentView('list');
+      } catch (error) {
+        console.error('Error adding supplier:', error);
+        showToast('error', error.message.includes('CSRF token')
+          ? 'Thêm thất bại: Không thể lấy CSRF token. Vui lòng kiểm tra backend.'
+          : `Thêm thất bại: ${error.message}`);
+      } finally {
+        setIsLoading(false);
+      }
     },
-    [fetchSuppliers]
+    [fetchSuppliers, getCsrfToken, showToast]
   );
+
+  const handleShowEditForm = useCallback((supplier) => {
+    setEditSupplier(supplier);
+    setCurrentView(supplier ? 'edit' : 'add');
+  }, []);
+
+  const handleCancelForm = useCallback(() => {
+    setCurrentView('list');
+    setEditSupplier(null);
+  }, []);
+
+  const handleShowDeleteModal = useCallback((id) => {
+    setSupplierToDelete(id);
+    setShowDeleteModal(true);
+  }, []);
+
+  const handleCancelDelete = useCallback(() => {
+    setShowDeleteModal(false);
+    setSupplierToDelete(null);
+  }, []);
+
+  const handlePageChange = useCallback(({ selected }) => {
+    fetchSuppliers(selected + 1, filterParams);
+  }, [fetchSuppliers, filterParams]);
+
+  useEffect(() => {
+    if (currentView === 'list') fetchSuppliers(1);
+  }, [currentView, fetchSuppliers]);
 
   return (
     <div className="d-flex">
-      <AdminSidebar />
+      
       <div className="position-relative w-100 flex-grow-1 ms-5 p-4">
-        <h1 className="mb-4">Quản Lý Nhà Cung Cấp</h1>
+        <h1 className="mb-4" style={{ fontSize: '1.8rem', fontWeight: '600' }}>Quản Lý Nhà Cung Cấp</h1>
+
         {currentView === 'list' && (
           <SupplierList
             suppliers={suppliers}
@@ -531,6 +561,10 @@ const AdminSuppliers = () => {
             pageCount={pageCount}
             currentPage={currentPage}
             handlePageChange={handlePageChange}
+            applyFilters={applyFilters}
+            clearFilters={clearFilters}
+            filters={filters}
+            setFilters={setFilters}
           />
         )}
         {currentView === 'add' && (
@@ -553,17 +587,17 @@ const AdminSuppliers = () => {
         <ConfirmDeleteModal
           isOpen={showDeleteModal}
           title="Xác nhận xóa"
-          message="Bạn có chắc chắn muốn xóa nhà cung cấp này? Lưu ý: Không thể xóa nếu nhà cung cấp có phiếu nhập kho liên quan."
+          message="Không thể xóa nếu có phiếu nhập kho liên quan."
           onConfirm={() => handleDelete(supplierToDelete)}
           onCancel={handleCancelDelete}
         />
-        {toast.show && (
+        {toast.show &&
           <CustomToast
             type={toast.type}
             message={toast.message}
             onClose={hideToast}
           />
-        )}
+        }
       </div>
     </div>
   );

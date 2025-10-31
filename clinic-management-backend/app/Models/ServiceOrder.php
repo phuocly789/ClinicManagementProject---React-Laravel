@@ -30,7 +30,7 @@ class ServiceOrder extends Model
 {
 	protected $table = 'ServiceOrders';
 	protected $primaryKey = 'ServiceOrderId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [

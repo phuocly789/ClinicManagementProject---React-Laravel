@@ -55,6 +55,7 @@ class AppointmentsController extends Controller
                     'age' => $age,
                     'gender' => $user?->Gender ?? 'N/A',
                     'phone' => $user?->Phone ?? 'N/A',
+                    'address' => $user->Address ?? 'N/A',
                     'patient_id' => $appointment->PatientId,
                     'notes' => $appointment->notes ?? '',
                 ];
@@ -78,82 +79,6 @@ class AppointmentsController extends Controller
             'data' => $appointments,
         ]);
     }
-
-    /**
-     * Các method CRUD cơ bản cho Appointment.
-     * Chỉ bác sĩ (StaffId) mới được thao tác với lịch hẹn của mình.
-     */
-
-    // Các method CRUD cơ bản (từ --api flag), customize nếu cần
-    public function index(Request $request)
-    {
-        $query = Appointment::with('patient', 'staff_schedule', 'medical_record')
-            ->where('StaffId', Auth::id());
-
-        // Filter theo ngày nếu có (cho Schedule Section)
-        if ($request->has('date')) {
-            $query->whereDate('AppointmentDate', $request->date);
-        }
-
-        $appointments = $query->paginate(10);
-        return response()->json($appointments);
-    }
-
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'PatientId' => 'required|exists:patients,id',
-            'AppointmentDate' => 'required|date',
-            'AppointmentTime' => 'required',
-            'Status' => 'nullable|string|in:waiting,in-progress,done',
-        ]);
-
-        // Set thủ công AppointmentId (vì không auto-increment)
-        $validated['AppointmentId'] = 'APT' . time() . rand(100, 999); // Ví dụ mã unique
-        $validated['StaffId'] = Auth::id();
-        $validated['CreatedAt'] = now();
-        $validated['CreatedBy'] = Auth::id();
-
-        $appointment = Appointment::create($validated);
-        return response()->json(['message' => 'Tạo lịch hẹn thành công', 'appointment' => $appointment], 201);
-    }
-
-    public function show($id)
-    {
-        $appointment = Appointment::with('patient', 'prescriptions.details', 'diagnoses')->findOrFail($id);
-        if ($appointment->StaffId !== Auth::id()) {
-            return response()->json(['message' => 'Không có quyền'], 403);
-        }
-        return response()->json($appointment);
-    }
-
-    public function update(Request $request, $id)
-    {
-        $appointment = Appointment::findOrFail($id);
-        if ($appointment->StaffId !== Auth::id()) {
-            return response()->json(['message' => 'Không có quyền'], 403);
-        }
-
-        $validated = $request->validate([
-            'Status' => 'sometimes|in:waiting,in-progress,done',
-            'RecordId' => 'sometimes|exists:medical_records,id', // Khi hoàn tất khám
-        ]);
-
-        $appointment->update($validated);
-        return response()->json(['message' => 'Cập nhật lịch hẹn thành công', 'appointment' => $appointment]);
-    }
-
-    public function destroy($id)
-    {
-        $appointment = Appointment::findOrFail($id);
-        if ($appointment->StaffId !== Auth::id()) {
-            return response()->json(['message' => 'Không có quyền'], 403);
-        }
-
-        $appointment->delete();
-        return response()->json(['message' => 'Xóa lịch hẹn thành công']);
-    }
-
 
     /**
      * 🩺 Lấy lịch làm việc của bác sĩ theo ID (không cần đăng nhập)
