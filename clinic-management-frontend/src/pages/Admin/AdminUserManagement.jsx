@@ -1,7 +1,5 @@
-// ... (các phần import và state không đổi)
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import '../../App.css';
-// import Pagination from '../Components/Pagination/Pagination';
 import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
 import CustomToast from '../../Components/CustomToast/CustomToast';
 import Loading from '../../Components/Loading/Loading';
@@ -18,13 +16,11 @@ const initialFormState = {
 };
 
 const AdminUserManagement = () => {
-  // ... (toàn bộ logic state và hàm xử lý giữ nguyên như phiên bản trước)
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [pagination, setPagination] = useState({ currentPage: 1, totalPages: 1 });
   const [filters, setFilters] = useState({ search: '', gender: '', role: '', status: '' });
   const [debouncedSearchTerm] = useDebounce(filters.search, 500);
-
   const [modal, setModal] = useState({ type: null, user: null });
   const [formData, setFormData] = useState(initialFormState);
   const [loading, setLoading] = useState(true);
@@ -115,8 +111,7 @@ const AdminUserManagement = () => {
         ? Object.values(err.response.data.errors).flat().join(' ')
         : (err.response?.data?.message || 'Có lỗi xảy ra.');
       setToast({ type: 'error', message: errorMessage });
-    }
-    finally {
+    } finally {
       setLoading(false);
     }
   };
@@ -131,8 +126,7 @@ const AdminUserManagement = () => {
       fetchUsers(newPage);
     } catch (err) {
       setToast({ type: 'error', message: err.response?.data?.error || 'Lỗi khi xóa người dùng.' });
-    }
-    finally {
+    } finally {
       setLoading(false);
     }
   };
@@ -147,8 +141,7 @@ const AdminUserManagement = () => {
       fetchUsers(pagination.currentPage);
     } catch (err) {
       setToast({ type: 'error', message: err.response?.data?.message || 'Lỗi khi thay đổi trạng thái.' });
-    }
-    finally {
+    } finally {
       setLoading(false);
     }
   };
@@ -174,23 +167,73 @@ const AdminUserManagement = () => {
       </>
     );
 
+    const InfoRow = ({ label, value }) => (
+      <div className="d-flex justify-content-between py-2 border-bottom">
+        <span className="text-muted">{label}:</span>
+        <span className="fw-semibold text-dark">{value}</span>
+      </div>
+    );
+
     switch (modal.type) {
       case 'add':
       case 'edit':
         const isEditing = modal.type === 'edit';
-        return renderModal(
+        return modalLayout(
           isEditing ? 'Cập Nhật Thông Tin' : 'Thêm Người Dùng Mới',
           <form onSubmit={handleFormSubmit}>
             <div className="row g-3">
-              <div className="col-md-6 mb-3"><label className="form-label">Tên đăng nhập</label><input type="text" name="Username" value={formData.Username || ''} onChange={handleFormChange} className="form-control" required disabled={isEditing} /></div>
-              <div className="col-md-6 mb-3"><label className="form-label">Họ tên</label><input type="text" name="FullName" value={formData.FullName || ''} onChange={handleFormChange} className="form-control" required /></div>
-              {!isEditing && <div className="col-12 mb-3"><label className="form-label">Mật khẩu</label><input type="password" name="Password" value={formData.Password || ''} onChange={handleFormChange} className="form-control" required /></div>}
-              <div className="col-md-6 mb-3"><label className="form-label">Email</label><input type="email" name="Email" value={formData.Email || ''} onChange={handleFormChange} className="form-control" required /></div>
-              <div className="col-md-6 mb-3"><label className="form-label">Số điện thoại</label><input type="tel" name="Phone" value={formData.Phone || ''} onChange={handleFormChange} className="form-control" required /></div>
-              <div className="col-md-6 mb-3"><label className="form-label">Ngày sinh</label><input type="date" name="DateOfBirth" value={formData.DateOfBirth || ''} onChange={handleFormChange} className="form-control" /></div>
-              <div className="col-md-6 mb-3"><label className="form-label">Giới tính</label><select name="Gender" value={formData.Gender || ''} onChange={handleFormChange} className="form-select" required><option value="">Chọn giới tính</option><option value="Nam">Nam</option><option value="Nữ">Nữ</option></select></div>
-              <div className="col-12 mb-3"><label className="form-label">Địa chỉ</label><input type="text" name="Address" value={formData.Address || ''} onChange={handleFormChange} className="form-control" /></div>
-              <div className="col-12 mb-3"><label className="form-label">Vai trò</label><select name="Role" value={formData.Role || ''} onChange={handleFormChange} className="form-select" required disabled={formData.Role === 'Admin'}><option value="">Chọn vai trò</option>{roles.map(r => <option key={r.RoleId} value={r.RoleName}>{r.RoleName}</option>)}</select></div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Tên đăng nhập</label>
+                <input type="text" name="Username" value={formData.Username || ''} onChange={handleFormChange}
+                  className="form-control" required disabled={isEditing} />
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Họ tên</label>
+                <input type="text" name="FullName" value={formData.FullName || ''} onChange={handleFormChange}
+                  className="form-control" required />
+              </div>
+              {!isEditing && (
+                <div className="col-12 mb-3">
+                  <label className="form-label">Mật khẩu</label>
+                  <input type="password" name="Password" value={formData.Password || ''} onChange={handleFormChange}
+                    className="form-control" required />
+                </div>
+              )}
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Email</label>
+                <input type="email" name="Email" value={formData.Email || ''} onChange={handleFormChange}
+                  className="form-control" required />
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Số điện thoại</label>
+                <input type="tel" name="Phone" value={formData.Phone || ''} onChange={handleFormChange}
+                  className="form-control" required />
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Ngày sinh</label>
+                <input type="date" name="DateOfBirth" value={formData.DateOfBirth || ''} onChange={handleFormChange}
+                  className="form-control" />
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Giới tính</label>
+                <select name="Gender" value={formData.Gender || ''} onChange={handleFormChange} className="form-select" required>
+                  <option value="">Chọn giới tính</option>
+                  <option value="Nam">Nam</option>
+                  <option value="Nữ">Nữ</option>
+                </select>
+              </div>
+              <div className="col-12 mb-3">
+                <label className="form-label">Địa chỉ</label>
+                <input type="text" name="Address" value={formData.Address || ''} onChange={handleFormChange} className="form-control" />
+              </div>
+              <div className="col-12 mb-3">
+                <label className="form-label">Vai trò</label>
+                <select name="Role" value={formData.Role || ''} onChange={handleFormChange} className="form-select" required
+                  disabled={formData.Role === 'Admin'}>
+                  <option value="">Chọn vai trò</option>
+                  {roles.map(r => <option key={r.RoleId} value={r.RoleName}>{r.RoleName}</option>)}
+                </select>
+              </div>
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>Hủy</button>
@@ -201,7 +244,7 @@ const AdminUserManagement = () => {
         );
 
       case 'delete':
-        return renderModal(
+        return modalLayout(
           'Xác Nhận Xóa',
           <>
             <p>Bạn có chắc chắn muốn xóa người dùng <strong>{modal.user.FullName}</strong>?</p>
@@ -215,7 +258,7 @@ const AdminUserManagement = () => {
         );
 
       case 'status':
-        return renderModal(
+        return modalLayout(
           'Xác Nhận',
           <p>Bạn có chắc muốn <strong>{modal.user.IsActive ? 'vô hiệu hóa' : 'kích hoạt'}</strong> tài khoản của <strong>{modal.user.FullName}</strong>?</p>,
           <>
@@ -226,13 +269,7 @@ const AdminUserManagement = () => {
         );
 
       case 'detail':
-        const InfoRow = ({ label, value }) => (
-          <div className="d-flex justify-content-between py-2 border-bottom">
-            <span className="text-muted">{label}:</span>
-            <span className="fw-semibold text-dark">{value}</span>
-          </div>
-        );
-        return renderModal(
+        return modalLayout(
           'Chi Tiết Người Dùng',
           <>
             <InfoRow label="ID" value={modal.user.UserId} />
@@ -256,7 +293,6 @@ const AdminUserManagement = () => {
 
   return (
     <div className="d-flex">
-      
       <main className="main-content flex-grow-1 p-4 d-flex flex-column gap-4">
         {toast && <CustomToast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
 
@@ -270,15 +306,34 @@ const AdminUserManagement = () => {
         <div className="card shadow-sm border-0 flex-shrink-0">
           <div className="card-body p-4">
             <div className="row g-3">
-              <div className="col-md-6"><input type="text" name="search" className="form-control" placeholder="Tìm theo tên, email, SĐT..." value={filters.search} onChange={handleFilterChange} /></div>
-              <div className="col-md-2"><select name="gender" className="form-select" value={filters.gender} onChange={handleFilterChange}><option value="">Giới tính</option><option value="Nam">Nam</option><option value="Nữ">Nữ</option></select></div>
-              <div className="col-md-2"><select name="role" className="form-select" value={filters.role} onChange={handleFilterChange}><option value="">Vai trò</option>{roles.map(r => <option key={r.RoleId} value={r.RoleName}>{r.RoleName}</option>)}</select></div>
-              <div className="col-md-2"><select name="status" className="form-select" value={filters.status} onChange={handleFilterChange}><option value="">Trạng thái</option><option value="1">Hoạt động</option><option value="0">Vô hiệu hóa</option></select></div>
+              <div className="col-md-6">
+                <input type="text" name="search" className="form-control" placeholder="Tìm theo tên, email, SĐT..."
+                  value={filters.search} onChange={handleFilterChange} />
+              </div>
+              <div className="col-md-2">
+                <select name="gender" className="form-select" value={filters.gender} onChange={handleFilterChange}>
+                  <option value="">Giới tính</option>
+                  <option value="Nam">Nam</option>
+                  <option value="Nữ">Nữ</option>
+                </select>
+              </div>
+              <div className="col-md-2">
+                <select name="role" className="form-select" value={filters.role} onChange={handleFilterChange}>
+                  <option value="">Vai trò</option>
+                  {roles.map(r => <option key={r.RoleId} value={r.RoleName}>{r.RoleName}</option>)}
+                </select>
+              </div>
+              <div className="col-md-2">
+                <select name="status" className="form-select" value={filters.status} onChange={handleFilterChange}>
+                  <option value="">Trạng thái</option>
+                  <option value="1">Hoạt động</option>
+                  <option value="0">Vô hiệu hóa</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* ===== KHỐI BẢNG ĐÃ SỬA LẠI LAYOUT ===== */}
         <div className="card shadow-sm border-0 table-panel">
           {loading ? <Loading isLoading={loading} /> : (
             <>
