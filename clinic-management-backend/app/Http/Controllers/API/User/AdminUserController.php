@@ -10,7 +10,7 @@ use App\Models\UserRole;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
-class UserControllers extends Controller
+class AdminUserController extends Controller
 {
     //ấy danh sách người dùng với tìm kiếm, lọc và phân trang
     public function index(Request $request)
