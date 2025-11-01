@@ -8,7 +8,7 @@ export const path = {
     ADMIN: {
         ROOT: "/admin",
         DASHBOARD: "/admin/dashboard",
-        USER:{
+        USER: {
             MANAGEMENT: "/admin/users",
             CREATE: "/admin/users/create",
             UPDATE: "/admin/users/update/:id",
@@ -29,13 +29,13 @@ export const path = {
             CREATE: "/admin/services/create",
             UPDATE: "/admin/services/update/:id",
         },
-        SCHEDULE:{
+        SCHEDULE: {
             MANAGEMENT: "/admin/schedule-management",
             CREATE: "/admin/schedules/create",
             UPDATE: "/admin/schedules/update/:id",
         },
         REVENUE_REPORT: "/admin/revenue-report",
-        
+
     },
     RECEPTIONIST: {
         ROOT: "/receptionist"
@@ -69,15 +69,30 @@ export const path = {
             UPDATE: "/patient/profile-update",
         }
     },
-    DOCTOR:{
+    DOCTOR: {
         ROOT: "/doctor",
-        DASHBOARD: "/doctor/dashboard",
-        APPOINTMENT: {
-            MANAGEMENT: "/doctor/apppointment-management",
-            CREATE: "/doctor/apppointment-create",
-            UPDATE: "/doctor/apppointment-update",
-        },
+        TODAY_APPOINTMENTS: "today",
+        SCHEDULE: "schedule-doctor",
+        PATIENT_HISTORY: "history",
+        DOCTOR_PRINT_PDF: "print-pdf-editor",
+    },
+
+    TECHNICIAN: {
+        ROOT: "/technician",
+        SCHEDULE: "schedule",
+        TEST_RESULTS: "test-results",
     }
+};
+
+export const USER_ROLE = {
+    ADMIN: "Admin",
+    PATIENT: "Bệnh nhân",
+};
+
+
+export const ROLE_ROUTE = {
+    [USER_ROLE.ADMIN]: path.ADMIN.ROOT,
+    [USER_ROLE.PATIENT]: path.PATIENT.ROOT,
 };
 
 export const CRUD_ACTIONS = {

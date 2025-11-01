@@ -47,6 +47,7 @@ const SupplierList = memo(({
                 placeholder="Tìm tên nhà cung cấp..."
                 value={filters.search}
                 onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
               />
             </InputGroup>
           </Col>
@@ -57,6 +58,7 @@ const SupplierList = memo(({
               placeholder="Lọc theo email..."
               value={filters.email}
               onChange={(e) => setFilters({ ...filters, email: e.target.value })}
+              onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
             />
           </Col>
 
@@ -66,6 +68,7 @@ const SupplierList = memo(({
               placeholder="Lọc theo số điện thoại..."
               value={filters.phone}
               onChange={(e) => setFilters({ ...filters, phone: e.target.value })}
+              onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
             />
           </Col>
 
@@ -346,15 +349,17 @@ const AdminSuppliers = () => {
 
 
   // ÁP DỤNG LỌC - CHỈ KHI NHẤN NÚT
-  const applyFilters = useCallback((updates = {}) => {
-    const newFilters = { ...filters, ...updates };
-    setFilters(newFilters);
-
+  const applyFilters = useCallback(() => {
     const params = new URLSearchParams();
-    if (newFilters.search) params.append('search', newFilters.search);
-    if (newFilters.email) params.append('email', newFilters.email);
-    if (newFilters.phone) params.append('phone', newFilters.phone);
-
+  
+    const search = filters.search.trim();
+    const email = filters.email.trim();
+    const phone = filters.phone.trim();
+  
+    if (search) params.append('search', search);     // GỬI NGUYÊN BẢN
+    if (email) params.append('email', email);
+    if (phone) params.append('phone', phone);
+  
     const query = params.toString();
     setFilterParams(query);
     fetchSuppliers(1, query);
