@@ -53,13 +53,13 @@ function App() {
         {/* Receptionist */}
         {/* Doctor */}
         <Route path={path.DOCTOR.ROOT} element={<DoctorSidebar />}>
-          <Route index element={<TodaySection />} />
-          <Route path={path.DOCTOR.TODAY_APPOINTMENTS} element={<TodaySection />} />
+          <Route index element={<DoctorDashboard />} />
+          <Route path={path.DOCTOR.TODAY_APPOINTMENTS} element={<DoctorDashboard />} />
           <Route path={path.DOCTOR.SCHEDULE} element={<DoctorSchedule />} />
           <Route path={path.DOCTOR.PATIENT_HISTORY} element={<HistorySection />} />
-             <Route path={path.DOCTOR.DOCTOR_PRINT_PDF} element={<PDFEditorPage />} />
+          <Route path={path.DOCTOR.DOCTOR_PRINT_PDF} element={<PDFEditorPage />} />
         </Route>
-    
+
         {/* Patient */}
         <Route path={path.PATIENT.ROOT} element={<PatientLayout />}>
           <Route
@@ -75,7 +75,7 @@ function App() {
           path={path.VERIFICATION_EMAIL}
           element={<VerifyEmailPage />}
         />
-     
+
         {/* Technician */}
         <Route path={path.TECHNICIAN.ROOT} element={<TechnicianSidebar />}>
           <Route index element={<TechSchedule />} />

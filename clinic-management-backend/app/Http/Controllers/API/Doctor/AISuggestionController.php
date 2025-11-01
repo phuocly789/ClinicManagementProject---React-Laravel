@@ -9,156 +9,163 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class AISuggestionController extends Controller
-/**
-     * Gợi ý AI 
-     * /
-     */
 {
     public function suggest(Request $request)
     {
-        // Log params để debug (giữ tạm)
         $symptoms = $request->query('symptoms', '');
         $diagnosis = $request->query('diagnosis', '');
-        $input = $request->query('input', '');
         $type = $request->query('type', 'medicine');
-        Log::info('AI Suggestion Debug - Params: symptoms="' . $symptoms . '", diagnosis="' . $diagnosis . '", input="' . $input . '", type="' . $type . '"');
-
-        // Ưu tiên symptoms nếu có, rồi diagnosis, rồi input
-        $finalInput = trim($symptoms ?: $diagnosis ?: $input);
-
-        Log::info('Final input after trim: "' . $finalInput . '" (length: ' . strlen($finalInput) . ')');
-
+        
+        $finalInput = $this->getFinalInput($symptoms, $diagnosis);
+        
         if (strlen($finalInput) < 3) {
-            Log::warning('AI Suggestion - Input too short: ' . $finalInput);
-            return response()->json(['error' => 'Thiếu thông tin input (symptoms hoặc diagnosis)'], 400);
+            return response()->json(['error' => 'Vui lòng nhập ít nhất 3 ký tự triệu chứng hoặc chẩn đoán'], 400);
         }
 
-        // Case cho type='diagnosis'
-        if ($type === 'diagnosis') {
-            $prompt = "
-        Bạn là bác sĩ chuyên khoa nội tổng quát.
-        Dựa trên triệu chứng: '{$finalInput}', hãy gợi ý 3-5 chẩn đoán có thể nhất.
-        Chỉ trả về JSON thuần túy với định dạng:
-        [
-          { 'DiagnosisName': 'Chẩn đoán 1', 'Reason': 'Lý do ngắn gọn...' },
-          { 'DiagnosisName': 'Chẩn đoán 2', 'Reason': 'Lý do ngắn gọn...' }
-        ]
-        Không thêm bất kỳ text nào ngoài JSON. Lý do phải dựa trên y khoa cơ bản, không chẩn đoán chính thức.
-        ";
-            return $this->callGemini($prompt);
+        try {
+            if ($type === 'diagnosis') {
+                return $this->handleDiagnosisSuggestion($finalInput);
+            }
+            
+            return $this->handleMedicineServiceSuggestion($finalInput, $type);
+            
+        } catch (\Exception $e) {
+            Log::error('AI Suggestion Error: ' . $e->getMessage());
+            return response()->json(['error' => 'Lỗi hệ thống AI, vui lòng thử lại sau'], 500);
         }
+    }
 
-        // Medicine/Service logic
-        $items = [];
-        $itemList = '';
-        if ($type === 'medicine') {
-            $items = DB::table('Medicines')
-                ->select('MedicineName', 'MedicineType', 'Unit', 'Price', 'StockQuantity', 'Description')
-                ->limit(10)
-                ->get();
-            $itemList = $items->map(fn($m) => "{$m->MedicineName} ({$m->MedicineType})")->implode(', ');
-            Log::debug('Medicines list: ' . $itemList);
-        } elseif ($type === 'service') {
-            $items = DB::table('Services')
-                ->select('ServiceId', 'ServiceName', 'ServiceType', 'Price', 'Description')
-                ->limit(10)
-                ->get();
-            $itemList = $items->map(fn($s) => "{$s->ServiceName} ({$s->ServiceType})")->implode(', ');
-            Log::debug('Services list: ' . $itemList);
-        }
+    private function getFinalInput($symptoms, $diagnosis)
+    {
+        $input = trim($symptoms ?: $diagnosis);
+        // Mask sensitive data for logging
+        $maskedInput = strlen($input) > 10 ? substr($input, 0, 10) . '...' : $input;
+        Log::info('AI Suggestion - Input: ' . $maskedInput);
+        return $input;
+    }
+
+    private function handleDiagnosisSuggestion($input)
+    {
+        $prompt = "Bạn là bác sĩ. Dựa trên triệu chứng: '{$input}', gợi ý 3-5 chẩn đoán có thể.
+        Trả về JSON: [{'DiagnosisName': '...', 'Reason': '...'}]";
+        
+        return $this->callGemini($prompt);
+    }
+
+    private function handleMedicineServiceSuggestion($input, $type)
+    {
+        $items = $type === 'medicine' 
+            ? $this->getMedicines() 
+            : $this->getServices();
 
         if ($items->isEmpty()) {
-            return response()->json(['error' => 'Không tìm thấy ' . ($type === 'medicine' ? 'thuốc' : 'dịch vụ') . ' trong database'], 500);
+            return response()->json(['error' => 'Không tìm thấy dữ liệu'], 404);
         }
 
-        // 🆕 Prompt rõ ràng hơn (best practice: chỉ định schema chính xác, tránh Gemini bịa key)
-        $inputType = ($type === 'medicine') ? 'chẩn đoán' : 'chẩn đoán';
-        $itemType = ($type === 'medicine') ? 'thuốc' : 'dịch vụ cận lâm sàng';
-        $schemaKey = ($type === 'medicine') ? 'MedicineName' : 'ServiceName'; // 🆕 Fix key cho service
-        $extraField = ($type === 'service') ? ", 'ServiceId': '...' " : '';
-        $prompt = "
-    Bạn là bác sĩ chuyên khoa nội tổng quát.
-    Dựa trên {$inputType}: '{$finalInput}', hãy chọn 3-5 {$itemType} phù hợp nhất từ danh sách sau (chỉ chọn có trong danh sách, không bịa thêm):
-    {$itemList}
+        $prompt = $this->buildSuggestionPrompt($input, $items, $type);
+        $aiResponse = $this->callGemini($prompt);
+        
+        return $this->enrichWithRealData($aiResponse, $items, $type);
+    }
 
-    Trả về JSON thuần túy, không text thừa, với schema chính xác sau:
-    [
-      { '{$schemaKey}': 'Tên chính xác từ danh sách', 'Reason': 'Lý do ngắn gọn dựa trên y khoa' {$extraField} }
-    ]
+    private function getMedicines()
+    {
+        return DB::table('Medicines')
+            ->select('MedicineName', 'MedicineType', 'Unit', 'Price', 'StockQuantity')
+            ->where('StockQuantity', '>', 0) // Chỉ lấy thuốc còn hàng
+            ->limit(15)
+            ->get();
+    }
 
-    Ví dụ cho {$itemType}: { '{$schemaKey}': 'Tên dịch vụ/thuốc', 'Reason': 'Lý do' }
-    ";
-        Log::debug('Generated prompt for ' . $type . ': ' . substr($prompt, 0, 200) . '...'); // Log prompt ngắn
+    private function getServices()
+    {
+        return DB::table('Services')
+            ->select('ServiceId', 'ServiceName', 'ServiceType', 'Price', 'Description')
+            ->limit(15)
+            ->get();
+    }
 
-        return $this->callGemini($prompt);
+    private function buildSuggestionPrompt($input, $items, $type)
+    {
+        $itemType = $type === 'medicine' ? 'thuốc' : 'dịch vụ';
+        $itemList = $items->map(fn($item) => 
+            $type === 'medicine' 
+                ? "{$item->MedicineName} - Giá: {$item->Price} VNĐ - Đơn vị: {$item->Unit}"
+                : "{$item->ServiceName} - Giá: {$item->Price} VNĐ"
+        )->implode(', ');
+
+        return "Bạn là bác sĩ. Dựa trên chẩn đoán: '{$input}', chọn 3-5 {$itemType} phù hợp từ: {$itemList}
+        Trả về JSON: [{'MedicineName': '...', 'Reason': '...', 'Price': ..., 'Unit': '...'}]";
+    }
+
+    private function enrichWithRealData($aiResponse, $databaseItems, $type)
+    {
+        if ($aiResponse->getStatusCode() !== 200) {
+            return $aiResponse;
+        }
+
+        $aiData = json_decode($aiResponse->getContent(), true);
+        
+        if (!is_array($aiData)) {
+            return $aiResponse;
+        }
+
+        $enrichedData = array_map(function($item) use ($databaseItems, $type) {
+            $name = $item['MedicineName'] ?? $item['ServiceName'] ?? null;
+            $dbItem = $databaseItems->firstWhere(
+                $type === 'medicine' ? 'MedicineName' : 'ServiceName', 
+                $name
+            );
+
+            if ($dbItem) {
+                $item['Price'] = $dbItem->Price;
+                if ($type === 'medicine') {
+                    $item['Unit'] = $dbItem->Unit;
+                }
+            }
+            
+            return $item;
+        }, $aiData);
+
+        return response()->json($enrichedData);
     }
 
     private function callGemini($prompt)
     {
         $apiKey = env('GOOGLE_API_KEY');
         if (!$apiKey) {
-            Log::error('GOOGLE_API_KEY not set in .env');
-            return response()->json(['error' => 'API key Gemini chưa cấu hình'], 500);
+            throw new \Exception('API key chưa được cấu hình');
         }
 
-        $apiUrl = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={$apiKey}";
+        $response = Http::timeout(30)->post(
+            "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={$apiKey}",
+            [
+                'contents' => [['parts' => [['text' => $prompt]]]],
+                'generationConfig' => ['temperature' => 0.4]
+            ]
+        );
 
-        try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json',
-            ])->post($apiUrl, [
-                        'contents' => [
-                            [
-                                'parts' => [['text' => $prompt]],
-                            ]
-                        ],
-                        'generationConfig' => ['temperature' => 0.4],
-                    ]);
-
-            Log::info('Gemini Response Status: ' . $response->status());
-
-            if ($response->failed()) {
-                return response()->json([
-                    'error' => 'Gemini API lỗi',
-                    'details' => $response->json() ?? 'Không có chi tiết lỗi',
-                    'status_code' => $response->status(),
-                ], 500);
-            }
-
-            $data = $response->json();
-            if (!isset($data['candidates'][0]['content']['parts'][0]['text'])) {
-                return response()->json([
-                    'error' => 'Dữ liệu trả về từ Gemini không hợp lệ',
-                    'raw' => $data,
-                ], 500);
-            }
-
-            $text = $data['candidates'][0]['content']['parts'][0]['text'];
-            Log::debug('Raw response from Gemini: ' . $text);
-
-            $jsonString = $text;
-            if (preg_match('/```json\s*([\s\S]*?)\s*```/', $text, $matches)) {
-                $jsonString = trim($matches[1]);
-            }
-
-            $json = json_decode($jsonString, true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                return response()->json([
-                    'error' => 'Gemini trả về định dạng không hợp lệ',
-                    'raw' => $text,
-                    'json_error' => json_last_error_msg(),
-                    'extracted_json' => $jsonString,
-                ], 500);
-            }
-
-            return response()->json($json);
-
-        } catch (\Exception $e) {
-            Log::error('Gemini Exception: ' . $e->getMessage());
-            return response()->json([
-                'error' => 'Lỗi kết nối tới Gemini',
-                'message' => $e->getMessage(),
-            ], 500);
+        if ($response->failed()) {
+            throw new \Exception('Lỗi kết nối AI');
         }
+
+        $text = $response->json('candidates.0.content.parts.0.text');
+        
+        if (!$text) {
+            throw new \Exception('AI không trả về kết quả');
+        }
+
+        // Extract JSON from response
+        if (preg_match('/```json\s*([\s\S]*?)\s*```/', $text, $matches)) {
+            $text = trim($matches[1]);
+        }
+
+        $data = json_decode($text, true);
+        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new \Exception('Định dạng kết quả không hợp lệ');
+        }
+
+        return response()->json($data);
     }
 }
