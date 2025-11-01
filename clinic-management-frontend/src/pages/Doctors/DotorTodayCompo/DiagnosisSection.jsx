@@ -12,35 +12,29 @@ const DiagnosisSection = ({
   prescriptionRows,
   setPrescriptionRows,
   setToast,
-  onDiagnosisUpdate, // Callback để truyền diagnoses
+  onDiagnosisUpdate,
 }) => {
-  const [symptoms, setSymptoms] = useState(initialSymptoms || '');
-  const [diagnosis, setDiagnosis] = useState(initialDiagnosis || '');
+  // FIX: SỬ DỤNG DIRECTLY TỪ PROPS, KHÔNG DÙNG STATE LOCAL
+  const symptoms = initialSymptoms || '';
+  const diagnosis = initialDiagnosis || '';
+  
   const [diagnosisSuggestions, setDiagnosisSuggestions] = useState([]);
   const [diagnosisLoading, setDiagnosisLoading] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
 
-  // Cập nhật state cha khi symptoms hoặc diagnosis thay đổi
-  useEffect(() => {
-    setInitialSymptoms(symptoms);
-  }, [symptoms, setInitialSymptoms]);
+  // FIX: XÓA CÁC USE EFFECT GÂY RE-RENDER, XỬ LÝ TRỰC TIẾP
+  const handleSymptomsChange = useCallback((e) => {
+    setInitialSymptoms(e.target.value);
+  }, [setInitialSymptoms]);
 
-  useEffect(() => {
-    setInitialDiagnosis(diagnosis);
-    // Gửi diagnoses lên component cha qua callback
-    if (onDiagnosisUpdate) {
-      onDiagnosisUpdate({
-        Symptoms: symptoms || '',
-        Diagnosis: diagnosis || '',
-      });
-    }
-  }, [diagnosis, symptoms, setInitialDiagnosis, onDiagnosisUpdate]);
+  const handleDiagnosisChange = useCallback((e) => {
+    setInitialDiagnosis(e.target.value);
+  }, [setInitialDiagnosis]);
 
-  // Gợi ý chẩn đoán dựa trên symptoms
+  // FIX: GỢI Ý CHẨN ĐOÁN - CODE ĐẦY ĐỦ
   useEffect(() => {
     const trimmedSymptoms = symptoms?.trim();
-
     if (!trimmedSymptoms || trimmedSymptoms.length < 3) {
       setDiagnosisSuggestions([]);
       return;
@@ -76,10 +70,9 @@ const DiagnosisSection = ({
     return () => clearTimeout(timeout);
   }, [symptoms, setToast]);
 
-  // Gợi ý thuốc dựa trên diagnosis
+  // FIX: GỢI Ý THUỐC - CODE ĐẦY ĐỦ
   useEffect(() => {
     const trimmedDiagnosis = diagnosis?.trim();
-
     if (!trimmedDiagnosis || trimmedDiagnosis.length < 3) {
       setAiSuggestions([]);
       return;
@@ -115,16 +108,51 @@ const DiagnosisSection = ({
     return () => clearTimeout(timeout);
   }, [diagnosis, setToast]);
 
+  // FIX: XỬ LÝ CHỌN GỢI Ý CHẨN ĐOÁN
   const handleSelectDiagnosis = useCallback((suggestedDiagnosis) => {
     const newDiagnosis = suggestedDiagnosis.DiagnosisName;
-    setDiagnosis(newDiagnosis);
+    setInitialDiagnosis(newDiagnosis);
     setToast({
       show: true,
       message: `✅ Đã chọn chẩn đoán: "${newDiagnosis}"`,
       variant: "success",
     });
     setDiagnosisSuggestions([]);
-  }, [setDiagnosis, setToast]);
+  }, [setInitialDiagnosis, setToast]);
+
+  // FIX: XỬ LÝ THÊM THUỐC TỪ GỢI Ý
+  const handleAddMedicine = useCallback((item) => {
+    const existingItem = prescriptionRows.find(row => row.medicine === item.MedicineName);
+    if (existingItem) {
+      const updatedRows = prescriptionRows.map(row =>
+        row.medicine === item.MedicineName
+          ? { ...row, quantity: row.quantity + 1 }
+          : row
+      );
+      setPrescriptionRows(updatedRows);
+    } else {
+      setPrescriptionRows(prev => [...prev, { 
+        medicine: item.MedicineName, 
+        quantity: 1, 
+        dosage: '' 
+      }]);
+    }
+    setToast({ 
+      show: true, 
+      message: `✅ Đã thêm "${item.MedicineName}" vào toa thuốc.`, 
+      variant: "success" 
+    });
+  }, [prescriptionRows, setPrescriptionRows, setToast]);
+
+  // FIX: CẬP NHẬT DIAGNOSES KHI CÓ THAY ĐỔI
+  useEffect(() => {
+    if (onDiagnosisUpdate && (symptoms || diagnosis)) {
+      onDiagnosisUpdate({
+        Symptoms: symptoms || '',
+        Diagnosis: diagnosis || '',
+      });
+    }
+  }, [symptoms, diagnosis, onDiagnosisUpdate]);
 
   return (
     <Col md={12}>
@@ -139,7 +167,7 @@ const DiagnosisSection = ({
               as="textarea"
               rows={3}
               value={symptoms}
-              onChange={(e) => setSymptoms(e.target.value)}
+              onChange={handleSymptomsChange}
               disabled={isFormDisabled}
               placeholder="Nhập triệu chứng (ví dụ: ho, sốt, đau đầu...)"
             />
@@ -160,6 +188,7 @@ const DiagnosisSection = ({
                           variant="outline-primary"
                           size="sm"
                           onClick={() => handleSelectDiagnosis(item)}
+                          disabled={isFormDisabled}
                         >
                           Chọn
                         </Button>
@@ -175,7 +204,7 @@ const DiagnosisSection = ({
             <Form.Control
               type="text"
               value={diagnosis}
-              onChange={(e) => setDiagnosis(e.target.value)}
+              onChange={handleDiagnosisChange}
               disabled={isFormDisabled}
               placeholder="Chọn từ gợi ý trên để tự động fill"
             />
@@ -195,20 +224,8 @@ const DiagnosisSection = ({
                         <Button
                           variant="outline-success"
                           size="sm"
-                          onClick={() => {
-                            const existingItem = prescriptionRows.find(row => row.medicine === item.MedicineName);
-                            if (existingItem) {
-                              const updatedRows = prescriptionRows.map(row =>
-                                row.medicine === item.MedicineName
-                                  ? { ...row, quantity: row.quantity + 1 }
-                                  : row
-                              );
-                              setPrescriptionRows(updatedRows);
-                            } else {
-                              setPrescriptionRows(prev => [...prev, { medicine: item.MedicineName, quantity: 1, dosage: '' }]);
-                            }
-                            setToast({ show: true, message: `✅ Đã thêm "${item.MedicineName}" vào toa thuốc.`, variant: "success" });
-                          }}
+                          onClick={() => handleAddMedicine(item)}
+                          disabled={isFormDisabled}
                         >
                           + Thêm
                         </Button>
@@ -225,4 +242,4 @@ const DiagnosisSection = ({
   );
 };
 
-export default DiagnosisSection;
+export default React.memo(DiagnosisSection);

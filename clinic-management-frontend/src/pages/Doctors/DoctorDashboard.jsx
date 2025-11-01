@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Container, Modal, Button, Toast, ToastContainer, Spinner } from 'react-bootstrap';
-import Sidebar from '../../Components/Sidebar/DoctorSidebar';
 import TodaySection from './TodaySection';
-import ScheduleSection from './ScheduleSection';
+import DoctorSchedule from './DoctorSchedule';
 import HistorySection from './HistorySection';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -207,14 +206,15 @@ const DoctorDashboard = () => {
 
   return (
     <div className="d-flex min-vh-100 bg-light">
-      <Sidebar currentSection={currentSection} switchSection={switchSection} />
-      <div className="flex-grow-1 p-4" style={{ marginLeft: '250px' }}>
-        <Container fluid>
-          <div className="alert alert-success mb-4 tab-container">
-            <h2 className="alert-heading mb-0">Bảng Điều Khiển Của Bác Sĩ</h2>
-          </div>
 
-          {isLoading && <Spinner animation="border" className="position-fixed top-50 start-50 translate-middle" />}
+      <div className="flex-grow-1 p-4">
+        <Container fluid>
+          {isLoading && (
+            <div className="text-center">
+              <Spinner animation="border" variant="primary" />
+              <p className="mt-2">Đang tải dữ liệu...</p>
+            </div>
+          )}
 
           {currentSection === 'today' && (
             <TodaySection
@@ -235,12 +235,13 @@ const DoctorDashboard = () => {
               selectedTodayPatient={selectedTodayPatient}
               setSelectedTodayPatient={setSelectedTodayPatient}
               todayPatients={todayPatients}
+              setTodayPatients={setTodayPatients} // THÊM DÒNG NÀY
               setToast={setToast}
             />
           )}
 
           {currentSection === 'schedule' && (
-            <ScheduleSection
+            <DoctorSchedule
               currentSection={currentSection}
               events={events}
               currentDate={currentDate}

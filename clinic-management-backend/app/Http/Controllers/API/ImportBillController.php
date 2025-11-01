@@ -20,65 +20,60 @@ class ImportBillController extends Controller
      * Display a listing of the import bills.
      */
     public function index(Request $request)
-    {
-        $perPage = $request->get('per_page', 10);
+{
+    $perPage = $request->get('per_page', 10);
 
-        $query = ImportBill::with([
+    $query = ImportBill::query()
+        ->join('Suppliers', 'ImportBills.SupplierId', '=', 'Suppliers.SupplierId')
+        ->with([
             'supplier',
             'user',
             'import_details' => fn($q) => $q->with('medicine')
-        ]);
+        ])
+        ->select('ImportBills.*'); // Chỉ lấy dữ liệu từ ImportBills
 
-        // 1. TÌM KIẾM (search)
-        if ($search = $request->get('search')) {
-            $search = trim($search);
-            $like = "%" . mb_strtolower($search) . "%";
-            $query->whereRaw("search_text ILIKE ?", [$like]);
-        }
-
-        // 2. LỌC THEO NGÀY (date range)
-        if ($dateFrom = $request->get('date_from')) {
-            $query->whereDate('ImportDate', '>=', $dateFrom);
-        }
-        if ($dateTo = $request->get('date_to')) {
-            $query->whereDate('ImportDate', '<=', $dateTo);
-        }
-
-        // 3. LỌC THEO NHÀ CUNG CẤP
-        if ($supplierId = $request->get('supplier_id')) {
-            $query->where('SupplierId', $supplierId);
-        }
-
-        // 4. LỌC THEO KHOẢNG TIỀN
-        if ($minAmount = $request->get('min_amount')) {
-            $query->where('TotalAmount', '>=', $minAmount);
-        }
-        if ($maxAmount = $request->get('max_amount')) {
-            $query->where('TotalAmount', '<=', $maxAmount);
-        }
-
-        // 5. SẮP XẾP
-        $sortBy = $request->get('sort_by', 'ImportDate');
-        $sortDir = $request->get('sort_dir', 'desc');
-        $query->orderBy($sortBy, $sortDir);
-
-        // 6. PHÂN TRANG
-        $importBills = $query->paginate($perPage);
-
-        return response()->json([
-            'status' => 'success',
-            'data' => $importBills->items(),
-            'current_page' => $importBills->currentPage(),
-            'last_page' => $importBills->lastPage(),
-            'per_page' => $importBills->perPage(),
-            'total' => $importBills->total(),
-            'filters' => $request->only([
-                'search', 'date_from', 'date_to', 
-                'supplier_id', 'min_amount', 'max_amount',
-                'sort_by', 'sort_dir'
-            ])
-        ], 200);
+    // 1. TÌM KIẾM TRÊN SupplierName - KHÔNG PHÂN BIỆT HOA/THƯỜNG
+    if ($search = $request->get('search')) {
+        $search = trim($search);
+        $query->whereRaw('LOWER("Suppliers"."SupplierName") ILIKE ?', ['%' . mb_strtolower($search) . '%']);
     }
+
+    // 2. LỌC NGÀY
+    if ($dateFrom = $request->get('date_from')) {
+        $query->whereDate('ImportBills.ImportDate', '>=', $dateFrom);
+    }
+    if ($dateTo = $request->get('date_to')) {
+        $query->whereDate('ImportBills.ImportDate', '<=', $dateTo);
+    }
+
+    // 3. LỌC NHÀ CUNG CẤP
+    if ($supplierId = $request->get('supplier_id')) {
+        $query->where('ImportBills.SupplierId', $supplierId);
+    }
+
+    // 4. LỌC TIỀN
+    if ($minAmount = $request->get('min_amount')) {
+        $query->where('ImportBills.TotalAmount', '>=', $minAmount);
+    }
+    if ($maxAmount = $request->get('max_amount')) {
+        $query->where('ImportBills.TotalAmount', '<=', $maxAmount);
+    }
+
+    // 5. SẮP XẾP
+    $sortBy = $request->get('sort_by', 'ImportBills.ImportDate');
+    $sortDir = $request->get('sort_dir', 'desc');
+    $query->orderBy($sortBy, $sortDir);
+
+    // 6. PHÂN TRANG
+    $importBills = $query->paginate($perPage);
+
+    return response()->json([
+        'status' => 'success',
+        'data' => $importBills->items(),
+        'current_page' => $importBills->currentPage(),
+        'last_page' => $importBills->lastPage(),
+    ], 200);
+}
 
     /**
      * Store a newly created import bill with details in storage.
