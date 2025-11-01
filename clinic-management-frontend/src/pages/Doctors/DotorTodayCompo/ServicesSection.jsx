@@ -25,17 +25,10 @@ const ServicesSection = ({
   const [currentPage, setCurrentPage] = useState(0);
   const itemsPerPage = 8;
 
-  // FIX: Tạo local state để quản lý riêng
-  const [localServicesState, setLocalServicesState] = useState({});
+  // FIX: SỬ DỤNG DIRECTLY TỪ PROPS, KHÔNG DÙNG STATE LOCAL TRUNG GIAN
+  const servicesState = services || {};
 
-  // Đồng bộ state từ props khi component mount
-  useEffect(() => {
-    if (services && Object.keys(services).length > 0) {
-      setLocalServicesState(services);
-    }
-  }, [services]);
-
-  // Fetch services
+  // Fetch services - CHỈ CHẠY 1 LẦN KHI MOUNT
   useEffect(() => {
     const fetchServices = async () => {
       try {
@@ -48,15 +41,12 @@ const ServicesSection = ({
 
         if (Array.isArray(data)) {
           setLocalServices(data);
-          // FIX: Khởi tạo cả local state và prop state
+          // FIX: Chỉ khởi tạo services nếu chưa có
           if (!services || Object.keys(services).length === 0) {
             const initialServices = data.reduce((acc, service) => {
               return { ...acc, [service.ServiceId]: false };
             }, {});
-            setLocalServicesState(initialServices);
             setServices(initialServices);
-          } else {
-            setLocalServicesState(services);
           }
         } else {
           throw new Error("Dữ liệu từ API không phải mảng");
@@ -75,9 +65,9 @@ const ServicesSection = ({
     };
 
     fetchServices();
-  }, []);
+  }, []); // CHỈ CHẠY 1 LẦN
 
-  // FUNCTION PREVIEW PDF - SỬA LẠI GIỐNG CODE TOA THUỐC
+  // FUNCTION PREVIEW PDF
   const handlePreview = async () => {
     if (!selectedTodayPatient) {
       setToast({
@@ -89,8 +79,8 @@ const ServicesSection = ({
     }
 
     // CHUYỂN ĐỔI services từ object {id: boolean} sang array
-    const selectedServices = Object.keys(localServicesState)
-      .filter(serviceId => localServicesState[serviceId])
+    const selectedServices = Object.keys(servicesState)
+      .filter(serviceId => servicesState[serviceId])
       .map(serviceId => {
         const service = localServices.find(s => s.ServiceId == serviceId);
         return service ? {
@@ -123,65 +113,53 @@ const ServicesSection = ({
       doctor_name: "Bác sĩ điều trị",
       services: selectedServices,
       diagnoses: diagnoses || [],
+      appointment_id: selectedTodayPatient.id || selectedTodayPatient.AppointmentId,
+      patient_id: selectedTodayPatient.PatientId || selectedTodayPatient.patient_id,
+      originalData: {
+        services: servicesState,
+        symptoms,
+        diagnosis,
+        diagnoses
+      }
     };
 
-    console.log('📤 Data preview dịch vụ gửi lên BE:', previewData);
-
-    // Lưu data vào sessionStorage để trang mới có thể truy cập - GIỐNG CODE TOA THUỐC
     try {
-      sessionStorage.setItem('pdfPreviewData', JSON.stringify(previewData));
-      sessionStorage.setItem('prescriptionRows', JSON.stringify(
-        selectedServices.map((service, index) => ({
-          id: index + 1,
-          name: service.ServiceName,
-          quantity: service.Quantity || 1,
-          dosage: '', // Dịch vụ không có liều dùng
-          unitPrice: service.Price || 0,
-          totalPrice: (service.Price || 0) * (service.Quantity || 1)
-        }))
-      ));
-      sessionStorage.setItem('selectedPatient', JSON.stringify(selectedTodayPatient));
-      sessionStorage.setItem('diagnoses', JSON.stringify(diagnoses));
-      sessionStorage.setItem('services', JSON.stringify(selectedServices));
+      sessionStorage.setItem('pdfEditorData', JSON.stringify(previewData));
+      sessionStorage.setItem('shouldRefreshOnReturn', 'true');
+      sessionStorage.setItem('editorSource', 'services');
 
-      // Mở trang mới trong tab mới - GIỐNG CODE TOA THUỐC
-      const newWindow = window.open('/pdf-editor', '_blank');
-
-      if (!newWindow) {
-        setToast({
-          show: true,
-          message: "⚠️ Trình duyệt đã chặn popup. Vui lòng cho phép popup để mở editor PDF.",
-          variant: "warning",
-        });
-        return;
-      }
+      navigate('/doctor/print-pdf-editor', { 
+        state: { 
+          pdfData: previewData,
+          source: 'services'
+        }
+      });
 
       setToast({
         show: true,
-        message: "✅ Đang mở trình chỉnh sửa PDF trong tab mới...",
+        message: "✅ Đang chuyển đến trình chỉnh sửa PDF...",
         variant: "success",
       });
 
     } catch (error) {
-      console.error('Error opening new window:', error);
+      console.error('Error navigating to PDF editor:', error);
       setToast({
         show: true,
-        message: "❌ Lỗi khi mở trình chỉnh sửa PDF",
+        message: "❌ Lỗi khi chuyển đến trình chỉnh sửa PDF",
         variant: "danger",
       });
     }
   };
 
-  // FUNCTION DOWNLOAD PDF - GIỮ NGUYÊN
+  // FUNCTION DOWNLOAD PDF
   const printDocument = async () => {
     if (!selectedTodayPatient) {
       setToast({ show: true, message: "⚠️ Chưa chọn bệnh nhân.", variant: "warning" });
       return;
     }
 
-    // Data for service
-    const selectedServices = Object.keys(localServicesState)
-      .filter(serviceId => localServicesState[serviceId])
+    const selectedServices = Object.keys(servicesState)
+      .filter(serviceId => servicesState[serviceId])
       .map(serviceId => {
         const service = localServices.find(s => s.ServiceId == serviceId);
         return service ? {
@@ -225,7 +203,6 @@ const ServicesSection = ({
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
-      // Tạo blob và download
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -343,34 +320,22 @@ const ServicesSection = ({
     return bestScore > 0.5 ? bestKey : null;
   }, []);
 
-  // FIX: Handle test change - sử dụng local state
+  // FIX: Handle test change - XỬ LÝ TRỰC TIẾP
   const handleTestChange = useCallback((serviceId) => (e) => {
     const isChecked = e.target.checked;
-
-    // Cập nhật local state ngay lập tức để UI phản hồi
-    setLocalServicesState(prev => {
-      const newState = {
-        ...prev,
-        [serviceId]: isChecked
-      };
-      return newState;
-    });
-
-    // Đồng bộ với prop state
-    setServices(prev => {
-      const newState = {
-        ...prev,
-        [serviceId]: isChecked
-      };
-      return newState;
-    });
+    
+    // Cập nhật trực tiếp prop state
+    setServices(prev => ({
+      ...prev,
+      [serviceId]: isChecked
+    }));
   }, [setServices]);
 
-  // FUNCTION FIXED: Handle request service - GỌI API CHỈ ĐỊNH DỊCH VỊ
+  // FUNCTION: Handle request service
   const handleRequestService = useCallback(async () => {
     console.log('🔍 DEBUG selectedTodayPatient:', selectedTodayPatient);
 
-    const selected = Object.keys(localServicesState).filter((k) => localServicesState[k]);
+    const selected = Object.keys(servicesState).filter((k) => servicesState[k]);
 
     if (selected.length === 0) {
       setToast({
@@ -390,17 +355,13 @@ const ServicesSection = ({
       return;
     }
 
-    // TÌM appointment_id TRONG NHIỀU TRƯỜNG CÓ THỂ
     const appointmentId = selectedTodayPatient.appointment_id ||
       selectedTodayPatient.AppointmentId ||
       selectedTodayPatient.appointmentId ||
       selectedTodayPatient.id ||
       selectedTodayPatient.AppointmentID;
 
-    console.log('🔍 DEBUG appointmentId found:', appointmentId);
-
     if (!appointmentId) {
-      console.log('❌ No appointmentId found in:', selectedTodayPatient);
       setToast({
         show: true,
         message: `⚠️ Không tìm thấy ID cuộc hẹn. Vui lòng chọn bệnh nhân từ danh sách hôm nay.`,
@@ -412,21 +373,12 @@ const ServicesSection = ({
     try {
       setServiceLoading(true);
 
-      console.log('🔄 Đang gửi yêu cầu chỉ định dịch vụ...', {
-        appointmentId: appointmentId,
-        selectedServices: selected,
-        patient: selectedTodayPatient
-      });
-
-      // ✅ FIX: CHỈ GỬI selectedServices (backend đã sửa)
       const requestData = {
-        selectedServices: selected.map(id => parseInt(id)), // ✅ CHỈ GỬI FIELD NÀY
+        selectedServices: selected.map(id => parseInt(id)),
         diagnosis: diagnosis || '',
         symptoms: symptoms || '',
         notes: "Chỉ định từ bác sĩ"
       };
-
-      console.log('📤 Request data gửi đi:', requestData);
 
       const response = await fetch(
         `${API_BASE_URL}/api/doctor/appointments/${appointmentId}/assign-services`,
@@ -440,49 +392,26 @@ const ServicesSection = ({
       );
 
       const responseText = await response.text();
-      console.log('📥 Backend raw response:', responseText);
-
       let result;
       try {
         result = JSON.parse(responseText);
       } catch (parseError) {
-        console.error('❌ JSON parse error:', parseError);
         throw new Error(`Lỗi định dạng từ server: ${responseText.substring(0, 100)}...`);
       }
 
       if (!response.ok) {
-        console.error('❌ Backend error:', result);
-
-        // ✅ HIỂN THỊ THÔNG BÁO TỪ BACKEND DỄ ĐỌC
         let userMessage = 'Lỗi hệ thống';
-
         if (result && result.message) {
-          // Lấy message từ backend và làm sạch
           userMessage = result.message
-            .replace(/Lỗi hệ thống khi chỉ định dịch vụ: /g, '') // Xóa prefix lỗi
-            .replace(/SQLSTATE.*$/g, '') // Xóa thông tin SQL
-            .replace(/\(Connection:.*$/g, '') // Xóa connection info
+            .replace(/Lỗi hệ thống khi chỉ định dịch vụ: /g, '')
+            .replace(/SQLSTATE.*$/g, '')
+            .replace(/\(Connection:.*$/g, '')
             .trim();
-
-          // Nếu message rỗng sau khi làm sạch, dùng message gốc
-          if (!userMessage) {
-            userMessage = result.message;
-          }
-        } else if (response.status === 404) {
-          userMessage = 'Không tìm thấy API. Vui lòng kiểm tra kết nối server.';
-        } else if (response.status === 500) {
-          userMessage = 'Lỗi server. Vui lòng thử lại sau.';
+          if (!userMessage) userMessage = result.message;
         }
-
-        setToast({
-          show: true,
-          message: `❌ ${userMessage}`,
-          variant: "danger",
-        });
+        setToast({ show: true, message: `❌ ${userMessage}`, variant: "danger" });
         return;
       }
-
-      console.log('✅ Backend success response:', result);
 
       if (result.success) {
         setToast({
@@ -491,15 +420,12 @@ const ServicesSection = ({
           variant: "success",
         });
 
-        // Cập nhật trạng thái đã yêu cầu
         const updatedRequestedServices = { ...requestedServices };
         selected.forEach(serviceId => {
           updatedRequestedServices[serviceId] = true;
         });
         setRequestedServices(updatedRequestedServices);
-
       } else {
-        // ✅ HIỂN THỊ LỖI TỪ BACKEND (success: false)
         setToast({
           show: true,
           message: `⚠️ ${result.message || 'Lỗi không xác định từ server'}`,
@@ -509,29 +435,17 @@ const ServicesSection = ({
 
     } catch (error) {
       console.error('❌ Error:', error);
-
-      // ✅ HIỂN THỊ LỖI MẠNG HOẶC LỖI KHÁC
       let userMessage = error.message;
-
       if (error.message.includes('Failed to fetch') || error.message.includes('Network')) {
         userMessage = 'Lỗi kết nối mạng. Vui lòng kiểm tra kết nối internet.';
-      } else if (error.message.includes('404')) {
-        userMessage = 'Không tìm thấy API. Vui lòng kiểm tra lại đường dẫn.';
-      } else if (error.message.includes('500')) {
-        userMessage = 'Lỗi server. Vui lòng thử lại sau.';
       }
-
-      setToast({
-        show: true,
-        message: `❌ ${userMessage}`,
-        variant: "danger",
-      });
+      setToast({ show: true, message: `❌ ${userMessage}`, variant: "danger" });
     } finally {
       setServiceLoading(false);
     }
-  }, [localServicesState, selectedTodayPatient, diagnosis, symptoms, requestedServices, setRequestedServices, setToast, setServices]);
+  }, [servicesState, selectedTodayPatient, diagnosis, symptoms, requestedServices, setRequestedServices, setToast]);
 
-  // FIX: Render services - sử dụng localServicesState
+  // FIX: Render services - sử dụng trực tiếp từ props
   const renderServices = useCallback(() => {
     const half = Math.ceil(currentItems.length / 2);
     const leftColumn = currentItems.slice(0, half);
@@ -539,8 +453,7 @@ const ServicesSection = ({
 
     const renderServiceColumn = (columnServices) =>
       columnServices.map((service) => {
-        // Sử dụng localServicesState thay vì services prop
-        const checked = localServicesState[service.ServiceId] || false;
+        const checked = servicesState[service.ServiceId] || false;
 
         return (
           <div key={service.ServiceId} className="d-flex justify-content-between align-items-center mb-2">
@@ -572,7 +485,7 @@ const ServicesSection = ({
         <Col md={6}>{renderServiceColumn(rightColumn)}</Col>
       </Row>
     );
-  }, [currentItems, localServicesState, requestedServices, isFormDisabled, handleTestChange]);
+  }, [currentItems, servicesState, requestedServices, isFormDisabled, handleTestChange]);
 
   const handlePageChange = useCallback(({ selected }) => {
     setCurrentPage(selected);
@@ -603,14 +516,9 @@ const ServicesSection = ({
                             size="sm"
                             onClick={() => {
                               if (serviceKey) {
-                                const isCurrentlyChecked = localServicesState[serviceKey] || false;
+                                const isCurrentlyChecked = servicesState[serviceKey] || false;
                                 const newValue = !isCurrentlyChecked;
 
-                                // Cập nhật cả local và prop state
-                                setLocalServicesState(prev => ({
-                                  ...prev,
-                                  [serviceKey]: newValue
-                                }));
                                 setServices(prev => ({
                                   ...prev,
                                   [serviceKey]: newValue
@@ -629,8 +537,9 @@ const ServicesSection = ({
                                 });
                               }
                             }}
+                            disabled={isFormDisabled}
                           >
-                            {serviceKey ? (localServicesState[serviceKey] ? "✓ Đã chọn" : "+ Chọn") : "Không khả dụng"}
+                            {serviceKey ? (servicesState[serviceKey] ? "✓ Đã chọn" : "+ Chọn") : "Không khả dụng"}
                           </Button>
                         </div>
                       </li>
@@ -671,7 +580,7 @@ const ServicesSection = ({
               variant="outline-primary"
               size="sm"
               onClick={handleRequestService}
-              disabled={isFormDisabled || !Object.values(localServicesState).some(v => v) || serviceLoading}
+              disabled={isFormDisabled || !Object.values(servicesState).some(v => v) || serviceLoading}
               className="no-print"
             >
               {serviceLoading ? (
@@ -680,16 +589,15 @@ const ServicesSection = ({
                   Đang gửi...
                 </>
               ) : (
-                `🧾 Yêu cầu thực hiện dịch vụ đã chọn (${Object.values(localServicesState).filter(v => v).length})`
+                `🧾 Yêu cầu thực hiện dịch vụ đã chọn (${Object.values(servicesState).filter(v => v).length})`
               )}
             </Button>
 
-            {/* SỬA NÚT PREVIEW - GIỐNG CODE TOA THUỐC */}
             <Button
               variant="outline-info"
               size="sm"
               onClick={handlePreview}
-              disabled={!selectedTodayPatient || !Object.values(localServicesState).some(Boolean)}
+              disabled={!selectedTodayPatient || !Object.values(servicesState).some(Boolean)}
               className="no-print ms-2"
             >
               👁️ Xem trước PDF
@@ -699,7 +607,7 @@ const ServicesSection = ({
               variant="outline-success"
               size="sm"
               onClick={printDocument}
-              disabled={!selectedTodayPatient || !Object.values(localServicesState).some(Boolean)}
+              disabled={!selectedTodayPatient || !Object.values(servicesState).some(Boolean)}
               className="no-print ms-2"
             >
               🖨️ Xuất PDF
