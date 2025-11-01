@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Passport\HasApiTokens;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * Class User
@@ -77,6 +78,16 @@ class User extends Authenticatable
 		'IsActive'
 	];
 
+	// middleware check role
+	public function hasRole($roleName)
+	{
+		return $this->roles()->where('RoleName', $roleName)->exists();
+	}
+	/**
+	 * Quan hệ: User có nhiều Role (Many-to-Many)
+	 *
+	 * @return BelongsToMany<\App\Models\Role>
+	 */
 	public function roles()
 	{
 		return $this->belongsToMany(Role::class, 'UserRoles', 'UserId', 'RoleId')

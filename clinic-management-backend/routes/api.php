@@ -61,11 +61,26 @@ Route::put('/schedules/{scheduleId}', [ScheduleController::class, 'updateSchedul
 Route::delete('/schedules/{scheduleId}', [ScheduleController::class, 'deleteSchedule']);
 
 
-
+// Auth
 Route::post('/auth/login', [AuthController::class, 'login']);
+Route::middleware('auth:api')->post('/auth/logout', [AuthController::class, 'logout']);
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post("/verification-email", [AuthController::class, 'verificationEmail']);
 Route::post("/resend-verification-email", [AuthController::class, 'resendVerificationEmail']);
+Route::middleware(['auth:api'])->get('/me', function (Request $request) {
+    $user = $request->user();
+    return response()->json([
+        'user' => [
+            'id' => $user->UserId,
+            'full_name' => $user->FullName,
+            'email' => $user->Email,
+            'username' => $user->Username,
+            'is_active' => $user->IsActive,
+            'roles' => $user->roles()->pluck('RoleName'),
+        ],
+    ], 200, [], JSON_UNESCAPED_UNICODE);
+});
+
 //admin-revenue
 Route::get('/report-revenue/combined', [ReportRevenueController::class, 'getCombinedStatistics']);
 Route::get('/report-revenue/detail-revenue', [ReportRevenueController::class, 'getDetailRevenueReport']);
