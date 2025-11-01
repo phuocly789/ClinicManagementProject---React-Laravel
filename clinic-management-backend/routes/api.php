@@ -21,7 +21,7 @@ use App\Http\Controllers\API\Doctor\DoctorExaminationsController;
 use App\Http\Controllers\API\Doctor\PatientsController;
 
 //----------------------------------------------Hết-------------------------------
-use App\Http\Controllers\API\User\UserControllers;
+use App\Http\Controllers\API\User\AdminUserController;
 use App\Http\Controllers\API\Print\InvoicePrintController;
 use App\Http\Controllers\API\Technician\TestResultsController;
 
@@ -131,14 +131,14 @@ Route::prefix('doctor')->group(function () {
 //Nhóm route cho User
 
 Route::prefix('users')->group(function () {
-    Route::get('/', [UserControllers::class, 'index']);
-    Route::post('/', [UserControllers::class, 'store']);
-    Route::put('/{id}', [UserControllers::class, 'update']);
-    Route::delete('/{id}', [UserControllers::class, 'destroy']);
-    Route::put('/toggle-status/{id}', [UserControllers::class, 'toggleStatus']);
+    Route::get('/', [AdminUserController::class, 'index']);
+    Route::post('/', [AdminUserController::class, 'store']);
+    Route::put('/{id}', [AdminUserController::class, 'update']);
+    Route::delete('/{id}', [AdminUserController::class, 'destroy']);
+    Route::put('/toggle-status/{id}', [AdminUserController::class, 'toggleStatus']);
 });
 
-Route::get('/roles', [UserControllers::class, 'roles']);
+Route::get('/roles', [AdminUserController::class, 'roles']);
 // Route::post('/print/export', [InvoicePrintController::class, 'export']); // POST để pass appointment_id + type
 Route::get('/print/{type}/{appointment_id}', [InvoicePrintController::class, 'export']);
 Route::post('/print/prescription/preview', [InvoicePrintController::class, 'previewPrescription']);
