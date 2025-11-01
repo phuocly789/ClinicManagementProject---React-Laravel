@@ -4,7 +4,7 @@ import reactLogo from "./assets/react.svg";
 import viteLogo from "/vite.svg";
 import "./App.css";
 
-import { path } from "./utils/constant";
+import { path, USER_ROLE } from "./utils/constant";
 import LoginPage from "./pages/auth/Login/Login";
 import AdminMedicine from "./pages/Admin/AdminMedicine.jsx";
 import AdminInventory from "./pages/Admin/AdminInventory.jsx";
@@ -28,12 +28,11 @@ import TechnicianDashboard from "./pages/Technician/TechnicianDashboard.jsx";
 import DoctorSchedule from "./pages/Doctors/DoctorSchedule.jsx";
 import HistorySection from "./pages/Doctors/HistorySection.jsx";
 import TodaySection from "./pages/Doctors/TodaySection.jsx";
-
+import ProtectedRoute from "./Components/ProtectedRoute/ProtectedRoute.jsx";
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Home */}
+    <Routes>
+      {/* Home */}
         <Route path={path.HOME} element={<Home />} />
         {/* Admin */}
         <Route path={path.ADMIN.ROOT} element={<AdminSidebar />} >
@@ -82,8 +81,7 @@ function App() {
           <Route path={path.TECHNICIAN.SCHEDULE} element={<TechSchedule />} />
           <Route path={path.TECHNICIAN.TEST_RESULTS} element={<TechnicianDashboard />} />
         </Route>
-      </Routes>
-    </BrowserRouter >
+    </Routes>
   );
 }
 

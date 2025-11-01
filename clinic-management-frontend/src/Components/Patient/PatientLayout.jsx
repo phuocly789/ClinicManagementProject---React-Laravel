@@ -1,21 +1,15 @@
 import React, { useState } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { path } from "../../utils/constant";
-
+import { useUser } from "../../context/userContext";
 const PatientLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
+  const { handleLogout } = useUser();
   const user = JSON.parse(localStorage.getItem("userInfo")) || {
     fullName: "Người dùng",
     email: "user@example.com",
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("userInfo");
-    localStorage.removeItem("token");
-    navigate("/login");
   };
 
   const menuItems = [
@@ -23,7 +17,7 @@ const PatientLayout = () => {
     { path: "/patient/history", label: "Lịch Sử Khám Bệnh" },
     { path: "/patient/results", label: "Kết Quả Xét Nghiệm" },
     { path: "/patient/prescriptions", label: "Đơn Thuốc Của Tôi" },
-    { path: "/patient/profile", label: "Hồ sơ cá nhân" },
+    { path: path.PATIENT.PROFILE.MANAGEMENT, label: "Hồ sơ cá nhân" },
   ];
 
   const isActive = (itemPath) => location.pathname.startsWith(itemPath);
