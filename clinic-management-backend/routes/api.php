@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\API\ReportRevenueController;
 use App\Http\Controllers\API\ScheduleController;
+use App\Http\Controllers\Receptionist\AppointmentRecepController;
 use Dba\Connection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -107,7 +108,7 @@ Route::prefix('doctor')->group(function () {
     // Lấy lịch làm việc của bác sĩ
     Route::get('/schedules/{doctorId}', [AppointmentsController::class, 'getStaffScheduleById']);
 
-    // Lấy danh sách tất cả bệnh nhân 
+    // Lấy danh sách tất cả bệnh nhân
     Route::get('/patients', [PatientsController::class, 'index']);
 
     // Lịch sử bệnh nhân
@@ -149,6 +150,14 @@ Route::post('/print/preview-html', [InvoicePrintController::class, 'previewHTML'
 Route::prefix('technician')->group(function () {
     // Danh sách dịch vụ
     Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
-    // thay đổi trạng thái dịch vụ
+   // thay đổi trạng thái dịch vụ
     Route::post('/services/{serviceOrderId}/status', [TestResultsController::class, 'updateServiceStatus']);
 });
+
+//Receptionist Routes
+Route::prefix('receptionist')->group(function () {
+    //lịch hẹn
+    Route::get('/appointments/today',[AppointmentRecepController::class, 'GetAppointmentToday']);
+    Route::post('/appointments', [AppointmentRecepController::class, 'CreateAppoitment']);
+});
+
