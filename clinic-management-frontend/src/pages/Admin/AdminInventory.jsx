@@ -54,6 +54,7 @@ const InventoryList = memo(({
   currentPage,
   handlePageChange,
   suppliers,
+  setFilterParams,
   fetchInventories
 }) => {
   // --- FILTER STATES ---
@@ -67,7 +68,6 @@ const InventoryList = memo(({
   // --- ÁP DỤNG LỌC - CHỈ KHI NHẤN NÚT ---
   const applyFilters = useCallback(() => {
     const params = new URLSearchParams();
-
     if (search.trim()) params.append('search', search.trim());
     if (supplierFilter) params.append('supplier_id', supplierFilter);
     if (dateFrom) params.append('date_from', dateFrom);
@@ -75,8 +75,12 @@ const InventoryList = memo(({
     if (minAmount) params.append('min_amount', minAmount);
     if (maxAmount) params.append('max_amount', maxAmount);
 
-    fetchInventories(1, params.toString());
-  }, [search, supplierFilter, dateFrom, dateTo, minAmount, maxAmount, fetchInventories]);
+    const queryString = params.toString();
+    setFilterParams(queryString); // Cập nhật filterParams
+    cache.current.clear(); // Xóa cache để tải mới
+    setInventoriesReady(false); // Reset trạng thái
+    fetchInventories(1, queryString);
+  }, [search, supplierFilter, dateFrom, dateTo, minAmount, maxAmount, fetchInventories, setFilterParams]);
 
   // --- XÓA LỌC ---
   const clearFilters = useCallback(() => {
@@ -731,6 +735,8 @@ const AdminInventory = () => {
   const cache = useRef(new Map());
   const debounceRef = useRef(null);
   const [filterParams, setFilterParams] = useState('');
+  const [suppliersReady, setSuppliersReady] = useState(false);
+  const [inventoriesReady, setInventoriesReady] = useState(false);
 
   const showToast = useCallback((type, message) => {
     setToast({ show: true, type, message });
@@ -741,7 +747,10 @@ const AdminInventory = () => {
   }, []);
 
   const fetchSuppliers = useCallback(async () => {
-    if (suppliers.length > 0) return;
+    if (suppliers.length > 0) {
+      setSuppliersReady(true);
+      return;
+    }
     try {
       setIsLoading(true);
       const response = await fetch(`${API_BASE_URL}/api/suppliers/all`, {
@@ -751,6 +760,7 @@ const AdminInventory = () => {
       if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
       const data = await response.json();
       setSuppliers(data.data || []);
+      setSuppliersReady(true); // Đánh dấu sẵn sàng
     } catch (error) {
       console.error('Error fetching suppliers:', error);
       showToast('error', `Lỗi khi tải danh sách nhà cung cấp: ${error.message}`);
@@ -785,11 +795,13 @@ const AdminInventory = () => {
       setInventories(data);
       setPageCount(last_page);
       setCurrentPage(page - 1);
+      setInventoriesReady(true); // Đảm bảo trạng thái sẵn sàng
       return;
     }
 
     try {
       setIsLoading(true);
+      setInventoriesReady(false); // Reset trước khi fetch
       const response = await fetch(`${API_BASE_URL}/api/import-bills?page=${page}${queryString ? '&' + queryString : ''}`, {
         headers: { 'Accept': 'application/json' },
         credentials: 'include',
@@ -809,8 +821,11 @@ const AdminInventory = () => {
       setInventories(mappedData);
       setPageCount(res.last_page);
       setCurrentPage(page - 1);
+      setInventoriesReady(true); // Chỉ set khi thành công
     } catch (error) {
       showToast('error', `Lỗi tải dữ liệu: ${error.message}`);
+      setInventories([]); // Đặt rỗng để tránh lỗi
+      setInventoriesReady(true); // Vẫn cho phép render để hiển thị "Không có dữ liệu"
     } finally {
       setIsLoading(false);
     }
@@ -996,7 +1011,11 @@ const AdminInventory = () => {
     setCurrentView('list');
     setSelectedInventory(null);
     setDetails([]);
-  }, []);
+    setInventoriesReady(false); // Reset trạng thái
+    setSuppliersReady(suppliers.length > 0);
+    cache.current.clear(); // Xóa cache để tải mới
+    fetchInventories(currentPage + 1, filterParams); // Tải lại với trang hiện tại và bộ lọc
+  }, [currentPage, filterParams, suppliers.length, fetchInventories]);
 
   const handleAddInventory = useCallback(async (e, items) => {
     try {
@@ -1109,13 +1128,15 @@ const AdminInventory = () => {
 
   useEffect(() => {
     if (currentView === 'list') {
+      setInventoriesReady(false);
+      setSuppliersReady(suppliers.length > 0);
       fetchInventories(1);
       fetchSuppliers();
-      fetchMedicines();
     }
-  }, [currentView, fetchInventories, fetchSuppliers, fetchMedicines]);
+  }, []); // Chỉ chạy 1 lần khi mount
 
   const handlePageChange = useCallback(({ selected }) => {
+    setInventoriesReady(false);
     fetchInventories(selected + 1, filterParams);
   }, [fetchInventories, filterParams]);
 
@@ -1129,20 +1150,30 @@ const AdminInventory = () => {
       <div className='position-relative w-100 flex-grow-1 ms-5 p-4'>
         <h1 className="mb-4" style={{ fontSize: '1.8rem', fontWeight: '600' }}>Quản Lý Kho</h1>
         {currentView === 'list' && (
-          <InventoryList
-            inventories={inventories}
-            isLoading={isLoading}
-            formatVND={formatVND}
-            handleShowDeleteModal={handleShowDeleteModal}
-            handleShowDetail={handleShowDetail}
-            handleShowAddInventory={handleShowAddInventory}
-            handleShowEditForm={handleShowEditForm}
-            pageCount={pageCount}
-            currentPage={currentPage}
-            handlePageChange={handlePageChange}
-            suppliers={suppliers}
-            fetchInventories={fetchInventories}
-          />
+          <>
+            {(!inventoriesReady || !suppliersReady || isLoading) ? (
+              <div className="text-center py-5">
+                <Spinner animation="border" variant="primary" />
+                <p className="mt-2">Đang tải danh sách phiếu nhập...</p>
+              </div>
+            ) : (
+              <InventoryList
+                inventories={inventories}
+                isLoading={isLoading}
+                formatVND={formatVND}
+                handleShowDeleteModal={handleShowDeleteModal}
+                handleShowDetail={handleShowDetail}
+                handleShowAddInventory={handleShowAddInventory}
+                handleShowEditForm={handleShowEditForm}
+                pageCount={pageCount}
+                currentPage={currentPage}
+                handlePageChange={handlePageChange}
+                suppliers={suppliers}
+                setFilterParams={setFilterParams}
+                fetchInventories={fetchInventories}
+              />
+            )}
+          </>
         )}
         {currentView === 'add' && (
           <ErrorBoundary>
