@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Col, Card, Form, Button, Spinner, Badge, Row } from "react-bootstrap";
 import Pagination from "../../../Components/Pagination/Pagination";
+import { useNavigate } from "react-router-dom";
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -16,6 +17,7 @@ const ServicesSection = ({
   symptoms,
   diagnoses = [],
 }) => {
+  const navigate = useNavigate();
   const [localServices, setLocalServices] = useState([]);
   const [localServicesLoading, setLocalServicesLoading] = useState(true);
   const [serviceSuggestions, setServiceSuggestions] = useState([]);
@@ -23,17 +25,10 @@ const ServicesSection = ({
   const [currentPage, setCurrentPage] = useState(0);
   const itemsPerPage = 8;
 
-  // FIX: Tạo local state để quản lý riêng
-  const [localServicesState, setLocalServicesState] = useState({});
+  // FIX: SỬ DỤNG DIRECTLY TỪ PROPS, KHÔNG DÙNG STATE LOCAL TRUNG GIAN
+  const servicesState = services || {};
 
-  // Đồng bộ state từ props khi component mount
-  useEffect(() => {
-    if (services && Object.keys(services).length > 0) {
-      setLocalServicesState(services);
-    }
-  }, [services]);
-
-  // Fetch services
+  // Fetch services - CHỈ CHẠY 1 LẦN KHI MOUNT
   useEffect(() => {
     const fetchServices = async () => {
       try {
@@ -46,15 +41,12 @@ const ServicesSection = ({
 
         if (Array.isArray(data)) {
           setLocalServices(data);
-          // FIX: Khởi tạo cả local state và prop state
+          // FIX: Chỉ khởi tạo services nếu chưa có
           if (!services || Object.keys(services).length === 0) {
             const initialServices = data.reduce((acc, service) => {
               return { ...acc, [service.ServiceId]: false };
             }, {});
-            setLocalServicesState(initialServices);
             setServices(initialServices);
-          } else {
-            setLocalServicesState(services);
           }
         } else {
           throw new Error("Dữ liệu từ API không phải mảng");
@@ -73,17 +65,118 @@ const ServicesSection = ({
     };
 
     fetchServices();
-  }, []);
+  }, []); // CHỈ CHẠY 1 LẦN
 
-  // THÊM FUNCTION printDocument VÀO ĐÂY
-  const printDocument = async (type) => {
+  // FUNCTION PREVIEW PDF
+  const handlePreview = async () => {
+    if (!selectedTodayPatient) {
+      setToast({
+        show: true,
+        message: "⚠️ Vui lòng chọn bệnh nhân trước khi xem trước.",
+        variant: "warning"
+      });
+      return;
+    }
+
+    // CHUYỂN ĐỔI services từ object {id: boolean} sang array
+    const selectedServices = Object.keys(servicesState)
+      .filter(serviceId => servicesState[serviceId])
+      .map(serviceId => {
+        const service = localServices.find(s => s.ServiceId == serviceId);
+        return service ? {
+          ServiceName: service.ServiceName,
+          Price: service.Price || 0,
+          Quantity: 1
+        } : null;
+      })
+      .filter(Boolean);
+
+    if (selectedServices.length === 0) {
+      setToast({
+        show: true,
+        message: "⚠️ Vui lòng chọn ít nhất một dịch vụ trước khi xem trước.",
+        variant: "warning"
+      });
+      return;
+    }
+
+    const previewData = {
+      type: 'service',
+      patient_name: selectedTodayPatient.name || 'N/A',
+      age: String(selectedTodayPatient.age || 'N/A'),
+      gender: selectedTodayPatient.gender || 'N/A',
+      phone: selectedTodayPatient.phone || 'N/A',
+      appointment_date: selectedTodayPatient.date
+        ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
+        : new Date().toLocaleDateString('vi-VN'),
+      appointment_time: selectedTodayPatient.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      doctor_name: "Bác sĩ điều trị",
+      services: selectedServices,
+      diagnoses: diagnoses || [],
+      appointment_id: selectedTodayPatient.id || selectedTodayPatient.AppointmentId,
+      patient_id: selectedTodayPatient.PatientId || selectedTodayPatient.patient_id,
+      originalData: {
+        services: servicesState,
+        symptoms,
+        diagnosis,
+        diagnoses
+      }
+    };
+
+    try {
+      sessionStorage.setItem('pdfEditorData', JSON.stringify(previewData));
+      sessionStorage.setItem('shouldRefreshOnReturn', 'true');
+      sessionStorage.setItem('editorSource', 'services');
+
+      navigate('/doctor/print-pdf-editor', { 
+        state: { 
+          pdfData: previewData,
+          source: 'services'
+        }
+      });
+
+      setToast({
+        show: true,
+        message: "✅ Đang chuyển đến trình chỉnh sửa PDF...",
+        variant: "success",
+      });
+
+    } catch (error) {
+      console.error('Error navigating to PDF editor:', error);
+      setToast({
+        show: true,
+        message: "❌ Lỗi khi chuyển đến trình chỉnh sửa PDF",
+        variant: "danger",
+      });
+    }
+  };
+
+  // FUNCTION DOWNLOAD PDF
+  const printDocument = async () => {
     if (!selectedTodayPatient) {
       setToast({ show: true, message: "⚠️ Chưa chọn bệnh nhân.", variant: "warning" });
       return;
     }
 
-    let requestData = {
-      type: type,
+    const selectedServices = Object.keys(servicesState)
+      .filter(serviceId => servicesState[serviceId])
+      .map(serviceId => {
+        const service = localServices.find(s => s.ServiceId == serviceId);
+        return service ? {
+          ServiceName: service.ServiceName,
+          Price: service.Price || 0,
+          Quantity: 1
+        } : null;
+      })
+      .filter(Boolean);
+
+    if (selectedServices.length === 0) {
+      setToast({ show: true, message: "⚠️ Chưa chọn dịch vụ nào.", variant: "warning" });
+      return;
+    }
+
+    const requestData = {
+      type: 'service',
       patient_name: selectedTodayPatient.name,
       age: selectedTodayPatient.age,
       gender: selectedTodayPatient.gender,
@@ -92,32 +185,10 @@ const ServicesSection = ({
       appointment_time: selectedTodayPatient.time,
       doctor_name: "Bác sĩ điều trị",
       diagnoses: diagnoses.length > 0 ? diagnoses : [{ Symptoms: symptoms, Diagnosis: diagnosis }],
+      services: selectedServices,
     };
 
-    if (type === 'service') {
-      // Data for service
-      const selectedServices = Object.keys(localServicesState)
-        .filter(serviceId => localServicesState[serviceId])
-        .map(serviceId => {
-          const service = localServices.find(s => s.ServiceId == serviceId);
-          return service ? {
-            ServiceName: service.ServiceName,
-            Price: service.Price || 0,
-            Quantity: 1
-          } : null;
-        })
-        .filter(Boolean);
-
-      if (selectedServices.length === 0) {
-        setToast({ show: true, message: "⚠️ Chưa chọn dịch vụ nào.", variant: "warning" });
-        return;
-      }
-      requestData.services = selectedServices;
-    }
-
     try {
-
-      // Trong function printDocument của ServicesSection
       const response = await fetch(`${API_BASE_URL}/api/print/prescription/preview`, {
         method: 'POST',
         headers: {
@@ -132,7 +203,6 @@ const ServicesSection = ({
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
-      // Tạo blob và download
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -250,32 +320,22 @@ const ServicesSection = ({
     return bestScore > 0.5 ? bestKey : null;
   }, []);
 
-  // FIX: Handle test change - sử dụng local state
+  // FIX: Handle test change - XỬ LÝ TRỰC TIẾP
   const handleTestChange = useCallback((serviceId) => (e) => {
     const isChecked = e.target.checked;
-
-    // Cập nhật local state ngay lập tức để UI phản hồi
-    setLocalServicesState(prev => {
-      const newState = {
-        ...prev,
-        [serviceId]: isChecked
-      };
-      return newState;
-    });
-
-    // Đồng bộ với prop state
-    setServices(prev => {
-      const newState = {
-        ...prev,
-        [serviceId]: isChecked
-      };
-      return newState;
-    });
+    
+    // Cập nhật trực tiếp prop state
+    setServices(prev => ({
+      ...prev,
+      [serviceId]: isChecked
+    }));
   }, [setServices]);
 
-  // Handle request service
-  const handleRequestService = useCallback(() => {
-    const selected = Object.keys(localServicesState).filter((k) => localServicesState[k]);
+  // FUNCTION: Handle request service
+  const handleRequestService = useCallback(async () => {
+    console.log('🔍 DEBUG selectedTodayPatient:', selectedTodayPatient);
+
+    const selected = Object.keys(servicesState).filter((k) => servicesState[k]);
 
     if (selected.length === 0) {
       setToast({
@@ -286,18 +346,106 @@ const ServicesSection = ({
       return;
     }
 
-    const updated = { ...requestedServices };
-    selected.forEach((id) => (updated[id] = true));
-    setRequestedServices(updated);
+    if (!selectedTodayPatient) {
+      setToast({
+        show: true,
+        message: "⚠️ Chưa chọn bệnh nhân.",
+        variant: "warning",
+      });
+      return;
+    }
 
-    setToast({
-      show: true,
-      message: `✅ Đã gửi yêu cầu thực hiện ${selected.length} dịch vụ cận lâm sàng.`,
-      variant: "success",
-    });
-  }, [localServicesState, requestedServices, setRequestedServices, setToast]);
+    const appointmentId = selectedTodayPatient.appointment_id ||
+      selectedTodayPatient.AppointmentId ||
+      selectedTodayPatient.appointmentId ||
+      selectedTodayPatient.id ||
+      selectedTodayPatient.AppointmentID;
 
-  // FIX: Render services - sử dụng localServicesState
+    if (!appointmentId) {
+      setToast({
+        show: true,
+        message: `⚠️ Không tìm thấy ID cuộc hẹn. Vui lòng chọn bệnh nhân từ danh sách hôm nay.`,
+        variant: "warning",
+      });
+      return;
+    }
+
+    try {
+      setServiceLoading(true);
+
+      const requestData = {
+        selectedServices: selected.map(id => parseInt(id)),
+        diagnosis: diagnosis || '',
+        symptoms: symptoms || '',
+        notes: "Chỉ định từ bác sĩ"
+      };
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/doctor/appointments/${appointmentId}/assign-services`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestData),
+        }
+      );
+
+      const responseText = await response.text();
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        throw new Error(`Lỗi định dạng từ server: ${responseText.substring(0, 100)}...`);
+      }
+
+      if (!response.ok) {
+        let userMessage = 'Lỗi hệ thống';
+        if (result && result.message) {
+          userMessage = result.message
+            .replace(/Lỗi hệ thống khi chỉ định dịch vụ: /g, '')
+            .replace(/SQLSTATE.*$/g, '')
+            .replace(/\(Connection:.*$/g, '')
+            .trim();
+          if (!userMessage) userMessage = result.message;
+        }
+        setToast({ show: true, message: `❌ ${userMessage}`, variant: "danger" });
+        return;
+      }
+
+      if (result.success) {
+        setToast({
+          show: true,
+          message: result.message || `✅ Đã chỉ định ${selected.length} dịch vụ thành công!`,
+          variant: "success",
+        });
+
+        const updatedRequestedServices = { ...requestedServices };
+        selected.forEach(serviceId => {
+          updatedRequestedServices[serviceId] = true;
+        });
+        setRequestedServices(updatedRequestedServices);
+      } else {
+        setToast({
+          show: true,
+          message: `⚠️ ${result.message || 'Lỗi không xác định từ server'}`,
+          variant: "warning",
+        });
+      }
+
+    } catch (error) {
+      console.error('❌ Error:', error);
+      let userMessage = error.message;
+      if (error.message.includes('Failed to fetch') || error.message.includes('Network')) {
+        userMessage = 'Lỗi kết nối mạng. Vui lòng kiểm tra kết nối internet.';
+      }
+      setToast({ show: true, message: `❌ ${userMessage}`, variant: "danger" });
+    } finally {
+      setServiceLoading(false);
+    }
+  }, [servicesState, selectedTodayPatient, diagnosis, symptoms, requestedServices, setRequestedServices, setToast]);
+
+  // FIX: Render services - sử dụng trực tiếp từ props
   const renderServices = useCallback(() => {
     const half = Math.ceil(currentItems.length / 2);
     const leftColumn = currentItems.slice(0, half);
@@ -305,8 +453,7 @@ const ServicesSection = ({
 
     const renderServiceColumn = (columnServices) =>
       columnServices.map((service) => {
-        // Sử dụng localServicesState thay vì services prop
-        const checked = localServicesState[service.ServiceId] || false;
+        const checked = servicesState[service.ServiceId] || false;
 
         return (
           <div key={service.ServiceId} className="d-flex justify-content-between align-items-center mb-2">
@@ -338,15 +485,11 @@ const ServicesSection = ({
         <Col md={6}>{renderServiceColumn(rightColumn)}</Col>
       </Row>
     );
-  }, [currentItems, localServicesState, requestedServices, isFormDisabled, handleTestChange]);
+  }, [currentItems, servicesState, requestedServices, isFormDisabled, handleTestChange]);
 
   const handlePageChange = useCallback(({ selected }) => {
     setCurrentPage(selected);
   }, []);
-
-  // Debug logs
-  useEffect(() => {
-  }, [localServicesState, services]);
 
   return (
     <Col md={12}>
@@ -373,14 +516,9 @@ const ServicesSection = ({
                             size="sm"
                             onClick={() => {
                               if (serviceKey) {
-                                const isCurrentlyChecked = localServicesState[serviceKey] || false;
+                                const isCurrentlyChecked = servicesState[serviceKey] || false;
                                 const newValue = !isCurrentlyChecked;
 
-                                // Cập nhật cả local và prop state
-                                setLocalServicesState(prev => ({
-                                  ...prev,
-                                  [serviceKey]: newValue
-                                }));
                                 setServices(prev => ({
                                   ...prev,
                                   [serviceKey]: newValue
@@ -399,8 +537,9 @@ const ServicesSection = ({
                                 });
                               }
                             }}
+                            disabled={isFormDisabled}
                           >
-                            {serviceKey ? (localServicesState[serviceKey] ? "✓ Đã chọn" : "+ Chọn") : "Không khả dụng"}
+                            {serviceKey ? (servicesState[serviceKey] ? "✓ Đã chọn" : "+ Chọn") : "Không khả dụng"}
                           </Button>
                         </div>
                       </li>
@@ -441,19 +580,37 @@ const ServicesSection = ({
               variant="outline-primary"
               size="sm"
               onClick={handleRequestService}
-              disabled={isFormDisabled || !Object.values(localServicesState).some(v => v)}
+              disabled={isFormDisabled || !Object.values(servicesState).some(v => v) || serviceLoading}
               className="no-print"
             >
-              🧾 Yêu cầu thực hiện dịch vụ đã chọn ({Object.values(localServicesState).filter(v => v).length})
+              {serviceLoading ? (
+                <>
+                  <Spinner animation="border" size="sm" className="me-2" />
+                  Đang gửi...
+                </>
+              ) : (
+                `🧾 Yêu cầu thực hiện dịch vụ đã chọn (${Object.values(servicesState).filter(v => v).length})`
+              )}
             </Button>
+
+            <Button
+              variant="outline-info"
+              size="sm"
+              onClick={handlePreview}
+              disabled={!selectedTodayPatient || !Object.values(servicesState).some(Boolean)}
+              className="no-print ms-2"
+            >
+              👁️ Xem trước PDF
+            </Button>
+
             <Button
               variant="outline-success"
               size="sm"
-              onClick={() => printDocument('service')}
-              disabled={!selectedTodayPatient || !Object.values(localServicesState).some(Boolean)}
+              onClick={printDocument}
+              disabled={!selectedTodayPatient || !Object.values(servicesState).some(Boolean)}
               className="no-print ms-2"
             >
-              🖨️ Xuất chỉ định dịch vụ
+              🖨️ Xuất PDF
             </Button>
           </div>
 

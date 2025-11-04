@@ -12,8 +12,10 @@
   "dependencies": {
     "@fullcalendar/bootstrap5": "^6.1.19",
     "@fullcalendar/daygrid": "^6.1.19",
+    "@fullcalendar/interaction": "^6.1.19",
     "@fullcalendar/react": "^6.1.19",
     "@fullcalendar/timegrid": "^6.1.19",
+    "@supabase/supabase-js": "^2.78.0",
     "axios": "^1.12.2",
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1",
@@ -21,6 +23,7 @@
     "chartjs-plugin-datalabels": "^2.2.0",
     "dayjs": "^1.11.18",
     "dompurify": "^3.3.0",
+    "js-cookie": "^3.0.5",
     "jspdf": "^3.0.3",
     "jspdf-autotable": "^5.0.2",
     "lodash": "^4.17.21",
