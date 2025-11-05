@@ -1,8 +1,8 @@
 <?php
 
+use App\Http\Controllers\API\Receptionist\AppointmentRecepController;
 use App\Http\Controllers\API\ReportRevenueController;
 use App\Http\Controllers\API\ScheduleController;
-use App\Http\Controllers\Receptionist\AppointmentRecepController;
 use Dba\Connection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -23,9 +23,8 @@ use App\Http\Controllers\API\Doctor\PatientsController;
 //----------------------------------------------Hết-------------------------------
 use App\Http\Controllers\API\User\AdminUserController;
 use App\Http\Controllers\API\Print\InvoicePrintController;
+use App\Http\Controllers\API\Receptionist\QueueController;
 use App\Http\Controllers\API\Technician\TestResultsController;
-
-
 
 Route::get('/user', [UserController::class, 'index']);
 Route::get('/ping', [UserController::class, 'ping']);
@@ -161,6 +160,14 @@ Route::prefix('receptionist')->group(function () {
     //lịch hẹn
     Route::get('/appointments/today', [AppointmentRecepController::class, 'GetAppointmentToday']);
     Route::post('/appointments', [AppointmentRecepController::class, 'CreateAppoitment']);
+    Route::put('/appointments/{appointmentId}/status', [AppointmentRecepController::class, 'UpdateAppointmentStatus']);
+    //hàng chờ
+    Route::get('/queue/{room_id}', [QueueController::class, 'GetQueueByRoomAndDate']);
+    Route::post('/queue', [QueueController::class, 'CreateQueue']);
+    Route::put('/queue/{queueId}/status', [QueueController::class, 'UpdateQueueStatus']);
+    Route::delete('/queue/{queueId}', [QueueController::class, 'DeleteQueue']);
+    Route::put('/queue/{queueId}/prioritize', [QueueController::class, 'PrioritizeQueue']);
+
 });
 
 // Patient Routes

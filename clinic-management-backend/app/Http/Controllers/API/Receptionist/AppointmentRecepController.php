@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Receptionist;
+namespace App\Http\Controllers\API\Receptionist;
 
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
@@ -63,11 +63,12 @@ class AppointmentRecepController extends Controller
 
         $patientId = $request->input('PatientId');
         $staffId = $request->input('StaffId');
-        $appointmentDate = now()->format('Y-m-d');
-        $appointmentTime = now()->format('H:i:s');
+        $appointmentDate = now('Asia/Ho_Chi_Minh')->format('Y-m-d');
+        $appointmentTime = now('Asia/Ho_Chi_Minh')->format('H:i:s');
         $notes = $request->input('Notes', '');
 
-        $createdBy = auth()->user()->UserId;
+        // $createdBy = auth()->user()->UserId;
+        $createdBy = 3;
 
         //kiểm tra bác sĩ đó có lich làm việc không
         $schedule = StaffSchedule::where('StaffId', $staffId)
@@ -137,43 +138,31 @@ class AppointmentRecepController extends Controller
         }
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
+   public function UpdateAppointmentStatus(Request $request, $appointmentId)
     {
-        //
-    }
+        $request->validate([
+            'Status' => 'required|string|in:Đã đặt,Đang chờ,Đang khám,Đã khám,Hủy'
+        ]);
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
-    }
+        $appointment = Appointment::find($appointmentId);
+        if (!$appointment) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lịch hẹn không tồn tại.'
+            ], 404);
+        }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
-    {
-        //
-    }
+        $appointment->Status = $request->input('Status');
+        $appointment->save();
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
-    {
-        //
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'AppointmentId' => $appointment->AppointmentId,
+                'Status' => $appointment->Status,
+            ],
+            'message' => 'Cập nhật trạng thái lịch hẹn thành công.'
+        ]);
     }
 }
