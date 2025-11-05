@@ -76,13 +76,15 @@ Route::middleware(['auth:api'])->get('/me', function (Request $request) {
             'id' => $user->UserId,
             'full_name' => $user->FullName,
             'email' => $user->Email,
+            'phone' => $user->Phone,
+            'address' => $user->Adress,
+            'date_of_birth' => $user->DateOfBirth,
             'username' => $user->Username,
             'is_active' => $user->IsActive,
             'roles' => $user->roles()->pluck('RoleName'),
         ],
     ], 200, [], JSON_UNESCAPED_UNICODE);
 });
-
 //admin-revenue
 Route::get('/report-revenue/combined', [ReportRevenueController::class, 'getCombinedStatistics']);
 Route::get('/report-revenue/detail-revenue', [ReportRevenueController::class, 'getDetailRevenueReport']);
@@ -150,14 +152,16 @@ Route::post('/print/preview-html', [InvoicePrintController::class, 'previewHTML'
 Route::prefix('technician')->group(function () {
     // Danh sách dịch vụ
     Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
-   // thay đổi trạng thái dịch vụ
+    // thay đổi trạng thái dịch vụ
     Route::post('/services/{serviceOrderId}/status', [TestResultsController::class, 'updateServiceStatus']);
 });
 
 //Receptionist Routes
 Route::prefix('receptionist')->group(function () {
     //lịch hẹn
-    Route::get('/appointments/today',[AppointmentRecepController::class, 'GetAppointmentToday']);
+    Route::get('/appointments/today', [AppointmentRecepController::class, 'GetAppointmentToday']);
     Route::post('/appointments', [AppointmentRecepController::class, 'CreateAppoitment']);
 });
 
+// Patient Routes
+// Route::middleware()->post('/auth/login', [AuthController::class, 'login']);

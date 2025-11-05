@@ -105,13 +105,24 @@ const LoginPage = () => {
         username: formData.username,
         password: formData.password,
       });
-
+      // Kiểm tra đúng dữ liệu -> res trả về
       if (res?.success) {
+        // Kiểm trả người dùng đã kích hoạt tài khoản hay chưa
         if (res?.user?.is_active === false) {
           showToast(
             "warning",
             "Tài khoản của bạn chưa được kích hoạt vui lòng nhập mã xác thực để kích hoạt tài khoản."
           );
+          // Chuyển sang xác thực email
+          setTimeout(() => {
+            navigate(path.VERIFICATION_EMAIL, {
+              state: {
+                email: res?.user?.email,
+                justRegistered: true,
+                expired: res?.user?.expired,
+              },
+            });
+          }, 1000);
         } else {
           setUser(res.user);
           showToast("success", "Đăng nhập thành công.");

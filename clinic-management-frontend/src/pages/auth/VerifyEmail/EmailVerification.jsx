@@ -31,7 +31,6 @@ export default function VerifyEmailPage() {
 
   // 🕒 Khởi tạo thời gian hết hạn và đếm ngược
   useEffect(() => {
-    console.log("🔥 expired từ backend:", expired);
     let expiryTime = null;
 
     if (expired) {
