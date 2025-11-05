@@ -105,43 +105,45 @@ const LoginPage = () => {
         username: formData.username,
         password: formData.password,
       });
-      // Kiểm tra đúng dữ liệu -> res trả về
+
       if (res?.success) {
-        // Kiểm trả người dùng đã kích hoạt tài khoản hay chưa
-        if (res?.user?.is_active === false) {
-          showToast(
-            "warning",
-            "Tài khoản của bạn chưa được kích hoạt vui lòng nhập mã xác thực để kích hoạt tài khoản."
-          );
-          // Chuyển sang xác thực email
-          setTimeout(() => {
-            navigate(path.VERIFICATION_EMAIL, {
-              state: {
-                email: res?.user?.email,
-                justRegistered: true,
-                expired: res?.user?.expired,
-              },
-            });
-          }, 1000);
-        } else {
-          setUser(res.user);
-          showToast("success", "Đăng nhập thành công.");
+        setUser(res.user);
+        showToast("success", "Đăng nhập thành công.");
 
-          // Redirect sau 1s
-          const roles = res.user.roles || [];
-          const mainRole = roles.length > 0 ? roles[0] : null;
-          const redirectPath = ROLE_ROUTE[mainRole] || path.HOME;
+        const roles = res.user.roles || [];
+        const mainRole = roles.length > 0 ? roles[0] : null;
+        const redirectPath = ROLE_ROUTE[mainRole] || path.HOME;
 
-          setTimeout(() => {
-            navigate(redirectPath, { replace: true });
-          }, 1000);
-        }
+        setTimeout(() => {
+          navigate(redirectPath, { replace: true });
+        }, 1000);
       }
     } catch (error) {
       console.error("Login error:", error);
+      const response = error.response?.data;
+
+      // ✅ Nếu là lỗi tài khoản chưa kích hoạt
+      if (response?.error_code === 3) {
+        showToast(
+          "warning",
+          "Tài khoản của bạn chưa được kích hoạt. Vui lòng nhập mã xác thực để kích hoạt tài khoản."
+        );
+        setTimeout(() => {
+          navigate(path.VERIFICATION_EMAIL, {
+            state: {
+              email: formData.username,
+              justRegistered: true,
+              expired: response?.user?.expired,
+            },
+          });
+        }, 1000);
+        return;
+      }
+
+      // ❌ Lỗi khác
       const message =
-        error.response?.data?.message ||
-        "Đã xảy ra lỗi ở phía server. Vui lòng đăng nhập lại";
+        response?.message ||
+        "Đã xảy ra lỗi ở phía server. Vui lòng đăng nhập lại.";
       showToast("error", message);
     } finally {
       setLoading(false);
