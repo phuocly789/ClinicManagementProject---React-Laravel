@@ -44,6 +44,8 @@ class AuthService
         ])->validate();
 
         $code = rand(100000, 999999);
+        $now = Carbon::now('Asia/Ho_Chi_Minh');
+        $expiredAt = $now->copy()->addMinutes(5);
         $userExitst = \App\Models\User::where('Username', $validated['username'])->first();
 
         if ($userExitst) {
@@ -70,7 +72,7 @@ class AuthService
             'Email' => $validated['email'],
             'PasswordHash' => Hash::make($validated['password']),
             'Phone' => $validated['phone'],
-            'Birthday' => $validated['birthday'],
+            'DateOfBirth' => $validated['birthday'],
             'Gender' => match (Str::lower($validated['gender'])) {
                 'male' => 'Nam',
                 'female' => 'Nữ',
@@ -80,7 +82,7 @@ class AuthService
             'MustChangePassword' => false,
             'IsActive' => false,
             'CodeId' => $code,
-            'CodeExpired' => Carbon::now('UTC')->addMinutes(5),
+            'CodeExpired' => Carbon::now('Asia/Ho_Chi_Minh')->addMinutes(5),
         ]);
         $user->roles()->attach(2);
         try {
@@ -105,9 +107,7 @@ class AuthService
                 "id" => $user->UserId,
                 "email" => $user->Email,
                 "is_active" => $user->IsActive,
-                "expired" => Carbon::parse($user->CodeExpired)
-                    ->setTimezone('Asia/Ho_Chi_Minh')
-                    ->format('Y-m-d H:i:s'),
+                "expired" => $expiredAt->toIso8601String(),
             ],
             'token' => $token,
         ];
@@ -143,7 +143,7 @@ class AuthService
 
     /**
      * Đăng nhập
-     */ 
+     */
     public function handleLogin(array $data)
     {
         // Validate dữ liệu đầu vào
@@ -166,19 +166,19 @@ class AuthService
         $user = User::where('Username', $validated['username'])->first();
         if (!$user) {
             $msg = AuthMessages::AUTH['USER_NOT_FOUND'];
-            throw new AppErrors($msg['message'], $msg['status'], $msg['code']);
+            throw new AppErrors($msg['message'], $msg['status'], 1);
         }
 
         // Kiểm tra mật khẩu
         if (!Hash::check($validated['password'], $user->PasswordHash)) {
             $msg = AuthMessages::AUTH['WRONG_PASSWORD'];
-            throw new AppErrors($msg['message'], $msg['status'], $msg['code']);
+            throw new AppErrors($msg['message'], $msg['status'], 2);
         }
 
         // Kiểm tra kích hoạt
         if (!$user->IsActive) {
             $msg = AuthMessages::AUTH['ACCOUNT_INACTIVE'];
-            throw new AppErrors($msg['message'], $msg['status'], $msg['code']);
+            throw new AppErrors($msg['message'], $msg['status'], 3);
         }
 
         // Đăng nhập thành công
@@ -206,7 +206,9 @@ class AuthService
             throw new AppErrors("Vui lòng nhập đầy đủ thông tin.", 400, 1);
         }
 
-        $user = User::where('Email', $data['email'])->first();
+        $user = User::where('Email', $data['email'])
+            ->orWhere('Username', $data['email'])
+            ->first();
 
         if (!$user) {
             throw new AppErrors("Email không tồn tại.", 404, 2);
@@ -220,9 +222,15 @@ class AuthService
             throw new AppErrors("Mã xác thực không chính xác.", 400, 4);
         }
 
-        if ($user->CodeExpired && now()->greaterThan($user->CodeExpired)) {
-            throw new AppErrors("Mã xác thực đã hết hạn.", 410, 5);
+        if ($user->CodeExpired) {
+            $expiredHcm = Carbon::parse($user->CodeExpired, 'Asia/Ho_Chi_Minh');
+            $nowHcm = Carbon::now('Asia/Ho_Chi_Minh');
+
+            if ($nowHcm->greaterThan($expiredHcm)) {
+                throw new AppErrors("Mã xác thực đã hết hạn.", 410, 5);
+            }
         }
+
 
         $user->IsActive = true;
         $user->CodeExpired = null;
@@ -238,13 +246,15 @@ class AuthService
     public function handleResendEmail(array $data)
     {
         if (empty($data['email'])) {
-            throw new AppErrors("Vui lòng nhập đầy đủ thông tin.", 400, 1);
+            throw new AppErrors("Vui lòng nhập ít nhất email hoặc tên đăng nhập.", 400, 1);
         }
 
-        $user = User::where('Email', $data['email'])->first();
+        $user = User::where('Email', $data['email'])
+            ->orWhere('Username', $data['email'])
+            ->first();
 
         if (!$user) {
-            throw new AppErrors("Email không tồn tại.", 404, 2);
+            throw new AppErrors("Người dùng không tồn tại.", 404, 2);
         }
 
         if ($user->IsActive === true) {
@@ -253,7 +263,8 @@ class AuthService
         $code = rand(100000, 999999);
 
         $user->IsActive = false;
-        $user->CodeExpired = Carbon::now('UTC')->addMinutes(5);
+        $CodeExpired = Carbon::now('Asia/Ho_Chi_Minh')->addMinutes(5);
+        $user->CodeExpired = $CodeExpired->toIso8601String();
         $user->CodeId = $code;
         $user->save();
 
@@ -274,6 +285,7 @@ class AuthService
 
         return [
             'success' => true,
+            'message' => 'Gửi lại email xác thực thành công.',
             'user' => [
                 "id" => $user->UserId,
                 "email" => $user->Email,
