@@ -26,7 +26,7 @@ class PrescriptionDetail extends Model
 {
 	protected $table = 'PrescriptionDetails';
 	protected $primaryKey = 'PrescriptionDetailId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [

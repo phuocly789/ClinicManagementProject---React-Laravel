@@ -24,10 +24,10 @@ use Illuminate\Database\Eloquent\Model;
 class UserRole extends Model
 {
 	protected $table = 'UserRoles';
-    protected $primaryKey = ['UserId', 'RoleId'];
+	protected $primaryKey = ['UserId', 'RoleId'];
 	public $incrementing = false;
 	public $timestamps = false;
-    protected $keyType = 'int';
+	protected $keyType = 'int';
 
 	protected $casts = [
 		'UserId' => 'int',
@@ -48,4 +48,5 @@ class UserRole extends Model
 	{
 		return $this->belongsTo(Role::class, 'RoleId');
 	}
+
 }

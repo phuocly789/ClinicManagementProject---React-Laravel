@@ -1,19 +1,32 @@
+// axios.js
 import axios from "axios";
-import _ from "lodash";
+import Cookies from 'js-cookie';
 import NProgress from "nprogress";
 import "nprogress/nprogress.css";
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = "http://localhost:8000";
+
 NProgress.configure({ showSpinner: false });
-const instance = axios.create({
+
+const axiosInstance = axios.create({
     baseURL: API_BASE_URL,
     withCredentials: true,
+    headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+    }
 });
 
-
-instance.interceptors.request.use(
+axiosInstance.interceptors.request.use(
     (config) => {
         NProgress.start();
+
+        // Lấy token từ cookie và thêm vào header
+        const token = Cookies.get('token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+
         return config;
     },
     (error) => {
@@ -21,20 +34,20 @@ instance.interceptors.request.use(
         return Promise.reject(error);
     }
 );
-instance.interceptors.response.use(
+
+axiosInstance.interceptors.response.use(
     (response) => {
         NProgress.done();
         return response.data;
     },
     (error) => {
         NProgress.done();
+        if (error.response?.status === 401) {
+            Cookies.remove('token');
+        }
+
         return Promise.reject(error);
     }
 );
 
-// instance.interceptors.response.use((response) => {
-//     const { data } = response;
-//     return response.data;
-// });
-
-export default instance;
+export default axiosInstance;

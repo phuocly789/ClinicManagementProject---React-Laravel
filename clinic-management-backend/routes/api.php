@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\API\Receptionist\AppointmentRecepController;
 use App\Http\Controllers\API\ReportRevenueController;
 use App\Http\Controllers\API\ScheduleController;
 use Dba\Connection;
@@ -20,11 +21,12 @@ use App\Http\Controllers\API\Doctor\DoctorExaminationsController;
 use App\Http\Controllers\API\Doctor\PatientsController;
 
 //----------------------------------------------Hết-------------------------------
-use App\Http\Controllers\API\User\UserControllers;
+use App\Http\Controllers\API\User\AdminUserController;
+use App\Http\Controllers\API\Print\InvoicePrintController;
+use App\Http\Controllers\API\Receptionist\QueueController;
+use App\Http\Controllers\API\Technician\TestResultsController;
 
-
-
-Route::get('/users', [UserController::class, 'index']);
+Route::get('/user', [UserController::class, 'index']);
 Route::get('/ping', [UserController::class, 'ping']);
 
 //check tồn kho
@@ -43,10 +45,16 @@ Route::delete('/import-bills/{id}', [ImportBillController::class, 'destroy']);
 Route::get('/import-bills/{id}', [ImportBillController::class, 'show']);
 
 Route::get('/suppliers', [SuppliersController::class, 'index']);
+Route::get('/suppliers/all', [SuppliersController::class, 'all']);
 Route::post('/suppliers', [SuppliersController::class, 'store']);
 Route::put('/suppliers/{id}', [SuppliersController::class, 'update']);
 Route::delete('/suppliers/{id}', [SuppliersController::class, 'destroy']);
 Route::get('/suppliers/{id}', [SuppliersController::class, 'show']);
+//handel excel
+Route::get('/medicines/template', [MedicinesController::class, 'downloadTemplate']);
+Route::post('/medicines/dry-run', [MedicinesController::class, 'dryRunImport']);
+Route::post('/medicines/import', [MedicinesController::class, 'import']);
+Route::get('/medicines/export', [MedicinesController::class, 'export']);
 
 Route::get('/schedules', [ScheduleController::class, 'index']);
 Route::post('/schedules', [ScheduleController::class, 'createSchedule']);
@@ -54,11 +62,28 @@ Route::put('/schedules/{scheduleId}', [ScheduleController::class, 'updateSchedul
 Route::delete('/schedules/{scheduleId}', [ScheduleController::class, 'deleteSchedule']);
 
 
-
+// Auth
 Route::post('/auth/login', [AuthController::class, 'login']);
+Route::middleware('auth:api')->post('/auth/logout', [AuthController::class, 'logout']);
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post("/verification-email", [AuthController::class, 'verificationEmail']);
 Route::post("/resend-verification-email", [AuthController::class, 'resendVerificationEmail']);
+Route::middleware(['auth:api'])->get('/me', function (Request $request) {
+    $user = $request->user();
+    return response()->json([
+        'user' => [
+            'id' => $user->UserId,
+            'full_name' => $user->FullName,
+            'email' => $user->Email,
+            'phone' => $user->Phone,
+            'address' => $user->Adress,
+            'date_of_birth' => $user->DateOfBirth,
+            'username' => $user->Username,
+            'is_active' => $user->IsActive,
+            'roles' => $user->roles()->pluck('RoleName'),
+        ],
+    ], 200, [], JSON_UNESCAPED_UNICODE);
+});
 //admin-revenue
 Route::get('/report-revenue/combined', [ReportRevenueController::class, 'getCombinedStatistics']);
 Route::get('/report-revenue/detail-revenue', [ReportRevenueController::class, 'getDetailRevenueReport']);
@@ -84,7 +109,7 @@ Route::prefix('doctor')->group(function () {
     // Lấy lịch làm việc của bác sĩ
     Route::get('/schedules/{doctorId}', [AppointmentsController::class, 'getStaffScheduleById']);
 
-    // Lấy danh sách tất cả bệnh nhân 
+    // Lấy danh sách tất cả bệnh nhân
     Route::get('/patients', [PatientsController::class, 'index']);
 
     // Lịch sử bệnh nhân
@@ -98,16 +123,52 @@ Route::prefix('doctor')->group(function () {
         Route::get('{appointmentId}', [DoctorExaminationsController::class, 'show']);
         Route::post('{appointmentId}/temp-save', [DoctorExaminationsController::class, 'tempSave']);
     });
+
+    // Chỉ định dịch vụ
+    Route::post('/appointments/{appointmentId}/assign-services', [ServiceController::class, 'assignServices']);
+    Route::get('/doctor/check-roles', [ServiceController::class, 'checkRolesAndTechnicians']);
 });
 
 //Nhóm route cho User
 
 Route::prefix('users')->group(function () {
-    Route::get('/', [UserControllers::class, 'index']);
-    Route::post('/', [UserControllers::class, 'store']);
-    Route::put('/{id}', [UserControllers::class, 'update']);
-    Route::delete('/{id}', [UserControllers::class, 'destroy']);
-    Route::patch('/{id}/toggle-status', [UserControllers::class, 'toggleStatus']);
+    Route::get('/', [AdminUserController::class, 'index']);
+    Route::post('/', [AdminUserController::class, 'store']);
+    Route::put('/{id}', [AdminUserController::class, 'update']);
+    Route::delete('/{id}', [AdminUserController::class, 'destroy']);
+    Route::put('/toggle-status/{id}', [AdminUserController::class, 'toggleStatus']);
 });
 
-Route::get('/roles', [UserControllers::class, 'roles']);
+Route::get('/roles', [AdminUserController::class, 'roles']);
+// Route::post('/print/export', [InvoicePrintController::class, 'export']); // POST để pass appointment_id + type
+Route::get('/print/{type}/{appointment_id}', [InvoicePrintController::class, 'export']);
+Route::post('/print/prescription/preview', [InvoicePrintController::class, 'previewPrescription']);
+// Route cho PDF Preview
+Route::post('/print/preview-html', [InvoicePrintController::class, 'previewHTML']);
+
+
+// Technician Routes
+Route::prefix('technician')->group(function () {
+    // Danh sách dịch vụ
+    Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
+    // thay đổi trạng thái dịch vụ
+    Route::post('/services/{serviceOrderId}/status', [TestResultsController::class, 'updateServiceStatus']);
+});
+
+//Receptionist Routes
+Route::prefix('receptionist')->group(function () {
+    //lịch hẹn
+    Route::get('/appointments/today', [AppointmentRecepController::class, 'GetAppointmentToday']);
+    Route::post('/appointments', [AppointmentRecepController::class, 'CreateAppoitment']);
+    Route::put('/appointments/{appointmentId}/status', [AppointmentRecepController::class, 'UpdateAppointmentStatus']);
+    //hàng chờ
+    Route::get('/queue/{room_id}', [QueueController::class, 'GetQueueByRoomAndDate']);
+    Route::post('/queue', [QueueController::class, 'CreateQueue']);
+    Route::put('/queue/{queueId}/status', [QueueController::class, 'UpdateQueueStatus']);
+    Route::delete('/queue/{queueId}', [QueueController::class, 'DeleteQueue']);
+    Route::put('/queue/{queueId}/prioritize', [QueueController::class, 'PrioritizeQueue']);
+
+});
+
+// Patient Routes
+// Route::middleware()->post('/auth/login', [AuthController::class, 'login']);

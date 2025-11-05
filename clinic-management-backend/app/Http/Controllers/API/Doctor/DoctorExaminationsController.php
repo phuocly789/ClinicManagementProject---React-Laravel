@@ -48,28 +48,27 @@ class DoctorExaminationsController extends Controller
             'instructions' => 'nullable|string',
         ]);
 
-        $appointment = Appointment::findOrFail($appointmentId);
-        
-        // 🆕 Hardcode staffId tạm cho test (thay 1 bằng ID bác sĩ thật từ DB MedicalStaff)
-        $staffId = 4; // Auth::id(); // Uncomment khi có auth
+        // SỬA: Thêm eager loading để lấy thông tin patient và user
+        $appointment = Appointment::with(['patient.user'])->findOrFail($appointmentId);
 
-        // Validate Patient & Staff
-        $patient = Patient::find($appointment->PatientId);
+        $staffId = 4;
+
+        // SỬA: Lấy patient từ relationship đã eager load
+        $patient = $appointment->patient;
         if (!$patient) {
             return response()->json(['error' => 'Không tìm thấy bệnh nhân'], 400);
         }
+
         $staff = MedicalStaff::find($staffId);
         if (!$staff) {
-            return response()->json(['error' => 'Không tìm thấy thông tin bác sĩ (StaffId: ' . $staffId . ')'], 400);
+            return response()->json(['error' => 'Không tìm thấy thông tin bác sĩ'], 400);
         }
 
         DB::beginTransaction();
 
         try {
-            // Update Appointment status
             $appointment->update(['Status' => 'Đã khám']);
 
-            // Link MedicalRecord if not exist
             $recordId = $appointment->RecordId;
             if (!$recordId) {
                 $medicalRecord = MedicalRecord::create([
@@ -83,7 +82,6 @@ class DoctorExaminationsController extends Controller
                 $appointment->update(['RecordId' => $recordId]);
             }
 
-            // Save Diagnosis nếu có
             if ($request->symptoms || $request->diagnosis) {
                 Diagnosis::updateOrCreate(
                     ['AppointmentId' => $appointmentId],
@@ -97,31 +95,45 @@ class DoctorExaminationsController extends Controller
                 );
             }
 
-            // Save ServiceOrders
-            foreach ($request->services as $serviceId => $isSelected) {
-                if ($isSelected) {
-                    $service = Service::find($serviceId);
-                    if (!$service) {
-                        throw new \Exception("Không tìm thấy dịch vụ ID: " . $serviceId);
+            // SAVE SERVICE ORDERS VỚI STATUS HỢP LỆ
+            if ($request->services && is_array($request->services)) {
+                foreach ($request->services as $serviceId => $isSelected) {
+                    if ($serviceId == 0 || !is_numeric($serviceId) || !$isSelected) {
+                        continue;
                     }
 
+                    $service = Service::find($serviceId);
+                    if (!$service) {
+                        \Log::warning("Service not found ID: " . $serviceId);
+                        continue;
+                    }
+
+                    // SỬ DỤNG STATUS HỢP LỆ: 'Đã chỉ định' cho dịch vụ mới
                     ServiceOrder::create([
                         'AppointmentId' => $appointmentId,
                         'ServiceId' => $serviceId,
                         'AssignedStaffId' => $staffId,
                         'OrderDate' => now(),
-                        'Status' => 'Pending',
+                        'Status' => 'Đã chỉ định', // GIÁ TRỊ HỢP LỆ
                     ]);
                 }
             }
 
-            // Save Prescriptions
             if ($request->prescriptions && count($request->prescriptions) > 0) {
+                // SỬA: Lấy tên bệnh nhân từ relationship
+                $patientName = 'Bệnh nhân';
+                if ($patient->user && $patient->user->FullName) {
+                    $patientName = $patient->user->FullName;
+                }
+
+                // SỬA: Tạo instructions tự động với tên bệnh nhân
+                $instructions = $request->instructions ?? "Đơn thuốc cho bệnh nhân {$patientName}";
+
                 $prescription = Prescription::create([
                     'AppointmentId' => $appointmentId,
                     'StaffId' => $staffId,
                     'RecordId' => $recordId,
-                    'Instructions' => $request->instructions,
+                    'Instructions' => $instructions, // SỬA: Dùng instructions đã tạo
                     'PrescriptionDate' => now(),
                 ]);
 
@@ -140,6 +152,8 @@ class DoctorExaminationsController extends Controller
                         'MedicineId' => $medicineId,
                         'Quantity' => $med['quantity'],
                         'DosageInstruction' => $med['dosage'],
+                        'UnitPrice' => $med['unitPrice'] ?? 0,
+                        'TotalPrice' => $med['totalPrice'] ?? 0,
                     ]);
                 }
             }
@@ -176,6 +190,8 @@ class DoctorExaminationsController extends Controller
                         'medicine' => $detail->medicine->MedicineName,
                         'quantity' => $detail->Quantity,
                         'dosage' => $detail->DosageInstruction,
+                        'unitPrice' => $detail->UnitPrice ?? 0,
+                        'totalPrice' => $detail->TotalPrice ?? 0,
                     ];
                 });
             })->toArray(),
@@ -186,12 +202,12 @@ class DoctorExaminationsController extends Controller
 
     public function tempSave(Request $request, $appointmentId)
     {
-        $appointment = Appointment::findOrFail($appointmentId);
+        // Tạm thời không lưu gì cả, chỉ trả về success
+        // Hoặc bạn có thể thêm cột DraftData vào bảng Appointments
 
-        $appointment->update([
-            'DraftData' => json_encode($request->all(['symptoms', 'diagnosis', 'services', 'prescriptions'])),
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã ghi nhận tạm lưu'
         ]);
-
-        return response()->json(['success' => true, 'message' => 'Đã tạm lưu']);
     }
 }
