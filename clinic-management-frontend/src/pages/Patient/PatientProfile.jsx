@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
 import dayjs from "dayjs";
 import CustomToast from "../../Components/CustomToast/CustomToast";
+import patientService from "../../services/patientService";
 
 const PatientProfile = () => {
   const user = useOutletContext();
@@ -13,6 +14,7 @@ const PatientProfile = () => {
 
   // State cho thông tin cá nhân
   const [profileData, setProfileData] = useState({
+    id: "",
     fullName: "",
     email: "",
     phone: "",
@@ -24,6 +26,7 @@ const PatientProfile = () => {
     console.log("Check user: ", user);
     if (user) {
       setProfileData({
+        id: user?.id,
         fullName: user.full_name || "",
         email: user.email || "",
         phone: user.phone || "",
@@ -92,9 +95,6 @@ const PatientProfile = () => {
     if (!confirmPassword.trim())
       newErrors.confirmPassword = "Xác nhận mật khẩu không được để trống";
 
-    if (otp && otp !== "123456")
-      newErrors.otp = "Mã OTP không chính xác. Vui lòng nhập lại mã OTP";
-
     if (newPassword && confirmPassword && newPassword !== confirmPassword)
       newErrors.confirmPassword = "Mật khẩu xác nhận không khớp";
 
@@ -108,13 +108,26 @@ const PatientProfile = () => {
   };
 
   // Xử lý lưu thông tin cá nhân
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
     const validationErrors = validateProfile();
     setErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) return;
-    console.log("Check profile data: ", profileData);
-    showToast("success", "Cập nhật thông tin thành công!");
+    try {
+      const payload = {
+        full_name: profileData.fullName,
+        date_of_birth: profileData.birthDate,
+        address: profileData.address,
+        phone: profileData.phone,
+        email: profileData.email,
+      };
+      const res = await patientService.updateProfile(profileData.id, payload);
+      if (res && res.success === true) {
+        showToast("success", "Cập nhật thông tin thành công!");
+      }
+    } catch (error) {
+      showToast("error", "Lỗi server ");
+    }
   };
 
   // Xử lý thay đổi mật khẩu
@@ -127,7 +140,7 @@ const PatientProfile = () => {
   };
 
   // Gửi mã OTP
-  const handleSendOTP = (e) => {
+  const handleSendOTP = async (e) => {
     e.preventDefault();
     if (!passwordData.currentPassword) {
       setErrors({
@@ -136,33 +149,84 @@ const PatientProfile = () => {
       });
       return;
     }
+    try {
+      const res = await patientService.sendEmailVerification({
+        email: profileData.email,
+        password: passwordData.currentPassword,
+      });
 
-    console.log("Gửi OTP đến email:", profileData.email);
-    setOtpSent(true);
-    showToast(
-      "success",
-      "Mã OTP đã được gửi đến email của bạn! (Mã giả lập: 123456)"
-    );
+      if (res && res.success === false) {
+        if (res?.code === 1) {
+          setErrors({
+            ...errors,
+            currentPassword: "Mật khẩu hiện tại không đúng!",
+          });
+          return;
+        }
+      }
+      if (res && res.success === true) {
+        setOtpSent(true);
+        showToast(
+          "success",
+          "Mã OTP đã được gửi đến email của bạn. Vui lòng kiểm tra hộp thư !"
+        );
+      }
+    } catch (error) {
+      const response = error.response?.data;
+      if (response?.code === 1) {
+        setErrors({
+          ...errors,
+          currentPassword: "Mật khẩu hiện tại không đúng!",
+        });
+      } else {
+        showToast("error", "Lỗi server");
+      }
+    }
   };
 
   // Xác nhận đổi mật khẩu
-  const handleChangePassword = (e) => {
+  const handleChangePassword = async (e) => {
     e.preventDefault();
     const validationErrors = validatePassword();
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) return;
-
-    console.log("Đổi mật khẩu thành công");
-    showToast("success", "Đổi mật khẩu thành công!");
-
-    setPasswordData({
-      currentPassword: "",
-      otp: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
-    setOtpSent(false);
+    try {
+      const res = await patientService.changePassword({
+        email: profileData.email,
+        password: passwordData.currentPassword,
+        code: passwordData.otp,
+        new_password: passwordData.newPassword,
+        confirm_password: passwordData.confirmPassword,
+      });
+      if (res && res.success === true) {
+        showToast("success", "Đổi mật khẩu thành công!");
+        setPasswordData({
+          currentPassword: "",
+          otp: "",
+          newPassword: "",
+          confirmPassword: "",
+        });
+        setOtpSent(false);
+      }
+    } catch (error) {
+      const response = error.response?.data;
+      if (response?.code === 2) {
+        showToast("error", "Người dùng không tồn tại!");
+      } else if (response?.code === 4) {
+        setErrors({
+          ...errors,
+          otp: "Mã OTP không chính xác. Vui lòng nhập lại mã OTP",
+        });
+      } else if (response?.code === 5) {
+        setErrors({
+          ...errors,
+          otp: "Mã OTP không chính xác. Vui lòng nhập lại mã OTP",
+        });
+      } else {
+        showToast("error", "Lỗi server");
+      }
+    }
   };
   return (
     <>
@@ -179,8 +243,9 @@ const PatientProfile = () => {
                 <label className="form-label fw-semibold">Họ và Tên</label>
                 <input
                   type="text"
-                  className={`form-control ${errors.fullName ? "is-invalid" : ""
-                    }`}
+                  className={`form-control ${
+                    errors.fullName ? "is-invalid" : ""
+                  }`}
                   name="fullName"
                   value={profileData.fullName}
                   onChange={handleProfileChange}
@@ -218,8 +283,9 @@ const PatientProfile = () => {
                 <label className="form-label fw-semibold">Ngày sinh</label>
                 <input
                   type="date"
-                  className={`form-control ${errors.birthDate ? "is-invalid" : ""
-                    }`}
+                  className={`form-control ${
+                    errors.birthDate ? "is-invalid" : ""
+                  }`}
                   name="birthDate"
                   value={profileData.birthDate}
                   onChange={handleProfileChange}
@@ -233,8 +299,9 @@ const PatientProfile = () => {
                 <label className="form-label fw-semibold">Địa chỉ</label>
                 <input
                   type="text"
-                  className={`form-control ${errors.address ? "is-invalid" : ""
-                    }`}
+                  className={`form-control ${
+                    errors.address ? "is-invalid" : ""
+                  }`}
                   name="address"
                   value={profileData.address}
                   onChange={handleProfileChange}
@@ -262,8 +329,9 @@ const PatientProfile = () => {
                 </label>
                 <input
                   type="password"
-                  className={`form-control ${errors.currentPassword ? "is-invalid" : ""
-                    }`}
+                  className={`form-control ${
+                    errors.currentPassword ? "is-invalid" : ""
+                  }`}
                   name="currentPassword"
                   value={passwordData.currentPassword}
                   onChange={handlePasswordChange}
@@ -315,8 +383,9 @@ const PatientProfile = () => {
                 <label className="form-label fw-semibold">Mật khẩu mới</label>
                 <input
                   type="password"
-                  className={`form-control ${errors.newPassword ? "is-invalid" : ""
-                    }`}
+                  className={`form-control ${
+                    errors.newPassword ? "is-invalid" : ""
+                  }`}
                   name="newPassword"
                   value={passwordData.newPassword}
                   onChange={handlePasswordChange}
@@ -333,8 +402,9 @@ const PatientProfile = () => {
                 </label>
                 <input
                   type="password"
-                  className={`form-control ${errors.confirmPassword ? "is-invalid" : ""
-                    }`}
+                  className={`form-control ${
+                    errors.confirmPassword ? "is-invalid" : ""
+                  }`}
                   name="confirmPassword"
                   value={passwordData.confirmPassword}
                   onChange={handlePasswordChange}
