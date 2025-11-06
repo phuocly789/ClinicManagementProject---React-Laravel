@@ -19,7 +19,7 @@ use App\Http\Controllers\API\Doctor\DoctorMedicineSearchController;
 use App\Http\Controllers\API\Doctor\ServiceController;
 use App\Http\Controllers\API\Doctor\DoctorExaminationsController;
 use App\Http\Controllers\API\Doctor\PatientsController;
-
+use App\Http\Controllers\API\PatientController;
 //----------------------------------------------Hết-------------------------------
 use App\Http\Controllers\API\User\AdminUserController;
 use App\Http\Controllers\API\Print\InvoicePrintController;
@@ -76,7 +76,7 @@ Route::middleware(['auth:api'])->get('/me', function (Request $request) {
             'full_name' => $user->FullName,
             'email' => $user->Email,
             'phone' => $user->Phone,
-            'address' => $user->Adress,
+            'address' => $user->Address,
             'date_of_birth' => $user->DateOfBirth,
             'username' => $user->Username,
             'is_active' => $user->IsActive,
@@ -176,10 +176,15 @@ Route::prefix('receptionist')->group(function () {
     Route::put('/queue/{queueId}/status', [QueueController::class, 'UpdateQueueStatus']);
     Route::delete('/queue/{queueId}', [QueueController::class, 'DeleteQueue']);
     Route::put('/queue/{queueId}/prioritize', [QueueController::class, 'PrioritizeQueue']);
-
 });
 
 // Patient Routes
+Route::middleware(['auth:api'])
+    ->put('/patient/update-profile/{id}', [PatientController::class, 'updateProfile']);
+Route::middleware(['auth:api'])
+    ->post('/patient/send-vefication-email', [PatientController::class, 'sendVerificationEmail']);
+Route::middleware(['auth:api'])
+    ->post('/account/change-password', [PatientController::class, 'changePassword']);
 // Route::middleware()->post('/auth/login', [AuthController::class, 'login']);
 
 });
