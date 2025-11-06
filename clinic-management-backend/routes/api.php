@@ -155,4 +155,8 @@ Route::prefix('technician')->group(function () {
     Route::post('/service-orders/{serviceOrderId}/result', [TestResultsController::class, 'updateServiceResult']);
     // Lấy danh sách dịch vụ đã hoàn thành
     Route::get('/completed-services', [TestResultsController::class, 'getCompletedServices']);
+    // ✅ Lịch làm việc KTV
+    Route::get('/work-schedule', [TestResultsController::class, 'getWorkSchedule']);
+    Route::get('/work-schedule/{year}/{month}', [TestResultsController::class, 'getWorkScheduleByMonth']);
+
 });

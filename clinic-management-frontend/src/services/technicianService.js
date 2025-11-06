@@ -61,6 +61,36 @@ const technicianService = {
                 console.error('❌ Completed services error:', error);
                 throw error;
             });
+    },
+
+    // ✅ LẤY LỊCH LÀM VIỆC CỦA KTV
+    getWorkSchedule: () => {
+        console.log('📅 Getting work schedule for technician');
+
+        return axios.get('/api/technician/work-schedule')
+            .then(response => {
+                console.log('✅ Work schedule response:', response.data);
+                return response;
+            })
+            .catch(error => {
+                console.error('❌ Work schedule error:', error);
+                throw error;
+            });
+    },
+
+    // ✅ LẤY LỊCH LÀM VIỆC THEO THÁNG
+    getWorkScheduleByMonth: (year, month) => {
+        console.log(`📅 Getting work schedule for ${month}/${year}`);
+
+        return axios.get(`/api/technician/work-schedule/${year}/${month}`)
+            .then(response => {
+                console.log('✅ Monthly work schedule response:', response.data);
+                return response;
+            })
+            .catch(error => {
+                console.error('❌ Monthly work schedule error:', error);
+                throw error;
+            });
     }
 };
 
