@@ -7,10 +7,7 @@ const PatientLayout = () => {
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const { handleLogout } = useUser();
-  const user = JSON.parse(localStorage.getItem("userInfo")) || {
-    fullName: "Người dùng",
-    email: "user@example.com",
-  };
+  const { user } = useUser();
 
   const menuItems = [
     { path: "/patient/appointment", label: "Đặt Lịch Khám" },
@@ -183,13 +180,13 @@ const PatientLayout = () => {
 
             <div className="d-flex align-items-center gap-2">
               <span className="text-muted small d-none d-sm-inline">
-                {user.fullName}
+                {user?.full_name}
               </span>
               <div
                 className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center"
                 style={{ width: "35px", height: "35px", flexShrink: 0 }}
               >
-                {user.fullName.charAt(0).toUpperCase()}
+                {user?.full_name.charAt(0).toUpperCase()}
               </div>
             </div>
           </div>
@@ -200,7 +197,7 @@ const PatientLayout = () => {
           className="flex-grow-1 bg-light p-2 p-md-4"
           style={{ overflowY: "auto" }}
         >
-          <Outlet />
+          <Outlet context={user} />
         </main>
       </div>
     </div>

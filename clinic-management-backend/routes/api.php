@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\API\Receptionist\AppointmentRecepController;
 use App\Http\Controllers\API\ReportRevenueController;
 use App\Http\Controllers\API\ScheduleController;
 use Dba\Connection;
@@ -20,11 +21,10 @@ use App\Http\Controllers\API\Doctor\DoctorExaminationsController;
 use App\Http\Controllers\API\Doctor\PatientsController;
 
 //----------------------------------------------Hết-------------------------------
-use App\Http\Controllers\API\User\UserControllers;
+use App\Http\Controllers\API\User\AdminUserController;
 use App\Http\Controllers\API\Print\InvoicePrintController;
+use App\Http\Controllers\API\Receptionist\QueueController;
 use App\Http\Controllers\API\Technician\TestResultsController;
-
-
 
 Route::get('/user', [UserController::class, 'index']);
 Route::get('/ping', [UserController::class, 'ping']);
@@ -75,13 +75,15 @@ Route::middleware(['auth:api'])->get('/me', function (Request $request) {
             'id' => $user->UserId,
             'full_name' => $user->FullName,
             'email' => $user->Email,
+            'phone' => $user->Phone,
+            'address' => $user->Adress,
+            'date_of_birth' => $user->DateOfBirth,
             'username' => $user->Username,
             'is_active' => $user->IsActive,
             'roles' => $user->roles()->pluck('RoleName'),
         ],
     ], 200, [], JSON_UNESCAPED_UNICODE);
 });
-
 //admin-revenue
 Route::get('/report-revenue/combined', [ReportRevenueController::class, 'getCombinedStatistics']);
 Route::get('/report-revenue/detail-revenue', [ReportRevenueController::class, 'getDetailRevenueReport']);
@@ -107,7 +109,7 @@ Route::prefix('doctor')->group(function () {
     // Lấy lịch làm việc của bác sĩ
     Route::get('/schedules/{doctorId}', [AppointmentsController::class, 'getStaffScheduleById']);
 
-    // Lấy danh sách tất cả bệnh nhân 
+    // Lấy danh sách tất cả bệnh nhân
     Route::get('/patients', [PatientsController::class, 'index']);
 
     // Lịch sử bệnh nhân
@@ -130,14 +132,14 @@ Route::prefix('doctor')->group(function () {
 //Nhóm route cho User
 
 Route::prefix('users')->group(function () {
-    Route::get('/', [UserControllers::class, 'index']);
-    Route::post('/', [UserControllers::class, 'store']);
-    Route::put('/{id}', [UserControllers::class, 'update']);
-    Route::delete('/{id}', [UserControllers::class, 'destroy']);
-    Route::put('/toggle-status/{id}', [UserControllers::class, 'toggleStatus']);
+    Route::get('/', [AdminUserController::class, 'index']);
+    Route::post('/', [AdminUserController::class, 'store']);
+    Route::put('/{id}', [AdminUserController::class, 'update']);
+    Route::delete('/{id}', [AdminUserController::class, 'destroy']);
+    Route::put('/toggle-status/{id}', [AdminUserController::class, 'toggleStatus']);
 });
 
-Route::get('/roles', [UserControllers::class, 'roles']);
+Route::get('/roles', [AdminUserController::class, 'roles']);
 // Route::post('/print/export', [InvoicePrintController::class, 'export']); // POST để pass appointment_id + type
 Route::get('/print/{type}/{appointment_id}', [InvoicePrintController::class, 'export']);
 Route::post('/print/prescription/preview', [InvoicePrintController::class, 'previewPrescription']);
@@ -151,6 +153,7 @@ Route::prefix('technician')->group(function () {
     Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
     // thay đổi trạng thái dịch vụ
     Route::post('/services/{serviceOrderId}/status', [TestResultsController::class, 'updateServiceStatus']);
+    
     // CẬP NHẬT KẾT QUẢ
     Route::post('/service-orders/{serviceOrderId}/result', [TestResultsController::class, 'updateServiceResult']);
     // Lấy danh sách dịch vụ đã hoàn thành
@@ -158,5 +161,25 @@ Route::prefix('technician')->group(function () {
     // ✅ Lịch làm việc KTV
     Route::get('/work-schedule', [TestResultsController::class, 'getWorkSchedule']);
     Route::get('/work-schedule/{year}/{month}', [TestResultsController::class, 'getWorkScheduleByMonth']);
+
+});
+
+//Receptionist Routes
+Route::prefix('receptionist')->group(function () {
+    //lịch hẹn
+    Route::get('/appointments/today', [AppointmentRecepController::class, 'GetAppointmentToday']);
+    Route::post('/appointments', [AppointmentRecepController::class, 'CreateAppoitment']);
+    Route::put('/appointments/{appointmentId}/status', [AppointmentRecepController::class, 'UpdateAppointmentStatus']);
+    //hàng chờ
+    Route::get('/queue/{room_id}', [QueueController::class, 'GetQueueByRoomAndDate']);
+    Route::post('/queue', [QueueController::class, 'CreateQueue']);
+    Route::put('/queue/{queueId}/status', [QueueController::class, 'UpdateQueueStatus']);
+    Route::delete('/queue/{queueId}', [QueueController::class, 'DeleteQueue']);
+    Route::put('/queue/{queueId}/prioritize', [QueueController::class, 'PrioritizeQueue']);
+
+});
+
+// Patient Routes
+// Route::middleware()->post('/auth/login', [AuthController::class, 'login']);
 
 });
