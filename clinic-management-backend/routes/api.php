@@ -153,7 +153,7 @@ Route::prefix('technician')->group(function () {
     Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
     // thay đổi trạng thái dịch vụ
     Route::post('/services/{serviceOrderId}/status', [TestResultsController::class, 'updateServiceStatus']);
-    
+
     // CẬP NHẬT KẾT QUẢ
     Route::post('/service-orders/{serviceOrderId}/result', [TestResultsController::class, 'updateServiceResult']);
     // Lấy danh sách dịch vụ đã hoàn thành
@@ -161,7 +161,6 @@ Route::prefix('technician')->group(function () {
     // ✅ Lịch làm việc KTV
     Route::get('/work-schedule', [TestResultsController::class, 'getWorkSchedule']);
     Route::get('/work-schedule/{year}/{month}', [TestResultsController::class, 'getWorkScheduleByMonth']);
-
 });
 
 //Receptionist Routes
@@ -186,5 +185,3 @@ Route::middleware(['auth:api'])
 Route::middleware(['auth:api'])
     ->post('/account/change-password', [PatientController::class, 'changePassword']);
 // Route::middleware()->post('/auth/login', [AuthController::class, 'login']);
-
-});
