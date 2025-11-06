@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Card,
   Row,
@@ -7,58 +7,92 @@ import {
   Collapse,
   Badge,
   ButtonGroup,
+  Spinner,
+  Alert
 } from "react-bootstrap";
+import technicianService from '../../services/technicianService';
 
 const TechSchedule = () => {
   const [selectedDate, setSelectedDate] = useState(null);
-  const [viewMode, setViewMode] = useState("month"); // today | week | month
+  const [viewMode, setViewMode] = useState("month");
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [scheduleData, setScheduleData] = useState(null);
+  const [hasRealData, setHasRealData] = useState(false);
 
-  // Danh sách lịch làm việc mẫu
-  const workSchedule = [
-    {
-      date: "2025-10-07",
-      location: "Phòng Khám Đa Khoa Trung Tâm",
-      time: "08:00 - 17:00",
-      type: "Làm việc toàn thời gian",
-      status: "active"
-    },
-    {
-      date: "2025-10-08",
-      location: "Phòng Xét Nghiệm Hóa Sinh",
-      time: "07:30 - 16:30",
-      type: "Làm việc toàn thời gian",
-      status: "active"
-    },
-    {
-      date: "2025-10-09",
-      location: "Phòng Xét Nghiệm Vi Sinh",
-      time: "08:00 - 12:00",
-      type: "Làm việc bán thời gian",
-      status: "upcoming"
-    },
-    {
-      date: "2025-10-10",
-      location: "Phòng Xét Nghiệm Huyết Học",
-      time: "13:00 - 17:00",
-      type: "Làm việc bán thời gian",
-      status: "upcoming"
-    },
-    {
-      date: "2025-10-15",
-      location: "Phòng Xét Nghiệm Tổng Quát",
-      time: "09:00 - 18:00",
-      type: "Làm việc toàn thời gian",
-      status: "upcoming"
-    },
-    {
-      date: "2025-10-20",
-      location: "Phòng Khám Đa Khoa Trung Tâm",
-      time: "08:00 - 17:00",
-      type: "Làm việc toàn thời gian",
-      status: "upcoming"
-    },
-  ];
+  // ✅ FETCH LỊCH LÀM VIỆC
+  const fetchWorkSchedule = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      console.log('🔄 [TechSchedule] Fetching work schedule...');
+      
+      const response = await technicianService.getWorkSchedule();
+      
+      if (response.data?.success) {
+        console.log('✅ Work schedule data:', response.data.data);
+        
+        // ✅ KIỂM TRA NẾU CÓ DỮ LIỆU THẬT
+        const hasRealSchedules = response.data.data.schedules && 
+                                response.data.data.schedules.length > 0;
+        
+        setScheduleData(response.data.data);
+        setHasRealData(hasRealSchedules);
+        
+        if (!hasRealSchedules) {
+          console.log('ℹ️ No real schedule data found, showing empty state');
+        }
+      } else {
+        setError('Không thể lấy dữ liệu lịch làm việc');
+      }
+
+    } catch (err) {
+      console.error('❌ [TechSchedule] Error:', err);
+      setError('Không thể tải lịch làm việc. Vui lòng thử lại sau.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ FETCH LỊCH THEO THÁNG
+  const fetchMonthlySchedule = async (year, month) => {
+    try {
+      setLoading(true);
+      
+      const response = await technicianService.getWorkScheduleByMonth(year, month);
+      
+      if (response.data?.success) {
+        // Chỉ cập nhật nếu có dữ liệu thật
+        if (response.data.data && response.data.data.length > 0) {
+          setScheduleData(prev => ({
+            ...prev,
+            schedules: response.data.data
+          }));
+          setHasRealData(true);
+        }
+      }
+    } catch (err) {
+      console.error('❌ [TechSchedule] Monthly schedule error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ LOAD DATA KHI COMPONENT MOUNT
+  useEffect(() => {
+    fetchWorkSchedule();
+  }, []);
+
+  // ✅ LOAD DATA KHI ĐỔI THÁNG
+  useEffect(() => {
+    if (currentMonth && hasRealData) {
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth() + 1;
+      fetchMonthlySchedule(year, month);
+    }
+  }, [currentMonth, hasRealData]);
 
   // Điều hướng tháng
   const changeMonth = (offset) => {
@@ -67,14 +101,14 @@ const TechSchedule = () => {
     setCurrentMonth(newDate);
   };
 
-  // Lọc lịch theo tháng hiện tại
-  const filteredSchedule = workSchedule.filter((item) => {
+  // ✅ LỌC LỊCH THEO THÁNG HIỆN TẠI
+  const filteredSchedule = scheduleData?.schedules?.filter((item) => {
     const itemDate = new Date(item.date);
     return (
       itemDate.getMonth() === currentMonth.getMonth() &&
       itemDate.getFullYear() === currentMonth.getFullYear()
     );
-  });
+  }) || [];
 
   const getStatusVariant = (status) => {
     switch (status) {
@@ -94,28 +128,26 @@ const TechSchedule = () => {
     }
   };
 
-  // Hàm tạo lịch tháng
+  // ✅ HÀM TẠO LỊCH THÁNG (CHỈ KHI CÓ DỮ LIỆU)
   const generateCalendar = () => {
+    if (!scheduleData || !hasRealData) return [];
+
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
     
-    // Ngày đầu tiên của tháng
     const firstDay = new Date(year, month, 1);
-    // Ngày cuối cùng của tháng
     const lastDay = new Date(year, month + 1, 0);
-    // Ngày bắt đầu của lịch (có thể là ngày cuối tháng trước)
     const startDate = new Date(firstDay);
     startDate.setDate(startDate.getDate() - firstDay.getDay());
     
     const calendar = [];
     const currentDate = new Date(startDate);
     
-    // Tạo 6 tuần (42 ngày) để đủ hiển thị
     for (let week = 0; week < 6; week++) {
       const weekDays = [];
       for (let day = 0; day < 7; day++) {
         const dateString = currentDate.toISOString().split('T')[0];
-        const daySchedule = workSchedule.filter(item => item.date === dateString);
+        const daySchedule = scheduleData.schedules.filter(item => item.date === dateString);
         const isCurrentMonth = currentDate.getMonth() === month;
         
         weekDays.push({
@@ -136,8 +168,52 @@ const TechSchedule = () => {
   const calendar = generateCalendar();
   const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
+  // ✅ RENDER TRẠNG THÁI KHÔNG CÓ DỮ LIỆU
+  const renderNoDataState = () => (
+    <div className="text-center py-5">
+      <div className="py-4">
+        <i className="fas fa-calendar-plus text-muted fa-4x mb-3 opacity-50"></i>
+        <h4 className="text-muted fw-light mb-3">Chưa có lịch làm việc</h4>
+        <p className="text-muted mb-3">
+          Hiện tại bạn chưa có lịch làm việc nào được xếp trong tháng {currentMonth.getMonth() + 1}.
+        </p>
+        <div className="bg-light rounded p-4 mx-auto" style={{maxWidth: '500px'}}>
+          <h6 className="text-primary mb-3">
+            <i className="fas fa-info-circle me-2"></i>
+            Thông tin hữu ích
+          </h6>
+          <ul className="text-start text-muted">
+            <li>Liên hệ quản lý phòng ban để được xếp lịch làm việc</li>
+            <li>Lịch làm việc sẽ xuất hiện ở đây sau khi được xếp</li>
+            <li>Bạn có thể xem lịch làm việc theo ngày/tuần/tháng</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ✅ RENDER LOADING
+  if (loading && !scheduleData) {
+    return (
+      <div className="section active" id="schedule">
+        <div className="text-center py-5">
+          <Spinner animation="border" variant="primary" size="lg" />
+          <p className="mt-3 text-muted fs-5">Đang tải lịch làm việc...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="section active" id="schedule">
+      {/* Error Alert */}
+      {error && (
+        <Alert variant="danger" dismissible onClose={() => setError('')}>
+          <i className="fas fa-exclamation-triangle me-2"></i>
+          {error}
+        </Alert>
+      )}
+
       <Row className="g-4">
         {/* Thông tin kỹ thuật viên */}
         <Col md={12}>
@@ -149,51 +225,76 @@ const TechSchedule = () => {
                   <h4 className="mb-0 fw-bold">Thông Tin Kỹ Thuật Viên</h4>
                   <small className="opacity-75">Thông tin cá nhân và chuyên môn</small>
                 </div>
+                {!hasRealData && (
+                  <Badge bg="warning" className="ms-2">
+                    <i className="fas fa-clock me-1"></i>
+                    Chờ xếp lịch
+                  </Badge>
+                )}
               </div>
             </Card.Header>
             <Card.Body className="p-4">
-              <Row className="g-4">
-                <Col md={6}>
-                  <div className="d-flex align-items-center mb-3">
-                    <div className="bg-primary bg-opacity-10 rounded p-3 me-3">
-                      <i className="fas fa-id-card text-primary fa-lg"></i>
+              {scheduleData?.technician_info ? (
+                <Row className="g-4">
+                  <Col md={6}>
+                    <div className="d-flex align-items-center mb-3">
+                      <div className="bg-primary bg-opacity-10 rounded p-3 me-3">
+                        <i className="fas fa-id-card text-primary fa-lg"></i>
+                      </div>
+                      <div>
+                        <small className="text-muted d-block">Họ và tên</small>
+                        <strong className="text-dark fs-6">{scheduleData.technician_info.full_name}</strong>
+                      </div>
                     </div>
-                    <div>
-                      <small className="text-muted d-block">Họ và tên</small>
-                      <strong className="text-dark fs-6">Trần Văn Hùng</strong>
+                    <div className="d-flex align-items-center mb-3">
+                      <div className="bg-success bg-opacity-10 rounded p-3 me-3">
+                        <i className="fas fa-briefcase text-success fa-lg"></i>
+                      </div>
+                      <div>
+                        <small className="text-muted d-block">Chức vụ</small>
+                        <strong className="text-dark fs-6">{scheduleData.technician_info.position}</strong>
+                      </div>
                     </div>
-                  </div>
-                  <div className="d-flex align-items-center mb-3">
-                    <div className="bg-success bg-opacity-10 rounded p-3 me-3">
-                      <i className="fas fa-briefcase text-success fa-lg"></i>
+                  </Col>
+                  <Col md={6}>
+                    <div className="d-flex align-items-center mb-3">
+                      <div className="bg-info bg-opacity-10 rounded p-3 me-3">
+                        <i className="fas fa-building text-info fa-lg"></i>
+                      </div>
+                      <div>
+                        <small className="text-muted d-block">Phòng ban</small>
+                        <strong className="text-dark fs-6">{scheduleData.technician_info.department}</strong>
+                      </div>
                     </div>
-                    <div>
-                      <small className="text-muted d-block">Chức vụ</small>
-                      <strong className="text-dark fs-6">Kỹ Thuật Viên Thiết Bị Y Tế</strong>
+                    <div className="d-flex align-items-center mb-3">
+                      <div className="bg-warning bg-opacity-10 rounded p-3 me-3">
+                        <i className="fas fa-calendar-plus text-warning fa-lg"></i>
+                      </div>
+                      <div>
+                        <small className="text-muted d-block">Trạng thái lịch làm việc</small>
+                        <strong className="text-dark fs-6">
+                          {hasRealData ? (
+                            <Badge bg="success" className="fs-7">
+                              <i className="fas fa-check me-1"></i>
+                              Đã xếp lịch
+                            </Badge>
+                          ) : (
+                            <Badge bg="secondary" className="fs-7">
+                              <i className="fas fa-clock me-1"></i>
+                              Chờ xếp lịch
+                            </Badge>
+                          )}
+                        </strong>
+                      </div>
                     </div>
-                  </div>
-                </Col>
-                <Col md={6}>
-                  <div className="d-flex align-items-center mb-3">
-                    <div className="bg-info bg-opacity-10 rounded p-3 me-3">
-                      <i className="fas fa-building text-info fa-lg"></i>
-                    </div>
-                    <div>
-                      <small className="text-muted d-block">Phòng ban</small>
-                      <strong className="text-dark fs-6">Phòng Kỹ Thuật</strong>
-                    </div>
-                  </div>
-                  <div className="d-flex align-items-center mb-3">
-                    <div className="bg-warning bg-opacity-10 rounded p-3 me-3">
-                      <i className="fas fa-calendar-plus text-warning fa-lg"></i>
-                    </div>
-                    <div>
-                      <small className="text-muted d-block">Ngày vào làm</small>
-                      <strong className="text-dark fs-6">15/03/2023</strong>
-                    </div>
-                  </div>
-                </Col>
-              </Row>
+                  </Col>
+                </Row>
+              ) : (
+                <div className="text-center py-3">
+                  <Spinner animation="border" size="sm" variant="primary" />
+                  <p className="mt-2 text-muted">Đang tải thông tin...</p>
+                </div>
+              )}
             </Card.Body>
           </Card>
         </Col>
@@ -213,13 +314,23 @@ const TechSchedule = () => {
                     </small>
                   </div>
                 </div>
-                <Badge bg="light" text="dark" className="fs-6">
-                  <i className="fas fa-list me-1"></i>
-                  {filteredSchedule.length} lịch trình
-                </Badge>
+                {hasRealData && scheduleData?.statistics && (
+                  <Badge bg="light" text="dark" className="fs-6">
+                    <i className="fas fa-list me-1"></i>
+                    {scheduleData.statistics.total_schedules} lịch trình
+                  </Badge>
+                )}
               </div>
             </Card.Header>
             <Card.Body className="p-4">
+              {/* Loading */}
+              {loading && (
+                <div className="text-center mb-3">
+                  <Spinner animation="border" variant="success" size="sm" />
+                  <span className="ms-2">Đang tải dữ liệu...</span>
+                </div>
+              )}
+
               {/* Bộ lọc chế độ xem + điều hướng tháng */}
               <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
                 <ButtonGroup>
@@ -228,6 +339,7 @@ const TechSchedule = () => {
                     onClick={() => setViewMode("today")}
                     size="sm"
                     className="px-3"
+                    disabled={!hasRealData}
                   >
                     <i className="fas fa-calendar-day me-2"></i> 
                     Hôm nay
@@ -237,6 +349,7 @@ const TechSchedule = () => {
                     onClick={() => setViewMode("week")}
                     size="sm"
                     className="px-3"
+                    disabled={!hasRealData}
                   >
                     <i className="fas fa-calendar-week me-2"></i> 
                     Tuần này
@@ -246,6 +359,7 @@ const TechSchedule = () => {
                     onClick={() => setViewMode("month")}
                     size="sm"
                     className="px-3"
+                    disabled={!hasRealData}
                   >
                     <i className="fas fa-calendar me-2"></i> 
                     Cả tháng
@@ -258,6 +372,7 @@ const TechSchedule = () => {
                     size="sm"
                     onClick={() => changeMonth(-1)}
                     className="d-flex align-items-center px-3"
+                    disabled={loading}
                   >
                     <i className="fas fa-chevron-left me-2"></i> 
                     Tháng trước
@@ -275,6 +390,7 @@ const TechSchedule = () => {
                     size="sm"
                     onClick={() => changeMonth(1)}
                     className="d-flex align-items-center px-3"
+                    disabled={loading}
                   >
                     Tháng sau 
                     <i className="fas fa-chevron-right ms-2"></i>
@@ -282,9 +398,12 @@ const TechSchedule = () => {
                 </div>
               </div>
 
-              {/* HIỂN THỊ THEO CHẾ ĐỘ XEM */}
-              {viewMode === "month" ? (
-                // CHẾ ĐỘ XEM LỊCH THÁNG - DẠNG Ô VUÔNG
+              {/* ✅ HIỂN THỊ THEO TRẠNG THÁI DỮ LIỆU */}
+              {!hasRealData ? (
+                // KHÔNG CÓ DỮ LIỆU THẬT
+                renderNoDataState()
+              ) : viewMode === "month" ? (
+                // CHẾ ĐỘ XEM LỊCH THÁNG - CÓ DỮ LIỆU
                 <div className="calendar-month-view">
                   {/* Header các ngày trong tuần */}
                   <div className="row g-0 border-bottom mb-2">
@@ -364,18 +483,18 @@ const TechSchedule = () => {
                   ))}
                 </div>
               ) : filteredSchedule.length === 0 ? (
-                // KHÔNG CÓ LỊCH TRÌNH
+                // CÓ DỮ LIỆU NHƯNG KHÔNG CÓ LỊCH TRONG THÁNG NÀY
                 <div className="text-center py-5">
                   <div className="py-4">
                     <i className="fas fa-calendar-times text-muted fa-4x mb-3 opacity-50"></i>
-                    <h5 className="text-muted fw-light mb-3">Không có lịch làm việc</h5>
+                    <h5 className="text-muted fw-light mb-3">Không có lịch làm việc trong tháng này</h5>
                     <p className="text-muted mb-0">
-                      Không có lịch làm việc nào trong tháng này.
+                      Không có lịch làm việc nào trong tháng {currentMonth.getMonth() + 1}.
                     </p>
                   </div>
                 </div>
               ) : (
-                // CHẾ ĐỘ XEM DANH SÁCH (HÔM NAY/TUẦN)
+                // CHẾ ĐỘ XEM DANH SÁCH (HÔM NAY/TUẦN) - CÓ DỮ LIỆU
                 <div className="schedule-list">
                   {filteredSchedule.map((item, index) => (
                     <Card key={index} className="border-0 shadow-sm mb-3">
@@ -465,6 +584,15 @@ const TechSchedule = () => {
                                           {item.type}
                                         </strong>
                                       </div>
+                                      {item.notes && (
+                                        <div>
+                                          <small className="text-muted d-block">Ghi chú</small>
+                                          <strong className="text-dark">
+                                            <i className="fas fa-sticky-note text-warning me-2"></i>
+                                            {item.notes}
+                                          </strong>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -498,8 +626,8 @@ const TechSchedule = () => {
                 </div>
               )}
 
-              {/* Footer thống kê */}
-              {filteredSchedule.length > 0 && (
+              {/* Footer thống kê - CHỈ HIỂN THỊ KHI CÓ DỮ LIỆU */}
+              {hasRealData && scheduleData?.statistics && filteredSchedule.length > 0 && (
                 <div className="mt-4 pt-3 border-top">
                   <Row className="align-items-center">
                     <Col md={6}>
@@ -519,6 +647,11 @@ const TechSchedule = () => {
                           <Badge bg="warning" className="me-1">
                             {filteredSchedule.filter(s => s.status === 'upcoming').length}
                           </Badge> Sắp diễn ra
+                        </small>
+                        <small className="text-muted">
+                          <Badge bg="secondary" className="me-1">
+                            {filteredSchedule.filter(s => s.status === 'completed').length}
+                          </Badge> Đã hoàn thành
                         </small>
                       </div>
                     </Col>
