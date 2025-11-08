@@ -243,7 +243,7 @@ class ServiceController extends Controller
         }
     }
     /**
-     * Tìm KTV rảnh nhất 
+     * Tìm KTV rảnh nhất
      */
     private function findAvailableTechnicianv1()
     {

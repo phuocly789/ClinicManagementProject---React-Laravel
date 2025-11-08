@@ -36,6 +36,7 @@ const TodaySection = ({
   selectedTodayPatient = null,
   setSelectedTodayPatient = () => { },
   todayPatients = [],
+  setTodayPatients = () => { },
   setToast = () => { },
 }) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -44,7 +45,6 @@ const TodaySection = ({
   const [diagnoses, setDiagnoses] = useState([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const printRef = useRef(null);
-  const cache = useRef(new Map());
 
   const isFormDisabled = viewMode || !selectedTodayPatient || selectedTodayPatient?.status !== 'Đang khám';
 
@@ -69,23 +69,25 @@ const TodaySection = ({
     }
   }, []);
 
-  const filterValidStatuses = useCallback((patients) => {
-    const validStatuses = ["Đã khám", "Đang khám", "Đang chờ"];
-    return patients.filter(patient => validStatuses.includes(getStatusText(patient.status)));
-  }, [getStatusText]);
-
+  // FETCH TODAY PATIENTS
   const fetchTodayPatients = async () => {
     try {
       setIsLoading(true);
+      console.log('🔄 Đang tải danh sách bệnh nhân...');
+
       const response = await doctorService.getToday();
-      if (response.success === true) {
-        const filteredData = filterValidStatuses(response.data);
-        cache.current.set('today-patients', response.data);
+      console.log('📊 API Response:', response);
+
+      if (response && response.success === true) {
+        setTodayPatients(response.data || []);
+        console.log('✅ Đã cập nhật danh sách bệnh nhân:', response.data);
       } else {
-        console.warn('API response success is false:', response);
+        console.warn('⚠️ API response success is false:', response);
+        setTodayPatients([]);
       }
     } catch (error) {
-      console.error('Error fetching today patients:', error);
+      console.error('❌ Lỗi fetch today patients:', error);
+      setTodayPatients([]);
       setToast({
         show: true,
         message: `Lỗi tải danh sách bệnh nhân: ${error.message}`,
@@ -100,6 +102,14 @@ const TodaySection = ({
     fetchTodayPatients();
   }, []);
 
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      fetchTodayPatients();
+    }
+  }, [refreshTrigger]);
+
+
+  // FIXED: LOAD COMPLETED EXAM - ĐẢM BẢO BINDING DỮ LIỆU
   const loadCompletedExam = useCallback(async (patientId) => {
     if (!patientId) return;
     setIsLoading(true);
@@ -109,14 +119,35 @@ const TodaySection = ({
         credentials: 'include',
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}: Không tải được hồ sơ`);
-      const data = await response.json();
 
+      const data = await response.json();
+      console.log('📊 Dữ liệu hồ sơ nhận được:', data);
+
+      // FIX: ĐẢM BẢO DỮ LIỆU ĐƯỢC TRUYỀN ĐÚNG VÀO CÁC FORM FIELD
       setSymptoms(data.symptoms || '');
       setDiagnosis(data.diagnosis || '');
-      setServices(data.services || {});
+
+      // FIX: Xử lý services data
+      if (data.services && Array.isArray(data.services)) {
+        const servicesObj = data.services.reduce((acc, serviceId) => {
+          acc[serviceId] = true;
+          return acc;
+        }, {});
+        setServices(servicesObj);
+      } else {
+        setServices(data.services || {});
+      }
+
       setRequestedServices(data.requestedServices || {});
       setPrescriptionRows(data.prescriptions || []);
-      setDiagnoses(data.diagnoses ? [data.diagnoses] : []);
+      setDiagnoses(data.diagnoses || []);
+
+      console.log('✅ Đã binding dữ liệu vào form:', {
+        symptoms: data.symptoms,
+        diagnosis: data.diagnosis,
+        services: data.services,
+        prescriptions: data.prescriptions
+      });
 
       setToast({ show: true, message: '✅ Đã tải hồ sơ cũ để xem.', variant: 'info' });
     } catch (error) {
@@ -127,6 +158,7 @@ const TodaySection = ({
     }
   }, [setToast, setSymptoms, setDiagnosis, setServices, setRequestedServices, setPrescriptionRows]);
 
+  // START EXAMINATION
   const startExamination = useCallback(async (patientId) => {
     if (!patientId) return null;
     setIsLoading(true);
@@ -142,12 +174,12 @@ const TodaySection = ({
       const result = await response.json();
       console.log('DEBUG - API start response:', result);
 
-      setSelectedTodayPatient(prev => prev ? { ...prev, status: 'Đang khám' } : null);
+      const updatedPatient = { ...selectedTodayPatient, status: 'Đang khám' };
+      setSelectedTodayPatient(updatedPatient);
       setIsExamining(true);
       setViewMode(false);
       setToast({ show: true, message: '✅ Đã bắt đầu khám bệnh nhân.', variant: 'info' });
 
-      // CHỈ REFRESH KHI BẮT ĐẦU KHÁM
       await fetchTodayPatients();
       setRefreshTrigger(prev => prev + 1);
 
@@ -160,9 +192,12 @@ const TodaySection = ({
     } finally {
       setIsLoading(false);
     }
-  }, [setToast, setSelectedTodayPatient]);
+  }, [setToast, setSelectedTodayPatient, selectedTodayPatient]);
 
+  // FIXED: HANDLE SELECT PATIENT - RESET FORM TRƯỚC KHI LOAD DỮ LIỆU MỚI
   const handleSelectPatient = useCallback(async (patient) => {
+    console.log('🔄 Chọn bệnh nhân:', patient);
+
     if (!patient) {
       setSelectedTodayPatient(null);
       setIsExamining(false);
@@ -177,24 +212,39 @@ const TodaySection = ({
     }
 
     const currentStatus = getStatusText(patient.status);
+    console.log('📊 Trạng thái:', currentStatus);
+
+    // LUÔN SET SELECTED PATIENT TRƯỚC
+    setSelectedTodayPatient(patient);
+
+    // RESET FORM TRƯỚC KHI LOAD DỮ LIỆU MỚI
+    setSymptoms('');
+    setDiagnosis('');
+    setServices({});
+    setRequestedServices({});
+    setPrescriptionRows([]);
+    setDiagnoses([]);
+
     if (currentStatus === 'Đang khám') {
-      setSelectedTodayPatient(patient);
+      console.log('🔵 Bệnh nhân đang khám - enable form');
       setIsExamining(true);
       setViewMode(false);
+
     } else if (currentStatus === 'Đang chờ') {
+      console.log('🟡 Bệnh nhân đang chờ - bắt đầu khám');
       await startExamination(patient.id || patient.AppointmentId);
+
     } else if (currentStatus === 'Đã khám') {
-      setSelectedTodayPatient(patient);
+      console.log('🟢 Bệnh nhân đã khám - xem hồ sơ');
+      setIsExamining(false);
       setViewMode(true);
       await loadCompletedExam(patient.id || patient.AppointmentId);
-      setIsExamining(false);
-    } else {
-      setToast({ show: true, message: `⚠️ Trạng thái không hợp lệ cho bệnh nhân ${patient.name}.`, variant: 'warning' });
-      return;
-    }
-  }, [startExamination, getStatusText, setToast, loadCompletedExam, setSelectedTodayPatient, setSymptoms, setDiagnosis, setServices, setRequestedServices, setPrescriptionRows]);
 
-  // CẢI THIỆN HÀM TÌM BỆNH NHÂN TIẾP THEO
+    } else {
+      setToast({ show: true, message: `⚠️ Trạng thái không hợp lệ.`, variant: 'warning' });
+    }
+  }, [startExamination, getStatusText, setToast, loadCompletedExam, setSelectedTodayPatient]);
+
   const findNextPatient = useCallback((currentPatientId, patients) => {
     if (!patients.length) return null;
 
@@ -204,16 +254,14 @@ const TodaySection = ({
       return hours * 60 + minutes;
     };
 
-    // Ưu tiên tìm bệnh nhân Đang khám trước
-    const inProgressPatients = patients.filter(p => 
+    const inProgressPatients = patients.filter(p =>
       getStatusText(p.status) === 'Đang khám' && p.id !== currentPatientId
     );
-    
+
     if (inProgressPatients.length > 0) {
-      return inProgressPatients[0]; // Lấy bệnh nhân đầu tiên đang khám
+      return inProgressPatients[0];
     }
 
-    // Sau đó tìm bệnh nhân Đang chờ theo thứ tự thời gian
     const waitingPatients = patients
       .filter(p => getStatusText(p.status) === 'Đang chờ')
       .sort((a, b) => parseTime(a.time) - parseTime(b.time));
@@ -260,7 +308,6 @@ const TodaySection = ({
 
       const result = await response.json();
 
-      // CHỈ REFRESH KHI HOÀN TẤT KHÁM
       await fetchTodayPatients();
       setRefreshTrigger(prev => prev + 1);
 
@@ -272,43 +319,33 @@ const TodaySection = ({
       setPrescriptionRows([]);
       setDiagnoses([]);
 
-      // TÌM BỆNH NHÂN TIẾP THEO SAU KHI REFRESH
-      const refreshedResponse = await doctorService.getToday();
-      if (refreshedResponse.success) {
-        const refreshedPatients = filterValidStatuses(refreshedResponse.data);
-        
-        // Tìm bệnh nhân tiếp theo
-        const nextPatient = findNextPatient(selectedTodayPatient.id, refreshedPatients);
-        
-        if (nextPatient) {
-          // Tự động chọn bệnh nhân tiếp theo
-          setSelectedTodayPatient(nextPatient);
-          
-          // Nếu bệnh nhân tiếp theo đang chờ, tự động bắt đầu khám
-          if (getStatusText(nextPatient.status) === 'Đang chờ') {
-            await startExamination(nextPatient.id || nextPatient.AppointmentId);
-          } else if (getStatusText(nextPatient.status) === 'Đang khám') {
-            // Nếu đã đang khám, chỉ cần set selected
-            setIsExamining(true);
-            setViewMode(false);
-          }
-          
-          setToast({
-            show: true,
-            message: `✅ Hoàn tất khám cho ${selectedTodayPatient.name}. Đã tự động chuyển sang bệnh nhân tiếp theo: ${nextPatient.name}.`,
-            variant: "success",
-          });
-        } else {
-          // Không còn bệnh nhân nào
-          setSelectedTodayPatient(null);
-          setIsExamining(false);
+      // TÌM BỆNH NHÂN TIẾP THEO
+      const nextPatient = findNextPatient(selectedTodayPatient.id, todayPatients);
+
+      if (nextPatient) {
+        setSelectedTodayPatient(nextPatient);
+
+        if (getStatusText(nextPatient.status) === 'Đang chờ') {
+          await startExamination(nextPatient.id || nextPatient.AppointmentId);
+        } else if (getStatusText(nextPatient.status) === 'Đang khám') {
+          setIsExamining(true);
           setViewMode(false);
-          setToast({
-            show: true,
-            message: `✅ Hoàn tất khám cho ${selectedTodayPatient.name}. Đã lưu vào DB. Không còn bệnh nhân chờ khám hôm nay.`,
-            variant: "success",
-          });
         }
+
+        setToast({
+          show: true,
+          message: `✅ Hoàn tất khám cho ${selectedTodayPatient.name}. Đã tự động chuyển sang bệnh nhân tiếp theo: ${nextPatient.name}.`,
+          variant: "success",
+        });
+      } else {
+        setSelectedTodayPatient(null);
+        setIsExamining(false);
+        setViewMode(false);
+        setToast({
+          show: true,
+          message: `✅ Hoàn tất khám cho ${selectedTodayPatient.name}. Đã lưu vào DB. Không còn bệnh nhân chờ khám hôm nay.`,
+          variant: "success",
+        });
       }
 
     } catch (error) {
@@ -337,6 +374,7 @@ const TodaySection = ({
 
     setIsLoading(true);
     try {
+      // FIX: THÊM DRAFT DATA BỊ THIẾU
       const draftData = {
         symptoms,
         diagnosis,
@@ -344,6 +382,7 @@ const TodaySection = ({
         prescriptions: prescriptionRows,
         diagnoses: diagnoses.length > 0 ? diagnoses : [{ Symptoms: symptoms, Diagnosis: diagnosis }],
       };
+
       console.log('DEBUG - Temp save data:', draftData);
 
       const response = await fetch(`${API_BASE_URL}/api/doctor/examinations/${selectedTodayPatient.id}/temp-save`, {
@@ -426,6 +465,14 @@ const TodaySection = ({
             <Card className="h-100 shadow-sm">
               <Card.Header className="bg-success text-white text-start d-flex justify-content-between align-items-center">
                 <h5 className="mb-0">Danh sách khám ({new Date().toLocaleDateString('vi-VN')})</h5>
+                <Button
+                  variant="light"
+                  size="sm"
+                  onClick={fetchTodayPatients}
+                  disabled={isLoading}
+                >
+                  {isLoading ? <Spinner animation="border" size="sm" /> : '🔄'}
+                </Button>
               </Card.Header>
               <Card.Body className="p-0">
                 <PatientList
@@ -446,6 +493,7 @@ const TodaySection = ({
               <Card.Header className="bg-info text-white text-start">
                 <h5 className="mb-0">Thông Tin Khám Bệnh</h5>
                 {viewMode && <Badge bg="secondary" className="ms-2">👁️ Chế độ xem (không chỉnh sửa)</Badge>}
+                {isExamining && <Badge bg="success" className="ms-2">✏️ Đang khám</Badge>}
               </Card.Header>
               <Card.Body>
                 <div className="card-text text-start">
@@ -519,6 +567,8 @@ const TodaySection = ({
                       isFormDisabled={isFormDisabled}
                       setToast={setToast}
                       selectedTodayPatient={selectedTodayPatient}
+                      symptoms={symptoms}
+                      diagnoses={diagnoses}
                     />
 
                     <PrescriptionSection

@@ -9,6 +9,10 @@ use Illuminate\Support\Facades\Log;
 use App\Helpers\PaginationHelper;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use App\Models\StaffSchedule;
+use App\Models\MedicalStaff;
+use Carbon\Carbon;
+
 
 class TestResultsController extends Controller
 {
@@ -82,10 +86,9 @@ class TestResultsController extends Controller
         DB::beginTransaction();
 
         try {
-            // ✅ DEBUG: Xem chính xác dữ liệu nhận được
-            Log::info('🔄 updateServiceStatus - SUPPORT BOTH PUT/POST', [
-                'method' => $request->method(),
-                'service_order_id' => $serviceOrderId
+            Log::info('🔄 updateServiceStatus - START', [
+                'service_order_id' => $serviceOrderId,
+                'technician_id' => $this->technicianId
             ]);
 
             // ✅ XỬ LÝ RAW JSON BODY
@@ -104,13 +107,10 @@ class TestResultsController extends Controller
             if (!$status) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Thiếu trường status trong request body',
-                    'debug' => [
-                        'raw_content' => $rawContent,
-                        'request_all' => $request->all()
-                    ]
+                    'message' => 'Thiếu trường status trong request body'
                 ], 400);
             }
+
             $serviceOrder = ServiceOrder::where('ServiceOrderId', $serviceOrderId)
                 ->where('AssignedStaffId', $this->technicianId)
                 ->first();
@@ -123,7 +123,7 @@ class TestResultsController extends Controller
             }
 
             $oldStatus = $serviceOrder->Status;
-            $newStatus = $request->status;
+            $newStatus = $status;
 
             // ✅ LOGIC CHUYỂN TRẠNG THÁI
             $validTransitions = [
@@ -141,9 +141,14 @@ class TestResultsController extends Controller
             }
 
             // ✅ Cập nhật status
-            $serviceOrder->update([
-                'Status' => $newStatus
-            ]);
+            $updateData = ['Status' => $newStatus];
+
+            // ✅ THÊM THỜI GIAN HOÀN THÀNH NẾU LÀ TRẠNG THÁI HOÀN THÀNH
+            if ($newStatus === 'Hoàn thành') {
+                $updateData['CompletedAt'] = now();
+            }
+
+            $serviceOrder->update($updateData);
 
             DB::commit();
 
@@ -176,6 +181,146 @@ class TestResultsController extends Controller
     }
 
     /**
+     * ✅ CẬP NHẬT KẾT QUẢ XÉT NGHIỆM - CHỈ LƯU KẾT QUẢ, KHÔNG ĐỔI TRẠNG THÁI
+     */
+    public function updateServiceResult(Request $request, $serviceOrderId)
+    {
+        DB::beginTransaction();
+
+        try {
+            Log::info('🔄 updateServiceResult - START', [
+                'service_order_id' => $serviceOrderId,
+                'technician_id' => $this->technicianId
+            ]);
+
+            // ✅ LẤY DỮ LIỆU TỪ REQUEST
+            $result = $request->input('result');
+
+            Log::info('🔍 Extracted data:', [
+                'result' => $result ? 'CÓ - Length: ' . strlen($result) : 'KHÔNG',
+            ]);
+
+            // ✅ VALIDATION
+            if (empty($result)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Kết quả xét nghiệm không được để trống'
+                ], 400);
+            }
+
+            $trimmedResult = trim($result);
+            if (empty($trimmedResult)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Kết quả xét nghiệm không được để trống (chỉ chứa khoảng trắng)'
+                ], 400);
+            }
+
+            // ✅ TÌM DỊCH VỤ
+            $serviceOrder = ServiceOrder::where('ServiceOrderId', $serviceOrderId)
+                ->where('AssignedStaffId', $this->technicianId)
+                ->first();
+
+            if (!$serviceOrder) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không tìm thấy dịch vụ được chỉ định hoặc không có quyền truy cập'
+                ], 404);
+            }
+
+            $currentStatus = $serviceOrder->Status;
+            Log::info('📊 Current service status:', ['status' => $currentStatus]);
+
+            // ✅ CHỈ CHO PHÉP LƯU KẾT QUẢ KHI ĐANG Ở TRẠNG THÁI "Đang thực hiện"
+            if ($currentStatus !== 'Đang thực hiện') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Chỉ có thể nhập kết quả khi dịch vụ đang ở trạng thái "Đang thực hiện"'
+                ], 400);
+            }
+
+            // ✅ CẬP NHẬT DỮ LIỆU - CHỈ CẬP NHẬT KẾT QUẢ, KHÔNG ĐỔI TRẠNG THÁI
+            $updateData = [
+                'Result' => $trimmedResult,
+                'UpdatedAt' => now()
+            ];
+
+            // ✅ KHÔNG TỰ ĐỘNG CHUYỂN TRẠNG THÁI - CHỈ LƯU KẾT QUẢ
+            $serviceOrder->update($updateData);
+
+            DB::commit();
+
+            Log::info("✅ Service result updated SUCCESS", [
+                'service_order_id' => $serviceOrderId,
+                'result_length' => strlen($trimmedResult),
+                'status' => $currentStatus // Vẫn giữ nguyên trạng thái
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã lưu kết quả xét nghiệm thành công',
+                'data' => [
+                    'service_order_id' => $serviceOrderId,
+                    'result_preview' => substr($trimmedResult, 0, 50) . (strlen($trimmedResult) > 50 ? '...' : ''),
+                    'result_length' => strlen($trimmedResult),
+                    'status' => $currentStatus, // Trạng thái không thay đổi
+                    'updated_at' => now()->format('d/m/Y H:i')
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollback();
+            Log::error('❌ ERROR in updateServiceResult: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi hệ thống khi lưu kết quả: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * ✅ LẤY DANH SÁCH KẾT QUẢ XÉT NGHIỆM ĐÃ HOÀN THÀNH
+     */
+    public function getCompletedServices(Request $request)
+    {
+        try {
+            Log::info('🔄 [CompletedServices] Technician ID:', ['technician_id' => $this->technicianId]);
+
+            // Query lấy dịch vụ đã hoàn thành
+            $services = ServiceOrder::with([
+                'appointment.patient.user',
+                'service',
+                'appointment.medical_staff.user'
+            ])
+                ->where('AssignedStaffId', $this->technicianId)
+                ->where('Status', 'Hoàn thành')
+                ->get();
+
+            // Format data
+            $formattedServices = $services->map(function ($order) {
+                return $this->formatCompletedServiceData($order);
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $formattedServices,
+                'message' => 'Lấy danh sách kết quả xét nghiệm thành công',
+                'count' => $formattedServices->count()
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ [CompletedServices] Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi lấy danh sách kết quả xét nghiệm: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+
+
+    /**
      * Hàm format dữ liệu dịch vụ 
      */
     private function formatServiceData($order)
@@ -185,6 +330,7 @@ class TestResultsController extends Controller
         return [
             'service_order_id' => $order->ServiceOrderId,
             'appointment_id' => $order->AppointmentId,
+            'patient_id' => $order->appointment->patient->PatientId ?? null,
             'patient_name' => $user->FullName ?? 'N/A',
             'patient_age' => !empty($user->DateOfBirth)
                 ? \Carbon\Carbon::parse($user->DateOfBirth)->age
@@ -200,7 +346,225 @@ class TestResultsController extends Controller
             'referring_doctor_name' => $order->appointment->medical_staff->user->FullName ?? 'N/A',
             'notes' => $order->Notes,
             'result' => $order->Result,
-            'completed_at' => $order->CompletedAt?->format('d/m/Y H:i')
+            'completed_at' => $order->CompletedAt?->format('d/m/Y H:i'),
+            'result_updated_at' => $order->UpdatedAt?->format('d/m/Y H:i')
+        ];
+    }
+
+
+
+    /**
+     * ✅ LẤY LỊCH LÀM VIỆC CỦA KỸ THUẬT VIÊN
+     */
+    public function getWorkSchedule(Request $request)
+    {
+        try {
+            Log::info('🔄 [WorkSchedule] Getting work schedule for technician:', ['technician_id' => $this->technicianId]);
+
+            // Lấy toàn bộ lịch làm việc của KTV
+            $schedules = StaffSchedule::where('StaffId', $this->technicianId)
+                ->orderBy('WorkDate')
+                ->orderBy('StartTime')
+                ->get()
+                ->map(function ($item) {
+                    $workDate = Carbon::parse($item->WorkDate);
+                    $now = Carbon::now();
+
+                    // Xác định trạng thái
+                    $status = 'upcoming';
+                    if ($workDate->isToday()) {
+                        $status = 'active';
+                    } elseif ($workDate->isPast()) {
+                        $status = 'completed';
+                    }
+
+                    return [
+                        'schedule_id' => $item->ScheduleId,
+                        'date' => $item->WorkDate->format('Y-m-d'),
+                        'start_time' => $item->StartTime,
+                        'end_time' => $item->EndTime,
+                        'time' => $item->StartTime . ' - ' . $item->EndTime,
+                        'location' => $item->Location ?? 'Phòng Kỹ Thuật Xét Nghiệm',
+                        'type' => $item->IsAvailable ? 'Làm việc toàn thời gian' : 'Làm việc bán thời gian',
+                        'status' => $status,
+                        'is_available' => (bool) $item->IsAvailable,
+                        'notes' => $item->Notes,
+                        'work_date_formatted' => $item->WorkDate->format('d/m/Y'),
+                        'day_of_week' => $this->getVietnameseDayOfWeek($item->WorkDate->dayOfWeek)
+                    ];
+                });
+
+            // Lấy thông tin KTV
+            $technician = MedicalStaff::with('user')
+                ->where('StaffId', $this->technicianId)
+                ->first();
+
+            $technicianInfo = null;
+            if ($technician) {
+                $technicianInfo = [
+                    'staff_id' => $technician->StaffId,
+                    'full_name' => $technician->user->FullName ?? 'N/A',
+                    'position' => $technician->Position ?? 'Kỹ Thuật Viên',
+                    'department' => $technician->Department ?? 'Phòng Kỹ Thuật',
+                    'hire_date' => $technician->HireDate ? $technician->HireDate->format('d/m/Y') : 'N/A',
+                    'phone' => $technician->user->Phone ?? 'N/A',
+                    'email' => $technician->user->Email ?? 'N/A'
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'technician_info' => $technicianInfo,
+                    'schedules' => $schedules,
+                    'statistics' => [
+                        'total_schedules' => $schedules->count(),
+                        'active_schedules' => $schedules->where('status', 'active')->count(),
+                        'upcoming_schedules' => $schedules->where('status', 'upcoming')->count(),
+                        'completed_schedules' => $schedules->where('status', 'completed')->count(),
+                    ]
+                ],
+                'message' => 'Lấy lịch làm việc thành công'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ [WorkSchedule] Error getting work schedule: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi lấy lịch làm việc: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * ✅ LẤY LỊCH LÀM VIỆC THEO THÁNG
+     */
+    public function getWorkScheduleByMonth(Request $request, $year, $month)
+    {
+        try {
+            Log::info('🔄 [WorkSchedule] Getting monthly schedule:', [
+                'technician_id' => $this->technicianId,
+                'year' => $year,
+                'month' => $month
+            ]);
+
+            $startDate = Carbon::create($year, $month, 1)->startOfMonth();
+            $endDate = Carbon::create($year, $month, 1)->endOfMonth();
+
+            $schedules = StaffSchedule::where('StaffId', $this->technicianId)
+                ->whereBetween('WorkDate', [$startDate, $endDate])
+                ->orderBy('WorkDate')
+                ->orderBy('StartTime')
+                ->get()
+                ->map(function ($item) {
+                    $workDate = Carbon::parse($item->WorkDate);
+                    $now = Carbon::now();
+
+                    $status = 'upcoming';
+                    if ($workDate->isToday()) {
+                        $status = 'active';
+                    } elseif ($workDate->isPast()) {
+                        $status = 'completed';
+                    }
+
+                    return [
+                        'schedule_id' => $item->ScheduleId,
+                        'date' => $item->WorkDate->format('Y-m-d'),
+                        'start_time' => $item->StartTime,
+                        'end_time' => $item->EndTime,
+                        'time' => $item->StartTime . ' - ' . $item->EndTime,
+                        'location' => $item->Location ?? 'Phòng Kỹ Thuật Xét Nghiệm',
+                        'type' => $item->IsAvailable ? 'Làm việc toàn thời gian' : 'Làm việc bán thời gian',
+                        'status' => $status,
+                        'is_available' => (bool) $item->IsAvailable,
+                        'notes' => $item->Notes
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'data' => $schedules,
+                'message' => 'Lấy lịch làm việc theo tháng thành công',
+                'period' => [
+                    'month' => (int) $month,
+                    'year' => (int) $year,
+                    'month_name' => $this->getVietnameseMonthName($month)
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ [WorkSchedule] Error getting monthly schedule: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi lấy lịch làm việc theo tháng: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * ✅ Hàm helper: Chuyển đổi thứ tiếng Việt
+     */
+    private function getVietnameseDayOfWeek($dayOfWeek)
+    {
+        $days = [
+            0 => 'Chủ Nhật',
+            1 => 'Thứ Hai',
+            2 => 'Thứ Ba',
+            3 => 'Thứ Tư',
+            4 => 'Thứ Năm',
+            5 => 'Thứ Sáu',
+            6 => 'Thứ Bảy'
+        ];
+
+        return $days[$dayOfWeek] ?? 'N/A';
+    }
+
+    /**
+     * ✅ Hàm helper: Chuyển đổi tên tháng tiếng Việt
+     */
+    private function getVietnameseMonthName($month)
+    {
+        $months = [
+            1 => 'Tháng Một',
+            2 => 'Tháng Hai',
+            3 => 'Tháng Ba',
+            4 => 'Tháng Tư',
+            5 => 'Tháng Năm',
+            6 => 'Tháng Sáu',
+            7 => 'Tháng Bảy',
+            8 => 'Tháng Tám',
+            9 => 'Tháng Chín',
+            10 => 'Tháng Mười',
+            11 => 'Tháng Mười Một',
+            12 => 'Tháng Mười Hai'
+        ];
+
+        return $months[(int) $month] ?? 'N/A';
+    }
+
+    /**
+     * Hàm format dữ liệu dịch vụ đã hoàn thành
+     */
+    private function formatCompletedServiceData($order)
+    {
+        $user = $order->appointment->patient->user ?? null;
+
+        return [
+            'service_order_id' => $order->ServiceOrderId,
+            'appointment_id' => $order->AppointmentId,
+            'patient_id' => $order->appointment->patient->PatientId ?? null,
+            'patient_name' => $user->FullName ?? 'N/A',
+            'patient_age' => !empty($user->DateOfBirth)
+                ? \Carbon\Carbon::parse($user->DateOfBirth)->age
+                : 'N/A',
+            'patient_gender' => $user->Gender ?? 'N/A',
+            'service_name' => $order->service->ServiceName ?? 'N/A',
+            'service_type' => $order->service->ServiceType ?? 'N/A',
+            'referring_doctor_name' => $order->appointment->medical_staff->user->FullName ?? 'N/A',
+            'order_date' => $order->OrderDate?->format('d/m/Y H:i'),
+            'completed_at' => $order->CompletedAt?->format('d/m/Y H:i'),
+            'result' => $order->Result,
+            'status' => $order->Status
         ];
     }
 }

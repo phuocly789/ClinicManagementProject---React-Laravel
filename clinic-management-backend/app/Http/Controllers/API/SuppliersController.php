@@ -34,18 +34,18 @@ class SuppliersController extends Controller
         // 1. TÌM KIẾM CHUNG (search_text)
         if ($search = $request->get('search')) {
             $search = trim($search);
-            $like = "%" . mb_strtolower($search) . "%";
-            $query->whereRaw("search_text ILIKE ?", [$like]);
+            $query->whereRaw('LOWER("SupplierName") LIKE ?', ['%' . strtolower($search) . '%']);
         }
 
         // 2. LỌC EMAIL
         if ($email = $request->get('email')) {
-            $query->where('ContactEmail', 'like', "%{$email}%");
+            $email = trim($email);
+            $query->whereRaw('LOWER("ContactEmail") LIKE ?', ['%' . strtolower($email) . '%']);
         }
-
         // 3. LỌC SỐ ĐIỆN THOẠI
         if ($phone = $request->get('phone')) {
-            $query->where('ContactPhone', 'like', "%{$phone}%");
+            $phone = trim($phone);
+            $query->where('ContactPhone', 'LIKE', "%{$phone}%");
         }
 
         $query->orderBy('SupplierId', 'asc');

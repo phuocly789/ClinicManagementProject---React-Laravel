@@ -4,7 +4,7 @@ import reactLogo from "./assets/react.svg";
 import viteLogo from "/vite.svg";
 import "./App.css";
 
-import { path } from "./utils/constant";
+import { path, USER_ROLE } from "./utils/constant";
 import LoginPage from "./pages/auth/Login/Login";
 import AdminMedicine from "./pages/Admin/AdminMedicine.jsx";
 import AdminInventory from "./pages/Admin/AdminInventory.jsx";
@@ -28,12 +28,11 @@ import TechnicianDashboard from "./pages/Technician/TechnicianDashboard.jsx";
 import DoctorSchedule from "./pages/Doctors/DoctorSchedule.jsx";
 import HistorySection from "./pages/Doctors/HistorySection.jsx";
 import TodaySection from "./pages/Doctors/TodaySection.jsx";
-
+import ProtectedRoute from "./Components/ProtectedRoute/ProtectedRoute.jsx";
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Home */}
+    <Routes>
+      {/* Home */}
         <Route path={path.HOME} element={<Home />} />
         {/* Admin */}
         <Route path={path.ADMIN.ROOT} element={<AdminSidebar />} >
@@ -53,13 +52,13 @@ function App() {
         {/* Receptionist */}
         {/* Doctor */}
         <Route path={path.DOCTOR.ROOT} element={<DoctorSidebar />}>
-          <Route index element={<TodaySection />} />
-          <Route path={path.DOCTOR.TODAY_APPOINTMENTS} element={<TodaySection />} />
+          <Route index element={<DoctorDashboard />} />
+          <Route path={path.DOCTOR.TODAY_APPOINTMENTS} element={<DoctorDashboard />} />
           <Route path={path.DOCTOR.SCHEDULE} element={<DoctorSchedule />} />
           <Route path={path.DOCTOR.PATIENT_HISTORY} element={<HistorySection />} />
-             <Route path={path.DOCTOR.DOCTOR_PRINT_PDF} element={<PDFEditorPage />} />
+          <Route path={path.DOCTOR.DOCTOR_PRINT_PDF} element={<PDFEditorPage />} />
         </Route>
-    
+
         {/* Patient */}
         <Route path={path.PATIENT.ROOT} element={<PatientLayout />}>
           <Route
@@ -75,15 +74,14 @@ function App() {
           path={path.VERIFICATION_EMAIL}
           element={<VerifyEmailPage />}
         />
-     
+
         {/* Technician */}
         <Route path={path.TECHNICIAN.ROOT} element={<TechnicianSidebar />}>
           <Route index element={<TechSchedule />} />
           <Route path={path.TECHNICIAN.SCHEDULE} element={<TechSchedule />} />
           <Route path={path.TECHNICIAN.TEST_RESULTS} element={<TechnicianDashboard />} />
         </Route>
-      </Routes>
-    </BrowserRouter >
+    </Routes>
   );
 }
 
