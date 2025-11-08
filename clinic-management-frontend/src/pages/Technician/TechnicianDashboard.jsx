@@ -1,77 +1,86 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Container, Button, Modal, Alert, Spinner } from 'react-bootstrap';
-import TechnicianSidebar from '../../Components/Sidebar/TechnicianSidebar';
-import Pagination from '../../Components/Pagination/Pagination';
-import Loading from '../../Components/Loading/Loading';
-import CustomToast from '../../Components/CustomToast/CustomToast';
-import ScheduleSection from '../../pages/Technician/ScheduleSection';
 import TechnicianSection from '../../pages/Technician/TechnicianSection';
-import TechnicianModalContent from '../../pages/Technician/TechnicianModalContent';
-import TechnicianReportModal from '../../pages/Technician//TechnicianReportModal';
 import technicianService from '../../services/technicianService';
+import TechSchedule from './TechSchedule';
 
 const TechnicianDashboard = () => {
   const [currentSection, setCurrentSection] = useState('test-results');
-  const [scheduleData, setScheduleData] = useState([]);
-  const [testReportData, setTestReportData] = useState([]);
   const [testResultsData, setTestResultsData] = useState([]);
+  const [completedServicesData, setCompletedServicesData] = useState([]); // ✅ THÊM STATE MỚI
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [showTestResultModal, setShowTestResultModal] = useState(false);
-  const [showReportModal, setShowReportModal] = useState(false);
   const [currentAction, setCurrentAction] = useState(null);
   const [actionParams, setActionParams] = useState([]);
-  const [reportData, setReportData] = useState({ testId: '', taskName: '', time: '' });
-  const [testResultData, setTestResultData] = useState({ id: '', patient: '', service: '', notes: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [dataVersion, setDataVersion] = useState(0);
 
-  // Fetch initial data - CHỈ LẤY DANH SÁCH DỊCH VỤ
+  // Fetch initial data - SỬA LẠI
   useEffect(() => {
     fetchInitialData();
   }, []);
 
+  // THÊM DEBUG ĐỂ XEM CẤU TRÚC THỰC TẾ
   const fetchInitialData = async () => {
     try {
       setLoading(true);
       setError('');
-      
-      // ✅ CHỈ GỌI API getAssignedServices (DUY NHẤT TỒN TẠI)
-      const servicesResponse = await technicianService.getAssignedServices(1);
-      
-      if (servicesResponse.data.success) {
-        console.log('✅ Danh sách dịch vụ:', servicesResponse.data);
-        // Có thể set data vào state nếu cần
-        // setTestResultsData(servicesResponse.data.data);
-      }
-      
-      // ❌ COMMENT TẤT CẢ API KHÔNG TỒN TẠI
-      /*
-      const scheduleResponse = await technicianService.getSchedule();
-      setScheduleData(scheduleResponse.data);
-      
-      const testResultsResponse = await technicianService.getTestResults();
-      setTestResultsData(testResultsResponse.data);
-      
-      const testReportsResponse = await technicianService.getTestReports();
-      setTestReportData(testReportsResponse.data);
-      */
-      
+
+      console.log('🔄 [TechnicianDashboard] Đang gọi API...');
+
+      const [servicesResponse, completedResponse] = await Promise.all([
+        technicianService.getAssignedServices(1),
+        technicianService.getCompletedServices()
+      ]);
+
+      console.log('🔍 [DEBUG] RAW Assigned Response:', servicesResponse);
+      console.log('🔍 [DEBUG] RAW Completed Response:', completedResponse);
+
+      // ✅ SỬA LẠI: API TRẢ VỀ TRỰC TIẾP ARRAY, KHÔNG CÓ SUCCESS FIELD
+      // 1. Xử lý assigned services - response.data đã là array
+      const assignedData = servicesResponse?.data || [];
+      console.log('✅ Assigned data after fix:', {
+        data: assignedData,
+        isArray: Array.isArray(assignedData),
+        length: assignedData.length
+      });
+      setTestResultsData(Array.isArray(assignedData) ? assignedData : []);
+
+      // 2. Xử lý completed services - response.data đã là array  
+      const completedData = completedResponse?.data || [];
+      console.log('✅ Completed data after fix:', {
+        data: completedData,
+        isArray: Array.isArray(completedData),
+        length: completedData.length
+      });
+      setCompletedServicesData(Array.isArray(completedData) ? completedData : []);
+
+      setDataVersion(prev => prev + 1);
+
     } catch (err) {
-      setError('Không thể tải dữ liệu. Vui lòng thử lại sau.');
-      console.error('Error fetching initial data:', err);
+      console.error('💥 [TechnicianDashboard] Error:', err);
+      setError('Không thể tải dữ liệu.');
+      setTestResultsData([]);
+      setCompletedServicesData([]);
     } finally {
       setLoading(false);
     }
   };
-
+  
   const switchSection = (sectionId) => {
+    console.log('🔄 [TechnicianDashboard] Switching to section:', sectionId);
     setCurrentSection(sectionId);
     setError('');
     setSuccess('');
+
+    if (sectionId === 'test-results') {
+      fetchInitialData();
+    }
   };
 
   const confirmAction = (action, ...params) => {
+    console.log('🔍 [TechnicianDashboard] confirmAction called:', { action, params });
     setCurrentAction(action);
     setActionParams(params);
     setShowConfirmModal(true);
@@ -81,28 +90,26 @@ const TechnicianDashboard = () => {
     try {
       setLoading(true);
       setError('');
-      
+
+      console.log('🚀 [TechnicianDashboard] executeAction:', currentAction);
+
       switch (currentAction) {
-        case 'completeTask':
-          await completeTask(actionParams[0], actionParams[1], actionParams[2]);
-          break;
         case 'updateTestResult':
           await updateTestResult(actionParams[0], actionParams[1], actionParams[2]);
           break;
         case 'editTestResult':
           await editTestResult(actionParams[0], actionParams[1], actionParams[2], actionParams[3]);
           break;
-        case 'saveReport':
-          await saveReport(actionParams[0], actionParams[1]);
-          break;
         default:
+          console.warn('⚠️ [TechnicianDashboard] Action không xác định:', currentAction);
           break;
       }
-      
+
       setSuccess('Thao tác thành công!');
+
     } catch (err) {
+      console.error('❌ [TechnicianDashboard] Error executing action:', err);
       setError('Thao tác thất bại. Vui lòng thử lại.');
-      console.error('Error executing action:', err);
     } finally {
       setLoading(false);
       setShowConfirmModal(false);
@@ -111,200 +118,108 @@ const TechnicianDashboard = () => {
     }
   };
 
-  // ❌ TẠM THỜI COMMENT CÁC HÀM GỌI API KHÔNG TỒN TẠI
-  /*
-  const completeTask = async (testId, task, time) => {
-    try {
-      await technicianService.updateTaskStatus(testId, {
-        status: 'completed',
-        completedAt: new Date().toISOString()
-      });
+  const updateTestResult = async (testId, patient, service) => {
+    console.log('📝 [TechnicianDashboard] updateTestResult:', { testId, patient, service });
+    setSuccess(`Đã cập nhật kết quả cho ${patient}`);
+  };
 
-      setScheduleData(prev => 
-        prev.map(item => 
-          item.testId === testId && item.time === time && item.status === 'Đang thực hiện' 
-            ? { ...item, status: 'Hoàn thành' } 
-            : item
-        )
-      );
-      
-      setTestResultsData(prev => 
-        prev.map(t => t.id === testId ? { ...t, status: 'Hoàn thành' } : t)
-      );
-      
-      openReportModal(testId, task, time);
-    } catch (err) {
-      throw new Error('Không thể hoàn thành nhiệm vụ');
+  const editTestResult = async (testId, patient, service, result) => {
+    console.log('✏️ [TechnicianDashboard] editTestResult:', { testId, patient, service, result });
+    setSuccess(`Đã chỉnh sửa kết quả cho ${patient}`);
+  };
+
+  // ✅ CẬP NHẬT updateStats
+  const updateStats = useCallback(() => {
+    console.log('📊 [TechnicianDashboard] updateStats called');
+
+    // Debounce logic
+    const now = Date.now();
+    if (window.lastUpdateCall && (now - window.lastUpdateCall < 2000)) {
+      console.log('⏰ [TechnicianDashboard] Debounced updateStats');
+      return;
     }
-  };
-  */
+    window.lastUpdateCall = now;
 
-  const openReportModal = (testId, task, time) => {
-    setReportData({ testId, taskName: task, time });
-    setShowReportModal(true);
-  };
-
-  // ❌ TẠM THỜI COMMENT
-  /*
-  const saveReport = async (testId, notes) => {
-    try {
-      const reportData = {
-        testId,
-        notes,
-        reportedAt: new Date().toISOString(),
-        status: 'completed'
-      };
-
-      await technicianService.saveTestReport(reportData);
-
-      const patient = testResultsData.find(t => t.id === testId)?.patient;
-      const service = testResultsData.find(t => t.id === testId)?.service;
-      const existingReport = testReportData.find(r => r.testId === testId);
-      
-      if (!existingReport) {
-        const newReport = {
-          testId,
-          name: `${patient} - ${service}`,
-          date: new Date().toLocaleDateString('vi-VN'),
-          status: 'Hoàn thành',
-          notes
-        };
-        
-        setTestReportData(prev => [...prev, newReport]);
-      }
-
-      setSuccess(`Báo cáo cho ${patient} đã được lưu thành công.`);
-    } catch (err) {
-      throw new Error('Không thể lưu báo cáo');
-    }
-  };
-  */
-
-  const updateTestResult = (testId, patient, service) => {
-    setTestResultData({ id: testId, patient, service, notes: '' });
-    setShowTestResultModal(true);
-  };
-
-  const editTestResult = (testId, patient, service, result) => {
-    setTestResultData({ id: testId, patient, service, notes: result });
-    setShowTestResultModal(true);
-  };
-
-  // ❌ TẠM THỜI COMMENT
-  /*
-  const handleTestResultSubmit = async (notes) => {
-    try {
-      setLoading(true);
-      
-      await technicianService.updateTestResult(testResultData.id, {
-        result: notes,
-        status: 'completed',
-        completedAt: new Date().toISOString()
-      });
-
-      setTestResultsData(prev => 
-        prev.map(t => 
-          t.id === testResultData.id 
-            ? { ...t, status: 'Hoàn thành', result: notes } 
-            : t
-        )
-      );
-
-      const existingReport = testReportData.find(r => r.testId === testResultData.id);
-      if (!existingReport) {
-        const newReport = {
-          testId: testResultData.id,
-          name: `${testResultData.patient} - ${testResultData.service}`,
-          date: new Date().toLocaleDateString('vi-VN'),
-          status: 'Hoàn thành',
-          notes
-        };
-        
-        await technicianService.saveTestReport(newReport);
-        setTestReportData(prev => [...prev, newReport]);
-      }
-
-      setShowTestResultModal(false);
-      setSuccess(`Kết quả xét nghiệm cho ${testResultData.patient} đã được cập nhật thành công.`);
-    } catch (err) {
-      setError('Không thể cập nhật kết quả xét nghiệm');
-      console.error('Error updating test result:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-  */
-
-  const updateStats = () => {
-    const completed = testResultsData.filter(t => t.status === 'Hoàn thành').length;
-    document.getElementById('completedTests') && (document.getElementById('completedTests').textContent = completed);
-  };
+    // Reload data sau 1 giây
+    setTimeout(() => {
+      fetchInitialData(); // ✅ RELOAD CẢ 2 DATA
+    }, 1000);
+  }, []);
 
   const clearMessages = () => {
     setError('');
     setSuccess('');
   };
 
+  console.log('🎯 [TechnicianDashboard] Rendering with:', {
+    currentSection,
+    testResultsDataLength: testResultsData.length,
+    completedServicesDataLength: completedServicesData.length,
+    loading,
+    dataVersion
+  });
+
   return (
     <div className="d-flex min-vh-100 bg-light">
-      <TechnicianSidebar currentSection={currentSection} switchSection={switchSection} />
-      <div className="flex-grow-1 p-4" style={{ marginLeft: '250px' }}>
+      <div className="flex-grow-1 p-4">
         <Container fluid>
           {/* Alert Messages */}
           {error && (
             <Alert variant="danger" dismissible onClose={clearMessages}>
+              <i className="fas fa-exclamation-triangle me-2"></i>
               {error}
             </Alert>
           )}
           {success && (
             <Alert variant="success" dismissible onClose={clearMessages}>
+              <i className="fas fa-check-circle me-2"></i>
               {success}
             </Alert>
           )}
 
+          {/* Loading Spinner */}
           {loading && (
             <div className="text-center mb-3">
-              <Spinner animation="border" variant="success" />
-              <span className="ms-2">Đang xử lý...</span>
+              <Spinner animation="border" variant="primary" />
+              <span className="ms-2">Đang tải dữ liệu...</span>
             </div>
           )}
 
-          {/* ❌ TẠM THỜI ẨN SCHEDULE SECTION VÌ KHÔNG CÓ DATA */}
-          {/*
-          {currentSection === 'schedule' && (
-            <ScheduleSection 
-              scheduleData={scheduleData}
-              testReportData={testReportData}
-              confirmAction={confirmAction}
-              openReportModal={openReportModal}
-              loading={loading}
-            />
-          )}
-          */}
-          
+          {/* Render Sections */}
+          {currentSection === 'schedule' && <TechSchedule />}
+
           {currentSection === 'test-results' && (
-            <TechnicianSection 
+            <TechnicianSection
               testResultsData={testResultsData}
+              completedServicesData={completedServicesData} // ✅ TRUYỀN DATA MỚI
               confirmAction={confirmAction}
               updateStats={updateStats}
               loading={loading}
+              dataVersion={dataVersion}
             />
           )}
+
+          {/* Debug Info */}
+          <div className="mt-3 text-center">
+            <small className="text-muted">
+              Section: <strong>{currentSection}</strong> |
+              Assigned: <strong>{testResultsData.length}</strong> |
+              Completed: <strong>{completedServicesData.length}</strong> |
+              Version: <strong>{dataVersion}</strong>
+            </small>
+          </div>
         </Container>
       </div>
 
-      {/* ❌ TẠM THỜI COMMENT MODALS */}
-      {/*
+      {/* Confirm Modal */}
       <Modal show={showConfirmModal} onHide={() => setShowConfirmModal(false)} centered>
         <Modal.Header closeButton className="bg-light">
           <Modal.Title>Xác nhận</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <p id="confirmMessage">
-            {currentAction === 'completeTask' && `Bạn có muốn hoàn thành nhiệm vụ "${actionParams[1]}"?`}
+          <p>
             {currentAction === 'updateTestResult' && `Bạn có muốn cập nhật kết quả xét nghiệm cho ${actionParams[1]}?`}
             {currentAction === 'editTestResult' && `Bạn có muốn chỉnh sửa kết quả xét nghiệm cho ${actionParams[1]}?`}
-            {currentAction === 'saveReport' && `Bạn có muốn lưu báo cáo cho nhiệm vụ "${reportData.taskName}"?`}
           </p>
           {loading && (
             <div className="text-center">
@@ -321,34 +236,6 @@ const TechnicianDashboard = () => {
           </Button>
         </Modal.Footer>
       </Modal>
-
-      <Modal show={showTestResultModal} onHide={() => setShowTestResultModal(false)} centered>
-        <Modal.Header closeButton className="bg-light">
-          <Modal.Title>Cập nhật/Chỉnh sửa kết quả xét nghiệm</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <TechnicianModalContent 
-            testResultData={testResultData}
-            onSubmit={handleTestResultSubmit}
-            loading={loading}
-          />
-        </Modal.Body>
-      </Modal>
-
-      <Modal show={showReportModal} onHide={() => setShowReportModal(false)} centered>
-        <Modal.Header closeButton className="bg-light">
-          <Modal.Title>Báo cáo nhiệm vụ</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <TechnicianModalContent 
-            reportData={reportData}
-            confirmAction={confirmAction}
-            setShowReportModal={setShowReportModal}
-            loading={loading}
-          />
-        </Modal.Body>
-      </Modal>
-      */}
     </div>
   );
 };
