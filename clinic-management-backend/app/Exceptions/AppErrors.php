@@ -17,7 +17,6 @@ class AppErrors extends Exception
         string $codeKey = 'INTERNAL_ERROR',
         bool $isOperational = true
     ) {
-        // ⚙️ Truyền đúng thứ tự vào Exception gốc để giữ nguyên code
         parent::__construct($message, $code);
 
         $this->statusCode = $statusCode;
@@ -38,5 +37,15 @@ class AppErrors extends Exception
     public function isOperational(): bool
     {
         return $this->isOperational;
+    }
+
+    public function render($request)
+    {
+        return response()->json([
+            'success' => false,
+            'message' => $this->getMessage(),
+            'error_code' => $this->getCode(),
+            'error_key' => $this->getCodeKey(),
+        ], $this->getStatusCode(), [], JSON_UNESCAPED_UNICODE);
     }
 }

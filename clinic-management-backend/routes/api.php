@@ -19,7 +19,7 @@ use App\Http\Controllers\API\Doctor\DoctorMedicineSearchController;
 use App\Http\Controllers\API\Doctor\ServiceController;
 use App\Http\Controllers\API\Doctor\DoctorExaminationsController;
 use App\Http\Controllers\API\Doctor\PatientsController;
-
+use App\Http\Controllers\API\PatientController;
 //----------------------------------------------Hết-------------------------------
 use App\Http\Controllers\API\User\AdminUserController;
 use App\Http\Controllers\API\Print\InvoicePrintController;
@@ -75,13 +75,15 @@ Route::middleware(['auth:api'])->get('/me', function (Request $request) {
             'id' => $user->UserId,
             'full_name' => $user->FullName,
             'email' => $user->Email,
+            'phone' => $user->Phone,
+            'address' => $user->Address,
+            'date_of_birth' => $user->DateOfBirth,
             'username' => $user->Username,
             'is_active' => $user->IsActive,
             'roles' => $user->roles()->pluck('RoleName'),
         ],
     ], 200, [], JSON_UNESCAPED_UNICODE);
 });
-
 //admin-revenue
 Route::get('/report-revenue/combined', [ReportRevenueController::class, 'getCombinedStatistics']);
 Route::get('/report-revenue/detail-revenue', [ReportRevenueController::class, 'getDetailRevenueReport']);
@@ -149,14 +151,22 @@ Route::post('/print/preview-html', [InvoicePrintController::class, 'previewHTML'
 Route::prefix('technician')->group(function () {
     // Danh sách dịch vụ
     Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
-   // thay đổi trạng thái dịch vụ
+    // thay đổi trạng thái dịch vụ
     Route::post('/services/{serviceOrderId}/status', [TestResultsController::class, 'updateServiceStatus']);
+
+    // CẬP NHẬT KẾT QUẢ
+    Route::post('/service-orders/{serviceOrderId}/result', [TestResultsController::class, 'updateServiceResult']);
+    // Lấy danh sách dịch vụ đã hoàn thành
+    Route::get('/completed-services', [TestResultsController::class, 'getCompletedServices']);
+    // ✅ Lịch làm việc KTV
+    Route::get('/work-schedule', [TestResultsController::class, 'getWorkSchedule']);
+    Route::get('/work-schedule/{year}/{month}', [TestResultsController::class, 'getWorkScheduleByMonth']);
 });
 
 //Receptionist Routes
 Route::prefix('receptionist')->group(function () {
     //lịch hẹn
-    Route::get('/appointments/today',[AppointmentRecepController::class, 'GetAppointmentToday']);
+    Route::get('/appointments/today', [AppointmentRecepController::class, 'GetAppointmentToday']);
     Route::post('/appointments', [AppointmentRecepController::class, 'CreateAppoitment']);
     Route::put('/appointments/{appointmentId}/status', [AppointmentRecepController::class, 'UpdateAppointmentStatus']);
     //hàng chờ
@@ -165,6 +175,13 @@ Route::prefix('receptionist')->group(function () {
     Route::put('/queue/{queueId}/status', [QueueController::class, 'UpdateQueueStatus']);
     Route::delete('/queue/{queueId}', [QueueController::class, 'DeleteQueue']);
     Route::put('/queue/{queueId}/prioritize', [QueueController::class, 'PrioritizeQueue']);
-
 });
 
+// Patient Routes
+Route::middleware(['auth:api'])
+    ->put('/patient/update-profile/{id}', [PatientController::class, 'updateProfile']);
+Route::middleware(['auth:api'])
+    ->post('/patient/send-vefication-email', [PatientController::class, 'sendVerificationEmail']);
+Route::middleware(['auth:api'])
+    ->post('/account/change-password', [PatientController::class, 'changePassword']);
+// Route::middleware()->post('/auth/login', [AuthController::class, 'login']);

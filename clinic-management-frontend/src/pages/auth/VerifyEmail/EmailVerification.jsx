@@ -31,11 +31,10 @@ export default function VerifyEmailPage() {
 
   // 🕒 Khởi tạo thời gian hết hạn và đếm ngược
   useEffect(() => {
-    console.log("🔥 expired từ backend:", expired);
     let expiryTime = null;
 
     if (expired) {
-      expiryTime = dayjs(expired, "YYYY-MM-DD HH:mm:ss").valueOf();
+      expiryTime = new Date(expired).getTime();
       console.log("✅ Convert sang ms:", expiryTime);
       localStorage.setItem(`verifyEmailExpiry_${email}`, expiryTime);
     } else {
@@ -47,7 +46,7 @@ export default function VerifyEmailPage() {
     }
 
     if (expiryTime) {
-      const now = dayjs().valueOf();
+      const now = Date.now();
       const diffSeconds = Math.floor((expiryTime - now) / 1000);
       console.log("⏰ Chênh lệch (giây):", diffSeconds);
 
