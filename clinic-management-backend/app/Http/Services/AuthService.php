@@ -143,7 +143,7 @@ class AuthService
 
     /**
      * Đăng nhập
-     */ 
+     */
     public function handleLogin(array $data)
     {
         // Validate dữ liệu đầu vào
@@ -166,7 +166,7 @@ class AuthService
         $user = User::where('Username', $validated['username'])->first();
         if (!$user) {
             $msg = AuthMessages::AUTH['USER_NOT_FOUND'];
-            throw new AppErrors($msg['message'], $msg['status'], $msg['code']);
+            throw new AppErrors($msg['message'], $msg['status'], (int)$msg['code']);
         }
 
         // Kiểm tra mật khẩu
