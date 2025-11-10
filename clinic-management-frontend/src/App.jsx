@@ -29,6 +29,7 @@ import DoctorSchedule from "./pages/Doctors/DoctorSchedule.jsx";
 import HistorySection from "./pages/Doctors/HistorySection.jsx";
 import TodaySection from "./pages/Doctors/TodaySection.jsx";
 import ProtectedRoute from "./Components/ProtectedRoute/ProtectedRoute.jsx";
+import AdminServiceManagement from "./pages/Admin/AdminServiceManagement.jsx";
 function App() {
   return (
     <Routes>
@@ -43,6 +44,7 @@ function App() {
             element={<AdminScheduleManagement />}
           />
           <Route path={path.ADMIN.USER.MANAGEMENT} element={<AdminUserManagement />} />
+          <Route path={path.ADMIN.SERVICE.MANAGEMENT} element={<AdminServiceManagement />} />
           <Route path={path.ADMIN.MEDICINE.MANAGEMENT} element={<AdminMedicine />} />
           <Route path={path.ADMIN.INVENTORY} element={<AdminInventory />} />
           <Route path={path.ADMIN.SUPPLIERS.MANAGEMENT} element={<AdminSuppliers />} />

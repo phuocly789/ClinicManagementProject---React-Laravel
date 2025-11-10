@@ -1,35 +1,26 @@
-import axios from "../axios";
+import instance from '../axios';
 
 const adminService = {
-    // Lấy danh sách dịch vụ với phân trang và lọc
-    getServices: (params = {}) => {
-        return axios.get(`/api/services`, { params });
-    },
+  // Lấy tất cả dịch vụ
+  getServices: (params) => instance.get('/api/admin/services', { params }),
 
-    // Lấy thông tin chi tiết dịch vụ
-    getServiceById: (id) => {
-        return axios.get(`/api/services/${id}`);
-    },
+  // Lấy dịch vụ theo ID
+  getService: (id) => instance.get(`/api/admin/services/${id}`),
 
-    // Tạo dịch vụ mới
-    createService: (data) => {
-        return axios.post(`/api/services`, data);
-    },
+  // Tạo mới dịch vụ
+  createService: (serviceData) => instance.post('/api/admin/services', serviceData),
 
-    // Cập nhật dịch vụ
-    updateService: (id, data) => {
-        return axios.put(`/api/services/${id}`, data);
-    },
+  // Cập nhật dịch vụ
+  updateService: (id, serviceData) => instance.put(`/api/admin/services/${id}`, serviceData),
 
-    // Xóa dịch vụ
-    deleteService: (id) => {
-        return axios.delete(`/api/services/${id}`);
-    },
+  // Xóa dịch vụ
+  deleteService: (id) => instance.delete(`/api/admin/services/${id}`),
 
-    // Lấy các loại dịch vụ
-    getServiceTypes: () => {
-        return axios.get(`/api/service-types`);
-    }
+  // Lấy loại dịch vụ
+  getServiceTypes: () => instance.get('/api/admin/services/types/all'),
+
+  // Lấy danh sách dịch vụ theo loại
+  getServicesByType: (type) => instance.get(`/api/admin/services/type/${type}`)
 };
 
 export default adminService;

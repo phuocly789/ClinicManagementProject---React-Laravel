@@ -1,106 +1,330 @@
 <?php
 
 namespace App\Http\Controllers\API\Services;
+
 use App\Http\Controllers\Controller;
 use App\Models\Service;
+use App\Models\ServiceOrder;
+use App\Models\InvoiceDetail;
 use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class AdminServiceController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    /**
+     * Display a listing of the services.
+     */
+    public function index(Request $request)
     {
-        $query = Service::query();
-        
-        // Search
-        if ($request->has('search') && $request->search) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('type', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
+        try {
+            $query = Service::query();
+
+            // Search filter
+            if ($request->has('search') && !empty($request->search)) {
+                $search = $request->search;
+                $query->where(function($q) use ($search) {
+                    $q->where('ServiceName', 'like', "%{$search}%")
+                      ->orWhere('Description', 'like', "%{$search}%")
+                      ->orWhere('ServiceType', 'like', "%{$search}%");
+                });
+            }
+
+            // ServiceType filter
+            if ($request->has('type') && !empty($request->type)) {
+                $query->where('ServiceType', $request->type);
+            }
+
+            // Status filter - Thêm nếu có trường status
+            if ($request->has('status') && !empty($request->status)) {
+                // Nếu bạn muốn thêm trường status, cần cập nhật database
+                // $query->where('Status', $request->status);
+            }
+
+            // Pagination
+            $perPage = $request->per_page ?? 5;
+            $services = $query->orderBy('ServiceId', 'asc')->paginate($perPage);
+
+            // Format response để phù hợp với frontend
+            $formattedServices = $services->map(function($service) {
+                return [
+                    'id' => $service->ServiceId,
+                    'name' => $service->ServiceName,
+                    'type' => $service->ServiceType,
+                    'price' => (float)$service->Price,
+                    'description' => $service->Description,
+                    'status' => 'active', // Mặc định vì model chưa có trường status
+                    'created_at' => null,
+                ];
             });
+
+            return response()->json([
+                'success' => true,
+                'data' => $formattedServices,
+                'current_page' => $services->currentPage(),
+                'last_page' => $services->lastPage(),
+                'total' => $services->total(),
+                'per_page' => $services->perPage(),
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi tải danh sách dịch vụ.',
+                'error' => $e->getMessage()
+            ], 500);
         }
-        
-        // Filter by type
-        if ($request->has('type') && $request->type) {
-            $query->where('type', $request->type);
+    }
+
+    /**
+     * Store a newly created service.
+     */
+    public function store(Request $request)
+    {
+        DB::beginTransaction();
+        try {
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'type' => 'required|string|max:255',
+                'price' => 'required|numeric|min:0',
+                'description' => 'required|string',
+            ], [
+                'name.required' => 'Tên dịch vụ là bắt buộc.',
+                'type.required' => 'Loại dịch vụ là bắt buộc.',
+                'price.required' => 'Giá dịch vụ là bắt buộc.',
+                'price.min' => 'Giá dịch vụ không được âm.',
+                'description.required' => 'Mô tả dịch vụ là bắt buộc.',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Dữ liệu không hợp lệ.',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $service = Service::create([
+                'ServiceName' => $request->name,
+                'ServiceType' => $request->type,
+                'Price' => $request->price,
+                'Description' => $request->description,
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Thêm dịch vụ thành công!',
+                'data' => [
+                    'id' => $service->ServiceId,
+                    'name' => $service->ServiceName,
+                    'type' => $service->ServiceType,
+                    'price' => (float)$service->Price,
+                    'description' => $service->Description,
+                    'status' => 'active',
+                ]
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi thêm dịch vụ.',
+                'error' => $e->getMessage()
+            ], 500);
         }
-        
-        // Filter by status
-        if ($request->has('status') && $request->status) {
-            $query->where('status', $request->status);
+    }
+
+    /**
+     * Display the specified service.
+     */
+    public function show($id)
+    {
+        try {
+            $service = Service::find($id);
+
+            if (!$service) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không tìm thấy dịch vụ.'
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $service->ServiceId,
+                    'name' => $service->ServiceName,
+                    'type' => $service->ServiceType,
+                    'price' => (float)$service->Price,
+                    'description' => $service->Description,
+                    'status' => 'active',
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi tải thông tin dịch vụ.',
+                'error' => $e->getMessage()
+            ], 500);
         }
-        
-        // Pagination
-        $perPage = $request->get('per_page', 10);
-        $services = $query->orderBy('created_at', 'desc')->paginate($perPage);
-        
-        return response()->json([
-            'data' => $services->items(),
-            'current_page' => $services->currentPage(),
-            'last_page' => $services->lastPage(),
-            'total' => $services->total(),
-            'per_page' => $services->perPage()
-        ]);
     }
-    
-    public function store(Request $request): JsonResponse
+
+    /**
+     * Update the specified service.
+     */
+    public function update(Request $request, $id)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'type' => 'required|string|max:100',
-            'price' => 'required|numeric|min:0',
-            'description' => 'required|string',
-            'status' => 'sometimes|string|in:active,inactive'
-        ]);
-        
-        $service = Service::create($validated);
-        
-        return response()->json([
-            'message' => 'Service created successfully',
-            'data' => $service
-        ], 201);
+        DB::beginTransaction();
+        try {
+            $service = Service::find($id);
+
+            if (!$service) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không tìm thấy dịch vụ.'
+                ], 404);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'type' => 'required|string|max:255',
+                'price' => 'required|numeric|min:0',
+                'description' => 'required|string',
+            ], [
+                'name.required' => 'Tên dịch vụ là bắt buộc.',
+                'type.required' => 'Loại dịch vụ là bắt buộc.',
+                'price.required' => 'Giá dịch vụ là bắt buộc.',
+                'price.min' => 'Giá dịch vụ không được âm.',
+                'description.required' => 'Mô tả dịch vụ là bắt buộc.',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Dữ liệu không hợp lệ.',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $service->update([
+                'ServiceName' => $request->name,
+                'ServiceType' => $request->type,
+                'Price' => $request->price,
+                'Description' => $request->description,
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cập nhật dịch vụ thành công!',
+                'data' => [
+                    'id' => $service->ServiceId,
+                    'name' => $service->ServiceName,
+                    'type' => $service->ServiceType,
+                    'price' => (float)$service->Price,
+                    'description' => $service->Description,
+                    'status' => 'active',
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi cập nhật dịch vụ.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
-    
-    public function update(Request $request, $id): JsonResponse
+
+    /**
+     * Remove the specified service.
+     */
+    public function destroy($id)
     {
-        $service = Service::findOrFail($id);
-        
-        $validated = $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'type' => 'sometimes|string|max:100',
-            'price' => 'sometimes|numeric|min:0',
-            'description' => 'sometimes|string',
-            'status' => 'sometimes|string|in:active,inactive'
-        ]);
-        
-        $service->update($validated);
-        
-        return response()->json([
-            'message' => 'Service updated successfully',
-            'data' => $service
-        ]);
+        DB::beginTransaction();
+        try {
+            $service = Service::find($id);
+
+            if (!$service) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không tìm thấy dịch vụ.'
+                ], 404);
+            }
+
+            // Check if service is being used in any service orders
+            $serviceOrderCount = ServiceOrder::where('ServiceId', $id)->count();
+            if ($serviceOrderCount > 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không thể xóa dịch vụ đang được sử dụng trong đơn dịch vụ.'
+                ], 422);
+            }
+
+            // Check if service is being used in any invoice details
+            $invoiceDetailCount = InvoiceDetail::where('ServiceId', $id)->count();
+            if ($invoiceDetailCount > 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không thể xóa dịch vụ đang được sử dụng trong hóa đơn.'
+                ], 422);
+            }
+
+            $service->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Xóa dịch vụ thành công!'
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi xóa dịch vụ.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
-    
-    public function destroy($id): JsonResponse
+
+    /**
+     * Get all service types (distinct from existing services)
+     */
+    public function getServiceTypes()
     {
-        $service = Service::findOrFail($id);
-        $service->delete();
-        
-        return response()->json([
-            'message' => 'Service deleted successfully'
-        ]);
-    }
-    
-    public function getServiceTypes(): JsonResponse
-    {
-        $types = Service::distinct()->pluck('type')->map(function($type) {
-            return ['id' => $type, 'name' => $type];
-        });
-        
-        return response()->json([
-            'data' => $types
-        ]);
+        try {
+            $types = Service::select('ServiceType')
+                ->distinct()
+                ->orderBy('ServiceType', 'asc')
+                ->pluck('ServiceType')
+                ->filter()
+                ->values();
+
+            $formatted = $types->map(function ($type, $index) {
+                return [
+                    'id' => $index + 1,
+                    'name' => $type
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $formatted
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi tải danh sách loại dịch vụ.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }
