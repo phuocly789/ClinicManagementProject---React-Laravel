@@ -35,7 +35,8 @@ class Patient extends Model
 	];
 
 	protected $fillable = [
-		'MedicalHistory'
+		'PatientId',
+		'MedicalHistory',
 	];
 
 	public function user()
