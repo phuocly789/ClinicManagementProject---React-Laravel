@@ -83,4 +83,51 @@ class PatientController extends Controller
             ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
+    public function getAllServices(Request $request)
+    {
+        try {
+            $service = $this->patientService->handleGetAllServices();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Lấy dịch vụ thành công.',
+                'data' => $service,
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (AppErrors $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ], $e->getStatusCode() ?: 400,);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi server: ' . $e->getMessage()
+            ], 500, [], JSON_UNESCAPED_UNICODE);
+        }
+    }
+    public function bookingAppointment(Request $request)
+    {
+        try {
+            $data = $request->all();
+            $appointment = $this->patientService->handleBookingAppointment($data);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đặt lịch thành công.',
+                'data' => $appointment,
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (AppErrors $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ], $e->getStatusCode() ?: 400,);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi server: ' . $e->getMessage()
+            ], 500, [], JSON_UNESCAPED_UNICODE);
+        }
+    }
 }

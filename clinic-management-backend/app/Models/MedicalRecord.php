@@ -34,7 +34,7 @@ class MedicalRecord extends Model
 {
 	protected $table = 'MedicalRecords';
 	protected $primaryKey = 'RecordId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [

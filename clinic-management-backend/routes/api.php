@@ -178,10 +178,14 @@ Route::prefix('receptionist')->group(function () {
 });
 
 // Patient Routes
-Route::middleware(['auth:api'])
+Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
     ->put('/patient/update-profile/{id}', [PatientController::class, 'updateProfile']);
 Route::middleware(['auth:api'])
     ->post('/patient/send-vefication-email', [PatientController::class, 'sendVerificationEmail']);
 Route::middleware(['auth:api'])
     ->post('/account/change-password', [PatientController::class, 'changePassword']);
+Route::middleware(['auth:api'])
+    ->get('/patient/services', [PatientController::class, 'getAllServices']);
+Route::middleware(['auth:api'])
+    ->post('/patient/booking-appointment', [PatientController::class, 'bookingAppointment']);
 // Route::middleware()->post('/auth/login', [AuthController::class, 'login']);
