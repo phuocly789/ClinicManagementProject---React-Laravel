@@ -30,41 +30,29 @@ import HistorySection from "./pages/Doctors/HistorySection.jsx";
 import TodaySection from "./pages/Doctors/TodaySection.jsx";
 import ProtectedRoute from "./Components/ProtectedRoute/ProtectedRoute.jsx";
 import PatientManagement from "./pages/Patient/PatientManagement.jsx";
+import AdminServiceManagement from "./pages/Admin/AdminServiceManagement.jsx";
+import PaymentSection from "./pages/Payment/PaymentSection.jsx";
 function App() {
   return (
     <Routes>
       {/* Home */}
-      <Route path={path.HOME} element={<Home />} />
-      {/* Admin */}
-      <Route path={path.ADMIN.ROOT} element={<AdminSidebar />}>
-        <Route path={path.ADMIN.DASHBOARD} element={<AdminDashboard />} />
-        <Route
-          path={path.ADMIN.REVENUE_REPORT}
-          element={<AdminRevenueReport />}
-        />
+        <Route path={path.HOME} element={<Home />} />
+        {/* Admin */}
+        <Route path={path.ADMIN.ROOT} element={<AdminSidebar />} >
+          <Route path={path.ADMIN.DASHBOARD} element={<AdminDashboard />} />
+          <Route path={path.ADMIN.REVENUE_REPORT} element={<AdminRevenueReport />} />
+          <Route path={path.ADMIN.USER.MANAGEMENT} element={<AdminUserManagement />} />
+          <Route path={path.ADMIN.SERVICE.MANAGEMENT} element={<AdminServiceManagement />} />
+          <Route path={path.ADMIN.MEDICINE.MANAGEMENT} element={<AdminMedicine />} />
+          <Route path={path.ADMIN.INVENTORY} element={<AdminInventory />} />
+          <Route path={path.ADMIN.SUPPLIERS.MANAGEMENT} element={<AdminSuppliers />} />
+          <Route path={path.ADMIN.MEDICINE.MANAGEMENT} element={<AdminMedicine />} />
+
         <Route
           path={path.ADMIN.SCHEDULE.MANAGEMENT}
           element={<AdminScheduleManagement />}
         />
-        <Route
-          path={path.ADMIN.USER.MANAGEMENT}
-          element={<AdminUserManagement />}
-        />
-        <Route
-          path={path.ADMIN.MEDICINE.MANAGEMENT}
-          element={<AdminMedicine />}
-        />
-        <Route path={path.ADMIN.INVENTORY} element={<AdminInventory />} />
-        <Route
-          path={path.ADMIN.SUPPLIERS.MANAGEMENT}
-          element={<AdminSuppliers />}
-        />
-        <Route
-          path={path.ADMIN.MEDICINE.MANAGEMENT}
-          element={<AdminMedicine />}
-        />
       </Route>
-      {/* Receptionist */}
       {/* Doctor */}
       <Route path={path.DOCTOR.ROOT} element={<DoctorSidebar />}>
         <Route index element={<DoctorDashboard />} />
@@ -98,15 +86,16 @@ function App() {
       <Route path={path.LOGIN} element={<LoginPage />} />{" "}
       <Route path={path.REGISTER} element={<Register />} />{" "}
       <Route path={path.VERIFICATION_EMAIL} element={<VerifyEmailPage />} />
-      {/* Technician */}
-      <Route path={path.TECHNICIAN.ROOT} element={<TechnicianSidebar />}>
-        <Route index element={<TechSchedule />} />
-        <Route path={path.TECHNICIAN.SCHEDULE} element={<TechSchedule />} />
-        <Route
-          path={path.TECHNICIAN.TEST_RESULTS}
-          element={<TechnicianDashboard />}
-        />
-      </Route>
+
+        {/* Technician */}
+        <Route path={path.TECHNICIAN.ROOT} element={<TechnicianSidebar />}>
+          <Route index element={<TechSchedule />} />
+          <Route path={path.TECHNICIAN.SCHEDULE} element={<TechSchedule />} />
+          <Route path={path.TECHNICIAN.TEST_RESULTS} element={<TechnicianDashboard />} />
+        </Route>
+
+        {/* Payment */}
+        <Route path={path.PayMent.ROOT} element={<PaymentSection />} />
     </Routes>
   );
 }
