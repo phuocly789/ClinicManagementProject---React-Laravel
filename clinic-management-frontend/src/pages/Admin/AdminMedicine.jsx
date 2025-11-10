@@ -91,11 +91,6 @@ const MedicineList = memo(({
                   onChange={(e) => {
                     const value = e.target.value;
                     setFilters(prev => ({ ...prev, search: value }));
-                    // Debounce: chỉ gọi API sau 500ms không gõ
-                    if (debounceRef.current) clearTimeout(debounceRef.current);
-                    debounceRef.current = setTimeout(() => {
-                      applyFilters({ search: value });
-                    }, 500);
                   }}
                 />
               </InputGroup>

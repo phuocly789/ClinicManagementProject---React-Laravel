@@ -17,7 +17,7 @@ services:
 
       # postgresql://postgres.phzrctyceyysendeluac:[YOUR-PASSWORD]@aws-1-ap-south-1.pooler.supabase.com:5432/postgres
       - DB_CONNECTION=pgsql
-      - DB_HOST=aws-1-ap-south-1.pooler.supabase.com:5432
+      - DB_HOST=aws-1-ap-south-1.pooler.supabase.com
       - DB_PORT=5432
       - DB_DATABASE=postgres
       - DB_USERNAME=postgres.phzrctyceyysendeluac

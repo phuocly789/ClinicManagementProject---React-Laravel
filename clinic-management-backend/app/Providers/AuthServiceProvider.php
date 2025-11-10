@@ -4,7 +4,6 @@ namespace App\Providers;
 
 // use Illuminate\Support\Facades\Gate;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
-use Illuminate\Support\Facades\Route;
 use Laravel\Passport\Passport;
 
 class AuthServiceProvider extends ServiceProvider
@@ -25,15 +24,14 @@ class AuthServiceProvider extends ServiceProvider
     {
         $this->registerPolicies();
 
-        Route::prefix('oauth')
-            ->middleware('api')
-            ->group(base_path('routes/passport.php'));
-        // Load key Passport
-        Passport::loadKeysFrom(storage_path());
-        // time_expire
-        Passport::tokensExpireIn(now()->addDays(15));
+        // Passport::routes();
+        // Access token hết hạn sau 1 ngày
+        Passport::tokensExpireIn(now()->addDays(1));
+
+        // Refresh token hết hạn sau 30 ngày
         Passport::refreshTokensExpireIn(now()->addDays(30));
 
-        //
+        // Personal access token hết hạn sau 1 năm
+        Passport::personalAccessTokensExpireIn(now()->addYear());
     }
 }

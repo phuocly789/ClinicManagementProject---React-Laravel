@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Class Queue
- * 
+ *
  * @property int $QueueId
  * @property int|null $PatientId
  * @property int|null $AppointmentId
@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property time without time zone $QueueTime
  * @property string $Status
  * @property int|null $CreatedBy
- * 
+ *
  * @property Patient|null $patient
  * @property Appointment|null $appointment
  * @property MedicalRecord|null $medical_record
@@ -46,7 +46,7 @@ class Queue extends Model
 		'QueueNumber' => 'int',
 		'RoomId' => 'int',
 		'QueueDate' => 'datetime',
-		'QueueTime' => 'time without time zone',
+		'QueueTime' => 'datetime',
 		'CreatedBy' => 'int'
 	];
 

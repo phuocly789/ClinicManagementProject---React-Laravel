@@ -81,7 +81,22 @@ export const path = {
         ROOT: "/technician",
         SCHEDULE: "schedule",
         TEST_RESULTS: "test-results",
+    },
+
+    PayMent:{
+        ROOT:"/payment",
     }
+};
+
+export const USER_ROLE = {
+    ADMIN: "Admin",
+    PATIENT: "Bệnh nhân",
+};
+
+
+export const ROLE_ROUTE = {
+    [USER_ROLE.ADMIN]: path.ADMIN.ROOT,
+    [USER_ROLE.PATIENT]: path.PATIENT.ROOT,
 };
 
 export const CRUD_ACTIONS = {
