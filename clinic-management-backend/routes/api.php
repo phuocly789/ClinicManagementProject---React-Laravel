@@ -199,6 +199,7 @@ Route::prefix('admin/services')->group(function () {
     Route::delete('/{id}', [AdminServiceController::class, 'destroy']);
     Route::get('/types/all', [AdminServiceController::class, 'getServiceTypes']);
     Route::get('/type/{type}', [AdminServiceController::class, 'getServicesByType']);
+});
 
 // Payment Routes
 // MoMo Payment Routes
