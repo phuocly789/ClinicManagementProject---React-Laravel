@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\API\Services\AdminServiceController;
 use App\Http\Controllers\API\Receptionist\AppointmentRecepController;
 use App\Http\Controllers\API\ReportRevenueController;
 use App\Http\Controllers\API\ScheduleController;
@@ -187,6 +188,17 @@ Route::middleware(['auth:api'])
 Route::middleware(['auth:api'])
     ->post('/account/change-password', [PatientController::class, 'changePassword']);
 // Route::middleware()->post('/auth/login', [AuthController::class, 'login']);
+
+
+// Service management routes
+Route::prefix('admin/services')->group(function () {
+    Route::get('/', [AdminServiceController::class, 'index']);
+    Route::post('/', [AdminServiceController::class, 'store']);
+    Route::get('/{id}', [AdminServiceController::class, 'show']);
+    Route::put('/{id}', [AdminServiceController::class, 'update']);
+    Route::delete('/{id}', [AdminServiceController::class, 'destroy']);
+    Route::get('/types/all', [AdminServiceController::class, 'getServiceTypes']);
+    Route::get('/type/{type}', [AdminServiceController::class, 'getServicesByType']);
 
 // Payment Routes
 // MoMo Payment Routes
