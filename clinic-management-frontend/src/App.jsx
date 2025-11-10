@@ -30,6 +30,7 @@ import HistorySection from "./pages/Doctors/HistorySection.jsx";
 import TodaySection from "./pages/Doctors/TodaySection.jsx";
 import ProtectedRoute from "./Components/ProtectedRoute/ProtectedRoute.jsx";
 import AdminServiceManagement from "./pages/Admin/AdminServiceManagement.jsx";
+import PaymentSection from "./pages/Payment/PaymentSection.jsx";
 function App() {
   return (
     <Routes>
@@ -83,6 +84,9 @@ function App() {
           <Route path={path.TECHNICIAN.SCHEDULE} element={<TechSchedule />} />
           <Route path={path.TECHNICIAN.TEST_RESULTS} element={<TechnicianDashboard />} />
         </Route>
+
+        {/* Payment */}
+        <Route path={path.PayMent.ROOT} element={<PaymentSection />} />
     </Routes>
   );
 }

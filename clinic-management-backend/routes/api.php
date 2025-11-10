@@ -26,6 +26,8 @@ use App\Http\Controllers\API\User\AdminUserController;
 use App\Http\Controllers\API\Print\InvoicePrintController;
 use App\Http\Controllers\API\Receptionist\QueueController;
 use App\Http\Controllers\API\Technician\TestResultsController;
+use App\Http\Controllers\API\Payment\PaymentController;
+use App\Http\Controllers\API\Payment\InvoiceController;
 
 Route::get('/user', [UserController::class, 'index']);
 Route::get('/ping', [UserController::class, 'ping']);
@@ -197,4 +199,16 @@ Route::prefix('admin/services')->group(function () {
     Route::delete('/{id}', [AdminServiceController::class, 'destroy']);
     Route::get('/types/all', [AdminServiceController::class, 'getServiceTypes']);
     Route::get('/type/{type}', [AdminServiceController::class, 'getServicesByType']);
+
+// Payment Routes
+// MoMo Payment Routes
+Route::prefix('payments')->group(function () {
+    Route::post('/momo/create', [PaymentController::class, 'createPayment']);
+    Route::post('/momo/callback', [PaymentController::class, 'handleCallback'])->name('payment.callback');
+    Route::get('/momo/return', [PaymentController::class, 'handleReturn'])->name('payment.return');
+
+    // Invoice Routes
+    Route::get('/invoices', [InvoiceController::class, 'index']);
+    Route::get('/invoices/{id}', [InvoiceController::class, 'show']);
+    Route::post('/invoices', [InvoiceController::class, 'store']);
 });
