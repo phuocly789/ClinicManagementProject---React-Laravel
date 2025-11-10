@@ -21,7 +21,7 @@ import PatientLayout from "./Components/Patient/PatientLayout.jsx";
 import AdminSidebar from "./Components/Sidebar/AdminSidebar.jsx";
 import DoctorSidebar from "./Components/Sidebar/DoctorSidebar.jsx";
 import Home from "./pages/Home.jsx";
-import PDFEditorPage from './pages/Doctors/PrintsPDF/PDFPreviewEditor.jsx';
+import PDFEditorPage from "./pages/Doctors/PrintsPDF/PDFPreviewEditor.jsx";
 import TechnicianSidebar from "./Components/Sidebar/TechnicianSidebar.jsx";
 import TechSchedule from "./pages/Technician/TechSchedule.jsx";
 import TechnicianDashboard from "./pages/Technician/TechnicianDashboard.jsx";
@@ -29,58 +29,81 @@ import DoctorSchedule from "./pages/Doctors/DoctorSchedule.jsx";
 import HistorySection from "./pages/Doctors/HistorySection.jsx";
 import TodaySection from "./pages/Doctors/TodaySection.jsx";
 import ProtectedRoute from "./Components/ProtectedRoute/ProtectedRoute.jsx";
+import WebSocketDemo from "./Components/WebSocketDemo.jsx";
 function App() {
   return (
     <Routes>
       {/* Home */}
-        <Route path={path.HOME} element={<Home />} />
-        {/* Admin */}
-        <Route path={path.ADMIN.ROOT} element={<AdminSidebar />} >
-          <Route path={path.ADMIN.DASHBOARD} element={<AdminDashboard />} />
-          <Route path={path.ADMIN.REVENUE_REPORT} element={<AdminRevenueReport />} />
-          <Route
-            path={path.ADMIN.SCHEDULE.MANAGEMENT}
-            element={<AdminScheduleManagement />}
-          />
-          <Route path={path.ADMIN.USER.MANAGEMENT} element={<AdminUserManagement />} />
-          <Route path={path.ADMIN.MEDICINE.MANAGEMENT} element={<AdminMedicine />} />
-          <Route path={path.ADMIN.INVENTORY} element={<AdminInventory />} />
-          <Route path={path.ADMIN.SUPPLIERS.MANAGEMENT} element={<AdminSuppliers />} />
-          <Route path={path.ADMIN.MEDICINE.MANAGEMENT} element={<AdminMedicine />} />
-        </Route>
-
-        {/* Receptionist */}
-        {/* Doctor */}
-        <Route path={path.DOCTOR.ROOT} element={<DoctorSidebar />}>
-          <Route index element={<DoctorDashboard />} />
-          <Route path={path.DOCTOR.TODAY_APPOINTMENTS} element={<DoctorDashboard />} />
-          <Route path={path.DOCTOR.SCHEDULE} element={<DoctorSchedule />} />
-          <Route path={path.DOCTOR.PATIENT_HISTORY} element={<HistorySection />} />
-          <Route path={path.DOCTOR.DOCTOR_PRINT_PDF} element={<PDFEditorPage />} />
-        </Route>
-
-        {/* Patient */}
-        <Route path={path.PATIENT.ROOT} element={<PatientLayout />}>
-          <Route
-            path={path.PATIENT.PROFILE.MANAGEMENT}
-            element={<PatientProfile />}
-          />
-          {/* <Route path={path.PATIENT.BOOKING} element={<PatientBooking />} />
-          <Route path={path.PATIENT.HISTORY} element={<PatientHistory />} /> */}
-        </Route>
-        <Route path={path.LOGIN} element={<LoginPage />} />{" "}
-        <Route path={path.REGISTER} element={<Register />} />{" "}
+      <Route path={path.HOME} element={<Home />} />
+      {/* Admin */}
+      <Route path={path.ADMIN.ROOT} element={<AdminSidebar />}>
+        <Route path={path.ADMIN.DASHBOARD} element={<AdminDashboard />} />
         <Route
-          path={path.VERIFICATION_EMAIL}
-          element={<VerifyEmailPage />}
+          path={path.ADMIN.REVENUE_REPORT}
+          element={<AdminRevenueReport />}
         />
-
-        {/* Technician */}
-        <Route path={path.TECHNICIAN.ROOT} element={<TechnicianSidebar />}>
-          <Route index element={<TechSchedule />} />
-          <Route path={path.TECHNICIAN.SCHEDULE} element={<TechSchedule />} />
-          <Route path={path.TECHNICIAN.TEST_RESULTS} element={<TechnicianDashboard />} />
-        </Route>
+        <Route
+          path={path.ADMIN.SCHEDULE.MANAGEMENT}
+          element={<AdminScheduleManagement />}
+        />
+        <Route
+          path={path.ADMIN.USER.MANAGEMENT}
+          element={<AdminUserManagement />}
+        />
+        <Route
+          path={path.ADMIN.MEDICINE.MANAGEMENT}
+          element={<AdminMedicine />}
+        />
+        <Route path={path.ADMIN.INVENTORY} element={<AdminInventory />} />
+        <Route
+          path={path.ADMIN.SUPPLIERS.MANAGEMENT}
+          element={<AdminSuppliers />}
+        />
+        <Route
+          path={path.ADMIN.MEDICINE.MANAGEMENT}
+          element={<AdminMedicine />}
+        />
+      </Route>
+      {/* Receptionist */}
+      {/* Doctor */}
+      <Route path={path.DOCTOR.ROOT} element={<DoctorSidebar />}>
+        <Route index element={<DoctorDashboard />} />
+        <Route
+          path={path.DOCTOR.TODAY_APPOINTMENTS}
+          element={<DoctorDashboard />}
+        />
+        <Route path={path.DOCTOR.SCHEDULE} element={<DoctorSchedule />} />
+        <Route
+          path={path.DOCTOR.PATIENT_HISTORY}
+          element={<HistorySection />}
+        />
+        <Route
+          path={path.DOCTOR.DOCTOR_PRINT_PDF}
+          element={<PDFEditorPage />}
+        />
+      </Route>
+      {/* Patient */}
+      <Route path={path.PATIENT.ROOT} element={<PatientLayout />}>
+        <Route
+          path={path.PATIENT.PROFILE.MANAGEMENT}
+          element={<PatientProfile />}
+        />
+        {/* <Route path={path.PATIENT.BOOKING} element={<PatientBooking />} />
+          <Route path={path.PATIENT.HISTORY} element={<PatientHistory />} /> */}
+      </Route>
+      <Route path={path.LOGIN} element={<LoginPage />} />{" "}
+      <Route path={path.REGISTER} element={<Register />} />{" "}
+      <Route path={path.VERIFICATION_EMAIL} element={<VerifyEmailPage />} />
+      {/* Technician */}
+      <Route path={path.TECHNICIAN.ROOT} element={<TechnicianSidebar />}>
+        <Route index element={<TechSchedule />} />
+        <Route path={path.TECHNICIAN.SCHEDULE} element={<TechSchedule />} />
+        <Route
+          path={path.TECHNICIAN.TEST_RESULTS}
+          element={<TechnicianDashboard />}
+        />
+      </Route>
+      <Route path={"/test"} element={<WebSocketDemo />} />
     </Routes>
   );
 }
