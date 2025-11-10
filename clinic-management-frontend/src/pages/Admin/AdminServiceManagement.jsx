@@ -4,7 +4,7 @@ import CustomToast from '../../Components/CustomToast/CustomToast';
 import Loading from '../../Components/Loading/Loading';
 import Pagination from '../../Components/Pagination/Pagination';
 import adminService from '../../services/adminService';
-import { BiPlus, BiPencil, BiTrash, BiSearch, BiRefresh } from 'react-icons/bi';
+import { BiPlus, BiPencil, BiTrash, BiSearch } from 'react-icons/bi';
 import { useDebounce } from 'use-debounce';
 
 const initialFormState = {
@@ -61,7 +61,7 @@ const AdminServiceManagement = () => {
     const [toast, setToast] = useState(null);
     const [formErrors, setFormErrors] = useState({});
 
-    // API filters - ĐƠN GIẢN HÓA giống code 2
+    // API filters - ĐƠN GIẢN HÓA 
     const apiFilters = useMemo(() => ({
         search: debouncedSearchTerm,
         type: filters.type,
@@ -95,7 +95,7 @@ const AdminServiceManagement = () => {
         fetchServiceTypes();
     }, []);
 
-    // Fetch services - SỬA LẠI THEO CODE 2
+    // Fetch services 
     const fetchServices = useCallback(async (page = 1) => {
         setLoading(true);
         try {
@@ -114,7 +114,7 @@ const AdminServiceManagement = () => {
             console.log('Full API Response:', response);
             console.log('Services Data:', response.data);
             
-            // XỬ LÝ DỮ LIỆU GIỐNG CODE 2
+            // XỬ LÝ DỮ LIỆU GIỐNG 
             if (!response.data) {
                 throw new Error('Dữ liệu trả về không hợp lệ');
             }
@@ -141,7 +141,7 @@ const AdminServiceManagement = () => {
         }
     }, [apiFilters]);
 
-    // Fetch services khi filters thay đổi - GIỐNG CODE 2
+    // Fetch services khi filters thay đổi 
     useEffect(() => {
         fetchServices(1);
     }, [apiFilters, fetchServices]);
@@ -243,7 +243,7 @@ const AdminServiceManagement = () => {
             });
             handleCloseModal();
             
-            // XỬ LÝ PHÂN TRANG KHI XÓA/THÊM GIỐNG CODE 2
+            // XỬ LÝ PHÂN TRANG KHI XÓA/THÊM 
             if (isEditing) {
                 fetchServices(pagination.currentPage);
             } else {
@@ -271,7 +271,7 @@ const AdminServiceManagement = () => {
             });
             handleCloseModal();
             
-            // XỬ LÝ PHÂN TRANG KHI XÓA GIỐNG CODE 2
+            // XỬ LÝ PHÂN TRANG 
             const newPage = services.length === 1 && pagination.currentPage > 1 
                 ? pagination.currentPage - 1 
                 : pagination.currentPage;
@@ -287,10 +287,6 @@ const AdminServiceManagement = () => {
 
     const clearFilters = () => {
         setFilters({ search: '', type: '' });
-    };
-
-    const refreshData = () => {
-        fetchServices(pagination.currentPage);
     };
 
     const formatPrice = (price) => {
@@ -439,23 +435,13 @@ const AdminServiceManagement = () => {
 
                 <header className="d-flex justify-content-between align-items-center flex-shrink-0">
                     <h1 className="h4 mb-0">Quản Lý Dịch Vụ</h1>
-                    <div className="d-flex gap-2">
-                        <button 
-                            className="btn btn-outline-secondary d-flex align-items-center gap-2"
-                            onClick={refreshData}
-                            disabled={loading}
-                        >
-                            <BiRefresh size={18} />
-                            Làm mới
-                        </button>
-                        <button 
-                            className="btn btn-primary d-flex align-items-center gap-2" 
-                            onClick={() => handleOpenModal('add')}
-                            disabled={loading}
-                        >
-                            <BiPlus size={18} /> Tạo Dịch Vụ
-                        </button>
-                    </div>
+                    <button 
+                        className="btn btn-primary d-flex align-items-center gap-2" 
+                        onClick={() => handleOpenModal('add')}
+                        disabled={loading}
+                    >
+                        <BiPlus size={18} /> Tạo Dịch Vụ
+                    </button>
                 </header>
 
                 {/* Bộ lọc */}
@@ -592,7 +578,7 @@ const AdminServiceManagement = () => {
                                 </table>
                             </div>
                             
-                            {/* PHÂN TRANG - SỬA LẠI GIỐNG CODE 2 */}
+                            {/* PHÂN TRANG */}
                             {pagination.totalPages > 1 && (
                                 <div className="card-footer p-3 border-0 flex-shrink-0">
                                     <Pagination
