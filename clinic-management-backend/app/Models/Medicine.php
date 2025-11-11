@@ -37,7 +37,8 @@ class Medicine extends Model
 		'MedicineId' => 'int',
 		'Unit' => 'string',
 		'Price' => 'float',
-		'StockQuantity' => 'int'
+		'StockQuantity' => 'int',
+		'ExpiryDate' => 'date'
 	];
 
 	protected $fillable = [
@@ -46,7 +47,9 @@ class Medicine extends Model
 		'Unit',
 		'Price',
 		'StockQuantity',
-		'Description'
+		'Description',
+		'ExpiryDate',
+		'LowStockThreshold'
 	];
 
 	public function prescription_details()

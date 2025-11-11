@@ -81,6 +81,10 @@ export const path = {
         ROOT: "/technician",
         SCHEDULE: "schedule",
         TEST_RESULTS: "test-results",
+    },
+
+    PayMent:{
+        ROOT:"/payment",
     }
 };
 

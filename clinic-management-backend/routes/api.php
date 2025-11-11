@@ -76,9 +76,6 @@ Route::middleware(['auth:api'])->get('/me', function (Request $request) {
             'id' => $user->UserId,
             'full_name' => $user->FullName,
             'email' => $user->Email,
-            'phone' => $user->Phone,
-            'address' => $user->Address,
-            'date_of_birth' => $user->DateOfBirth,
             'username' => $user->Username,
             'is_active' => $user->IsActive,
             'roles' => $user->roles()->pluck('RoleName'),
@@ -152,22 +149,14 @@ Route::post('/print/preview-html', [InvoicePrintController::class, 'previewHTML'
 Route::prefix('technician')->group(function () {
     // Danh sách dịch vụ
     Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
-    // thay đổi trạng thái dịch vụ
+   // thay đổi trạng thái dịch vụ
     Route::post('/services/{serviceOrderId}/status', [TestResultsController::class, 'updateServiceStatus']);
-
-    // CẬP NHẬT KẾT QUẢ
-    Route::post('/service-orders/{serviceOrderId}/result', [TestResultsController::class, 'updateServiceResult']);
-    // Lấy danh sách dịch vụ đã hoàn thành
-    Route::get('/completed-services', [TestResultsController::class, 'getCompletedServices']);
-    // ✅ Lịch làm việc KTV
-    Route::get('/work-schedule', [TestResultsController::class, 'getWorkSchedule']);
-    Route::get('/work-schedule/{year}/{month}', [TestResultsController::class, 'getWorkScheduleByMonth']);
 });
 
 //Receptionist Routes
 Route::prefix('receptionist')->group(function () {
     //lịch hẹn
-    Route::get('/appointments/today', [AppointmentRecepController::class, 'GetAppointmentToday']);
+    Route::get('/appointments/today',[AppointmentRecepController::class, 'GetAppointmentToday']);
     Route::post('/appointments', [AppointmentRecepController::class, 'CreateAppoitment']);
     Route::put('/appointments/{appointmentId}/status', [AppointmentRecepController::class, 'UpdateAppointmentStatus']);
     //hàng chờ

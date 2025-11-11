@@ -10,7 +10,7 @@ const PatientLayout = () => {
   const { user } = useUser();
 
   const menuItems = [
-    { path: "/patient/appointment", label: "Đặt Lịch Khám" },
+    { path: path.PATIENT.APPOINTMENT.MANAGEMENT, label: "Đặt Lịch Khám" },
     { path: "/patient/history", label: "Lịch Sử Khám Bệnh" },
     { path: "/patient/results", label: "Kết Quả Xét Nghiệm" },
     { path: "/patient/prescriptions", label: "Đơn Thuốc Của Tôi" },
