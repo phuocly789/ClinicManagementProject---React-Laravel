@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\API\Services\AdminServiceController;
+use App\Http\Controllers\API\Service\AdminServiceController;
 use App\Http\Controllers\API\Receptionist\AppointmentRecepController;
 use App\Http\Controllers\API\ReportRevenueController;
 use App\Http\Controllers\API\ScheduleController;
