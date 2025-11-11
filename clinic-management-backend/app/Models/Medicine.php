@@ -36,7 +36,8 @@ class Medicine extends Model
 	protected $casts = [
 		'MedicineId' => 'int',
 		'Price' => 'float',
-		'StockQuantity' => 'int'
+		'StockQuantity' => 'int',
+		'ExpiryDate' => 'date'
 	];
 
 	protected $fillable = [
@@ -45,7 +46,9 @@ class Medicine extends Model
 		'Unit',
 		'Price',
 		'StockQuantity',
-		'Description'
+		'Description',
+		'ExpiryDate',
+		'LowStockThreshold'
 	];
 
 	public function import_details()
