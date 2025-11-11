@@ -15,19 +15,24 @@ class MedicinesExport implements WithMultipleSheets, WithStyles
 {
     protected $filters;
     protected $columns;
+    protected $exampleData;
 
-    public function __construct($filters = [], $columns = [])
+
+    public function __construct($filters = [], $columns = [], $exampleData = [])
     {
         $this->filters = $filters;
-        $this->columns = $columns ?: ['MedicineId', 'MedicineName', 'MedicineType', 'Unit', 'Price', 'StockQuantity', 'Description'];
+        $this->columns = $columns ?: ['MedicineId', 'MedicineName', 'MedicineType', 'Unit', 'Price', 'StockQuantity', 'Description', 'ExpiryDate', 'LowStockThreshold'];
+        $this->exampleData = $exampleData;
     }
 
     public function sheets(): array
     {
-        return [
-            new SheetExport($this->filters, $this->columns), // Sheet chính
-            new DescriptionSheet(), // Sheet mô tả
+        $sheets = [
+            new SheetExport($this->filters, $this->columns, $this->exampleData),
+            new DescriptionSheet(),
         ];
+
+        return $sheets;
     }
 
     public function styles(Worksheet $sheet)
@@ -46,20 +51,27 @@ class SheetExport implements FromCollection, WithHeadings, WithTitle // <-- THÊ
 {
     protected $filters;
     protected $columns;
+    protected $exampleData;
 
-    public function __construct($filters = [], $columns = [])
+    public function __construct($filters = [], $columns = [], $exampleData = [])
     {
         $this->filters = $filters;
         $this->columns = $columns;
+        $this->exampleData = $exampleData;
     }
 
     public function collection()
     {
+        if (!empty($this->exampleData)) {
+            return collect($this->exampleData);
+        }
+
         $query = Medicine::query();
+
         if (!empty($this->filters['type'])) {
             $query->where('MedicineType', $this->filters['type']);
         }
-        // THÊM FILTER KHÁC NẾU CẦN: e.g., if (!empty($this->filters['stock_low'])) $query->where('StockQuantity', '<', 100);
+
         return $query->select($this->columns)->get();
     }
 
@@ -87,6 +99,8 @@ class DescriptionSheet implements FromArray, WithTitle // <-- THÊM WithTitle
             ['Price', 'Giá bán', 'Có', 'Numeric', 'Min 0, Max 9999999999999999.99'],
             ['StockQuantity', 'Số lượng tồn kho', 'Có', 'Integer', 'Min 0'],
             ['Description', 'Mô tả', 'Không', 'String', 'Max 500 ký tự'],
+            ['ExpiryDate', 'Hạn sử dụng (YYYY-MM-DD)', 'Không', 'Date', 'Hợp lệ'],
+            ['LowStockThreshold', 'Ngưỡng cảnh báo tồn kho thấp', 'Không', 'Integer', '>= 0'],
         ];
     }
 
