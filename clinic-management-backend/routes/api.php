@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\API\Services\AdminServiceController;
+use App\Http\Controllers\API\Service\AdminServiceController;
 use App\Http\Controllers\API\Receptionist\AppointmentRecepController;
 use App\Http\Controllers\API\ReportRevenueController;
 use App\Http\Controllers\API\ScheduleController;
@@ -188,7 +188,7 @@ Route::middleware(['auth:api'])
 // Route::middleware()->post('/auth/login', [AuthController::class, 'login']);
 
 
-// Service management routes
+// Service management routes for Admin
 Route::prefix('admin/services')->group(function () {
     Route::get('/', [AdminServiceController::class, 'index']);
     Route::post('/', [AdminServiceController::class, 'store']);
