@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int|null $MedicineId
  * @property int $Quantity
  * @property float $ImportPrice
- * @property float $SubTotal
+ * @property float|null $SubTotal
  * 
  * @property ImportBill|null $import_bill
  * @property Medicine|null $medicine
@@ -26,9 +26,10 @@ use Illuminate\Database\Eloquent\Model;
 class ImportDetail extends Model
 {
 	protected $table = 'ImportDetails';
-	protected $primaryKey = 'ImportDetailId';
-	public $incrementing = false;
-	public $timestamps = false;
+    protected $primaryKey = 'ImportDetailId';
+    protected $keyType = 'int';
+    public $incrementing = true;
+    public $timestamps = false;
 
 	protected $casts = [
 		'ImportDetailId' => 'int',

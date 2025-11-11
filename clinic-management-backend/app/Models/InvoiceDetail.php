@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int|null $MedicineId
  * @property int $Quantity
  * @property float $UnitPrice
- * @property float $SubTotal
+ * @property float|null $SubTotal
  * 
  * @property Invoice|null $invoice
  * @property Service|null $service

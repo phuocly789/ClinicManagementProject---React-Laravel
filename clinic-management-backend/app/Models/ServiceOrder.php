@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Model;
  * 
  * @property Appointment|null $appointment
  * @property Service|null $service
- * @property User|null $user
+ * @property MedicalStaff|null $medical_staff
  *
  * @package App\Models
  */
@@ -30,7 +30,7 @@ class ServiceOrder extends Model
 {
 	protected $table = 'ServiceOrders';
 	protected $primaryKey = 'ServiceOrderId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [
@@ -60,8 +60,8 @@ class ServiceOrder extends Model
 		return $this->belongsTo(Service::class, 'ServiceId');
 	}
 
-	public function user()
+	public function medical_staff()
 	{
-		return $this->belongsTo(User::class, 'AssignedStaffId');
+		return $this->belongsTo(MedicalStaff::class, 'AssignedStaffId');
 	}
 }

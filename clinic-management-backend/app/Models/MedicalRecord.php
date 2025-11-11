@@ -23,9 +23,9 @@ use Illuminate\Database\Eloquent\Model;
  * 
  * @property Patient|null $patient
  * @property User|null $user
+ * @property Collection|Diagnosis[] $diagnoses
  * @property Collection|Appointment[] $appointments
  * @property Collection|Queue[] $queues
- * @property Collection|Diagnosis[] $diagnoses
  * @property Collection|Prescription[] $prescriptions
  *
  * @package App\Models
@@ -34,7 +34,7 @@ class MedicalRecord extends Model
 {
 	protected $table = 'MedicalRecords';
 	protected $primaryKey = 'RecordId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [
@@ -63,6 +63,11 @@ class MedicalRecord extends Model
 		return $this->belongsTo(User::class, 'CreatedBy');
 	}
 
+	public function diagnoses()
+	{
+		return $this->hasMany(Diagnosis::class, 'RecordId');
+	}
+
 	public function appointments()
 	{
 		return $this->hasMany(Appointment::class, 'RecordId');
@@ -71,11 +76,6 @@ class MedicalRecord extends Model
 	public function queues()
 	{
 		return $this->hasMany(Queue::class, 'RecordId');
-	}
-
-	public function diagnoses()
-	{
-		return $this->hasMany(Diagnosis::class, 'RecordId');
 	}
 
 	public function prescriptions()

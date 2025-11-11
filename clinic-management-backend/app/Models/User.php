@@ -9,10 +9,15 @@ namespace App\Models;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Laravel\Passport\HasApiTokens;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * Class User
- * 
+ *
  * @property int $UserId
  * @property string $Username
  * @property string $PasswordHash
@@ -23,38 +28,38 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $Address
  * @property Carbon|null $DateOfBirth
  * @property Carbon|null $CreatedAt
- * @property bool|null $IsActive
  * @property bool $MustChangePassword
- * 
- * @property Collection|MedicalRecord[] $medical_records
- * @property Patient|null $patient
- * @property MedicalStaff|null $medical_staff
+ * @property string|null $CodeId
+ * @property Carbon|null $CodeExpired
+ * @property bool|null $IsActive
+ *
  * @property Collection|Role[] $roles
+ * @property MedicalStaff|null $medical_staff
+ * @property Collection|MedicalRecord[] $medical_records
+ * @property Collection|Notification[] $notifications
  * @property Collection|Appointment[] $appointments
  * @property Collection|Queue[] $queues
- * @property Collection|Diagnosis[] $diagnoses
- * @property Collection|StaffSchedule[] $staff_schedules
+ * @property Patient|null $patient
  * @property Collection|ImportBill[] $import_bills
- * @property Collection|ServiceOrder[] $service_orders
- * @property Collection|Invoice[] $invoices
- * @property Collection|Notification[] $notifications
- * @property Collection|Prescription[] $prescriptions
  *
  * @package App\Models
  */
-class User extends Model
+class User extends Authenticatable
 {
+	use HasApiTokens, Notifiable;
 	protected $table = 'Users';
 	protected $primaryKey = 'UserId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [
 		'UserId' => 'int',
+		'Gender' => 'string',
 		'DateOfBirth' => 'datetime',
 		'CreatedAt' => 'datetime',
-		'IsActive' => 'bool',
-		'MustChangePassword' => 'bool'
+		'MustChangePassword' => 'bool',
+		'CodeExpired' => 'datetime',
+		'IsActive' => 'bool'
 	];
 
 	protected $fillable = [
@@ -67,18 +72,26 @@ class User extends Model
 		'Address',
 		'DateOfBirth',
 		'CreatedAt',
-		'IsActive',
-		'MustChangePassword'
+		'MustChangePassword',
+		'CodeId',
+		'CodeExpired',
+		'IsActive'
 	];
 
-	public function medical_records()
+	// middleware check role
+	public function hasRole($roleName)
 	{
-		return $this->hasMany(MedicalRecord::class, 'CreatedBy');
+		return $this->roles()->where('RoleName', $roleName)->exists();
 	}
-
-	public function patient()
+	/**
+	 * Quan hệ: User có nhiều Role (Many-to-Many)
+	 *
+	 * @return BelongsToMany<\App\Models\Role>
+	 */
+	public function roles()
 	{
-		return $this->hasOne(Patient::class, 'PatientId');
+		return $this->belongsToMany(Role::class, 'UserRoles', 'UserId', 'RoleId')
+			->withPivot('AssignedAt');
 	}
 
 	public function medical_staff()
@@ -86,10 +99,14 @@ class User extends Model
 		return $this->hasOne(MedicalStaff::class, 'StaffId');
 	}
 
-	public function roles()
+	public function medical_records()
 	{
-		return $this->belongsToMany(Role::class, 'UserRoles', 'UserId', 'RoleId')
-					->withPivot('AssignedAt');
+		return $this->hasMany(MedicalRecord::class, 'CreatedBy');
+	}
+
+	public function notifications()
+	{
+		return $this->hasMany(Notification::class, 'UserId');
 	}
 
 	public function appointments()
@@ -102,38 +119,13 @@ class User extends Model
 		return $this->hasMany(Queue::class, 'CreatedBy');
 	}
 
-	public function diagnoses()
+	public function patient()
 	{
-		return $this->hasMany(Diagnosis::class, 'StaffId');
-	}
-
-	public function staff_schedules()
-	{
-		return $this->hasMany(StaffSchedule::class, 'StaffId');
+		return $this->hasOne(Patient::class, 'PatientId');
 	}
 
 	public function import_bills()
 	{
 		return $this->hasMany(ImportBill::class, 'CreatedBy');
-	}
-
-	public function service_orders()
-	{
-		return $this->hasMany(ServiceOrder::class, 'AssignedStaffId');
-	}
-
-	public function invoices()
-	{
-		return $this->hasMany(Invoice::class, 'PatientId');
-	}
-
-	public function notifications()
-	{
-		return $this->hasMany(Notification::class, 'UserId');
-	}
-
-	public function prescriptions()
-	{
-		return $this->hasMany(Prescription::class, 'StaffId');
 	}
 }

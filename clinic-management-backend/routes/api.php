@@ -1,24 +1,39 @@
 <?php
 
+use App\Http\Controllers\API\Services\AdminServiceController;
+use App\Http\Controllers\API\Receptionist\AppointmentRecepController;
+use App\Http\Controllers\API\ReportRevenueController;
+use App\Http\Controllers\API\ScheduleController;
+use Dba\Connection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\MedicinesController;
 use App\Http\Controllers\API\UserController;
+use App\Http\Controllers\API\ImportBillController;
+use App\Http\Controllers\API\SuppliersController;
 
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register API routes for your application. These
-| routes are loaded by the RouteServiceProvider and all of them will
-| be assigned to the "api" middleware group. Make something great!
-|
-*/
+use App\Http\Controllers\API\AuthController;
+use App\Http\Controllers\API\Doctor\AISuggestionController;
+use App\Http\Controllers\API\Doctor\AppointmentsController;
+use App\Http\Controllers\API\Doctor\DiagnosisSuggestionController;
+use App\Http\Controllers\API\Doctor\DoctorMedicineSearchController;
+use App\Http\Controllers\API\Doctor\ServiceController;
+use App\Http\Controllers\API\Doctor\DoctorExaminationsController;
+use App\Http\Controllers\API\Doctor\PatientsController;
+use App\Http\Controllers\API\PatientController;
+//----------------------------------------------Hết-------------------------------
+use App\Http\Controllers\API\User\AdminUserController;
+use App\Http\Controllers\API\Print\InvoicePrintController;
+use App\Http\Controllers\API\Receptionist\QueueController;
+use App\Http\Controllers\API\Technician\TestResultsController;
+use App\Http\Controllers\API\Payment\PaymentController;
+use App\Http\Controllers\API\Payment\InvoiceController;
 
-Route::get('/users', [UserController::class, 'index']);
+Route::get('/user', [UserController::class, 'index']);
 Route::get('/ping', [UserController::class, 'ping']);
 
+//check tồn kho
+Route::get('/medicines/low-stock', [MedicinesController::class, 'checkLowStock']);
 Route::get('/medicines', [MedicinesController::class, 'index']);
 Route::get('/medicines/ping', [MedicinesController::class, 'ping']);
 Route::post('/medicines', [MedicinesController::class, 'store']);

@@ -1,45 +1,17 @@
-import React from "react";
-import { Navigate, useLocation } from "react-router-dom";
-import userService from "../../services/userService";
+import { Navigate } from "react-router-dom";
+import { useUser } from "../../context/userContext";
 import { path } from "../../utils/constant";
 
-const ProtectedRoute = ({ role, children }) => {
-  const [isAllowed, setIsAllowed] = React.useState(null);
-  const [isLoggedIn, setIsLoggedIn] = React.useState(false);
-  const location = useLocation();
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const { user, loading } = useUser();
 
-  React.useEffect(() => {
-    const checkAccess = async () => {
-      try {
-        const res = await userService.getDashboard(role);
-        const userRole = res?.user?.role;
+  if (loading) return <div>Đang tải...</div>;
 
-        if (userRole === role) {
-          setIsAllowed(true);
-          setIsLoggedIn(true);
-        } else {
-          setIsAllowed(false);
-          setIsLoggedIn(true);
-        }
-      } catch (err) {
-        setIsAllowed(false);
-        setIsLoggedIn(false);
-      }
-    };
+  if (!user) return <Navigate to={path.LOGIN} />;
 
-    checkAccess();
-  }, [role]);
-
-  if (isAllowed === null) return <div>Loading...</div>;
-
-  if (!isAllowed) {
-    return (
-      <Navigate
-        to={isLoggedIn ? path.UNAUTHORIZED : path.LOGIN}
-        state={{ from: location }}
-        replace
-      />
-    );
+  // ✅ Kiểm tra quyền
+  if (allowedRoles && !allowedRoles.includes(user.roles[0])) {
+    return <Navigate to={path.UNAUTHORIZED} />;
   }
 
   return children;

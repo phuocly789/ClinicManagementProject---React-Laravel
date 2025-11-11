@@ -11,18 +11,18 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Class Medicine
- * 
+ *
  * @property int $MedicineId
  * @property string $MedicineName
  * @property string|null $MedicineType
- * @property string $Unit
+ * @property string|null $Unit
  * @property float $Price
  * @property int $StockQuantity
  * @property string|null $Description
- * 
- * @property Collection|ImportDetail[] $import_details
- * @property Collection|InvoiceDetail[] $invoice_details
+ *
  * @property Collection|PrescriptionDetail[] $prescription_details
+ * @property Collection|InvoiceDetail[] $invoice_details
+ * @property Collection|ImportDetail[] $import_details
  *
  * @package App\Models
  */
@@ -35,6 +35,7 @@ class Medicine extends Model
 
 	protected $casts = [
 		'MedicineId' => 'int',
+		'Unit' => 'string',
 		'Price' => 'float',
 		'StockQuantity' => 'int',
 		'ExpiryDate' => 'date'
@@ -51,9 +52,9 @@ class Medicine extends Model
 		'LowStockThreshold'
 	];
 
-	public function import_details()
+	public function prescription_details()
 	{
-		return $this->hasMany(ImportDetail::class, 'MedicineId');
+		return $this->hasMany(PrescriptionDetail::class, 'MedicineId');
 	}
 
 	public function invoice_details()
@@ -61,8 +62,8 @@ class Medicine extends Model
 		return $this->hasMany(InvoiceDetail::class, 'MedicineId');
 	}
 
-	public function prescription_details()
+	public function import_details()
 	{
-		return $this->hasMany(PrescriptionDetail::class, 'MedicineId');
+		return $this->hasMany(ImportDetail::class, 'MedicineId');
 	}
 }
