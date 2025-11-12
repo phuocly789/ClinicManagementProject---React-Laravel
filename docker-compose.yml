@@ -25,85 +25,27 @@ services:
       - APP_DEBUG=true
       - XDEBUG_MODE=develop,debug
       - XDEBUG_CONFIG=client_host=host.docker.internal
-      # WebSocket Configuration
       - BROADCAST_DRIVER=reverb
-      - REVERB_APP_ID=440176
-      - REVERB_APP_KEY=qves4obrj9wgycyzeaga
-      - REVERB_APP_SECRET=dfuivdhc6ybmixaqqesj
-      - REVERB_HOST=reverb
-      - REVERB_PORT=8080
-      - REVERB_SCHEME=http
-      - VITE_REVERB_APP_KEY=qves4obrj9wgycyzeaga
-      - VITE_REVERB_HOST=localhost
-      - VITE_REVERB_PORT=8080
-      - VITE_REVERB_SCHEME=http
-      #redis
-      - CACHE_STORE=redis
-      - SESSION_DRIVER=redis
-      - QUEUE_CONNECTION=redis
-      - REDIS_HOST=redis
+      - CACHE_DRIVER=file
+      - SESSION_DRIVER=file
+      - QUEUE_CONNECTION=sync
     ports:
       - "8000:8000"
       - "9003:9003"
+      - "8080:8080" # THÊM PORT CHO REVERB
     networks:
       - app-network
+    command: >
+      bash -c "
+        if [ ! -d vendor ]; then composer install --no-dev --optimize-autoloader; fi &&
+        php artisan migrate --force &&
+        php artisan reverb:serve --host=0.0.0.0 --port=8080 > /dev/null 2>&1 &
+        php artisan serve --host=0.0.0.0 --port=8000
+      "
     depends_on:
-      - reverb
-    command: bash -c "if [ ! -d vendor ]; then composer install --no-dev --optimize-autoloader; fi && php artisan serve --host=0.0.0.0 --port=8000"
+      - mailhog
 
-  # WebSocket Server: Laravel Reverb
-  reverb:
-    build:
-      context: ./clinic-management-backend
-      dockerfile: ../Dockerfile.backend
-    container_name: laravel-reverb
-    restart: unless-stopped
-    working_dir: /var/www/html
-    volumes:
-      - ./clinic-management-backend:/var/www/html
-    env_file:
-      - ./clinic-management-backend/.env
-    environment:
-      - REVERB_APP_ID=440176
-      - REVERB_APP_KEY=qves4obrj9wgycyzeaga
-      - REVERB_APP_SECRET=dfuivdhc6ybmixaqqesj
-      - REVERB_HOST=0.0.0.0
-      - REVERB_PORT=8080
-      - REVERB_SCHEME=http
-      - REDIS_HOST=redis
-    ports:
-      - "8080:8080"  # WebSocket port
-    networks:
-      - app-network
-    command: php artisan reverb:start --host=0.0.0.0 --port=8080
-
-  # Queue Worker (để xử lý broadcast events)
-  queue:
-    build:
-      context: ./clinic-management-backend
-      dockerfile: ../Dockerfile.backend
-    container_name: laravel-queue
-    restart: unless-stopped
-    working_dir: /var/www/html
-    volumes:
-      - ./clinic-management-backend:/var/www/html
-    env_file:
-      - ./clinic-management-backend/.env
-    environment:
-      - DB_CONNECTION=pgsql
-      - DB_HOST=aws-1-ap-south-1.pooler.supabase.com
-      - DB_PORT=5432
-      - DB_DATABASE=postgres
-      - DB_USERNAME=postgres.phzrctyceyysendeluac
-      - DB_PASSWORD=lmp@123
-      - DB_SSLMODE=require
-      - QUEUE_CONNECTION=redis
-      - REDIS_HOST=redis
-    networks:
-      - app-network
-    command: php artisan queue:work --tries=3
-
-  # Frontend: React dev server
+  # Frontend: React dev server (giữ nguyên)
   frontend:
     build:
       context: ./clinic-management-frontend
@@ -112,27 +54,24 @@ services:
     restart: unless-stopped
     working_dir: /app
     volumes:
-      - ./clinic-management-frontend:/app
-    # - /app/node_modules
+      - ./clinic-management-frontend:/app # Mount code React
+      - /app/node_modules # Không mount node_modules để tránh conflict
     ports:
-      - "3000:5173"
+      - "3000:5173" # Vite default port là 5173
     environment:
-      - CHOKIDAR_USEPOLLING=true
-      - VITE_API_URL=http://localhost:8000
-      - VITE_REVERB_PORT_HOST=localhost
-      - VITE_REVERB_PORT_PORT=8080
-      - VITE_REVERB_PORT_KEY=qves4obrj9wgycyzeaga
+      - CHOKIDAR_USEPOLLING=true # Để hot reload hoạt động tốt với volume
     command: npm run dev -- --host 0.0.0.0 --port 5173
     networks:
       - app-network
-    stdin_open: true
+    stdin_open: true # Để attach terminal nếu cần
     tty: true
-  redis:
-    image: redis:alpine
-    container_name: redis
-    restart: unless-stopped
+
+  # === MAILHOG (XEM EMAIL) ===
+  mailhog:
+    image: mailhog/mailhog
     ports:
-      - "6379:6379"
+      - "8025:8025" # Web UI: http://localhost:8025
+      - "1025:1025" # SMTP
     networks:
       - app-network
 

@@ -983,6 +983,36 @@ const AdminMedicine = () => {
     };
   }, [currentView, fetchMedicines, filterParams]);
 
+  useEffect(() => {
+    if (currentView !== 'list') return;
+
+    const channel = window.Echo.channel('admin-alerts');
+    channel.listen('.medicine.alert', (e) => {
+      const { alert, medicine } = e;
+      let title = '';
+      let variant = 'warning';
+
+      if (alert.type === 'expired') {
+        title = 'THUỐC HẾT HẠN';
+        variant = 'danger';
+      } else if (alert.type === 'expiring_soon') {
+        title = 'SẮP HẾT HẠN';
+        variant = 'warning';
+      } else if (alert.type === 'low_stock') {
+        title = 'TỒN KHO THẤP';
+        variant = 'danger';
+      }
+
+      showToast(variant, `${title}: ${medicine.MedicineName}`);
+      fetchMedicines(currentPage + 1, filterParams); // Refresh bảng
+    });
+
+    return () => {
+      channel.stopListening('.medicine.alert');
+      window.Echo.leave('admin-alerts');
+    };
+  }, [currentView, currentPage, filterParams, showToast, fetchMedicines]);
+
   const handlePageChange = useCallback(({ selected }) => {
     fetchMedicines(selected + 1, filterParams);
   }, [fetchMedicines, filterParams]);
