@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Calendar, Clock } from "lucide-react";
+import { Calendar, Clock, X, Eye } from "lucide-react";
 import Select from "react-select";
 import "bootstrap/dist/css/bootstrap.min.css";
 import patientService from "../../services/patientService";
 import CustomToast from "../../Components/CustomToast/CustomToast";
 import { useOutletContext } from "react-router-dom";
+import Pagination from "../../Components/Pagination/Pagination";
 export default function PatientManagement() {
   const user = useOutletContext();
   const [formData, setFormData] = useState({
@@ -12,32 +13,56 @@ export default function PatientManagement() {
     time: "",
     symptoms: "",
   });
-
+  const pageSize = 3;
+  const [current, setCurrent] = useState(0);
+  const [pageCount, setPageCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [services, setServices] = useState([]);
 
-  const [appointments, setAppointments] = useState([
-    {
-      id: 1,
-      date: "2025-09-10",
-      time: "09:30",
-      doctor: "BS. Trần Thị B",
-      service: "Khám Tổng Quát",
-      status: "Đã hoàn thành",
-    },
-    {
-      id: 2,
-      date: "2025-09-20",
-      time: "14:00",
-      doctor: "BS. Lê Văn C",
-      service: "Khám Răng Hàm Mặt",
-      status: "Đã đặt lịch",
-    },
-  ]);
+  const [appointments, setAppointments] = useState([]);
+
+  // Fetch Api
   const [toast, setToast] = useState(null);
 
   const showToast = (type, message) => {
     setToast({ type, message });
+  };
+
+  const getAppointment = async (page = current) => {
+    try {
+      setIsLoading(true);
+      const res = await patientService.historiesAppointments(
+        page + 1,
+        pageSize
+      );
+      if (res && res.success) {
+        const data = res.data;
+        setAppointments(
+          data.data.map((item, index) => ({
+            id: item.id,
+            date: item.date.split("T")[0],
+            time: item.time,
+            doctor: item.doctor,
+            specialty: item.specialty,
+            status: item.status,
+          }))
+        );
+        setPageCount(data.totalPages);
+        setCurrent(data.current - 1);
+      }
+    } catch (error) {
+      console.error(error);
+      showToast("error", "Lỗi server");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  useEffect(() => {
+    getAppointment(current);
+  }, [current]);
+  const handlePageChange = ({ selected }) => {
+    setCurrent(selected);
   };
 
   const handleInputChange = (e) => {
@@ -99,7 +124,7 @@ export default function PatientManagement() {
         const res = await patientService.bookingAppointment(payload);
         if (res && res.success === true) {
           showToast("success", res?.message || "Đặt lịch thành công.");
-          setAppointments((prev) => [...prev, payload]);
+          getAppointment(0);
 
           setFormData({
             date: "",
@@ -252,31 +277,38 @@ export default function PatientManagement() {
                             {apt.time}
                           </div>
                         </td>
-                        <td>{apt.doctor}</td>
-                        <td>{apt.service}</td>
+                        <td>{apt?.doctor || "Chờ hệ thống xác nhận"}</td>
+                        <td>{apt?.specialty || "Chờ hệ thống xác nhận"}</td>
                         <td>
                           <span
                             className={`badge px-3 py-2 ${
-                              apt.status === "Đã hoàn thành"
+                              apt.status === "Hủy"
+                                ? "bg-danger-subtle text-danger"
+                                : apt.status === "Đang chờ"
+                                ? "bg-warning-subtle text-warning"
+                                : apt.status === "Đã khám"
                                 ? "bg-success-subtle text-success"
-                                : "bg-primary-subtle text-primary"
+                                : apt.status === "Đã đặt"
+                                ? "bg-primary-subtle text-primary"
+                                : "bg-secondary-subtle text-secondary"
                             }`}
                           >
                             {apt.status}
                           </span>
                         </td>
-                        <td>
-                          {apt.status === "Đã đặt lịch" && (
+                        <td className="flex justify-center items-center text-center">
+                          {apt.status === "Đã đặt" && (
                             <button
                               onClick={() => handleCancel(apt.id)}
-                              className="btn btn-link text-primary text-decoration-underline p-0"
+                              className="btn btn-link text-danger p-0 flex justify-center items-center"
                             >
-                              Hủy lịch
+                              <X size={32} />
                             </button>
                           )}
-                          {apt.status === "Đã hoàn thành" && (
-                            <button className="btn btn-link text-primary text-decoration-underline p-0">
-                              Xem chi tiết
+                          {(apt.status === "Đã khám" ||
+                            apt.status === "Đang chờ") && (
+                            <button className="btn btn-link text-primary p-0 flex justify-center items-center">
+                              <Eye size={32} />
                             </button>
                           )}
                         </td>
@@ -286,6 +318,13 @@ export default function PatientManagement() {
                 </table>
               </div>
             </div>
+            {pageCount > 1 && (
+              <Pagination
+                pageCount={pageCount}
+                onPageChange={handlePageChange}
+                currentPage={current}
+              />
+            )}
           </div>
         </div>
       </div>

@@ -132,8 +132,10 @@ class PatientController extends Controller
     }
     public function appointmentHistories(Request $request)
     {
+        $current = $request->query('current');
+        $pageSize = $request->query('pageSize');
         try {
-            $appointment = $this->patientService->handleGetAppointments();
+            $appointment = $this->patientService->handleGetAppointments($current, $pageSize);
 
             return response()->json([
                 'success' => true,

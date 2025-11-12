@@ -210,4 +210,49 @@ class PatientService
             return $appointment;
         });
     }
+    public function handleGetAppointments(int $current = 1, int $pageSize = 5)
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            throw new AppErrors("Không tìm thấy người dùng", 404);
+        }
+
+        $patient = Patient::where('PatientId', $user->UserId)->first();
+
+        if (!$patient) {
+            throw new AppErrors("Không tìm thấy bệnh nhân", 404);
+        }
+
+        $current = max(1, $current);
+        $pageSize = max(1, $pageSize);
+        $query = Appointment::with([
+            'medical_staff.user:UserId,FullName,Email,Phone'
+        ])
+            ->where('PatientId', $patient->PatientId)
+            ->orderByDesc('CreatedAt');
+
+        $totalItems = $query->count();
+
+        $appointments = $query->skip(($current - 1) * $pageSize)
+            ->take($pageSize)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->AppointmentId,
+                    'date' => $item->AppointmentDate,
+                    'time' => $item->AppointmentTime,
+                    'status'          => $item->Status,
+                    'doctor'  => optional(optional($item->medical_staff)->user)->FullName ?? null,
+                    'service' => optional($item->medical_staff)->Specialty ?? null,
+                ];
+            });
+
+        return [
+            'totalItems'  => $totalItems,
+            'totalPages'  => ceil($totalItems / $pageSize),
+            'current'     => $current,
+            'data'        => $appointments
+        ];
+    }
 }
