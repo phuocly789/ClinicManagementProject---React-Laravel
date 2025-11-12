@@ -21,6 +21,8 @@ use App\Http\Controllers\API\Doctor\ServiceController;
 use App\Http\Controllers\API\Doctor\DoctorExaminationsController;
 use App\Http\Controllers\API\Doctor\PatientsController;
 use App\Http\Controllers\API\PatientController;
+use App\Http\Controllers\API\Payment\InvoiceController;
+use App\Http\Controllers\API\Payment\PaymentController;
 //----------------------------------------------Hết-------------------------------
 use App\Http\Controllers\API\User\AdminUserController;
 use App\Http\Controllers\API\Print\InvoicePrintController;
@@ -149,14 +151,14 @@ Route::post('/print/preview-html', [InvoicePrintController::class, 'previewHTML'
 Route::prefix('technician')->group(function () {
     // Danh sách dịch vụ
     Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
-   // thay đổi trạng thái dịch vụ
+    // thay đổi trạng thái dịch vụ
     Route::post('/services/{serviceOrderId}/status', [TestResultsController::class, 'updateServiceStatus']);
 });
 
 //Receptionist Routes
 Route::prefix('receptionist')->group(function () {
     //lịch hẹn
-    Route::get('/appointments/today',[AppointmentRecepController::class, 'GetAppointmentToday']);
+    Route::get('/appointments/today', [AppointmentRecepController::class, 'GetAppointmentToday']);
     Route::post('/appointments', [AppointmentRecepController::class, 'CreateAppoitment']);
     Route::put('/appointments/{appointmentId}/status', [AppointmentRecepController::class, 'UpdateAppointmentStatus']);
     //hàng chờ
@@ -181,7 +183,6 @@ Route::middleware(['auth:api'])
 Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
     ->get('/patient/appointments/histories', [PatientController::class, 'appointmentHistories']);
 // Route::middleware()->post('/auth/login', [AuthController::class, 'login']);
->>>>>>> origin/main
 
 
 // Service management routes for Admin
