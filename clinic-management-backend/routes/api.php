@@ -190,9 +190,10 @@ Route::middleware(['auth:api'])
 Route::middleware(['auth:api'])
     ->get('/patient/services', [PatientController::class, 'getAllServices']);
 Route::middleware(['auth:api'])
-    ->post('/patient/booking-appointment', [PatientController::class, 'bookingAppointment']);
-Route::middleware()->post('/auth/login', [AuthController::class, 'login']);
-// Route::middleware()->post('/auth/login', [AuthController::class, 'login']);
+    ->post('/patient/appointments/book', [PatientController::class, 'bookingAppointment']);
+Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
+    ->get('/patient/appointments/histories', [PatientController::class, 'appointmentHistories']);
+
 
 
 // Service management routes

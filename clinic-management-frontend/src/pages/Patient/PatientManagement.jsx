@@ -226,9 +226,9 @@ export default function PatientManagement() {
             <div className="card-body">
               <h2 className="h4 fw-semibold mb-4">Lịch Sử Các Lịch Hẹn</h2>
               <div className="table-responsive">
-                <table className="table align-middle">
-                  <thead className="table-light">
-                    <tr>
+                <table className="table table-bordered align-middle">
+                  <thead className="table-light text-center">
+                    <tr style={{ backgroundColor: "#f2f2f2" }}>
                       <th>Ngày Khám</th>
                       <th>Giờ</th>
                       <th>Bác Sĩ</th>
@@ -237,17 +237,17 @@ export default function PatientManagement() {
                       <th>Hành Động</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="text-center">
                     {appointments.map((apt) => (
-                      <tr key={apt.id}>
+                      <tr key={apt.id} className="align-middle">
                         <td>
-                          <div className="d-flex align-items-center gap-2">
+                          <div className="d-flex align-items-center justify-content-center gap-2">
                             <Calendar size={16} className="text-secondary" />
                             {apt.date}
                           </div>
                         </td>
                         <td>
-                          <div className="d-flex align-items-center gap-2">
+                          <div className="d-flex align-items-center justify-content-center gap-2">
                             <Clock size={16} className="text-secondary" />
                             {apt.time}
                           </div>
