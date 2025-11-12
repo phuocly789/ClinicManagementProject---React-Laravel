@@ -21,6 +21,8 @@ use App\Http\Controllers\API\Doctor\ServiceController;
 use App\Http\Controllers\API\Doctor\DoctorExaminationsController;
 use App\Http\Controllers\API\Doctor\PatientsController;
 use App\Http\Controllers\API\PatientController;
+use App\Http\Controllers\API\Payment\InvoiceController;
+use App\Http\Controllers\API\Payment\PaymentController;
 //----------------------------------------------Hết-------------------------------
 use App\Http\Controllers\API\User\AdminUserController;
 use App\Http\Controllers\API\Print\InvoicePrintController;
@@ -149,14 +151,14 @@ Route::post('/print/preview-html', [InvoicePrintController::class, 'previewHTML'
 Route::prefix('technician')->group(function () {
     // Danh sách dịch vụ
     Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
-   // thay đổi trạng thái dịch vụ
+    // thay đổi trạng thái dịch vụ
     Route::post('/services/{serviceOrderId}/status', [TestResultsController::class, 'updateServiceStatus']);
 });
 
 //Receptionist Routes
 Route::prefix('receptionist')->group(function () {
     //lịch hẹn
-    Route::get('/appointments/today',[AppointmentRecepController::class, 'GetAppointmentToday']);
+    Route::get('/appointments/today', [AppointmentRecepController::class, 'GetAppointmentToday']);
     Route::post('/appointments', [AppointmentRecepController::class, 'CreateAppoitment']);
     Route::put('/appointments/{appointmentId}/status', [AppointmentRecepController::class, 'UpdateAppointmentStatus']);
     //hàng chờ
@@ -174,6 +176,12 @@ Route::middleware(['auth:api'])
     ->post('/patient/send-vefication-email', [PatientController::class, 'sendVerificationEmail']);
 Route::middleware(['auth:api'])
     ->post('/account/change-password', [PatientController::class, 'changePassword']);
+Route::middleware(['auth:api'])
+    ->get('/patient/services', [PatientController::class, 'getAllServices']);
+Route::middleware(['auth:api'])
+    ->post('/patient/appointments/book', [PatientController::class, 'bookingAppointment']);
+Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
+    ->get('/patient/appointments/histories', [PatientController::class, 'appointmentHistories']);
 // Route::middleware()->post('/auth/login', [AuthController::class, 'login']);
 
 
@@ -186,4 +194,17 @@ Route::prefix('admin/services')->group(function () {
     Route::delete('/{id}', [AdminServiceController::class, 'destroy']);
     Route::get('/types/all', [AdminServiceController::class, 'getServiceTypes']);
     Route::get('/type/{type}', [AdminServiceController::class, 'getServicesByType']);
+});
+
+// Payment Routes
+// MoMo Payment Routes
+Route::prefix('payments')->group(function () {
+    Route::post('/momo/create', [PaymentController::class, 'createPayment']);
+    Route::post('/momo/callback', [PaymentController::class, 'handleCallback'])->name('payment.callback');
+    Route::get('/momo/return', [PaymentController::class, 'handleReturn'])->name('payment.return');
+
+    // Invoice Routes
+    Route::get('/invoices', [InvoiceController::class, 'index']);
+    Route::get('/invoices/{id}', [InvoiceController::class, 'show']);
+    Route::post('/invoices', [InvoiceController::class, 'store']);
 });
