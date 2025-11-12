@@ -207,43 +207,7 @@ Route::prefix('payments')->group(function () {
     Route::post('/momo/create', [PaymentController::class, 'createPayment']);
     Route::post('/momo/callback', [PaymentController::class, 'handleCallback'])->name('payment.callback');
     Route::get('/momo/return', [PaymentController::class, 'handleReturn'])->name('payment.return');
-    // Route test callback manual
-    Route::post('/test-manual-callback', function (Request $request) {
-        Log::info('🧪 [MANUAL_CALLBACK_TEST] Starting manual test');
-
-        // Dùng orderId từ thanh toán thành công của bạn
-        $testData = [
-            'orderId' => 'CLINIC_55_1762795721083',
-            'resultCode' => 0,
-            'transId' => '4610354008',
-            'amount' => 620000,
-            'message' => 'Thành công',
-            'orderInfo' => 'Thanh toán hóa đơn',
-            'orderType' => 'momo_wallet',
-            'partnerCode' => env('MOMO_PARTNER_CODE'),
-            'payType' => 'qr',
-            'requestId' => time(),
-            'responseTime' => time(),
-            'extraData' => '',
-            'signature' => 'test_signature_ignore'
-        ];
-
-        // Gọi callback handler
-        $controller = app()->make('App\Http\Controllers\API\Payment\PaymentController');
-        $testRequest = new Illuminate\Http\Request($testData);
-
-        $response = $controller->handleCallback($testRequest);
-
-        Log::info('🧪 [MANUAL_CALLBACK_TEST] Manual test completed', [
-            'response' => $response->getContent(),
-            'invoice_id' => 55
-        ]);
-
-        return response()->json([
-            'test_completed' => true,
-            'response' => $response->getContent()
-        ]);
-    });
+    
 
     // Invoice Routes
     Route::get('/invoices', [InvoiceController::class, 'index']);

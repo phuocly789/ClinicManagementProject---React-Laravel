@@ -195,77 +195,82 @@ class PaymentController extends Controller
     }
 
     // RETURN URL SAU KHI THANH TOÁN
-    public function handleReturn(Request $request)
-    {
-        Log::info('🔄 [MOMO_RETURN] User returned', $request->all());
+   // RETURN URL SAU KHI THANH TOÁN
+public function handleReturn(Request $request)
+{
+    Log::info('🔄 [MOMO_RETURN] User returned', $request->all());
 
-        $data = $request->all();
-        $resultCode = $data['resultCode'] ?? -1;
+    $data = $request->all();
+    $resultCode = $data['resultCode'] ?? -1;
+    $orderId = $data['orderId'] ?? null;
 
-        try {
-            DB::beginTransaction();
+    try {
+        DB::beginTransaction();
 
-            $orderId = $data['orderId'] ?? null;
-            $invoice = $orderId ? Invoice::where('OrderId', $orderId)->first() : null;
+        $invoice = $orderId ? Invoice::where('OrderId', $orderId)->first() : null;
 
-            // UPDATE MANUAL NẾU CALLBACK CHƯA ĐƯỢC GỌI
-            if ($resultCode == 0 && $invoice && $invoice->Status === 'Chờ thanh toán') {
-                Log::info('🔄 [MOMO_RETURN] Manual update needed');
+        // UPDATE MANUAL NẾU CALLBACK CHƯA ĐƯỢC GỌI
+        if ($resultCode == 0 && $invoice && $invoice->Status === 'Chờ thanh toán') {
+            Log::info('🔄 [MOMO_RETURN] Manual update needed');
 
-                $paymentMethod = 'momo';
-                if (isset($data['payType']) && $data['payType'] === 'napas') {
-                    $paymentMethod = 'napas';
-                }
-
-                $invoice->update([
-                    'Status' => 'Đã thanh toán',
-                    'TransactionId' => $data['transId'] ?? '',
-                    'Paidat' => now('Asia/Ho_Chi_Minh'),
-                    'PaymentMethod' => $paymentMethod
-                ]);
-
-                Log::info("✅ [MOMO_RETURN] Manual update success", [
-                    'invoiceId' => $invoice->InvoiceId,
-                    'paymentMethod' => $paymentMethod
-                ]);
+            $paymentMethod = 'momo';
+            if (isset($data['payType']) && $data['payType'] === 'napas') {
+                $paymentMethod = 'napas';
             }
 
-            DB::commit();
+            $invoice->update([
+                'Status' => 'Đã thanh toán',
+                'TransactionId' => $data['transId'] ?? '',
+                'Paidat' => now('Asia/Ho_Chi_Minh'),
+                'PaymentMethod' => $paymentMethod
+            ]);
 
-            if ($resultCode == 0) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Thanh toán thành công!',
-                    'orderId' => $data['orderId'] ?? '',
-                    'transId' => $data['transId'] ?? '',
-                    'invoice' => $invoice ? [
-                        'id' => $invoice->InvoiceId,
-                        'code' => 'HD' . str_pad($invoice->InvoiceId, 6, '0', STR_PAD_LEFT),
-                        'amount' => $invoice->TotalAmount,
-                        'status' => $invoice->Status,
-                        'paymentMethod' => $invoice->PaymentMethod,
-                        'patientName' => $invoice->patient ? $invoice->patient->Name : 'N/A'
-                    ] : null
-                ]);
-            } else {
-                return response()->json([
-                    'success' => false,
-                    'message' => $data['message'] ?? 'Thanh toán thất bại!',
-                    'invoice' => $invoice ? [
-                        'id' => $invoice->InvoiceId,
-                        'code' => 'HD' . str_pad($invoice->InvoiceId, 6, '0', STR_PAD_LEFT),
-                        'status' => $invoice->Status
-                    ] : null
-                ], 400);
-            }
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('💥 [MOMO_RETURN] Exception: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Lỗi hệ thống'
-            ], 500);
+            Log::info("✅ [MOMO_RETURN] Manual update success", [
+                'invoiceId' => $invoice->InvoiceId,
+                'paymentMethod' => $paymentMethod
+            ]);
         }
+
+        DB::commit();
+
+        // CHUYỂN HƯỚNG VỀ TRANG KẾT QUẢ - FIX DOUBLE ENCODING
+        $frontendUrl = config('app.frontend_url', 'http://localhost:3000');
+        
+        // Tạo query parameters - KHÔNG encode redirectUrl ở đây
+        $queryParams = [
+            'status' => $resultCode == 0 ? 'success' : 'failed',
+            'orderId' => $orderId,
+            'transId' => $data['transId'] ?? '',
+            'amount' => $data['amount'] ?? '',
+            'invoiceId' => $invoice ? $invoice->InvoiceId : '',
+            'redirectUrl' => '/payment', // KHÔNG encode
+            'countdown' => 5
+        ];
+
+        // Thêm message nếu failed
+        if ($resultCode != 0) {
+            $queryParams['message'] = $data['message'] ?? 'Thanh toán thất bại';
+        }
+
+        $redirectUrl = $frontendUrl . "/payment/result?" . http_build_query($queryParams);
+        
+        Log::info("🔄 [MOMO_RETURN] Redirecting to: " . $redirectUrl);
+        return redirect()->away($redirectUrl);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('💥 [MOMO_RETURN] Exception: ' . $e->getMessage());
+        
+        // Lỗi hệ thống
+        $frontendUrl = config('app.frontend_url', 'http://localhost:3000');
+        $errorUrl = $frontendUrl . "/payment/result?" . http_build_query([
+            'status' => 'error',
+            'message' => 'Lỗi hệ thống',
+            'redirectUrl' => '/payment',
+            'countdown' => 5
+        ]);
+        
+        return redirect()->away($errorUrl);
     }
+}
 }

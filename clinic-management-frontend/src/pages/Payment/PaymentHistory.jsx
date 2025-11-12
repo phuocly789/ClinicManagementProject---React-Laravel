@@ -7,7 +7,7 @@ const PaymentHistory = ({ invoice, onViewDetail }) => {
     const methods = {
       'momo': { name: 'Ví MoMo', icon: 'fas fa-mobile-alt text-primary', color: 'primary' },
       'cash': { name: 'Tiền mặt', icon: 'fas fa-money-bill-wave text-success', color: 'success' },
-      'bank_transfer': { name: 'Chuyển khoản', icon: 'fas fa-university text-info', color: 'info' },
+      'napas': { name: 'Thẻ Napas', icon: 'fas fa-university text-info', color: 'danger' },
       'insurance': { name: 'Bảo hiểm', icon: 'fas fa-heartbeat text-warning', color: 'warning' }
     };
     return methods[method] || { name: 'Khác', icon: 'fas fa-question-circle', color: 'secondary' };
@@ -48,9 +48,8 @@ const PaymentHistory = ({ invoice, onViewDetail }) => {
       </td>
       <td className="border-end">
         <div className="small">
-          <div>{invoice.paid_at || 'N/A'}</div>
-          <small className="text-muted">
-            {invoice.date || 'N/A'}
+          <div>Ngày thanh toán: {invoice.paid_at || 'N/A'}</div>
+          <small className="text-muted"> Ngày tạo: {invoice.date || 'N/A'}
           </small>
         </div>
       </td>
