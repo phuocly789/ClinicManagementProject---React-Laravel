@@ -41,6 +41,8 @@ const availableColumns = [
   { value: 'Unit', label: 'Đơn Vị' },
   { value: 'Price', label: 'Giá Bán' },
   { value: 'StockQuantity', label: 'Tồn Kho' },
+  { value: 'ExpiryDate', label: 'Hết Hạn' },
+  { value: 'LowStockThreshold', label: 'Ngưỡng Thấp' },
   { value: 'Description', label: 'Mô Tả' },
 ];
 
@@ -147,6 +149,18 @@ const MedicineList = memo(({
               />
             </Col>
 
+            {/* LỌC SẮP HẾT HẠN */}
+            <Col md={2}>
+              <Form.Select
+                value={filters.expiry_status || ''}
+                onChange={(e) => applyFilters({ expiry_status: e.target.value })}
+              >
+                <option value="">Hết hạn</option>
+                <option value="expired">Đã hết</option>
+                <option value="soon">Sắp hết (≤30 ngày)</option>
+              </Form.Select>
+            </Col>
+
             {/* NÚT TÌM KIẾM & XÓA */}
             <Col md={12} className="d-flex gap-2 mt-2">
               <Button type="submit" variant="primary">
@@ -171,6 +185,8 @@ const MedicineList = memo(({
               <th>ĐV</th>
               <th>Giá</th>
               <th>Tồn</th>
+              <th>Hết Hạn</th>
+              <th>Ngưỡng Thấp</th>
               <th>Mô Tả</th>
               <th>Hành Động</th>
             </tr>
@@ -182,7 +198,21 @@ const MedicineList = memo(({
               <tr><td colSpan="8" className="text-center py-4 text-muted">Không có dữ liệu</td></tr>
             ) : (
               medicines.map((m) => (
-                <tr key={m.MedicineId}>
+                <tr
+                  key={m.MedicineId}
+                  className={`
+                    ${m.StockQuantity < m.LowStockThreshold ? 'table-warning' : ''}
+                    ${(() => {
+                      if (!m.ExpiryDate) return '';
+                      const expiry = new Date(m.ExpiryDate);
+                      const today = new Date();
+                      const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+                      if (diffDays < 0) return 'table-danger'; // Đã hết hạn
+                      if (diffDays <= 30) return 'table-warning'; // Sắp hết
+                      return '';
+                    })()}
+                  `.trim()}
+                >
                   <td><strong>{m.MedicineId}</strong></td>
                   <td>{m.MedicineName}</td>
                   <td>{m.MedicineType}</td>
@@ -192,6 +222,17 @@ const MedicineList = memo(({
                     <Badge bg={m.StockQuantity < 100 ? 'danger' : m.StockQuantity < 500 ? 'warning' : 'success'}>
                       {m.StockQuantity}
                     </Badge>
+                  </td>
+                  <td>
+                    {m.ExpiryDate
+                      ? new Date(m.ExpiryDate).toLocaleDateString('vi-VN', {
+                        day: '2-digit', month: '2-digit', year: 'numeric'
+                      })
+                      : '—'
+                    }
+                  </td>
+                  <td>
+                    <Badge bg="info">{m.LowStockThreshold}</Badge>
                   </td>
                   <td title={m.Description}>
                     {m.Description?.length > 30 ? m.Description.substring(0, 30) + '...' : m.Description || '—'}
@@ -397,8 +438,15 @@ const MedicineForm = memo(({ isEditMode, medicine, onSubmit, onCancel, isLoading
     Unit: '',
     Price: '',
     StockQuantity: '',
+    ExpiryDate: '',
+    LowStockThreshold: '',
     Description: '',
   });
+
+  useEffect(() => {
+    const firstInput = document.querySelector('input[name="MedicineName"]');
+    firstInput?.focus();
+  }, []);
 
   const validateForm = useCallback((formData) => {
     const newErrors = {};
@@ -460,6 +508,25 @@ const MedicineForm = memo(({ isEditMode, medicine, onSubmit, onCancel, isLoading
       isValid = false;
     } else if (stockQuantity < 0) {
       newErrors.StockQuantity = 'Tồn kho không thể âm';
+      isValid = false;
+    }
+
+    // Trong validateForm
+    const expiryDate = formData.get('ExpiryDate');
+    if (expiryDate) {
+      const date = new Date(expiryDate);
+      if (isNaN(date.getTime())) {
+        newErrors.ExpiryDate = 'Ngày hết hạn không hợp lệ';
+        isValid = false;
+      } else if (date < new Date()) {
+        newErrors.ExpiryDate = 'Ngày hết hạn không được trong quá khứ';
+        isValid = false;
+      }
+    }
+
+    const lowStockThreshold = parseInt(formData.get('LowStockThreshold'));
+    if (isNaN(lowStockThreshold) || lowStockThreshold < 1) {
+      newErrors.LowStockThreshold = 'Ngưỡng thấp phải ≥ 1';
       isValid = false;
     }
 
@@ -559,6 +626,34 @@ const MedicineForm = memo(({ isEditMode, medicine, onSubmit, onCancel, isLoading
         <Row>
           <Col md={6}>
             <Form.Group className="mb-3">
+              <Form.Label>Ngày Hết Hạn</Form.Label>
+              <Form.Control
+                type="date"
+                name="ExpiryDate"
+                defaultValue={isEditMode && medicine?.ExpiryDate ? medicine.ExpiryDate.split('T')[0] : ''}
+                isInvalid={!!errors.ExpiryDate}
+              />
+              <Form.Text className="text-danger">{errors.ExpiryDate}</Form.Text>
+            </Form.Group>
+          </Col>
+          <Col md={6}>
+            <Form.Group className="mb-3">
+              <Form.Label>Ngưỡng Tồn Kho Thấp</Form.Label>
+              <Form.Control
+                type="number"
+                name="LowStockThreshold"
+                defaultValue={isEditMode ? medicine?.LowStockThreshold : 10}
+                min="1"
+                placeholder="Ví dụ: 10"
+                isInvalid={!!errors.LowStockThreshold}
+              />
+              <Form.Text className="text-danger">{errors.LowStockThreshold}</Form.Text>
+            </Form.Group>
+          </Col>
+        </Row>
+        <Row>
+          <Col md={6}>
+            <Form.Group className="mb-3">
               <Form.Label>Tồn Kho</Form.Label>
               <Form.Control
                 type="number"
@@ -623,6 +718,7 @@ const AdminMedicine = () => {
     min_price: '',
     max_price: '',
     low_stock: '',
+    expiry_status: '',
     threshold: 100
   });
   const [filterParams, setFilterParams] = useState('');
@@ -674,6 +770,10 @@ const AdminMedicine = () => {
       }
     });
 
+    if (newFilters.expiry_status) {
+      params.append('expiry_status', newFilters.expiry_status);
+    }
+
     const query = params.toString();
     setFilterParams(query);
     fetchMedicines(1, query); // Gọi ngay khi nhấn nút hoặc debounce kết thúc
@@ -681,7 +781,7 @@ const AdminMedicine = () => {
 
   // XÓA LỌC
   const clearFilters = useCallback(() => {
-    const reset = { search: '', type: '', unit: '', min_price: '', max_price: '', low_stock: '', threshold: 100 };
+    const reset = { search: '', type: '', unit: '', min_price: '', max_price: '', low_stock: '', expiry_status: '', threshold: 100 };
     setFilters(reset);
     setFilterParams('');
     fetchMedicines(1);
@@ -790,6 +890,8 @@ const AdminMedicine = () => {
         Unit: formData.get('Unit'),
         Price: parseFloat(formData.get('Price')),
         StockQuantity: parseInt(formData.get('StockQuantity')),
+        ExpiryDate: formData.get('ExpiryDate'),
+        LowStockThreshold: parseInt(formData.get('LowStockThreshold')),
         Description: formData.get('Description') || '',
       };
 
@@ -835,6 +937,8 @@ const AdminMedicine = () => {
         Unit: formData.get('Unit'),
         Price: parseFloat(formData.get('Price')),
         StockQuantity: parseInt(formData.get('StockQuantity')),
+        ExpiryDate: formData.get('ExpiryDate'),
+        LowStockThreshold: parseInt(formData.get('LowStockThreshold')),
         Description: formData.get('Description') || '',
       };
 
@@ -1117,7 +1221,7 @@ const AdminMedicine = () => {
   const { getRootProps, getInputProps } = useDropzone({ onDrop, noClick: !showImportModal }); // Chỉ active drop khi modal open
 
   return (
-    <div className="d-flex"> 
+    <div className="d-flex">
       <div className="position-relative w-100 flex-grow-1 ms-5 p-4">
         <h1 className="mb-4">Quản Lý Thuốc</h1>
         {currentView === 'list' && (

@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\API\Services\AdminServiceController;
+use App\Http\Controllers\API\Service\AdminServiceController;
 use App\Http\Controllers\API\Receptionist\AppointmentRecepController;
 use App\Http\Controllers\API\ReportRevenueController;
 use App\Http\Controllers\API\ScheduleController;
@@ -21,13 +21,13 @@ use App\Http\Controllers\API\Doctor\ServiceController;
 use App\Http\Controllers\API\Doctor\DoctorExaminationsController;
 use App\Http\Controllers\API\Doctor\PatientsController;
 use App\Http\Controllers\API\PatientController;
+use App\Http\Controllers\API\Payment\InvoiceController;
+use App\Http\Controllers\API\Payment\PaymentController;
 //----------------------------------------------Hết-------------------------------
 use App\Http\Controllers\API\User\AdminUserController;
 use App\Http\Controllers\API\Print\InvoicePrintController;
 use App\Http\Controllers\API\Receptionist\QueueController;
 use App\Http\Controllers\API\Technician\TestResultsController;
-use App\Http\Controllers\API\Payment\PaymentController;
-use App\Http\Controllers\API\Payment\InvoiceController;
 
 Route::get('/user', [UserController::class, 'index']);
 Route::get('/ping', [UserController::class, 'ping']);
@@ -78,9 +78,6 @@ Route::middleware(['auth:api'])->get('/me', function (Request $request) {
             'id' => $user->UserId,
             'full_name' => $user->FullName,
             'email' => $user->Email,
-            'phone' => $user->Phone,
-            'address' => $user->Address,
-            'date_of_birth' => $user->DateOfBirth,
             'username' => $user->Username,
             'is_active' => $user->IsActive,
             'roles' => $user->roles()->pluck('RoleName'),
@@ -156,14 +153,6 @@ Route::prefix('technician')->group(function () {
     Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
     // thay đổi trạng thái dịch vụ
     Route::post('/services/{serviceOrderId}/status', [TestResultsController::class, 'updateServiceStatus']);
-
-    // CẬP NHẬT KẾT QUẢ
-    Route::post('/service-orders/{serviceOrderId}/result', [TestResultsController::class, 'updateServiceResult']);
-    // Lấy danh sách dịch vụ đã hoàn thành
-    Route::get('/completed-services', [TestResultsController::class, 'getCompletedServices']);
-    // ✅ Lịch làm việc KTV
-    Route::get('/work-schedule', [TestResultsController::class, 'getWorkSchedule']);
-    Route::get('/work-schedule/{year}/{month}', [TestResultsController::class, 'getWorkScheduleByMonth']);
 });
 
 //Receptionist Routes
@@ -181,7 +170,7 @@ Route::prefix('receptionist')->group(function () {
 });
 
 // Patient Routes
-Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
+Route::middleware(['auth:api'])
     ->put('/patient/update-profile/{id}', [PatientController::class, 'updateProfile']);
 Route::middleware(['auth:api'])
     ->post('/patient/send-vefication-email', [PatientController::class, 'sendVerificationEmail']);
@@ -190,12 +179,13 @@ Route::middleware(['auth:api'])
 Route::middleware(['auth:api'])
     ->get('/patient/services', [PatientController::class, 'getAllServices']);
 Route::middleware(['auth:api'])
-    ->post('/patient/booking-appointment', [PatientController::class, 'bookingAppointment']);
-Route::middleware()->post('/auth/login', [AuthController::class, 'login']);
+    ->post('/patient/appointments/book', [PatientController::class, 'bookingAppointment']);
+Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
+    ->get('/patient/appointments/histories', [PatientController::class, 'appointmentHistories']);
 // Route::middleware()->post('/auth/login', [AuthController::class, 'login']);
 
 
-// Service management routes
+// Service management routes for Admin
 Route::prefix('admin/services')->group(function () {
     Route::get('/', [AdminServiceController::class, 'index']);
     Route::post('/', [AdminServiceController::class, 'store']);
