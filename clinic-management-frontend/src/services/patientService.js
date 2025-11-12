@@ -13,7 +13,7 @@ const patientService = {
         return axios.get(`/api/patient/services`);
     },
     bookingAppointment: async (data) => {
-        return axios.post(`/api/patient/booking-appointment`, data);
+        return axios.post(`/api/patient/appointments/book`, data);
     }
 }
 
