@@ -31,7 +31,7 @@ class MedicalStaff extends Model
 {
 	protected $table = 'MedicalStaff';
 	protected $primaryKey = 'StaffId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [
@@ -75,4 +75,19 @@ class MedicalStaff extends Model
 	{
 		return $this->hasMany(Prescription::class, 'StaffId');
 	}
+
+	
+	// Dịch vụ mà bác sĩ chỉ định
+	public function assigned_service_orders()
+	{
+		return $this->hasMany(ServiceOrder::class, 'AssignedStaffId');
+	}
+
+	// Dịch vụ mà kỹ thuật viên thực hiện
+	public function technician_service_orders()
+	{
+		return $this->hasMany(ServiceOrder::class, 'TechnicianId');
+	}
+
+	
 }

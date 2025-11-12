@@ -7,6 +7,38 @@ export const path = {
     UNAUTHORIZED: "/unauthorized",
     ADMIN: {
         ROOT: "/admin",
+        DASHBOARD: "/admin/dashboard",
+        USER: {
+            MANAGEMENT: "/admin/users",
+            CREATE: "/admin/users/create",
+            UPDATE: "/admin/users/update/:id",
+        },
+        MEDICINE: {
+            MANAGEMENT: "/admin/medicines",
+            CREATE: "/admin/medicines/create",
+            UPDATE: "/admin/medicines/update/:id",
+        },
+        INVENTORY: "/admin/inventory",
+        SUPPLIERS: {
+            MANAGEMENT: "/admin/suppliers",
+            CREATE: "/admin/suppliers/create",
+            UPDATE: "/admin/suppliers/update/:id",
+        },
+        SERVICE: {
+            MANAGEMENT: "/admin/services",
+            CREATE: "/admin/services/create",
+            UPDATE: "/admin/services/update/:id",
+        },
+        SCHEDULE: {
+            MANAGEMENT: "/admin/schedule-management",
+            CREATE: "/admin/schedules/create",
+            UPDATE: "/admin/schedules/update/:id",
+        },
+        REVENUE_REPORT: "/admin/revenue-report",
+
+    },
+    RECEPTIONIST: {
+        ROOT: "/receptionist"
     },
     USER: {
         ROOT: "/user",
@@ -24,6 +56,47 @@ export const path = {
             UPDATE: "/user/prescription-update/:id",
         },
     },
+    PATIENT: {
+        ROOT: "/patient",
+        APPOINTMENT: {
+            MANAGEMENT: "/patient/apppointment-management",
+            CREATE: "/patient/apppointment-create",
+            UPDATE: "/patient/apppointment-update",
+        },
+        PROFILE: {
+            MANAGEMENT: "/patient/profile-management",
+            CREATE: "/patient/profile-create",
+            UPDATE: "/patient/profile-update",
+        }
+    },
+    DOCTOR: {
+        ROOT: "/doctor",
+        TODAY_APPOINTMENTS: "today",
+        SCHEDULE: "schedule-doctor",
+        PATIENT_HISTORY: "history",
+        DOCTOR_PRINT_PDF: "print-pdf-editor",
+    },
+
+    TECHNICIAN: {
+        ROOT: "/technician",
+        SCHEDULE: "schedule",
+        TEST_RESULTS: "test-results",
+    },
+
+    PayMent:{
+        ROOT:"/payment",
+    }
+};
+
+export const USER_ROLE = {
+    ADMIN: "Admin",
+    PATIENT: "Bệnh nhân",
+};
+
+
+export const ROLE_ROUTE = {
+    [USER_ROLE.ADMIN]: path.ADMIN.ROOT,
+    [USER_ROLE.PATIENT]: path.PATIENT.ROOT,
 };
 
 export const CRUD_ACTIONS = {

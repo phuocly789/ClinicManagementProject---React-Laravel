@@ -1,23 +1,53 @@
-import React, { useState } from "react";
+// LoginPage.jsx
+import React, { useEffect, useState } from "react";
 import { Spinner } from "react-bootstrap";
+import Cookies from "js-cookie";
 import authService from "../../../services/authService";
 import { useNavigate } from "react-router-dom";
 import CustomToast from "../../../Components/CustomToast/CustomToast";
-import { path } from "../../../utils/constant";
+import { path, ROLE_ROUTE } from "../../../utils/constant";
+import userService from "../../../services/userService";
+import { useUser } from "../../../context/userContext";
+
 const LoginPage = () => {
   const [formData, setFormData] = useState({
     username: "",
     password: "",
   });
   const [errors, setErrors] = useState({});
+  const { setUser } = useUser();
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const [toast, setToast] = useState(null);
-  const [showPassword, setShowPassword] = useState(false);
 
   const showToast = (type, message) => {
     setToast({ type, message });
   };
+
+  // Kiểm tra nếu đã login thì redirect
+  useEffect(() => {
+    const checkLogin = async () => {
+      try {
+        const token = Cookies.get("token");
+        if (token) {
+          const res = await userService.getMe();
+
+          if (res?.user) {
+            const roles = res.user.roles || [];
+            const mainRole = roles.length > 0 ? roles[0] : null;
+            const redirectPath = ROLE_ROUTE[mainRole] || path.HOME;
+            navigate(redirectPath, { replace: true });
+          }
+        }
+      } catch (err) {
+        console.log("User not logged in:", err);
+        // Xóa token nếu không hợp lệ
+        Cookies.remove("token");
+      }
+    };
+
+    checkLogin();
+  }, [navigate]);
 
   // Xử lý thay đổi input
   const handleChange = (e) => {
@@ -35,9 +65,9 @@ const LoginPage = () => {
   // Validate cơ bản
   const validateForm = () => {
     const newErrors = {};
-    const htmlTagRegex = /<[^>]*>/; // Regex phát hiện HTML tag
+    const htmlTagRegex = /<[^>]*>/;
 
-    // ====== Kiểm tra username ======
+    // Kiểm tra username
     if (!formData.username.trim()) {
       newErrors.username = "Tên đăng nhập không được để trống";
     } else if (formData.username.length < 6) {
@@ -48,7 +78,7 @@ const LoginPage = () => {
       newErrors.username = "Tài khoản không được chứa mã HTML";
     }
 
-    // ====== Kiểm tra password ======
+    // Kiểm tra password
     if (!formData.password.trim()) {
       newErrors.password = "Mật khẩu không được để trống";
     } else if (formData.password.length < 6) {
@@ -60,39 +90,63 @@ const LoginPage = () => {
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0; // true nếu không có lỗi
+    return Object.keys(newErrors).length === 0;
   };
 
   // Submit form
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
+
+    setLoading(true);
+
     try {
       const res = await authService.handleLogin({
         username: formData.username,
         password: formData.password,
       });
-      console.log("Check res: ", res);
+
       if (res?.success) {
-        if (res?.user?.is_active === false) {
-          showToast(
-            "warning",
-            "Tài khoản của bạn chưa được kích hoạt vui lòng nhập mã xác thực để kích hoạt tài khoản."
-          );
-        } else {
-          showToast("success", "Đăng nhập thành công.");
-          // delay navigate 1s sau toast
-          setTimeout(() => {
-            navigate("/");
-          }, 1000);
-        }
+        setUser(res.user);
+        showToast("success", "Đăng nhập thành công.");
+
+        const roles = res.user.roles || [];
+        const mainRole = roles.length > 0 ? roles[0] : null;
+        const redirectPath = ROLE_ROUTE[mainRole] || path.HOME;
+
+        setTimeout(() => {
+          navigate(redirectPath, { replace: true });
+        }, 1000);
       }
     } catch (error) {
-      console.error(error);
+      console.error("Login error:", error);
+      const response = error.response?.data;
+
+      // ✅ Nếu là lỗi tài khoản chưa kích hoạt
+      if (response?.error_code === 3) {
+        showToast(
+          "warning",
+          "Tài khoản của bạn chưa được kích hoạt. Vui lòng nhập mã xác thực để kích hoạt tài khoản."
+        );
+        setTimeout(() => {
+          navigate(path.VERIFICATION_EMAIL, {
+            state: {
+              email: formData.username,
+              justRegistered: true,
+              expired: response?.user?.expired,
+            },
+          });
+        }, 1000);
+        return;
+      }
+
+      // ❌ Lỗi khác
       const message =
-        error.response?.data?.message ||
-        "Đã xảy ra lỗi ở phía server. Vui lòng đăng nhập lại";
+        response?.message ||
+        "Đã xảy ra lỗi ở phía server. Vui lòng đăng nhập lại.";
       showToast("error", message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -125,7 +179,7 @@ const LoginPage = () => {
                     className={`form-control form-control-lg ${
                       errors.username ? "is-invalid" : ""
                     }`}
-                    placeholder="Nhập email hoặc số điện thoại"
+                    placeholder="Nhập username"
                     value={formData.username}
                     onChange={handleChange}
                   />

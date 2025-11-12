@@ -71,6 +71,8 @@ const Register = () => {
       temp.username = "Vui lòng không nhập mã HTML";
     else if (form.username.length > 255)
       temp.username = "Tên đăng nhập không được quá 255 ký tự";
+    else if (form.username < 6)
+      temp.username = "Tên đăng nhập phải có ít nhất 6 ký tự";
 
     // Password
     if (!form.password) temp.password = "Mật khẩu không được để trống";
@@ -113,21 +115,16 @@ const Register = () => {
           "success",
           "Đăng ký tài khoản thành công. Vui lòng nhập mã OTP để xác thực tài khoản."
         );
-
-        // Reset form sau khi đăng ký thành công
-        setForm({
-          fullName: "",
-          email: "",
-          phone: "",
-          username: "",
-          password: "",
-          confirmPassword: "",
-          gender: "",
-          birthday: "",
-        });
-
-        // Chuyển hướng sau 1.5s
-        setTimeout(() => navigate(path.LOGIN), 1500);
+        // Chuyển hướng sau
+        setTimeout(() => {
+          navigate(path.VERIFICATION_EMAIL, {
+            state: {
+              email: res?.user?.email,
+              justRegistered: true,
+              expired: res?.user?.expired,
+            },
+          });
+        }, 1000);
       } else if (res?.status === false && res?.error) {
         // 🔥 Nếu backend trả về lỗi (VD: trùng email, phone, username)
         const msg = res?.error || "Đã xảy ra lỗi ở phía server.";

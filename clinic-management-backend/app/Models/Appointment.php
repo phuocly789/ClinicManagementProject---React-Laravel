@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Class Appointment
- * 
+ *
  * @property int $AppointmentId
  * @property int|null $PatientId
  * @property int|null $StaffId
@@ -24,7 +24,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property Carbon|null $FollowUpDate
  * @property Carbon|null $CreatedAt
  * @property int|null $CreatedBy
- * 
+ * @property  string|null $Notes
+ *
  * @property Patient|null $patient
  * @property MedicalStaff|null $medical_staff
  * @property StaffSchedule|null $staff_schedule
@@ -43,7 +44,7 @@ class Appointment extends Model
 {
 	protected $table = 'Appointments';
 	protected $primaryKey = 'AppointmentId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [
@@ -56,7 +57,8 @@ class Appointment extends Model
 		'AppointmentTime' => 'string',
 		'FollowUpDate' => 'datetime',
 		'CreatedAt' => 'datetime',
-		'CreatedBy' => 'int'
+		'CreatedBy' => 'int',
+        'Notes' => 'string'
 	];
 
 	protected $fillable = [
@@ -69,7 +71,8 @@ class Appointment extends Model
 		'Status',
 		'FollowUpDate',
 		'CreatedAt',
-		'CreatedBy'
+		'CreatedBy',
+        'Notes'
 	];
 
 	public function patient()

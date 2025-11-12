@@ -12,14 +12,53 @@ class SuppliersController extends Controller
     /**
      * Display a listing of the suppliers.
      */
-    public function index()
+    public function all()
     {
-        $suppliers = Supplier::orderBy('SupplierId', 'desc')
+        $suppliers = Supplier::orderBy('SupplierId', 'asc')
             ->get();
 
         return response()->json([
             'status' => 'success',
             'data' => $suppliers
+        ], 200);
+    }
+
+    /**
+     * Display a paginated listing of the suppliers.
+     */
+    public function index(Request $request)
+    {
+        $perPage = $request->query('per_page', 10);
+        $query = Supplier::query();
+
+        // 1. TÌM KIẾM CHUNG (search_text)
+        if ($search = $request->get('search')) {
+            $search = trim($search);
+            $query->whereRaw('LOWER("SupplierName") LIKE ?', ['%' . strtolower($search) . '%']);
+        }
+
+        // 2. LỌC EMAIL
+        if ($email = $request->get('email')) {
+            $email = trim($email);
+            $query->whereRaw('LOWER("ContactEmail") LIKE ?', ['%' . strtolower($email) . '%']);
+        }
+        // 3. LỌC SỐ ĐIỆN THOẠI
+        if ($phone = $request->get('phone')) {
+            $phone = trim($phone);
+            $query->where('ContactPhone', 'LIKE', "%{$phone}%");
+        }
+
+        $query->orderBy('SupplierId', 'asc');
+        $suppliers = $query->paginate($perPage);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $suppliers->items(),
+            'current_page' => $suppliers->currentPage(),
+            'last_page' => $suppliers->lastPage(),
+            'per_page' => $suppliers->perPage(),
+            'total' => $suppliers->total(),
+            'filters' => $request->only(['search', 'email', 'phone'])
         ], 200);
     }
 
