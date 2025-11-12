@@ -9,7 +9,12 @@ const patientService = {
     changePassword: async (data) => {
         return axios.post(`/api/account/change-password`, data)
     },
-
+    getAllService: async () => {
+        return axios.get(`/api/patient/services`);
+    },
+    bookingAppointment: async (data) => {
+        return axios.post(`/api/patient/appointments/book`, data);
+    }
 }
 
 export default patientService;

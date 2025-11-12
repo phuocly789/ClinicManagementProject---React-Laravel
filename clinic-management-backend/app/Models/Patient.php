@@ -35,7 +35,8 @@ class Patient extends Model
 	];
 
 	protected $fillable = [
-		'MedicalHistory'
+		'PatientId',
+		'MedicalHistory',
 	];
 
 	public function user()
@@ -62,4 +63,6 @@ class Patient extends Model
 	{
 		return $this->hasMany(Invoice::class, 'PatientId');
 	}
+
+	
 }
