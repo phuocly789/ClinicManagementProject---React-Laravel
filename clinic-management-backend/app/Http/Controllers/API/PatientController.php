@@ -130,4 +130,27 @@ class PatientController extends Controller
             ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
+    public function appointmentHistories(Request $request)
+    {
+        try {
+            $appointment = $this->patientService->handleGetAppointments();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Lấy danh sách lịch sử khám bệnh thành công.',
+                'data' => $appointment,
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (AppErrors $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ], $e->getStatusCode() ?: 400,);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi server: ' . $e->getMessage()
+            ], 500, [], JSON_UNESCAPED_UNICODE);
+        }
+    }
 }
