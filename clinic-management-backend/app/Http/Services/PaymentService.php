@@ -24,32 +24,39 @@ class PaymentService
     {
         $requestId = time() . '';
         $extraData = '';
-        
-        // LINH HOẠT REQUEST TYPE THEO PHƯƠNG THỨC
+
+        // XÁC ĐỊNH REQUEST TYPE THEO PHƯƠNG THỨC
         if ($paymentMethod === 'napas') {
             $requestType = "payWithATM";
             $extraData = base64_encode(json_encode(['bankCode' => 'NB']));
         } else {
-            $requestType = "captureWallet"; // Mặc định Momo QR
+            $requestType = "captureWallet";
             $extraData = base64_encode(json_encode([]));
         }
 
-        // Set default URLs if not provided
+        // SET URL MẶC ĐỊNH
         $returnUrl = $returnUrl ?? route('payment.return');
         $notifyUrl = $notifyUrl ?? route('payment.callback');
 
-        // Tạo raw signature
+        Log::info('💳 [MOMO_PAYMENT] Creating payment', [
+            'orderId' => $orderId,
+            'amount' => $amount,
+            'paymentMethod' => $paymentMethod,
+            'requestType' => $requestType
+        ]);
+
+        // TẠO SIGNATURE
         $rawHash = "accessKey=" . $this->accessKey .
-                   "&amount=" . $amount .
-                   "&extraData=" . $extraData .
-                   "&ipnUrl=" . $notifyUrl .
-                   "&orderId=" . $orderId .
-                   "&orderInfo=" . $orderInfo .
-                   "&partnerCode=" . $this->partnerCode .
-                   "&redirectUrl=" . $returnUrl .
-                   "&requestId=" . $requestId .
-                   "&requestType=" . $requestType;
-        
+            "&amount=" . $amount .
+            "&extraData=" . $extraData .
+            "&ipnUrl=" . $notifyUrl .
+            "&orderId=" . $orderId .
+            "&orderInfo=" . $orderInfo .
+            "&partnerCode=" . $this->partnerCode .
+            "&redirectUrl=" . $returnUrl .
+            "&requestId=" . $requestId .
+            "&requestType=" . $requestType;
+
         $signature = hash_hmac('sha256', $rawHash, $this->secretKey);
 
         $data = [
@@ -69,14 +76,14 @@ class PaymentService
         ];
 
         try {
-            Log::info('MoMo Request Data:', $data);
+            Log::info('📤 [MOMO_REQUEST] Sending to MoMo', $data);
             $response = Http::timeout(30)->post($this->endpoint, $data);
             $result = $response->json();
-            Log::info('MoMo Response:', $result);
-            
+            Log::info('📥 [MOMO_RESPONSE] Received from MoMo', $result);
+
             return $result;
         } catch (\Exception $e) {
-            Log::error('MoMo API Error: ' . $e->getMessage());
+            Log::error('💥 [MOMO_API_ERROR] ' . $e->getMessage());
             return [
                 'resultCode' => -1,
                 'message' => 'Lỗi kết nối MoMo: ' . $e->getMessage()
@@ -87,19 +94,19 @@ class PaymentService
     public function verifySignature($data, $signature)
     {
         $rawHash = "accessKey=" . $this->accessKey .
-                   "&amount=" . $data['amount'] .
-                   "&extraData=" . $data['extraData'] .
-                   "&message=" . $data['message'] .
-                   "&orderId=" . $data['orderId'] .
-                   "&orderInfo=" . $data['orderInfo'] .
-                   "&orderType=" . $data['orderType'] .
-                   "&partnerCode=" . $data['partnerCode'] .
-                   "&payType=" . $data['payType'] .
-                   "&requestId=" . $data['requestId'] .
-                   "&responseTime=" . $data['responseTime'] .
-                   "&resultCode=" . $data['resultCode'] .
-                   "&transId=" . $data['transId'];
-        
+            "&amount=" . $data['amount'] .
+            "&extraData=" . $data['extraData'] .
+            "&message=" . $data['message'] .
+            "&orderId=" . $data['orderId'] .
+            "&orderInfo=" . $data['orderInfo'] .
+            "&orderType=" . $data['orderType'] .
+            "&partnerCode=" . $data['partnerCode'] .
+            "&payType=" . $data['payType'] .
+            "&requestId=" . $data['requestId'] .
+            "&responseTime=" . $data['responseTime'] .
+            "&resultCode=" . $data['resultCode'] .
+            "&transId=" . $data['transId'];
+
         $computedSignature = hash_hmac('sha256', $rawHash, $this->secretKey);
         return hash_equals($signature, $computedSignature);
     }

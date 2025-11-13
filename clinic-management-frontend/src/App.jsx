@@ -32,6 +32,7 @@ import ProtectedRoute from "./Components/ProtectedRoute/ProtectedRoute.jsx";
 import PatientManagement from "./pages/Patient/PatientManagement.jsx";
 import AdminServiceManagement from "./pages/Admin/AdminServiceManagement.jsx";
 import PaymentSection from "./pages/Payment/PaymentSection.jsx";
+import PaymentResult from "./pages/Payment/PaymentResult.jsx";
 function App() {
   return (
     <Routes>
@@ -48,6 +49,7 @@ function App() {
           <Route path={path.ADMIN.SUPPLIERS.MANAGEMENT} element={<AdminSuppliers />} />
           <Route path={path.ADMIN.MEDICINE.MANAGEMENT} element={<AdminMedicine />} />
 
+
         <Route
           path={path.ADMIN.SCHEDULE.MANAGEMENT}
           element={<AdminScheduleManagement />}
@@ -56,19 +58,10 @@ function App() {
       {/* Doctor */}
       <Route path={path.DOCTOR.ROOT} element={<DoctorSidebar />}>
         <Route index element={<DoctorDashboard />} />
-        <Route
-          path={path.DOCTOR.TODAY_APPOINTMENTS}
-          element={<DoctorDashboard />}
-        />
+        <Route path={path.DOCTOR.TODAY_APPOINTMENTS} element={<DoctorDashboard />} />
         <Route path={path.DOCTOR.SCHEDULE} element={<DoctorSchedule />} />
-        <Route
-          path={path.DOCTOR.PATIENT_HISTORY}
-          element={<HistorySection />}
-        />
-        <Route
-          path={path.DOCTOR.DOCTOR_PRINT_PDF}
-          element={<PDFEditorPage />}
-        />
+        <Route path={path.DOCTOR.PATIENT_HISTORY} element={<HistorySection />} />
+        <Route path={path.DOCTOR.DOCTOR_PRINT_PDF} element={<PDFEditorPage />} />
       </Route>
       {/* Patient */}
       <Route path={path.PATIENT.ROOT} element={<PatientLayout />}>
@@ -76,26 +69,28 @@ function App() {
           path={path.PATIENT.PROFILE.MANAGEMENT}
           element={<PatientProfile />}
         />
-        <Route
-          path={path.PATIENT.APPOINTMENT.MANAGEMENT}
-          element={<PatientManagement />}
-        />
         {/* <Route path={path.PATIENT.BOOKING} element={<PatientBooking />} />
           <Route path={path.PATIENT.HISTORY} element={<PatientHistory />} /> */}
       </Route>
       <Route path={path.LOGIN} element={<LoginPage />} />{" "}
       <Route path={path.REGISTER} element={<Register />} />{" "}
-      <Route path={path.VERIFICATION_EMAIL} element={<VerifyEmailPage />} />
+      <Route
+        path={path.VERIFICATION_EMAIL}
+        element={<VerifyEmailPage />}
+      />
 
-        {/* Technician */}
-        <Route path={path.TECHNICIAN.ROOT} element={<TechnicianSidebar />}>
-          <Route index element={<TechSchedule />} />
-          <Route path={path.TECHNICIAN.SCHEDULE} element={<TechSchedule />} />
-          <Route path={path.TECHNICIAN.TEST_RESULTS} element={<TechnicianDashboard />} />
-        </Route>
+      {/* Technician */}
+      <Route path={path.TECHNICIAN.ROOT} element={<TechnicianSidebar />}>
+        <Route index element={<TechSchedule />} />
+        <Route path={path.TECHNICIAN.SCHEDULE} element={<TechSchedule />} />
+        <Route path={path.TECHNICIAN.TEST_RESULTS} element={<TechnicianDashboard />} />
+      </Route>
 
-        {/* Payment */}
-        <Route path={path.PayMent.ROOT} element={<PaymentSection />} />
+      {/* Payment */}
+      <Route path={path.PayMent.ROOT} element={<PaymentSection />}>
+        <Route index element={<PaymentSection />} />
+        <Route path={path.PayMent.PAY_RESULT} element={<PaymentResult />} />
+      </Route>
     </Routes>
   );
 }
