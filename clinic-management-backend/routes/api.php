@@ -185,6 +185,8 @@ Route::middleware(['auth:api'])
     ->post('/patient/appointments/book', [PatientController::class, 'bookingAppointment']);
 Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
     ->get('/patient/appointments/histories', [PatientController::class, 'appointmentHistories']);
+Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
+    ->put('/patient/appointments/cancel', [PatientController::class, 'cancelAppointment']);
 // Route::middleware()->post('/auth/login', [AuthController::class, 'login']);
 
 

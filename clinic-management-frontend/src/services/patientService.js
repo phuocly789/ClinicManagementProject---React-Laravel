@@ -17,6 +17,9 @@ const patientService = {
     },
     historiesAppointments: async (current = 1, pageSize = 3) => {
         return axios.get(`/api/patient/appointments/histories?current=${current}&pageSize=${pageSize}`);
+    },
+    cancelAppointment: async (appointment_id) => {
+        return axios.put(`/api/patient/appointments/cancel?id=${appointment_id}`);
     }
 }
 

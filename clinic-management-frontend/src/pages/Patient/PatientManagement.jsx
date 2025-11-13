@@ -151,8 +151,19 @@ export default function PatientManagement() {
     }
   };
 
-  const handleCancel = (id) => {
-    setAppointments((prev) => prev.filter((apt) => apt.id !== id));
+  const handleCancel = async (apt) => {
+    console.log("Check appointment: ", apt);
+    try {
+      const res = await patientService.cancelAppointment(apt.id);
+      if (res && res.success === true) {
+        showToast("success", res?.message || "Huỷ lịch hẹn thành công ");
+        getAppointment(0);
+      }
+    } catch (error) {
+      console.log("Check error: " + error);
+      const response = error.response?.data;
+      showToast(response?.message || "Lỗi server ");
+    }
   };
 
   return (
@@ -286,6 +297,8 @@ export default function PatientManagement() {
                                 ? "bg-danger-subtle text-danger"
                                 : apt.status === "Đang chờ"
                                 ? "bg-warning-subtle text-warning"
+                                : apt.status === "Đang khám"
+                                ? "bg-info-subtle text-info"
                                 : apt.status === "Đã khám"
                                 ? "bg-success-subtle text-success"
                                 : apt.status === "Đã đặt"
@@ -297,18 +310,21 @@ export default function PatientManagement() {
                           </span>
                         </td>
                         <td className="flex justify-center items-center text-center">
-                          {apt.status === "Đã đặt" && (
+                          {/* Nút xem chi tiết luôn hiển thị cho mọi trạng thái */}
+                          <button
+                            onClick={() => handleViewDetail(apt)}
+                            className="btn btn-link text-primary p-0 flex justify-center items-center"
+                          >
+                            <Eye size={32} />
+                          </button>
+                          {/* Nút hủy chỉ hiển thị khi trạng thái là "Đã đặt" */}
+                          {(apt.status === "Đã đặt" ||
+                            apt.status === "Đang chờ") && (
                             <button
-                              onClick={() => handleCancel(apt.id)}
+                              onClick={() => handleCancel(apt)}
                               className="btn btn-link text-danger p-0 flex justify-center items-center"
                             >
                               <X size={32} />
-                            </button>
-                          )}
-                          {(apt.status === "Đã khám" ||
-                            apt.status === "Đang chờ") && (
-                            <button className="btn btn-link text-primary p-0 flex justify-center items-center">
-                              <Eye size={32} />
                             </button>
                           )}
                         </td>

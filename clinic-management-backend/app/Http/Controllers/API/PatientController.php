@@ -155,4 +155,28 @@ class PatientController extends Controller
             ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
+    public function cancelAppointment(Request $request)
+    {
+        $appointment_id = $request->query('id');
+        try {
+            $appointment = $this->patientService->handleCancelAppointment($appointment_id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Hủy lịch hẹn thành công.',
+                'data' => $appointment,
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (AppErrors $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ], $e->getStatusCode() ?: 400,);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi server: ' . $e->getMessage()
+            ], 500, [], JSON_UNESCAPED_UNICODE);
+        }
+    }
 }
