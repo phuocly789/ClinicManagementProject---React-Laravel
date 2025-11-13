@@ -255,4 +255,37 @@ class PatientService
             'data'        => $appointments
         ];
     }
+    public function handleCancelAppointment($appointment_id)
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            throw new AppErrors("Không tìm thấy người dùng", 404);
+        }
+
+        $patient = Patient::where('PatientId', $user->UserId)->first();
+
+        if (!$patient) {
+            throw new AppErrors("Không tìm thấy bệnh nhân", 404);
+        }
+
+        $appointment = Appointment::where('AppointmentId', $appointment_id)
+            ->where('PatientId', $patient->PatientId)
+            ->first();
+        if (!$appointment) {
+            throw new  AppErrors("Không tìm thấy lịch hẹn", 400);
+        }
+
+        if ($appointment->Status === 'Hủy') {
+            throw new AppErrors("Lịch hẹn đã bị hủy trước đó", 400);
+        }
+        if ($appointment->Status === Appointment::STATUS_IN_PROGRESS || $appointment->Status === Appointment::STATUS_COMPLETED) {
+            throw new AppErrors("Lịch hẹn đã được xử lý", 400);
+        }
+
+        $appointment->Status = Appointment::STATUS_CANCELLED;
+        $appointment->save();
+
+        return $appointment;
+    }
 }
