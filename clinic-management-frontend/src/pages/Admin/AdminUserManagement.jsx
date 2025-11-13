@@ -15,6 +15,34 @@ const initialFormState = {
   Specialty: '', LicenseNumber: '', StaffType: '',
 };
 
+// Tách FormField component ra ngoài để tránh re-render
+const FormField = React.memo(({ 
+  label, 
+  name, 
+  type = "text", 
+  required = false, 
+  value,
+  onChange,
+  error,
+  ...props 
+}) => (
+  <div className="mb-3">
+    <label className="form-label">
+      {label} {required && <span className="text-danger">*</span>}
+    </label>
+    <input
+      type={type}
+      name={name}
+      value={value || ''}
+      onChange={onChange}
+      className={`form-control ${error ? 'is-invalid' : ''}`}
+      required={required}
+      {...props}
+    />
+    {error && <div className="invalid-feedback">{error}</div>}
+  </div>
+));
+
 const AdminUserManagement = () => {
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
@@ -34,7 +62,7 @@ const AdminUserManagement = () => {
     status: filters.status,
   }), [debouncedSearchTerm, filters.gender, filters.role, filters.status]);
 
-  // Fetch users với xử lý lỗi tốt hơn
+  // Fetch users
   const fetchUsers = useCallback(async (page = 1) => {
     setLoading(true);
     try {
@@ -77,7 +105,7 @@ const AdminUserManagement = () => {
     fetchUsers(1);
   }, [apiFilters, fetchUsers]);
 
-  // Fetch roles với xử lý lỗi
+  // Fetch roles
   useEffect(() => {
     const fetchRoles = async () => {
       try {
@@ -104,6 +132,7 @@ const AdminUserManagement = () => {
 
   const handleCloseModal = () => {
     setModal({ type: null, user: null });
+    setFormData(initialFormState);
     setFormErrors({});
   };
 
@@ -124,13 +153,14 @@ const AdminUserManagement = () => {
         DateOfBirth: user.DateOfBirth ? dayjs(user.DateOfBirth).format('YYYY-MM-DD') : '',
         Role: user.roles && user.roles.length > 0 ? user.roles[0].RoleName : user.Role,
       });
+    } else {
+      setFormData(initialFormState);
     }
   };
 
   const handleFormChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    // Clear error khi người dùng bắt đầu nhập
     if (formErrors[name]) {
       setFormErrors(prev => ({ ...prev, [name]: '' }));
     }
@@ -179,7 +209,6 @@ const AdminUserManagement = () => {
 
     try {
       const payload = { ...formData };
-      // Không gửi password nếu đang edit và không thay đổi password
       if (isEditing && !payload.Password) {
         delete payload.Password;
       }
@@ -250,6 +279,7 @@ const AdminUserManagement = () => {
     }
   };
 
+  // Render modal function
   const renderModal = () => {
     if (!modal.type) return null;
 
@@ -278,26 +308,6 @@ const AdminUserManagement = () => {
       </div>
     );
 
-    const FormField = ({ label, name, type = "text", required = false, children, ...props }) => (
-      <div className="mb-3">
-        <label className="form-label">
-          {label} {required && <span className="text-danger">*</span>}
-        </label>
-        {children || (
-          <input
-            type={type}
-            name={name}
-            value={formData[name] || ''}
-            onChange={handleFormChange}
-            className={`form-control ${formErrors[name] ? 'is-invalid' : ''}`}
-            required={required}
-            {...props}
-          />
-        )}
-        {formErrors[name] && <div className="invalid-feedback">{formErrors[name]}</div>}
-      </div>
-    );
-
     switch (modal.type) {
       case 'add':
       case 'edit':
@@ -312,6 +322,9 @@ const AdminUserManagement = () => {
                   name="Username" 
                   required 
                   disabled={isEditing}
+                  value={formData.Username}
+                  onChange={handleFormChange}
+                  error={formErrors.Username}
                 />
               </div>
               <div className="col-md-6">
@@ -319,6 +332,9 @@ const AdminUserManagement = () => {
                   label="Họ tên" 
                   name="FullName" 
                   required 
+                  value={formData.FullName}
+                  onChange={handleFormChange}
+                  error={formErrors.FullName}
                 />
               </div>
               
@@ -330,6 +346,9 @@ const AdminUserManagement = () => {
                     type="password" 
                     required 
                     minLength={6}
+                    value={formData.Password}
+                    onChange={handleFormChange}
+                    error={formErrors.Password}
                   />
                 </div>
               )}
@@ -340,6 +359,9 @@ const AdminUserManagement = () => {
                   name="Email" 
                   type="email" 
                   required 
+                  value={formData.Email}
+                  onChange={handleFormChange}
+                  error={formErrors.Email}
                 />
               </div>
               <div className="col-md-6">
@@ -348,6 +370,9 @@ const AdminUserManagement = () => {
                   name="Phone" 
                   type="tel" 
                   required 
+                  value={formData.Phone}
+                  onChange={handleFormChange}
+                  error={formErrors.Phone}
                 />
               </div>
               
@@ -357,6 +382,8 @@ const AdminUserManagement = () => {
                   name="DateOfBirth" 
                   type="date"
                   max={dayjs().format('YYYY-MM-DD')}
+                  value={formData.DateOfBirth}
+                  onChange={handleFormChange}
                 />
               </div>
               
@@ -384,6 +411,8 @@ const AdminUserManagement = () => {
                 <FormField 
                   label="Địa chỉ" 
                   name="Address" 
+                  value={formData.Address}
+                  onChange={handleFormChange}
                 />
               </div>
               
@@ -417,6 +446,9 @@ const AdminUserManagement = () => {
                       name="Specialty" 
                       required 
                       placeholder="Nhập chuyên khoa"
+                      value={formData.Specialty}
+                      onChange={handleFormChange}
+                      error={formErrors.Specialty}
                     />
                   </div>
                   <div className="col-md-6">
@@ -425,6 +457,9 @@ const AdminUserManagement = () => {
                       name="LicenseNumber" 
                       required 
                       placeholder="Nhập số giấy phép hành nghề"
+                      value={formData.LicenseNumber}
+                      onChange={handleFormChange}
+                      error={formErrors.LicenseNumber}
                     />
                   </div>
                 </>
@@ -661,7 +696,8 @@ const AdminUserManagement = () => {
                   <Pagination 
                     pageCount={pagination.totalPages} 
                     onPageChange={({ selected }) => fetchUsers(selected + 1)} 
-                    forcePage={pagination.currentPage - 1} 
+                    currentPage={pagination.currentPage - 1} 
+                    isLoading ={loading}
                   />
                 </div>
               )}

@@ -21,7 +21,7 @@ import PatientLayout from "./Components/Patient/PatientLayout.jsx";
 import AdminSidebar from "./Components/Sidebar/AdminSidebar.jsx";
 import DoctorSidebar from "./Components/Sidebar/DoctorSidebar.jsx";
 import Home from "./pages/Home.jsx";
-import PDFEditorPage from './pages/Doctors/PrintsPDF/PDFPreviewEditor.jsx';
+import PDFEditorPage from "./pages/Doctors/PrintsPDF/PDFPreviewEditor.jsx";
 import TechnicianSidebar from "./Components/Sidebar/TechnicianSidebar.jsx";
 import TechSchedule from "./pages/Technician/TechSchedule.jsx";
 import TechnicianDashboard from "./pages/Technician/TechnicianDashboard.jsx";
@@ -32,6 +32,11 @@ import ProtectedRoute from "./Components/ProtectedRoute/ProtectedRoute.jsx";
 import ReceptionSidebar from "./Components/Sidebar/ReceptionSidebar.jsx";
 import ReceptionistDashboard from "./pages/Receptionist/ReceptionistDashboard.jsx";
 import ReceptionistPatent from "./pages/Receptionist/ReceptionistPatent.jsx";
+import PatientManagement from "./pages/Patient/PatientManagement.jsx";
+import AdminServiceManagement from "./pages/Admin/AdminServiceManagement.jsx";
+import PaymentSection from "./pages/Payment/PaymentSection.jsx";
+import PaymentResult from "./pages/Payment/PaymentResult.jsx";
+
 function App() {
   return (
     <Routes>
@@ -87,7 +92,15 @@ function App() {
       <Route path={path.TECHNICIAN.ROOT} element={<TechnicianSidebar />}>
         <Route index element={<TechSchedule />} />
         <Route path={path.TECHNICIAN.SCHEDULE} element={<TechSchedule />} />
-        <Route path={path.TECHNICIAN.TEST_RESULTS} element={<TechnicianDashboard />} />
+        <Route
+          path={path.TECHNICIAN.TEST_RESULTS}
+          element={<TechnicianDashboard />}
+        />
+      </Route>
+      {/* Payment */}
+      <Route path={path.PayMent.ROOT} element={<PaymentSection />}>
+        <Route index element={<PaymentSection />} />
+        <Route path={path.PayMent.PAY_RESULT} element={<PaymentResult />} />
       </Route>
     </Routes>
   );

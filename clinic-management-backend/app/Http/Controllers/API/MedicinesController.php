@@ -14,6 +14,7 @@ use Maatwebsite\Excel\HeadingRowImport;
 use Maatwebsite\Excel\Imports\HeadingRowFormatter;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class MedicinesController extends Controller
 {
@@ -42,7 +43,7 @@ class MedicinesController extends Controller
         if ($search = $request->get('search')) {
             $search = trim($search);
             $like = "%" . mb_strtolower($search) . "%";
-        
+
             $query->whereRaw("search_text ILIKE ?", [$like]);
         }
 
@@ -66,8 +67,17 @@ class MedicinesController extends Controller
 
         // 5. TỒN KHO THẤP
         if ($request->get('low_stock') === '1') {
-            $threshold = $request->get('threshold', 100);
-            $query->where('StockQuantity', '<', $threshold);
+            $query->whereRaw('StockQuantity < LowStockThreshold');
+        }
+
+        // THÊM SAU CÁC FILTER KHÁC
+        if ($expiryStatus = $request->get('expiry_status')) {
+            $today = Carbon::today();
+            if ($expiryStatus === 'expired') {
+                $query->where('ExpiryDate', '<', $today);
+            } elseif ($expiryStatus === 'soon') {
+                $query->whereBetween('ExpiryDate', [$today, $today->copy()->addDays(30)]);
+            }
         }
 
         $query->orderBy('MedicineId', 'asc');
@@ -98,6 +108,8 @@ class MedicinesController extends Controller
             'Price' => 'required|numeric|min:0|max:9999999999999999.99',
             'StockQuantity' => 'required|integer|min:0',
             'Description' => 'nullable|string|max:500',
+            'ExpiryDate' => 'required|date',
+            'LowStockThreshold' => 'nullable|integer|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -113,7 +125,9 @@ class MedicinesController extends Controller
             'Unit',
             'Price',
             'StockQuantity',
-            'Description'
+            'Description',
+            'ExpiryDate',
+            'LowStockThreshold'
         ]));
 
         return response()->json([
@@ -139,6 +153,8 @@ class MedicinesController extends Controller
             'Price' => 'required|numeric|min:0|max:9999999999999999.99',
             'StockQuantity' => 'required|integer|min:0',
             'Description' => 'nullable|string|max:500',
+            'ExpiryDate' => 'required|date',
+            'LowStockThreshold' => 'nullable|integer|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -154,7 +170,9 @@ class MedicinesController extends Controller
             'Unit',
             'Price',
             'StockQuantity',
-            'Description'
+            'Description',
+            'ExpiryDate',
+            'LowStockThreshold'
         ]));
 
         return response()->json([
@@ -203,11 +221,20 @@ class MedicinesController extends Controller
         $columns = array_filter(array_map('trim', explode(',', $columnsStr))); // Parse comma-separated string to array, trim, remove empty
 
         if (empty($columns)) {
-            $columns = ['MedicineId', 'MedicineName', 'MedicineType', 'Unit', 'Price', 'StockQuantity', 'Description']; // Default
+            $columns = ['MedicineId', 'MedicineName', 'MedicineType', 'Unit', 'Price', 'StockQuantity', 'Description', 'ExpiryDate', 'LowStockThreshold']; // Default
         }
 
         if (count($columns) > 20) {
             return response()->json(['message' => 'Bạn đã chọn quá nhiều cột. Tối đa 20 cột/lần xuất.'], 422);
+        }
+
+        if ($filters['expiry_status'] ?? null) {
+            $today = Carbon::today();
+            if ($filters['expiry_status'] === 'expired') {
+                $query->where('ExpiryDate', '<', $today);
+            } elseif ($filters['expiry_status'] === 'soon') {
+                $query->whereBetween('ExpiryDate', [$today, $today->copy()->addDays(30)]);
+            }
         }
 
         $query = Medicine::query();
@@ -413,13 +440,35 @@ class MedicinesController extends Controller
             'Unit',
             'Price',
             'StockQuantity',
-            'Description'
+            'Description',
+            'ExpiryDate',
+            'LowStockThreshold',
         ];
 
         $exampleData = [
-            ['', 'Paracetamol', 'Giảm đau, hạ sốt', 'Viên', 500, 1000, 'Thuốc giảm đau, hạ sốt thông dụng']
+            ['', 'Paracetamol', 'Thuốc viên', 'Viên', 5000, 1000, 'Giảm đau, hạ sốt', '2026-12-31', 10]
         ];
 
         return Excel::download(new MedicinesExport([], $headers, $exampleData), 'medicines_template.xlsx');
+    }
+
+    public function getAlerts()
+    {
+        $today = Carbon::today();
+        $soon = $today->copy()->addDays(30);
+
+        $expiring = Medicine::whereDate('ExpiryDate', '>=', $today)
+            ->whereDate('ExpiryDate', '<=', $soon)
+            ->get();
+
+        $expired = Medicine::whereDate('ExpiryDate', '<', $today)->get();
+
+        $lowStock = Medicine::whereColumn('StockQuantity', '<=', 'LowStockThreshold')->get();
+
+        return response()->json([
+            'expiring' => $expiring,
+            'expired' => $expired,
+            'lowStock' => $lowStock,
+        ]);
     }
 }
