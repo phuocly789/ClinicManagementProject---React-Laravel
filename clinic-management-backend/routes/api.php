@@ -58,6 +58,7 @@ Route::get('/medicines/template', [MedicinesController::class, 'downloadTemplate
 Route::post('/medicines/dry-run', [MedicinesController::class, 'dryRunImport']);
 Route::post('/medicines/import', [MedicinesController::class, 'import']);
 Route::get('/medicines/export', [MedicinesController::class, 'export']);
+Route::post('/medicines/suggest', [MedicinesController::class, 'suggest']);
 
 Route::get('/schedules', [ScheduleController::class, 'index']);
 Route::post('/schedules', [ScheduleController::class, 'createSchedule']);

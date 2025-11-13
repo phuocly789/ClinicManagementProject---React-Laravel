@@ -9,12 +9,11 @@ use Illuminate\Support\Facades\Validator;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\MedicinesExport;
 use App\Imports\MedicinesImport;
-use Illuminate\Support\Facades\Storage;
-use Maatwebsite\Excel\HeadingRowImport;
 use Maatwebsite\Excel\Imports\HeadingRowFormatter;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
 
 class MedicinesController extends Controller
 {
@@ -470,5 +469,104 @@ class MedicinesController extends Controller
             'expired' => $expired,
             'lowStock' => $lowStock,
         ]);
+    }
+
+    public function suggest(Request $request)
+    {
+        $request->validate(['name' => 'required|string|max:100']);
+        $name = $request->name;
+
+        // Cache key để tránh gọi AI nhiều lần (lưu 24h)
+        $cacheKey = 'hf_suggest_' . md5(strtolower($name));
+
+        // Trả về từ cache nếu có
+        return Cache::remember($cacheKey, 3600 * 24, function () use ($name) {
+            // Model AI miễn phí, mạnh, hỗ trợ tiếng Việt
+            $model = 'mistralai/Mistral-7B-Instruct-v0.3';
+
+            // Prompt chi tiết để AI trả JSON chuẩn
+            $prompt = "Bạn là dược sĩ chuyên nghiệp. Dựa trên tên thuốc: \"{$name}\", trả về thông tin theo định dạng JSON chính xác sau (không thêm text thừa, chỉ JSON thuần):\n\n"
+                . "{\n"
+                . "  \"type\": \"Loại thuốc (chọn trong: Thuốc viên, Thuốc nước, Thuốc tiêm, Thuốc bột, Thuốc bôi, Thuốc nhỏ mắt)\",\n"
+                . "  \"unit\": \"Đơn vị (chọn trong: Viên, Chai, Ống, Gói, Tuýp, Lọ)\",\n"
+                . "  \"description\": \"Mô tả ngắn gọn công dụng (tiếng Việt, 1-2 câu)\",\n"
+                . "  \"warnings\": \"Cảnh báo tương tác hoặc tác dụng phụ (tiếng Việt, ngắn gọn)\"\n"
+                . "}\n\n"
+                . "Ví dụ cho Paracetamol: {\"type\": \"Thuốc viên\", \"unit\": \"Viên\", \"description\": \"Giảm đau, hạ sốt.\", \"warnings\": \"Không dùng quá 4g/ngày, tránh với bệnh gan.\"}";
+
+            try {
+                // ENDPOINT MỚI: https://router.huggingface.co/hf-inference (thay vì api-inference.huggingface.co)
+                $response = Http::withHeaders([
+                    'Authorization' => 'Bearer ' . env('HF_TOKEN'),
+                    'Content-Type' => 'application/json',
+                ])->post("https://router.huggingface.co/hf-inference/models/{$model}", [  // ← Thay đổi chính ở đây
+                    'inputs' => $prompt,
+                    'parameters' => [
+                        'max_new_tokens' => 200,  // Giới hạn output ngắn gọn
+                        'temperature' => 0.3,     // Ít random, chính xác hơn
+                        'return_full_text' => false,
+                        'wait_for_model' => true, // Chờ model load nếu cold start
+                    ],
+                ]);
+
+                // Log response để debug (xóa sau khi test OK)
+                Log::info('HF Response Status: ' . $response->status() . ', Body: ' . $response->body());
+
+                if (!$response->successful()) {
+                    $error = $response->json('error') ?? 'Lỗi không xác định từ HF';
+                    Log::error('Hugging Face Error: ' . $error);
+
+                    // Fallback: Trả dữ liệu mặc định nếu AI lỗi (không để user thấy lỗi)
+                    return [
+                        'type' => 'Thuốc viên',
+                        'unit' => 'Viên',
+                        'description' => 'Thông tin đang được cập nhật từ nguồn y tế.',
+                        'warnings' => 'Vui lòng tham khảo bác sĩ hoặc dược sĩ trước khi sử dụng.'
+                    ];
+                }
+
+                $result = $response->json();
+                $generatedText = $result[0]['generated_text'] ?? $result['generated_text'] ?? '';  // Handle cả 2 format
+
+                // Parse JSON từ text (lấy phần {} đầu tiên)
+                if (preg_match('/\{.*\}/s', $generatedText, $matches)) {
+                    $jsonString = $matches[0];
+                } else {
+                    $jsonString = '{}';
+                }
+
+                $data = json_decode($jsonString, true);
+
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    Log::warning('AI JSON parse failed: ' . $generatedText);
+
+                    // Fallback nếu parse lỗi
+                    return [
+                        'type' => 'Thuốc viên',
+                        'unit' => 'Viên',
+                        'description' => 'Không thể phân tích dữ liệu AI lúc này.',
+                        'warnings' => 'Thử lại sau hoặc nhập thủ công.'
+                    ];
+                }
+
+                // Đảm bảo fields đầy đủ (nếu AI thiếu)
+                return [
+                    'type' => $data['type'] ?? 'Thuốc viên',
+                    'unit' => $data['unit'] ?? 'Viên',
+                    'description' => $data['description'] ?? 'Không có mô tả chi tiết.',
+                    'warnings' => $data['warnings'] ?? 'Không có cảnh báo cụ thể.'
+                ];
+            } catch (\Exception $e) {
+                Log::error('Hugging Face Exception: ' . $e->getMessage());
+
+                // Fallback chung
+                return [
+                    'type' => 'Thuốc viên',
+                    'unit' => 'Viên',
+                    'description' => 'Lỗi kết nối AI tạm thời.',
+                    'warnings' => 'Vui lòng kiểm tra thủ công.'
+                ];
+            }
+        });
     }
 }
