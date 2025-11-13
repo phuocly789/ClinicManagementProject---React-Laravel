@@ -205,9 +205,11 @@ Route::prefix('payments')->group(function () {
     Route::post('/momo/create', [PaymentController::class, 'createPayment']);
     Route::post('/momo/callback', [PaymentController::class, 'handleCallback'])->name('payment.callback');
     Route::get('/momo/return', [PaymentController::class, 'handleReturn'])->name('payment.return');
+    
 
     // Invoice Routes
     Route::get('/invoices', [InvoiceController::class, 'index']);
+    Route::get('/invoices/payment-history', [InvoiceController::class, 'paymentHistory']);
     Route::get('/invoices/{id}', [InvoiceController::class, 'show']);
     Route::post('/invoices', [InvoiceController::class, 'store']);
 });
