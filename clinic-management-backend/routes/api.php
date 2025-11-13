@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\API\Service\AdminServiceController;
 use App\Http\Controllers\API\Receptionist\AppointmentRecepController;
+use App\Http\Controllers\API\Receptionist\RoomController;
 use App\Http\Controllers\API\ReportRevenueController;
 use App\Http\Controllers\API\ScheduleController;
 use Dba\Connection;
@@ -162,14 +163,17 @@ Route::prefix('technician')->group(function () {
 Route::prefix('receptionist')->group(function () {
     //lịch hẹn
     Route::get('/appointments/today', [AppointmentRecepController::class, 'GetAppointmentToday']);
-    Route::post('/appointments', [AppointmentRecepController::class, 'CreateAppoitment']);
-    Route::put('/appointments/{appointmentId}/status', [AppointmentRecepController::class, 'UpdateAppointmentStatus']);
     //hàng chờ
+    Route::get('/queue', [QueueController::class, 'GetQueueByDate']);
     Route::get('/queue/{room_id}', [QueueController::class, 'GetQueueByRoomAndDate']);
-    Route::post('/queue', [QueueController::class, 'CreateQueue']);
+    Route::post('/queueNoDirect', [QueueController::class, 'CreateQueue']);
+    Route::post('/queueDirect', [QueueController::class, 'CreateDicrectAppointment']);
     Route::put('/queue/{queueId}/status', [QueueController::class, 'UpdateQueueStatus']);
-    Route::delete('/queue/{queueId}', [QueueController::class, 'DeleteQueue']);
     Route::put('/queue/{queueId}/prioritize', [QueueController::class, 'PrioritizeQueue']);
+    Route::delete('/queue/{queueId}', [QueueController::class, 'DeleteQueue']);
+    //Rooms
+    Route::get('/rooms', [RoomController::class, 'getAllRooms']);
+
 });
 
 // Patient Routes
@@ -179,6 +183,9 @@ Route::middleware(['auth:api'])
     ->post('/patient/send-vefication-email', [PatientController::class, 'sendVerificationEmail']);
 Route::middleware(['auth:api'])
     ->post('/account/change-password', [PatientController::class, 'changePassword']);
+
+// Route::middleware()->post('/auth/login', [AuthController::class, 'login']);
+
 Route::middleware(['auth:api'])
     ->get('/patient/services', [PatientController::class, 'getAllServices']);
 Route::middleware(['auth:api'])
