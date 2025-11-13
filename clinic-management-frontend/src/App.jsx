@@ -43,51 +43,78 @@ function App() {
       {/* Home */}
       <Route path={path.HOME} element={<Home />} />
       {/* Admin */}
-      <Route path={path.ADMIN.ROOT} element={<AdminSidebar />} >
+      <Route path={path.ADMIN.ROOT} element={<AdminSidebar />}>
         <Route path={path.ADMIN.DASHBOARD} element={<AdminDashboard />} />
-        <Route path={path.ADMIN.REVENUE_REPORT} element={<AdminRevenueReport />} />
+        <Route
+          path={path.ADMIN.REVENUE_REPORT}
+          element={<AdminRevenueReport />}
+        />
         <Route
           path={path.ADMIN.SCHEDULE.MANAGEMENT}
           element={<AdminScheduleManagement />}
         />
-        <Route path={path.ADMIN.USER.MANAGEMENT} element={<AdminUserManagement />} />
-        <Route path={path.ADMIN.MEDICINE.MANAGEMENT} element={<AdminMedicine />} />
+        <Route
+          path={path.ADMIN.USER.MANAGEMENT}
+          element={<AdminUserManagement />}
+        />
+        <Route
+          path={path.ADMIN.MEDICINE.MANAGEMENT}
+          element={<AdminMedicine />}
+        />
         <Route path={path.ADMIN.INVENTORY} element={<AdminInventory />} />
-        <Route path={path.ADMIN.SUPPLIERS.MANAGEMENT} element={<AdminSuppliers />} />
-        <Route path={path.ADMIN.MEDICINE.MANAGEMENT} element={<AdminMedicine />} />
+        <Route
+          path={path.ADMIN.SUPPLIERS.MANAGEMENT}
+          element={<AdminSuppliers />}
+        />
+        <Route
+          path={path.ADMIN.MEDICINE.MANAGEMENT}
+          element={<AdminMedicine />}
+        />
       </Route>
-
       {/* Receptionist */}
       <Route path={path.RECEPTIONIST.ROOT} element={<ReceptionSidebar />}>
         <Route index element={<ReceptionistDashboard />} />
-        <Route path={path.RECEPTIONIST.DASHBOARD} element={<ReceptionistDashboard />} />
-        <Route path={path.RECEPTIONIST.PATIENT_MANAGEMENT} element={<ReceptionistPatent />} />
+        <Route
+          path={path.RECEPTIONIST.DASHBOARD}
+          element={<ReceptionistDashboard />}
+        />
+        <Route
+          path={path.RECEPTIONIST.PATIENT_MANAGEMENT}
+          element={<ReceptionistPatent />}
+        />
       </Route>
       {/* Doctor */}
       <Route path={path.DOCTOR.ROOT} element={<DoctorSidebar />}>
         <Route index element={<DoctorDashboard />} />
-        <Route path={path.DOCTOR.TODAY_APPOINTMENTS} element={<DoctorDashboard />} />
+        <Route
+          path={path.DOCTOR.TODAY_APPOINTMENTS}
+          element={<DoctorDashboard />}
+        />
         <Route path={path.DOCTOR.SCHEDULE} element={<DoctorSchedule />} />
-        <Route path={path.DOCTOR.PATIENT_HISTORY} element={<HistorySection />} />
-        <Route path={path.DOCTOR.DOCTOR_PRINT_PDF} element={<PDFEditorPage />} />
+        <Route
+          path={path.DOCTOR.PATIENT_HISTORY}
+          element={<HistorySection />}
+        />
+        <Route
+          path={path.DOCTOR.DOCTOR_PRINT_PDF}
+          element={<PDFEditorPage />}
+        />
       </Route>
-
       {/* Patient */}
       <Route path={path.PATIENT.ROOT} element={<PatientLayout />}>
         <Route
           path={path.PATIENT.PROFILE.MANAGEMENT}
           element={<PatientProfile />}
         />
-        {/* <Route path={path.PATIENT.BOOKING} element={<PatientBooking />} />
-          <Route path={path.PATIENT.HISTORY} element={<PatientHistory />} /> */}
+        <Route
+          path={path.PATIENT.APPOINTMENT.MANAGEMENT}
+          element={<PatientManagement />}
+        />
+        {/* <Route path={path.PATIENT.HISTORY} element={<PatientHistory />} /> */}
       </Route>
       <Route path={path.LOGIN} element={<LoginPage />} />{" "}
       <Route path={path.REGISTER} element={<Register />} />{" "}
-      <Route
-        path={path.VERIFICATION_EMAIL}
-        element={<VerifyEmailPage />}
-      />
-
+      <Route path={path.VERIFICATION_EMAIL} element={<VerifyEmailPage />} />
       {/* Technician */}
       <Route path={path.TECHNICIAN.ROOT} element={<TechnicianSidebar />}>
         <Route index element={<TechSchedule />} />
