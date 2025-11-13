@@ -20,6 +20,9 @@ const patientService = {
     },
     cancelAppointment: async (appointment_id) => {
         return axios.put(`/api/patient/appointments/cancel?id=${appointment_id}`);
+    },
+    getAppointmentDetail: async (appointment_id) => {
+        return axios.get(`/api/patient/appointments/detail?id=${appointment_id}`);
     }
 }
 

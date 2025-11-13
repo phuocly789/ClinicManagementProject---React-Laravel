@@ -187,6 +187,8 @@ Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
     ->get('/patient/appointments/histories', [PatientController::class, 'appointmentHistories']);
 Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
     ->put('/patient/appointments/cancel', [PatientController::class, 'cancelAppointment']);
+Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
+    ->get('/patient/appointments/detail', [PatientController::class, 'getDetailAppointment']);
 // Route::middleware()->post('/auth/login', [AuthController::class, 'login']);
 
 
@@ -207,7 +209,7 @@ Route::prefix('payments')->group(function () {
     Route::post('/momo/create', [PaymentController::class, 'createPayment']);
     Route::post('/momo/callback', [PaymentController::class, 'handleCallback'])->name('payment.callback');
     Route::get('/momo/return', [PaymentController::class, 'handleReturn'])->name('payment.return');
-    
+
 
     // Invoice Routes
     Route::get('/invoices', [InvoiceController::class, 'index']);
