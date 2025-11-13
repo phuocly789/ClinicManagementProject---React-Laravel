@@ -38,7 +38,10 @@ export const path = {
 
     },
     RECEPTIONIST: {
-        ROOT: "/receptionist"
+        ROOT: "/receptionist",
+        DASHBOARD: "/receptionist/dashboard",
+        PATIENT_MANAGEMENT: "/receptionist/patient-management",
+
     },
     USER: {
         ROOT: "/user",
@@ -85,18 +88,25 @@ export const path = {
 
     PayMent:{
         ROOT:"/payment",
+        PAY_RESULT:"result"
     }
 };
 
 export const USER_ROLE = {
     ADMIN: "Admin",
     PATIENT: "Bệnh nhân",
+    DOCTOR: "Bác sĩ",
+    TECHNICIAN: "Kỹ thuật viên",
+    RECEPTIONIST: "Lễ tân",
 };
 
 
 export const ROLE_ROUTE = {
     [USER_ROLE.ADMIN]: path.ADMIN.ROOT,
     [USER_ROLE.PATIENT]: path.PATIENT.ROOT,
+    [USER_ROLE.DOCTOR]: path.DOCTOR.ROOT,
+    [USER_ROLE.TECHNICIAN]: path.TECHNICIAN.ROOT,
+    [USER_ROLE.RECEPTIONIST]: path.RECEPTIONIST.ROOT,
 };
 
 export const CRUD_ACTIONS = {

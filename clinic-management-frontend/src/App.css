@@ -379,6 +379,47 @@ ul{
 .event-technician .event-icon {
   color: var(--grey-color);
 }
+/* src/components/PaymentSection.css */
+.stats-card {
+  transition: all 0.3s ease;
+  border-radius: 12px;
+}
+
+.stats-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
+}
+
+.hover-effect:hover {
+  background-color: #f8f9fa;
+  transform: translateX(5px);
+  transition: all 0.3s ease;
+}
+
+.dashboard-tab {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .stats-card .fs-2 {
+    font-size: 1.5rem !important;
+  }
+  
+  .table-responsive {
+    font-size: 0.875rem;
+  }
 
 dl, ol, ul {
     margin-top: 0;

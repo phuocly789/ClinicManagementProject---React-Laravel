@@ -46,10 +46,28 @@ class InvoiceController extends Controller
                 }
             }
 
-            $invoices = $query->orderBy('InvoiceDate', 'desc')->get();
+            // THÊM: Filter cho payment history
+            if ($request->has('has_payment_info') && $request->has_payment_info) {
+                $query->whereNotNull('PaymentMethod')
+                    ->where('PaymentMethod', '!=', '');
+            }
+
+            if ($request->has('with_transaction') && $request->with_transaction) {
+                $query->whereNotNull('TransactionId')
+                    ->where('TransactionId', '!=', '');
+            }
+
+            // THÊM: Xử lý phân trang
+            $perPage = $request->get('limit', 10); // Mặc định 10 items/trang
+            $page = $request->get('page', 1); // Mặc định trang 1
+
+            // Sử dụng paginate thay vì get
+            $paginatedInvoices = $query->orderBy('InvoiceDate', 'desc')
+                ->orderBy('InvoiceId', 'desc')
+                ->paginate($perPage, ['*'], 'page', $page);
 
             // Format data
-            $formattedInvoices = $invoices->map(function ($invoice) {
+            $formattedInvoices = $paginatedInvoices->map(function ($invoice) {
                 $patientName = 'N/A';
                 $patientPhone = 'N/A';
 
@@ -82,7 +100,17 @@ class InvoiceController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $formattedInvoices
+                'data' => [
+                    'invoices' => $formattedInvoices,
+                    'pagination' => [
+                        'current_page' => $paginatedInvoices->currentPage(),
+                        'last_page' => $paginatedInvoices->lastPage(),
+                        'per_page' => $paginatedInvoices->perPage(),
+                        'total' => $paginatedInvoices->total(),
+                        'from' => $paginatedInvoices->firstItem(),
+                        'to' => $paginatedInvoices->lastItem(),
+                    ]
+                ]
             ]);
 
         } catch (\Exception $e) {
@@ -191,6 +219,96 @@ class InvoiceController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Lỗi khi tạo hóa đơn: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Lấy danh sách hóa đơn đã thanh toán (cho tab lịch sử thanh toán)
+    public function paymentHistory(Request $request)
+    {
+        try {
+            $query = Invoice::with([
+                'appointment.patient.user',
+                'invoice_details.service',
+                'invoice_details.medicine'
+            ])->where('Status', 'Đã thanh toán');
+
+            // TÌM KIẾM AN TOÀN
+            if ($request->has('search') && $request->search) {
+                $search = trim($request->search);
+
+                if (strlen($search) > 0 && strlen($search) <= 100) {
+                    $safeSearch = str_replace(['%', '_', '\\'], ['\%', '\_', '\\\\'], $search);
+
+                    $query->where(function ($q) use ($safeSearch) {
+                        $q->where('InvoiceId', 'LIKE', "%{$safeSearch}%")
+                            ->orWhereHas('appointment.patient.user', function ($patientQuery) use ($safeSearch) {
+                                $patientQuery->where('FullName', 'LIKE', "%{$safeSearch}%")
+                                    ->orWhere('Phone', 'LIKE', "%{$safeSearch}%");
+                            });
+                    });
+                }
+            }
+
+            // Phân trang
+            $perPage = $request->get('limit', 20); // Tăng limit cho lịch sử
+            $page = $request->get('page', 1);
+
+            $paginatedInvoices = $query->orderBy('InvoiceDate', 'desc')
+                ->orderBy('InvoiceId', 'desc')
+                ->paginate($perPage, ['*'], 'page', $page);
+
+            // Format data (giống như method index)
+            $formattedInvoices = $paginatedInvoices->map(function ($invoice) {
+                $patientName = 'N/A';
+                $patientPhone = 'N/A';
+
+                if (
+                    $invoice->appointment &&
+                    $invoice->appointment->patient &&
+                    $invoice->appointment->patient->user
+                ) {
+                    $patientName = $invoice->appointment->patient->user->FullName ?? 'N/A';
+                    $patientPhone = $invoice->appointment->patient->user->Phone ?? 'N/A';
+                }
+
+                return [
+                    'id' => $invoice->InvoiceId,
+                    'code' => 'HD' . str_pad($invoice->InvoiceId, 6, '0', STR_PAD_LEFT),
+                    'patient_name' => $patientName,
+                    'patient_phone' => $patientPhone,
+                    'patient_id' => $invoice->PatientId,
+                    'date' => $invoice->InvoiceDate ? $invoice->InvoiceDate->format('d/m/Y') : 'N/A',
+                    'total' => (float) $invoice->TotalAmount,
+                    'status' => $invoice->Status,
+                    'payment_method' => $invoice->PaymentMethod,
+                    'order_id' => $invoice->OrderId,
+                    'transaction_id' => $invoice->TransactionId,
+                    'paid_at' => $invoice->Paidat ? $invoice->Paidat->format('d/m/Y H:i') : null,
+                    'appointment_id' => $invoice->AppointmentId,
+                    'can_pay' => $invoice->Status === 'Chờ thanh toán'
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'invoices' => $formattedInvoices,
+                    'pagination' => [
+                        'current_page' => $paginatedInvoices->currentPage(),
+                        'last_page' => $paginatedInvoices->lastPage(),
+                        'per_page' => $paginatedInvoices->perPage(),
+                        'total' => $paginatedInvoices->total(),
+                        'from' => $paginatedInvoices->firstItem(),
+                        'to' => $paginatedInvoices->lastItem(),
+                    ]
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi lấy lịch sử thanh toán: ' . $e->getMessage()
             ], 500);
         }
     }
