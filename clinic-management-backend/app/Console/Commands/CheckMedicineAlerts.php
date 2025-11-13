@@ -58,22 +58,23 @@ class CheckMedicineAlerts extends Command
         }
     }
 
-
     private function triggerAlert($medicine, $type, $message)
     {
+        // Kiểm tra tránh gửi trùng trong ngày
         $existing = Alert::where('medicine_id', $medicine->MedicineId)
             ->where('type', $type)
             ->whereDate('created_at', now()->toDateString())
             ->first();
 
         if (!$existing) {
+            // Tạo alert
             $alert = Alert::create([
                 'medicine_id' => $medicine->MedicineId,
                 'type' => $type,
                 'message' => $message,
             ]);
 
-            // TRUYỀN ID THAY VÌ MODEL
+            // GỌI EVENT ĐÚNG CÁCH
             event(new MedicineAlertTriggered($alert->id, $medicine->MedicineId));
         }
     }

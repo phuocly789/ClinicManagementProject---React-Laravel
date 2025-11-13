@@ -13,12 +13,16 @@ class MedicineAlertMail extends Mailable
 {
     use Queueable, SerializesModels;
 
+    public $alert;
+    public $medicine;
+
     /**
      * Create a new message instance.
      */
-    public function __construct()
+    public function __construct($alert, $medicine)
     {
-        //
+        $this->alert = $alert;
+        $this->medicine = $medicine;
     }
 
     /**
@@ -49,5 +53,12 @@ class MedicineAlertMail extends Mailable
     public function attachments(): array
     {
         return [];
+    }
+
+
+    public function build()
+    {
+        return $this->subject($this->alert->message)
+            ->view('emails.medicine-alert');
     }
 }

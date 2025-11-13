@@ -3,13 +3,16 @@
 namespace App\Events;
 
 use Illuminate\Broadcasting\Channel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Broadcasting\InteractsWithSockets;
+use Illuminate\Broadcasting\PrivateChannel;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
-class MedicineAlertTriggered implements ShouldBroadcast
+class MedicineAlertTriggered implements ShouldBroadcastNow
 {
-    use Dispatchable, SerializesModels;
+    use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public $alertId;
     public $medicineId;
@@ -20,24 +23,29 @@ class MedicineAlertTriggered implements ShouldBroadcast
         $this->medicineId = $medicineId;
     }
 
-    public function broadcastOn()
+    public function broadcastOn(): Channel
     {
-        return new Channel('admin-alerts');
+        return new PrivateChannel('admin-alerts');
     }
 
-    public function broadcastAs()
+    public function broadcastAs(): string
     {
-        return 'medicine.alert';
+        return 'MedicineAlertTriggered';
     }
 
-    public function broadcastWith()
+    public function broadcastWith(): array
     {
         $alert = \App\Models\Alert::find($this->alertId);
         $medicine = \App\Models\Medicine::find($this->medicineId);
 
+        if (!$alert || !$medicine) {
+            Log::warning("Broadcast failed: Alert ID {$this->alertId} or Medicine ID {$this->medicineId} not found");
+            return [];
+        }
+
         return [
-            'alert' => $alert,
-            'medicine' => $medicine,
+            'alert' => $alert->toArray(),
+            'medicine' => $medicine->toArray(),
         ];
     }
 }

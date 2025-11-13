@@ -981,16 +981,19 @@ const AdminMedicine = () => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [currentView, fetchMedicines, filterParams]);
-
+  }, [currentView, filterParams, fetchMedicines]);
   useEffect(() => {
-    const channel = window.Echo.channel('admin-alerts');
+    console.log('Echo: Đang lắng nghe admin-alerts...');
+
+    const channel = window.Echo.private('admin-alerts');
 
     const handler = (e) => {
+      console.log('TOAST NHẬN ĐƯỢC:', e);
       const { alert, medicine } = e;
+      if (!alert || !medicine) return;
+
       let title = '';
       let variant = 'warning';
-
       if (alert.type === 'expired') {
         title = 'THUỐC HẾT HẠN';
         variant = 'danger';
@@ -1004,19 +1007,20 @@ const AdminMedicine = () => {
 
       showToast(variant, `${title}: ${medicine.MedicineName}`);
 
-      // Refresh bảng nếu đang ở trang list
+      // Dùng callback để lấy state mới nhất
       if (currentView === 'list') {
         fetchMedicines(currentPage + 1, filterParams);
       }
     };
 
-    channel.listen('.medicine.alert', handler);
+    channel.listen('.MedicineAlertTriggered', handler);
 
     return () => {
-      channel.stopListening('.medicine.alert');
+      channel.stopListening('.MedicineAlertTriggered');
       window.Echo.leave('admin-alerts');
+      console.log('Echo cleanup');
     };
-  }, [showToast, fetchMedicines]);
+  }, [showToast]);
 
   const handlePageChange = useCallback(({ selected }) => {
     fetchMedicines(selected + 1, filterParams);
