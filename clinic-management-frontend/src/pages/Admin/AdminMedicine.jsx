@@ -984,10 +984,9 @@ const AdminMedicine = () => {
   }, [currentView, fetchMedicines, filterParams]);
 
   useEffect(() => {
-    if (currentView !== 'list') return;
-
     const channel = window.Echo.channel('admin-alerts');
-    channel.listen('.medicine.alert', (e) => {
+
+    const handler = (e) => {
       const { alert, medicine } = e;
       let title = '';
       let variant = 'warning';
@@ -1004,14 +1003,20 @@ const AdminMedicine = () => {
       }
 
       showToast(variant, `${title}: ${medicine.MedicineName}`);
-      fetchMedicines(currentPage + 1, filterParams); // Refresh bảng
-    });
+
+      // Refresh bảng nếu đang ở trang list
+      if (currentView === 'list') {
+        fetchMedicines(currentPage + 1, filterParams);
+      }
+    };
+
+    channel.listen('.medicine.alert', handler);
 
     return () => {
       channel.stopListening('.medicine.alert');
       window.Echo.leave('admin-alerts');
     };
-  }, [currentView, currentPage, filterParams, showToast, fetchMedicines]);
+  }, [showToast, fetchMedicines]);
 
   const handlePageChange = useCallback(({ selected }) => {
     fetchMedicines(selected + 1, filterParams);

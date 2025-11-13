@@ -39,7 +39,7 @@ services:
       bash -c "
         if [ ! -d vendor ]; then composer install --no-dev --optimize-autoloader; fi &&
         php artisan migrate --force &&
-        php artisan reverb:serve --host=0.0.0.0 --port=8080 > /dev/null 2>&1 &
+        php artisan reverb:start --host=0.0.0.0 --port=8080 --debug &
         php artisan serve --host=0.0.0.0 --port=8000
       "
     depends_on:
