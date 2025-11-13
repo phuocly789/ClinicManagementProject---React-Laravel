@@ -214,10 +214,15 @@ Route::prefix('admin/services')->group(function () {
 // Payment Routes
 // MoMo Payment Routes
 Route::prefix('payments')->group(function () {
+    // Payment APIs
     Route::post('/momo/create', [PaymentController::class, 'createPayment']);
     Route::post('/momo/callback', [PaymentController::class, 'handleCallback'])->name('payment.callback');
     Route::get('/momo/return', [PaymentController::class, 'handleReturn'])->name('payment.return');
 
+    // Reset APIs Payment
+    Route::post('/momo/reset', [PaymentController::class, 'resetPayment']);
+    Route::post('/momo/reset-stuck-invoices', [PaymentController::class, 'resetStuckInvoices']);
+    Route::post('/momo/reset-single-invoice/{invoiceId}', [PaymentController::class, 'resetSingleInvoice']);
 
     // Invoice Routes
     Route::get('/invoices', [InvoiceController::class, 'index']);
