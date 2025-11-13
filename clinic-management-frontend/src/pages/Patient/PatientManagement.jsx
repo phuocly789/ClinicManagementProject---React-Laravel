@@ -6,6 +6,7 @@ import patientService from "../../services/patientService";
 import CustomToast from "../../Components/CustomToast/CustomToast";
 import { useOutletContext } from "react-router-dom";
 import Pagination from "../../Components/Pagination/Pagination";
+import AppointmentDetailModal from "../../Components/Appointment/AppointmentDetailModal";
 export default function PatientManagement() {
   const user = useOutletContext();
   const [formData, setFormData] = useState({
@@ -19,8 +20,9 @@ export default function PatientManagement() {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [services, setServices] = useState([]);
-
+  const [showDetail, setShowDetail] = useState(false);
   const [appointments, setAppointments] = useState([]);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
 
   // Fetch Api
   const [toast, setToast] = useState(null);
@@ -164,6 +166,35 @@ export default function PatientManagement() {
       const response = error.response?.data;
       showToast(response?.message || "Lỗi server ");
     }
+  };
+
+  const handleViewDetail = async (apt) => {
+    try {
+      const res = await patientService.getAppointmentDetail(apt.id);
+      if (res && res.success === true) {
+        const data = {
+          id: res?.data?.id,
+          full_name: res?.data?.full_name,
+          date: res?.data.date.split("T")[0],
+          time: res?.data.time,
+          doctor: res?.data?.doctor || "Chờ hệ thống xác nhận",
+          specialty: res?.data?.specialty || "Chờ hệ thống xác nhận",
+          status: res?.data.status,
+          notes: res?.data?.notes,
+        };
+
+        setSelectedAppointment(data);
+        setShowDetail(true);
+      }
+    } catch (error) {
+      const response = error.response?.data;
+      showToast("error", response?.message || "Lỗi hệ thống");
+    }
+  };
+
+  const handleCloseDetail = () => {
+    setSelectedAppointment(null);
+    setShowDetail(false);
   };
 
   return (
@@ -344,6 +375,11 @@ export default function PatientManagement() {
           </div>
         </div>
       </div>
+      <AppointmentDetailModal
+        show={showDetail}
+        onClose={handleCloseDetail}
+        appointment={selectedAppointment}
+      />
       {toast && (
         <CustomToast
           type={toast.type}
