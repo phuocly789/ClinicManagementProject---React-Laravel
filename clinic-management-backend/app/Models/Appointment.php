@@ -42,91 +42,91 @@ use Illuminate\Database\Eloquent\Model;
  */
 class Appointment extends Model
 {
-	protected $table = 'Appointments';
-	protected $primaryKey = 'AppointmentId';
-	public $incrementing = true;
-	public $timestamps = false;
+    protected $table = 'Appointments';
+    protected $primaryKey = 'AppointmentId';
+    public $incrementing = true;
+    public $timestamps = false;
 
-	protected $casts = [
-		'AppointmentId' => 'int',
-		'PatientId' => 'int',
-		'StaffId' => 'int',
-		'ScheduleId' => 'int',
-		'RecordId' => 'int',
-		'AppointmentDate' => 'datetime',
-		'AppointmentTime' => 'string',
-		'FollowUpDate' => 'datetime',
-		'CreatedAt' => 'datetime',
-		'CreatedBy' => 'int',
+    protected $casts = [
+        'AppointmentId' => 'int',
+        'PatientId' => 'int',
+        'StaffId' => 'int',
+        'ScheduleId' => 'int',
+        'RecordId' => 'int',
+        'AppointmentDate' => 'datetime',
+        'AppointmentTime' => 'string',
+        'FollowUpDate' => 'datetime',
+        'CreatedAt' => 'datetime',
+        'CreatedBy' => 'int',
         'Notes' => 'string'
-	];
+    ];
 
-	protected $fillable = [
-		'PatientId',
-		'StaffId',
-		'ScheduleId',
-		'RecordId',
-		'AppointmentDate',
-		'AppointmentTime',
-		'Status',
-		'FollowUpDate',
-		'CreatedAt',
-		'CreatedBy',
+    protected $fillable = [
+        'PatientId',
+        'StaffId',
+        'ScheduleId',
+        'RecordId',
+        'AppointmentDate',
+        'AppointmentTime',
+        'Status',
+        'FollowUpDate',
+        'CreatedAt',
+        'CreatedBy',
         'Notes'
-	];
+    ];
 
-	public function patient()
-	{
-		return $this->belongsTo(Patient::class, 'PatientId');
-	}
+    public function patient()
+    {
+        return $this->belongsTo(Patient::class, 'PatientId');
+    }
 
-	public function medical_staff()
-	{
-		return $this->belongsTo(MedicalStaff::class, 'StaffId');
-	}
+    public function medical_staff()
+    {
+        return $this->belongsTo(MedicalStaff::class, 'StaffId');
+    }
 
-	public function staff_schedule()
-	{
-		return $this->belongsTo(StaffSchedule::class, 'ScheduleId');
-	}
+    public function staff_schedule()
+    {
+        return $this->belongsTo(StaffSchedule::class, 'ScheduleId');
+    }
 
-	public function medical_record()
-	{
-		return $this->belongsTo(MedicalRecord::class, 'RecordId');
-	}
+    public function medical_record()
+    {
+        return $this->belongsTo(MedicalRecord::class, 'RecordId');
+    }
 
-	public function user()
-	{
-		return $this->belongsTo(User::class, 'CreatedBy');
-	}
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'CreatedBy');
+    }
 
-	public function diagnoses()
-	{
-		return $this->hasMany(Diagnosis::class, 'AppointmentId');
-	}
+    public function diagnoses()
+    {
+        return $this->hasMany(Diagnosis::class, 'AppointmentId');
+    }
 
-	public function notifications()
-	{
-		return $this->hasMany(Notification::class, 'AppointmentId');
-	}
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class, 'AppointmentId');
+    }
 
-	public function queues()
-	{
-		return $this->hasMany(Queue::class, 'AppointmentId');
-	}
+    public function queues()
+    {
+        return $this->hasMany(Queue::class, 'AppointmentId');
+    }
 
-	public function service_orders()
-	{
-		return $this->hasMany(ServiceOrder::class, 'AppointmentId');
-	}
+    public function service_orders()
+    {
+        return $this->hasMany(ServiceOrder::class, 'AppointmentId');
+    }
 
-	public function prescriptions()
-	{
-		return $this->hasMany(Prescription::class, 'AppointmentId');
-	}
+    public function prescriptions()
+    {
+        return $this->hasMany(Prescription::class, 'AppointmentId');
+    }
 
-	public function invoices()
-	{
-		return $this->hasMany(Invoice::class, 'AppointmentId');
-	}
+    public function invoices()
+    {
+        return $this->hasMany(Invoice::class, 'AppointmentId');
+    }
 }
