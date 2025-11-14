@@ -1,30 +1,178 @@
 // src/components/InvoiceDetailModal.jsx
-import React from 'react';
-import { Modal, Button, Row, Col, Badge, Table, Card } from 'react-bootstrap';
+import React, { useState } from 'react';
+import { Modal, Button, Row, Col, Badge, Table, Card, Spinner, Alert } from 'react-bootstrap';
+import { Printer, Download, X } from 'lucide-react';
 
 const InvoiceDetailModal = ({ show, onHide, invoice }) => {
   console.log('🔍 InvoiceDetailModal received:', invoice);
+  const [printing, setPrinting] = useState(false);
+  const [printError, setPrintError] = useState('');
+  const [printSuccess, setPrintSuccess] = useState('');
 
   // FIXED: Xử lý nhiều cấu trúc data khác nhau
   let invoiceData = null;
-  
+
   if (invoice) {
     if (invoice.success !== undefined) {
-      // Structure: {success: true, data: {...}}
       invoiceData = invoice.data || invoice;
     } else if (invoice.id) {
-      // Structure: {id: 49, code: 'HD000049', ...} (direct invoice object)
       invoiceData = invoice;
     } else {
-      // Structure: {data: {...}} (nested data)
       invoiceData = invoice.data || invoice;
     }
   }
 
   console.log('📄 Processed invoice data:', invoiceData);
 
+  // Hàm in hóa đơn - SỬA TYPE THÀNH 'service'
+  const handlePrintInvoice = async () => {
+    try {
+      setPrinting(true);
+      setPrintError('');
+      setPrintSuccess('');
+
+      console.log('🖨️ Calling Laravel PDF API...', invoiceData);
+
+      if (!invoiceData) {
+        throw new Error('Không có dữ liệu hóa đơn');
+      }
+
+      // SỬA: Dùng type 'service' thay vì 'payment'
+      const printData = {
+        type: 'service', // ✅ SỬA THÀNH 'service' hoặc 'prescription'
+        patient_name: invoiceData.patient_name || 'THÔNG TIN BỆNH NHÂN',
+        age: invoiceData.age || 'N/A',
+        gender: invoiceData.gender || 'N/A',
+        phone: invoiceData.patient_phone || 'N/A',
+        appointment_date: invoiceData.date || new Date().toLocaleDateString('vi-VN'),
+        appointment_time: 'Hoàn tất',
+        doctor_name: 'Hệ thống',
+        prescriptions: [],
+        services: getServicesFromInvoice(invoiceData),
+        diagnoses: ['Khám và điều trị'],
+        payment_method: getPaymentMethodText(invoiceData.payment_method),
+        payment_status: 'Đã thanh toán',
+        discount: 0,
+        invoice_code: invoiceData.code || `INV_${invoiceData.id}`,
+        total_amount: invoiceData.total || 0,
+        transaction_id: invoiceData.transaction_id,
+        order_id: invoiceData.order_id,
+        pdf_settings: {
+          customTitle: 'HÓA ĐƠN THANH TOÁN', // Vẫn giữ tiêu đề hóa đơn
+          clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
+          clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
+          clinicPhone: '028 1234 5678',
+          fontFamily: 'Arial'
+        }
+      };
+
+      console.log('📤 Sending to Laravel PDF API:', printData);
+
+      // GỌI API LARAVEL PDF
+      const response = await fetch('http://localhost:8000/api/print/prescription/preview', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(printData),
+      });
+
+      console.log('📥 API Response status:', response.status);
+
+      if (response.ok) {
+        const blob = await response.blob();
+        console.log('📄 Received PDF blob:', blob);
+
+        // Tạo URL và tải file PDF
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `HOA_DON_${invoiceData.code || invoiceData.id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        setPrintSuccess('✅ Đã tải xuống PDF hóa đơn thành công!');
+        console.log('✅ PDF downloaded successfully');
+
+      } else {
+        const errorText = await response.text();
+        console.error('❌ API Error:', errorText);
+
+        // Parse lỗi chi tiết
+        try {
+          const errorData = JSON.parse(errorText);
+          throw new Error(errorData.message || errorData.errors?.type?.[0] || 'Lỗi không xác định');
+        } catch {
+          throw new Error(errorText || `Lỗi server: ${response.status}`);
+        }
+      }
+
+    } catch (error) {
+      console.error('❌ Print invoice error:', error);
+      setPrintError('Lỗi khi in hóa đơn: ' + error.message);
+    } finally {
+      setPrinting(false);
+    }
+  };
+
+  // Hàm chuyển đổi dữ liệu dịch vụ từ invoice
+  const getServicesFromInvoice = (invoice) => {
+    const services = [];
+
+    // Thêm dịch vụ từ invoice_details
+    if (invoice.invoice_details && invoice.invoice_details.length > 0) {
+      invoice.invoice_details.forEach(detail => {
+        if (detail.service) {
+          services.push({
+            ServiceName: detail.service.ServiceName || 'Dịch vụ khám',
+            Price: detail.UnitPrice || detail.unit_price || 0,
+            Quantity: detail.Quantity || detail.quantity || 1
+          });
+        } else if (detail.medicine) {
+          services.push({
+            ServiceName: detail.medicine.MedicineName || 'Thuốc',
+            Price: detail.UnitPrice || detail.unit_price || 0,
+            Quantity: detail.Quantity || detail.quantity || 1
+          });
+        }
+      });
+    }
+
+    // Nếu không có dịch vụ chi tiết, tạo một dịch vụ tổng
+    if (services.length === 0 && invoice.total) {
+      services.push({
+        ServiceName: "Phí khám và điều trị",
+        Price: invoice.total,
+        Quantity: 1
+      });
+    }
+
+    return services;
+  };
+
+  const getPaymentMethodText = (method) => {
+    switch (method) {
+      case 'momo': return 'MoMo';
+      case 'cash': return 'Tiền mặt';
+      case 'bank_transfer': return 'Chuyển khoản';
+      case 'insurance': return 'Bảo hiểm';
+      default: return method || 'Tiền mặt';
+    }
+  };
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'Chờ thanh toán': return <Badge bg="warning">Chờ thanh toán</Badge>;
+      case 'Đã thanh toán': return <Badge bg="success">Đã thanh toán</Badge>;
+      case 'Đã hủy': return <Badge bg="danger">Đã hủy</Badge>;
+      default: return <Badge bg="secondary">{status}</Badge>;
+    }
+  };
+
   if (!invoiceData) {
-    console.log('❌ No invoice data available');
     return (
       <Modal show={show} onHide={onHide} size="lg" centered>
         <Modal.Header closeButton>
@@ -39,25 +187,6 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
       </Modal>
     );
   }
-
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'Chờ thanh toán': return <Badge bg="warning">Chờ thanh toán</Badge>;
-      case 'Đã thanh toán': return <Badge bg="success">Đã thanh toán</Badge>;
-      case 'Đã hủy': return <Badge bg="danger">Đã hủy</Badge>;
-      default: return <Badge bg="secondary">{status}</Badge>;
-    }
-  };
-
-  const getPaymentMethodText = (method) => {
-    switch (method) {
-      case 'momo': return 'Ví điện tử MoMo';
-      case 'cash': return 'Tiền mặt';
-      case 'bank_transfer': return 'Chuyển khoản ngân hàng';
-      case 'insurance': return 'Bảo hiểm';
-      default: return 'Chưa thanh toán';
-    }
-  };
 
   const {
     code = 'N/A',
@@ -75,8 +204,6 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
     invoice_details = []
   } = invoiceData;
 
-  console.log('📋 Invoice details to render:', invoice_details);
-
   return (
     <Modal show={show} onHide={onHide} size="lg" centered>
       <Modal.Header closeButton className="bg-light">
@@ -85,8 +212,23 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
           Chi tiết hóa đơn {code}
         </Modal.Title>
       </Modal.Header>
-      
+
       <Modal.Body>
+        {/* Thông báo in */}
+        {printError && (
+          <Alert variant="danger" className="mb-3">
+            <i className="fas fa-exclamation-triangle me-2"></i>
+            {printError}
+          </Alert>
+        )}
+
+        {printSuccess && (
+          <Alert variant="success" className="mb-3">
+            <i className="fas fa-check me-2"></i>
+            {printSuccess}
+          </Alert>
+        )}
+
         {/* Thông tin cơ bản */}
         <Card className="mb-4">
           <Card.Header className="bg-primary text-white">
@@ -227,8 +369,8 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
                 <tbody>
                   {invoice_details.map((detail, index) => {
                     const isService = !!detail.service;
-                    const itemName = isService 
-                      ? detail.service?.ServiceName 
+                    const itemName = isService
+                      ? detail.service?.ServiceName
                       : detail.medicine?.MedicineName;
                     const unitPrice = detail.UnitPrice || detail.unit_price || 0;
                     const quantity = detail.Quantity || detail.quantity || 1;
@@ -244,13 +386,6 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
                         </td>
                         <td className="fw-medium">
                           {itemName || 'N/A'}
-                          {isService && detail.service?.Description && (
-                            <div>
-                              <small className="text-muted">
-                                {detail.service.Description}
-                              </small>
-                            </div>
-                          )}
                         </td>
                         <td>{unitPrice.toLocaleString('vi-VN')} VNĐ</td>
                         <td>{quantity}</td>
@@ -277,16 +412,31 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
           </div>
         )}
       </Modal.Body>
-      
+
       <Modal.Footer>
         <Button variant="secondary" onClick={onHide}>
-          <i className="fas fa-times me-1"></i>
+          <X size={18} className="me-1" />
           Đóng
         </Button>
+
         {status === 'Đã thanh toán' && (
-          <Button variant="primary" onClick={() => window.print()}>
-            <i className="fas fa-print me-1"></i>
-            In hóa đơn
+          <Button
+            variant="primary"
+            onClick={handlePrintInvoice}
+            disabled={printing}
+            className="d-flex align-items-center"
+          >
+            {printing ? (
+              <>
+                <Spinner animation="border" size="sm" className="me-2" />
+                Đang tạo PDF...
+              </>
+            ) : (
+              <>
+                <Printer size={18} className="me-1" />
+                Tải PDF Hóa Đơn
+              </>
+            )}
           </Button>
         )}
       </Modal.Footer>

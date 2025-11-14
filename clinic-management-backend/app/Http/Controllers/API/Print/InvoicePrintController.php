@@ -26,7 +26,7 @@ class InvoicePrintController extends Controller
             'Courier New' => 'courier',
             'DejaVu Sans' => 'dejavu sans', // Font mặc định an toàn nhất
         ];
-        
+
         return $fontMap[$fontFamily] ?? 'times'; // Mặc định là Times New Roman
     }
 
@@ -44,7 +44,7 @@ class InvoicePrintController extends Controller
             'Courier New' => 'courier, monospace',
             'DejaVu Sans' => '"DejaVu Sans", sans-serif',
         ];
-        
+
         return $fontMapping[$fontFamily] ?? 'times, "Times New Roman", serif';
     }
 
@@ -97,7 +97,7 @@ class InvoicePrintController extends Controller
         Log::info('Received previewPrescription data:', $request->all());
 
         $data = $request->validate([
-            'type' => 'required|string|in:prescription,service',
+            'type' => 'required|string|in:prescription,service,payment', // ✅ ĐÃ SỬA THÀNH 3 TYPE
             'patient_name' => 'required|string',
             'age' => 'nullable',
             'gender' => 'nullable|string',
@@ -105,16 +105,27 @@ class InvoicePrintController extends Controller
             'appointment_date' => 'required|string',
             'appointment_time' => 'required|string',
             'doctor_name' => 'nullable|string',
+
+            // Cho toa thuốc
             'prescriptions' => 'required_if:type,prescription|array',
             'prescriptions.*.details' => 'required_if:type,prescription|array',
             'prescriptions.*.details.*.medicine' => 'required_if:type,prescription|string',
             'prescriptions.*.details.*.quantity' => 'required_if:type,prescription|integer|min:1',
             'prescriptions.*.details.*.dosage' => 'required_if:type,prescription|string',
             'prescriptions.*.details.*.unitPrice' => 'required_if:type,prescription|numeric|min:0',
+
+            // Cho dịch vụ
             'services' => 'required_if:type,service|array',
             'services.*.ServiceName' => 'required_if:type,service|string',
             'services.*.Price' => 'required_if:type,service|numeric|min:0',
             'services.*.Quantity' => 'nullable|integer|min:1',
+
+            // Cho thanh toán
+            'payment_method' => 'required_if:type,payment|string',
+            'payment_status' => 'required_if:type,payment|string',
+            'discount' => 'nullable|numeric|min:0',
+
+            // Chẩn đoán
             'diagnoses' => 'nullable|array',
             'diagnoses.*.Symptoms' => 'nullable|string',
             'diagnoses.*.Diagnosis' => 'nullable|string',
@@ -140,6 +151,8 @@ class InvoicePrintController extends Controller
             'patient_name.required' => 'Tên bệnh nhân là bắt buộc.',
             'prescriptions.required_if' => 'Đơn thuốc là bắt buộc cho toa thuốc.',
             'services.required_if' => 'Danh sách dịch vụ là bắt buộc cho phiếu dịch vụ.',
+            'payment_method.required_if' => 'Phương thức thanh toán là bắt buộc cho hóa đơn.',
+            'payment_status.required_if' => 'Trạng thái thanh toán là bắt buộc cho hóa đơn.',
         ]);
 
         // Xác định title và template dựa trên type
@@ -153,6 +166,12 @@ class InvoicePrintController extends Controller
                 'title' => $data['pdf_settings']['customTitle'] ?? 'PHIẾU CHỈ ĐỊNH DỊCH VỤ',
                 'template' => 'pdf.service_pdf',
                 'filename' => 'PHIEU_DICH_VU.pdf'
+            ],
+            'payment' => [
+                'template' => 'pdf.payment_invoice_pdf',
+                'title' => $data['pdf_settings']['customTitle'] ?? 'HÓA ĐƠN THANH TOÁN',
+                'code_prefix' => 'INV',
+                'filename' => 'HOA_DON_THANH_TOAN.pdf'
             ]
         ];
 
@@ -181,7 +200,7 @@ class InvoicePrintController extends Controller
 
             // THÊM PDF SETTINGS VÀO DATA
             'pdf_settings' => $data['pdf_settings'] ?? [],
-            
+
             // THÊM FONT AN TOÀN
             'safe_font_family' => $safeFontFamily,
             'safe_font_css' => $safeFontCSS,
@@ -213,9 +232,32 @@ class InvoicePrintController extends Controller
                 ];
             })->toArray();
             $pdfData['prescriptions'] = [];
+        } else if ($data['type'] === 'payment') {
+            // Xử lý dữ liệu cho payment
+            $pdfData['services'] = collect($data['services'])->map(function ($service) {
+                return [
+                    'ServiceName' => $service['ServiceName'] ?? 'Dịch vụ khám bệnh',
+                    'Price' => $service['Price'] ?? 0,
+                    'Quantity' => $service['Quantity'] ?? 1,
+                ];
+            })->toArray();
+            $pdfData['prescriptions'] = [];
+            
+            // Thêm payment data
+            $pdfData['payment_method'] = $data['payment_method'] ?? 'Tiền mặt';
+            $pdfData['payment_status'] = $data['payment_status'] ?? 'Đã thanh toán';
+            $pdfData['discount'] = $data['discount'] ?? 0;
+            $pdfData['payment_date'] = now()->format('d/m/Y H:i');
+            $pdfData['invoice_code'] = $data['invoice_code'] ?? 'INV_' . Str::random(6);
         }
 
         try {
+            Log::info('🔍 Generating PDF with config:', [
+                'type' => $data['type'],
+                'template' => $config['template'],
+                'filename' => $config['filename']
+            ]);
+
             $pdf = Pdf::loadView($config['template'], $pdfData)
                 ->setPaper('a4', 'portrait');
 
@@ -304,9 +346,9 @@ class InvoicePrintController extends Controller
                     'code_prefix' => 'SRV'
                 ],
                 'payment' => [
-                    'template' => 'pdf.payment_pdf',
-                    'title' => 'PHIẾU THANH TOÁN',
-                    'code_prefix' => 'PAY'
+                    'template' => 'pdf.payment_invoice_pdf',
+                    'title' => $data['pdf_settings']['customTitle'] ?? 'HÓA ĐƠN THANH TOÁN',
+                    'code_prefix' => 'INV'
                 ]
             ];
 
@@ -336,7 +378,7 @@ class InvoicePrintController extends Controller
 
                 // THÊM PDF SETTINGS VÀO DATA
                 'pdf_settings' => $data['pdf_settings'] ?? [],
-                
+
                 // THÊM FONT AN TOÀN
                 'safe_font_family' => $safeFontFamily,
                 'safe_font_css' => $safeFontCSS,
