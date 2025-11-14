@@ -1,8 +1,10 @@
 import React from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import "../../App.css";
+import { useUser } from "../../context/userContext";
 
 const AdminSidebar = () => {
+  const {handleLogout } = useUser();
   return (
     <div className="d-flex" style={{ minHeight: "100vh" }}>
       {/* Sidebar */}
@@ -67,11 +69,14 @@ const AdminSidebar = () => {
               </NavLink>
             </li>
 
-            <li className="logout border-top mt-auto pt-3">
-              <NavLink to="/logout" className="nav-item">
+            <li className="border-top mt-auto pt-3">
+              <button
+                onClick={handleLogout}
+                className="nav-item logout-btn"
+              >
                 <i className="fa-solid fa-right-from-bracket"></i>
                 Đăng Xuất
-              </NavLink>
+              </button>
             </li>
           </ul>
         </nav>
