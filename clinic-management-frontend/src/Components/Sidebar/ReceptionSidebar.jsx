@@ -46,6 +46,12 @@ const ReceptionSidebar = () => {
                                 Bệnh Nhân
                             </NavLink>
                         </li>
+                        <li>
+                            <NavLink to="/payment" className="nav-item">
+                                <i className="fa-solid fa-id-card"></i>
+                                Quản lý thah toán
+                            </NavLink>
+                        </li>
 
                         <li className="border-top mt-auto pt-3">
                             <NavLink to="/logout" className="nav-item">

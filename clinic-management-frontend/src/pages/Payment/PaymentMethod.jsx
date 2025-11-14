@@ -1,5 +1,5 @@
 // src/components/Payment/PaymentMethod.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, Card, Form, Button, Alert, Spinner } from 'react-bootstrap';
 import { paymentService } from '../../services/paymentService';
 import { CreditCard, XCircle, CheckCircle, AlertTriangle } from "lucide-react";
@@ -10,6 +10,17 @@ const PaymentMethod = ({ show, onHide, invoice, onPaymentSuccess }) => {
   const [error, setError] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  // Reset state khi mở modal mới
+  useEffect(() => {
+    if (show) {
+      setLoading(false);
+      setError('');
+      setSelectedMethod('momo');
+      setShowConfirm(false);
+      setShowCancelConfirm(false);
+    }
+  }, [show]);
 
   const paymentMethods = [
     {
@@ -58,19 +69,30 @@ const PaymentMethod = ({ show, onHide, invoice, onPaymentSuccess }) => {
 
       if (response.success) {
         console.log('✅ Payment created, redirecting to:', response.payUrl);
+        
+        // QUAN TRỌNG: Đóng modal trước khi chuyển hướng
+        onHide();
+        
+        // Chuyển hướng đến trang thanh toán MoMo/Napas
+        // MoMo sẽ tự động redirect về /payment/result sau khi hoàn tất
         window.location.href = response.payUrl;
+        
       } else {
         setError(response.message || 'Có lỗi xảy ra khi tạo thanh toán');
+        setLoading(false);
       }
     } catch (err) {
       console.error('Payment error:', err);
       setError(err.response?.data?.message || 'Lỗi kết nối đến server. Vui lòng thử lại.');
-    } finally {
       setLoading(false);
     }
   };
 
   const handleCancelClick = () => {
+    if (loading) {
+      // Đang loading thì không cho hủy
+      return;
+    }
     setShowCancelConfirm(true);
   };
 
@@ -84,12 +106,26 @@ const PaymentMethod = ({ show, onHide, invoice, onPaymentSuccess }) => {
     setShowCancelConfirm(false);
   };
 
+  // Đóng modal khi click ra ngoài (chỉ khi không loading)
+  const handleModalHide = () => {
+    if (!loading) {
+      handleCancelClick();
+    }
+  };
+
   if (!invoice) return null;
 
   return (
     <>
-      <Modal show={show} onHide={handleCancelClick} size="lg" centered>
-        <Modal.Header closeButton className="bg-success text-white">
+      <Modal 
+        show={show} 
+        onHide={handleModalHide} 
+        size="lg" 
+        centered
+        backdrop={loading ? 'static' : true}
+        keyboard={!loading}
+      >
+        <Modal.Header closeButton={!loading} className="bg-success text-white">
           <Modal.Title>
             <i className="fas fa-credit-card me-2"></i>
             Thanh toán hóa đơn
@@ -115,7 +151,7 @@ const PaymentMethod = ({ show, onHide, invoice, onPaymentSuccess }) => {
                 <div className="col-md-6">
                   <strong>Tổng tiền:</strong> 
                   <span className="text-success fw-bold fs-5 ms-2">
-                    {invoice.total.toLocaleString('vi-VN')} VNĐ
+                    {invoice.total?.toLocaleString('vi-VN')} VNĐ
                   </span>
                 </div>
               </div>
@@ -128,6 +164,16 @@ const PaymentMethod = ({ show, onHide, invoice, onPaymentSuccess }) => {
               <i className="fas fa-exclamation-triangle me-2"></i>
               {error}
             </Alert>
+          )}
+
+          {/* Loading overlay */}
+          {loading && (
+            <div className="position-absolute top-0 left-0 w-100 h-100 d-flex align-items-center justify-content-center bg-light bg-opacity-75">
+              <div className="text-center">
+                <Spinner animation="border" variant="primary" className="mb-3" />
+                <p className="text-primary fw-bold">Đang kết nối đến cổng thanh toán...</p>
+              </div>
+            </div>
           )}
 
           {/* Chọn phương thức thanh toán */}
@@ -143,9 +189,9 @@ const PaymentMethod = ({ show, onHide, invoice, onPaymentSuccess }) => {
                   key={method.value}
                   className={`mb-2 cursor-pointer ${
                     selectedMethod === method.value ? 'border-primary border-2' : ''
-                  }`}
-                  onClick={() => setSelectedMethod(method.value)}
-                  style={{ cursor: 'pointer' }}
+                  } ${loading ? 'opacity-50' : ''}`}
+                  onClick={() => !loading && setSelectedMethod(method.value)}
+                  style={{ cursor: loading ? 'not-allowed' : 'pointer' }}
                 >
                   <Card.Body className="py-3">
                     <div className="d-flex align-items-center">
@@ -154,8 +200,9 @@ const PaymentMethod = ({ show, onHide, invoice, onPaymentSuccess }) => {
                         name="paymentMethod"
                         value={method.value}
                         checked={selectedMethod === method.value}
-                        onChange={(e) => setSelectedMethod(e.target.value)}
+                        onChange={(e) => !loading && setSelectedMethod(e.target.value)}
                         className="me-3"
+                        disabled={loading}
                       />
                       <div>
                         <div className="d-flex align-items-center">
@@ -176,22 +223,26 @@ const PaymentMethod = ({ show, onHide, invoice, onPaymentSuccess }) => {
             <small className="text-muted">
               <i className="fas fa-info-circle me-1"></i>
               {selectedMethod === 'momo' 
-                ? 'Bạn sẽ được chuyển đến trang quét QR code qua ứng dụng MoMo' 
-                : 'Bạn sẽ được chuyển đến trang nhập thông tin thẻ ATM/Napas'
+                ? 'Bạn sẽ được chuyển đến trang quét QR code qua ứng dụng MoMo. Sau khi thanh toán, hệ thống sẽ tự động chuyển hướng về trang kết quả.' 
+                : 'Bạn sẽ được chuyển đến trang nhập thông tin thẻ ATM/Napas. Sau khi thanh toán, hệ thống sẽ tự động chuyển hướng về trang kết quả.'
               }
             </small>
           </div>
         </Modal.Body>
         
         <Modal.Footer>
-          <Button variant="secondary" onClick={handleCancelClick} disabled={loading}>
+          <Button 
+            variant="secondary" 
+            onClick={handleCancelClick} 
+            disabled={loading}
+          >
             <i className="fas fa-times me-2"></i>
             Hủy
           </Button>
           <Button 
             variant="success" 
             onClick={handlePaymentConfirm}
-            disabled={loading}
+            disabled={loading || !selectedMethod}
             className="d-flex align-items-center"
           >
             {loading ? (
@@ -258,10 +309,11 @@ const PaymentMethod = ({ show, onHide, invoice, onPaymentSuccess }) => {
               </div>
             </div>
 
-            {/* Warning Message */}
+            {/* Thông báo quan trọng */}
             <Alert variant="info" className="mt-3 small">
               <i className="fas fa-info-circle me-2"></i>
-              Bạn sẽ được chuyển hướng đến trang thanh toán {selectedMethod === 'momo' ? 'MoMo' : 'Napas'} để hoàn tất giao dịch.
+              <strong>Lưu ý quan trọng:</strong> Bạn sẽ được chuyển đến trang thanh toán {selectedMethod === 'momo' ? 'MoMo' : 'Napas'}. 
+              Không đóng trang cho đến khi hoàn tất giao dịch.
             </Alert>
 
             {/* Action Buttons */}
