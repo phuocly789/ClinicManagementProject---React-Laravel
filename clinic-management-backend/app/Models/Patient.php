@@ -64,5 +64,5 @@ class Patient extends Model
 		return $this->hasMany(Invoice::class, 'PatientId');
 	}
 
-	
+
 }
