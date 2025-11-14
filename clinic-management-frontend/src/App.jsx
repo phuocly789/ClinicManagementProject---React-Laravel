@@ -54,6 +54,10 @@ function App() {
           element={<AdminScheduleManagement />}
         />
         <Route
+          path={path.ADMIN.SERVICE.MANAGEMENT}
+          element={<AdminServiceManagement />}
+        />
+        <Route
           path={path.ADMIN.USER.MANAGEMENT}
           element={<AdminUserManagement />}
         />
