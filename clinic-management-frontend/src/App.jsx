@@ -134,7 +134,7 @@ function App() {
         />
       </Route>
       {/* Payment */}
-      <Route path={path.PayMent.ROOT} element={<PaymentSection />}>
+      <Route path={path.PayMent.ROOT} element={<ReceptionSidebar />}>
         <Route index element={<PaymentSection />} />
         <Route path={path.PayMent.PAY_RESULT} element={<PaymentResult />} />
       </Route>
