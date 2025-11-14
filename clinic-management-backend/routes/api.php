@@ -27,7 +27,10 @@ use App\Http\Controllers\API\Payment\PaymentController;
 //----------------------------------------------Hết-------------------------------
 use App\Http\Controllers\API\User\AdminUserController;
 use App\Http\Controllers\API\Print\InvoicePrintController;
+use App\Http\Controllers\API\Receptionist\MedicalStaffController;
+use App\Http\Controllers\API\Receptionist\PatientByRecepController;
 use App\Http\Controllers\API\Receptionist\QueueController;
+use App\Http\Controllers\API\Receptionist\ReceptionController;
 use App\Http\Controllers\API\Technician\TestResultsController;
 
 Route::get('/user', [UserController::class, 'index']);
@@ -174,6 +177,21 @@ Route::prefix('receptionist')->group(function () {
     Route::delete('/queue/{queueId}', [QueueController::class, 'DeleteQueue']);
     //Rooms
     Route::get('/rooms', [RoomController::class, 'getAllRooms']);
+    //Tiếp nhận patient
+    Route::get('/searchPatient', [PatientByRecepController::class, 'searchPatients']);
+    Route::post('/patients', [PatientController::class, 'createPatient']);
+    Route::get('/patients', [PatientByRecepController::class, 'getPatient']);
+    // Thêm route này vào receptionist routes
+    Route::get('/patients/{patientId}', [PatientByRecepController::class, 'getPatientDetails']);
+    // Medical staff routes
+    Route::get('/medical-staff/schedules', [MedicalStaffController::class, 'getDoctorsWithSchedules']);
+    Route::get('/medical-staff/room/{roomId}', [MedicalStaffController::class, 'getDoctorsByRoom']);
+
+    // Complete reception
+    Route::post('/complete', [ReceptionController::class, 'completeReception']);
+
+    // Online appointments
+    Route::get('/appointments/online', [AppointmentRecepController::class, 'getOnlineAppointments']);
 
 });
 

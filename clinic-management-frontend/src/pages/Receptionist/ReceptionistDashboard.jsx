@@ -344,14 +344,21 @@ const ReceptionistDashboard = () => {
                                 />
                             </div>
                         </div>
-                        <div className="col-md-6">
+                        <div className="col-md-6 z-5">
                             <Select
+                                menuPortalTarget={document.body}  
+                                styles={{
+                                    menuPortal: provided => ({
+                                        ...provided,
+                                        zIndex: 9999 
+                                    })
+                                }}
                                 options={[
                                     { value: null, label: "Tất cả phòng" },
                                     ...rooms.map(room => ({
                                         value: room.RoomId,
                                         label: room.RoomName,
-                                        data: room // giữ full object để dùng khi chọn
+                                        data: room 
                                     }))
                                 ]}
                                 onChange={(selected) => {
