@@ -41,6 +41,7 @@ export const path = {
         ROOT: "/receptionist",
         DASHBOARD: "/receptionist/dashboard",
         PATIENT_MANAGEMENT: "/receptionist/patient-management",
+        NOTIFICATION: "/receptionist/notification-management",
 
     },
     USER: {
@@ -86,9 +87,9 @@ export const path = {
         TEST_RESULTS: "test-results",
     },
 
-    PayMent:{
-        ROOT:"/payment",
-        PAY_RESULT:"result"
+    PayMent: {
+        ROOT: "/payment",
+        PAY_RESULT: "result"
     }
 };
 

@@ -4,7 +4,7 @@ import CustomToast from '../../Components/CustomToast/CustomToast';
 import Loading from '../../Components/Loading/Loading';
 import instance from '../../axios';
 import dayjs from 'dayjs';
-import { BiUserPlus, BiShow, BiPencil, BiTrash, BiLockOpen, BiLock } from 'react-icons/bi';
+import { BiUserPlus, BiShow, BiPencil, BiTrash, BiLockOpen, BiLock, BiKey } from 'react-icons/bi'; // THÊM BiKey
 import { useDebounce } from 'use-debounce';
 import Pagination from '../../Components/Pagination/Pagination';
 
@@ -62,13 +62,13 @@ const AdminUserManagement = () => {
     status: filters.status,
   }), [debouncedSearchTerm, filters.gender, filters.role, filters.status]);
 
-  // Fetch users
+  // Lấy danh sách người dùng
   const fetchUsers = useCallback(async (page = 1) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ 
         page, 
-        per_page: 5, 
+        per_page: 10, 
         ...apiFilters 
       });
       
@@ -105,7 +105,7 @@ const AdminUserManagement = () => {
     fetchUsers(1);
   }, [apiFilters, fetchUsers]);
 
-  // Fetch roles
+  // Lấy danh sách vai trò
   useEffect(() => {
     const fetchRoles = async () => {
       try {
@@ -166,7 +166,7 @@ const AdminUserManagement = () => {
     }
   };
 
-  // Validate form
+  // Kiểm tra tính hợp lệ của form
   const validateForm = () => {
     const errors = {};
     
@@ -279,7 +279,34 @@ const AdminUserManagement = () => {
     }
   };
 
-  // Render modal function
+  // THÊM HÀM RESET MẬT KHẨU
+  const handleResetPassword = async () => {
+    setLoading(true);
+    const { user } = modal;
+    try {
+      const response = await instance.put(`/api/users/reset-password/${user.UserId}`, {
+        password: '123456'
+      });
+      const responseData = response.data || response;
+      
+      setToast({ 
+        type: 'success', 
+        message: responseData.message || responseData.data?.message || 'Reset mật khẩu thành công! Mật khẩu mới là: 123456' 
+      });
+      handleCloseModal();
+      fetchUsers(pagination.currentPage);
+    } catch (err) {
+      console.error('Lỗi khi reset mật khẩu:', err);
+      setToast({ 
+        type: 'error', 
+        message: err.response?.data?.message || err.message || 'Lỗi khi reset mật khẩu.' 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Hàm hiển thị modal
   const renderModal = () => {
     if (!modal.type) return null;
 
@@ -504,6 +531,28 @@ const AdminUserManagement = () => {
           '450px'
         );
 
+      // THÊM MODAL RESET PASSWORD
+      case 'reset-password':
+        return modalLayout(
+          'Xác Nhận Reset Mật Khẩu',
+          <>
+            <p>Bạn có chắc muốn reset mật khẩu cho người dùng <strong>{modal.user.FullName}</strong>?</p>
+            <p className="text-warning fw-semibold">
+              Mật khẩu sẽ được đặt lại thành: <strong>123456</strong>
+            </p>
+            <p className="text-muted small">
+              Người dùng nên đổi mật khẩu sau khi đăng nhập lần đầu để bảo mật tài khoản.
+            </p>
+          </>,
+          <>
+            <button className="btn btn-secondary" onClick={handleCloseModal}>Hủy</button>
+            <button className="btn btn-warning" onClick={handleResetPassword} disabled={loading}>
+              {loading ? 'Đang xử lý...' : 'Reset Mật Khẩu'}
+            </button>
+          </>,
+          '500px'
+        );
+
       case 'detail':
         return modalLayout(
           'Chi Tiết Người Dùng',
@@ -660,6 +709,14 @@ const AdminUserManagement = () => {
                               onClick={() => handleOpenModal('edit', user)}
                             >
                               <BiPencil />
+                            </button>
+                            {/* THÊM NÚT RESET PASSWORD */}
+                            <button 
+                              className="btn btn-lg btn-light text-info" 
+                              title="Reset mật khẩu" 
+                              onClick={() => handleOpenModal('reset-password', user)}
+                            >
+                              <BiKey />
                             </button>
                             <button 
                               className={`btn btn-lg btn-light text-${user.IsActive ? 'warning' : 'success'}`} 

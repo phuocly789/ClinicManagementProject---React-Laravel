@@ -36,6 +36,7 @@ import PatientManagement from "./pages/Patient/PatientManagement.jsx";
 import AdminServiceManagement from "./pages/Admin/AdminServiceManagement.jsx";
 import PaymentSection from "./pages/Payment/PaymentSection.jsx";
 import PaymentResult from "./pages/Payment/PaymentResult.jsx";
+import NotificationManagement from "./pages/Receptionist/NotificationManagement.jsx";
 
 function App() {
   return (
@@ -86,6 +87,10 @@ function App() {
           path={path.RECEPTIONIST.PATIENT_MANAGEMENT}
           element={<ReceptionistPatent />}
         />
+        <Route
+          path={path.RECEPTIONIST.NOTIFICATION}
+          element={<NotificationManagement />}
+        />
       </Route>
       {/* Doctor */}
       <Route path={path.DOCTOR.ROOT} element={<DoctorSidebar />}>
@@ -129,7 +134,7 @@ function App() {
         />
       </Route>
       {/* Payment */}
-      <Route path={path.PayMent.ROOT} element={<PaymentSection />}>
+      <Route path={path.PayMent.ROOT} element={<ReceptionSidebar />}>
         <Route index element={<PaymentSection />} />
         <Route path={path.PayMent.PAY_RESULT} element={<PaymentResult />} />
       </Route>

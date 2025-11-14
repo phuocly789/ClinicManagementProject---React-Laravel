@@ -19,7 +19,6 @@ export default function PatientManagement() {
   const [pageCount, setPageCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
-  const [services, setServices] = useState([]);
   const [showDetail, setShowDetail] = useState(false);
   const [appointments, setAppointments] = useState([]);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
