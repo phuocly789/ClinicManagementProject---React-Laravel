@@ -192,7 +192,9 @@ Route::prefix('receptionist')->group(function () {
 
     // Online appointments
     Route::get('/appointments/online', [AppointmentRecepController::class, 'getOnlineAppointments']);
-
+    //notification 
+    Route::middleware(['auth:api', 'role:Admin,Lễ tân'])
+        ->get('/notifications', [ReceptionController::class, 'getNotification']);
 });
 
 // Patient Routes
