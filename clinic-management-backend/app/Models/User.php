@@ -119,10 +119,10 @@ class User extends Authenticatable
 		return $this->hasMany(Queue::class, 'CreatedBy');
 	}
 
-	public function patient()
-	{
-		return $this->hasOne(Patient::class, 'PatientId');
-	}
+    public function patient()
+    {
+        return $this->hasOne(Patient::class, 'PatientId', 'UserId');
+    }
 
 	public function import_bills()
 	{
