@@ -1,0 +1,198 @@
+<?php
+
+namespace App\Http\Controllers\API\Receptionist;
+
+use App\Exceptions\AppErrors;
+use App\Http\Controllers\Controller;
+use App\Http\Services\ReceptionistService;
+use App\Models\Appointment;
+use App\Models\MedicalRecord;
+use App\Models\Patient;
+use App\Models\Queue;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+class ReceptionController extends Controller
+{
+    protected $receptionistService;
+    public function __construct(ReceptionistService $receptionistService)
+    {
+        $this->receptionistService = $receptionistService;
+    }
+    public function completeReception(Request $request)
+    {
+        $request->validate([
+            // Patient data (nếu là bệnh nhân mới)
+            'patient' => 'nullable|array',
+            'patient.fullName' => 'required_with:patient|string|max:100',
+            'patient.phone' => 'required_with:patient|string|max:15|unique:Users,Phone',
+            'patient.email' => 'nullable|email|unique:Users,Email',
+            'patient.dateOfBirth' => 'nullable|date',
+            'patient.gender' => 'nullable|string|in:Nam,Nữ',
+            'patient.address' => 'nullable|string|max:200',
+            'patient.medicalHistory' => 'nullable|string',
+
+            // Appointment data
+            'appointment.StaffId' => 'required|integer|exists:MedicalStaff,StaffId',
+            'appointment.RoomId' => 'required|integer|exists:Rooms,RoomId',
+            'appointment.AppointmentDate' => 'required|date',
+            'appointment.AppointmentTime' => 'required|date_format:H:i',
+            'appointment.Notes' => 'nullable|string',
+            'appointment.ServiceType' => 'nullable|string',
+
+            // Loại tiếp nhận
+            'receptionType' => 'required|string|in:online,direct',
+            'existingPatientId' => 'nullable|integer|exists:Patients,PatientId'
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $createdBy = auth()->id();
+            $today = now('Asia/Ho_Chi_Minh')->toDateString();
+            $currentTime = now('Asia/Ho_Chi_Minh')->format('H:i:s');
+
+            // 1. Xử lý Patient
+            $patientId = $request->existingPatientId;
+
+            if (!$patientId && $request->has('patient')) {
+                // Tạo patient mới
+                $user = User::create([
+                    'Username' => $request->patient['phone'], // Sử dụng số điện thoại làm username
+                    'PasswordHash' => bcrypt($request->patient['phone']),
+                    'FullName' => $request->patient['fullName'],
+                    'Email' => $request->patient['email'] ?? null,
+                    'Phone' => $request->patient['phone'],
+                    'Gender' => $request->patient['gender'] ?? null,
+                    'Address' => $request->patient['address'] ?? null,
+                    'DateOfBirth' => $request->patient['dateOfBirth'] ?? null,
+                    'MustChangePassword' => true,
+                    'IsActive' => true
+                ]);
+
+                $patient = Patient::create([
+                    'PatientId' => $user->UserId,
+                    'MedicalHistory' => $request->patient['MedicalHistory'] ?? null
+                ]);
+
+                $patientId = $patient->PatientId;
+            }
+
+            if (!$patientId) {
+                throw new \Exception('Thiếu thông tin bệnh nhân');
+            }
+
+            // 2. Xử lý Medical Record - CHỈ tạo mới nếu chưa có
+            $record = MedicalRecord::where('PatientId', $patientId)
+                ->where('Status', 'Hoạt động')
+                ->first();
+
+            if (!$record) {
+                $record = MedicalRecord::create([
+                    'PatientId' => $patientId,
+                    'RecordNumber' => 'MR-' . date('YmdHis') . '-' . $patientId, // Thêm timestamp để unique
+                    'IssuedDate' => $today,
+                    'Status' => 'Hoạt động',
+                    'Notes' => 'Hồ sơ được tạo khi tiếp nhận',
+                    'CreatedBy' => $createdBy,
+                ]);
+            }
+
+            // 3. Tạo Appointment
+            $appointmentData = [
+                'PatientId' => $patientId,
+                'StaffId' => $request->appointment['StaffId'],
+                'RecordId' => $record->RecordId,
+                'ScheduleId' => null,
+                'AppointmentDate' => $request->appointment['AppointmentDate'],
+                'AppointmentTime' => $request->appointment['AppointmentTime'],
+                'Status' => 'Đang chờ',
+                'CreatedBy' => $createdBy,
+                'Notes' => $request->appointment['Notes'] ?? null,
+                'ServiceType' => $request->appointment['ServiceType'] ?? 'Khám bệnh'
+            ];
+
+            $appointment = Appointment::create($appointmentData);
+
+            // 4. Tạo Queue
+            $lastTicket = Queue::where('QueueDate', $today)->max('TicketNumber');
+            $newTicketNumber = $lastTicket ? $lastTicket + 1 : 1;
+
+            $lastQueue = Queue::where('QueueDate', $today)->max('QueuePosition');
+            $newQueuePosition = $lastQueue ? $lastQueue + 1 : 1;
+
+            $queue = Queue::create([
+                'PatientId' => $patientId,
+                'AppointmentId' => $appointment->AppointmentId,
+                'RecordId' => $record->RecordId,
+                'RoomId' => $request->appointment['RoomId'],
+                'TicketNumber' => $newTicketNumber,
+                'QueuePosition' => $newQueuePosition,
+                'QueueDate' => $today,
+                'QueueTime' => $currentTime,
+                'Status' => 'Đang chờ',
+                'CreatedBy' => $createdBy
+            ]);
+
+            // 5. Nếu là online appointment, cập nhật status của appointment gốc
+            if ($request->receptionType === 'online' && $request->has('original_appointment_id')) {
+                $originalAppointment = Appointment::find($request->original_appointment_id);
+                if ($originalAppointment) {
+                    $originalAppointment->update(['Status' => 'Đang chờ']);
+                }
+            }
+
+            DB::commit();
+
+            // Load thông tin đầy đủ để trả về
+            $patientInfo = User::find($patientId);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'patient' => [
+                        'PatientId' => $patientId,
+                        'FullName' => $patientInfo->FullName,
+                        'Phone' => $patientInfo->Phone
+                    ],
+                    'appointment' => $appointment,
+                    'queue' => $queue,
+                    'medicalRecord' => $record
+                ],
+                'message' => 'Tiếp nhận bệnh nhân thành công. Số thứ tự: ' . $newTicketNumber
+            ], 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi tiếp nhận bệnh nhân: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    public function getNotification(Request $request)
+    {
+        $current = $request->query('current');
+        $pageSize = $request->query('pageSize');
+        try {
+            $appointment = $this->receptionistService->handleGetNotification($current, $pageSize);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Lấy danh sách thông báo thành công.',
+                'data' => $appointment,
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (AppErrors $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ], $e->getStatusCode() ?: 400,);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi server: ' . $e->getMessage()
+            ], 500, [], JSON_UNESCAPED_UNICODE);
+        }
+    }
+}

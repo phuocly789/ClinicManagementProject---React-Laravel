@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
-import { Table, Button, Spinner, Form, Row, Col } from 'react-bootstrap';
+import { Table, Button, Spinner, Form, Row, Col, InputGroup } from 'react-bootstrap';
 import Pagination from '../../Components/Pagination/Pagination';
 import ConfirmDeleteModal from '../../Components/CustomToast/DeleteConfirmModal';
 import CustomToast from '../../Components/CustomToast/CustomToast';
 import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
-import { PencilIcon, Trash } from 'lucide-react';
+import { Eye, PencilIcon, Trash, Search, Filter, Calendar, DollarSign, X } from 'lucide-react';
 
-// ErrorBoundary
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -25,7 +24,6 @@ class ErrorBoundary extends React.Component {
 
 const API_BASE_URL = 'http://localhost:8000';
 
-// Load html2pdf.js lazily
 const loadHtml2Pdf = () => {
   return new Promise((resolve) => {
     const existingScript = document.querySelector('script[src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"]');
@@ -41,22 +39,191 @@ const loadHtml2Pdf = () => {
   });
 };
 
-// Regex for validation
 const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
 const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class|import|export|\$\w+)/i;
 
-const InventoryList = memo(({ inventories, isLoading, formatVND, handleShowDeleteModal, handleShowDetail, handleShowAddInventory, handleShowEditForm, pageCount, currentPage, handlePageChange, suppliers }) => {
+const InventoryList = memo(({
+  inventories,
+  isLoading,
+  formatVND,
+  handleShowDeleteModal,
+  handleShowDetail,
+  handleShowAddInventory,
+  handleShowEditForm,
+  pageCount,
+  currentPage,
+  handlePageChange,
+  suppliers,
+  setFilterParams,
+  fetchInventories
+}) => {
+  // --- FILTER STATES ---
+  const [search, setSearch] = useState('');
+  const [supplierFilter, setSupplierFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [minAmount, setMinAmount] = useState('');
+  const [maxAmount, setMaxAmount] = useState('');
+
+  // --- ÁP DỤNG LỌC - CHỈ KHI NHẤN NÚT ---
+  const applyFilters = useCallback(() => {
+    const params = new URLSearchParams();
+    if (search.trim()) params.append('search', search.trim());
+    if (supplierFilter) params.append('supplier_id', supplierFilter);
+    if (dateFrom) params.append('date_from', dateFrom);
+    if (dateTo) params.append('date_to', dateTo);
+    if (minAmount) params.append('min_amount', minAmount);
+    if (maxAmount) params.append('max_amount', maxAmount);
+
+    const queryString = params.toString();
+    setFilterParams(queryString); // Cập nhật filterParams
+    cache.current.clear(); // Xóa cache để tải mới
+    setInventoriesReady(false); // Reset trạng thái
+    fetchInventories(1, queryString);
+  }, [search, supplierFilter, dateFrom, dateTo, minAmount, maxAmount, fetchInventories, setFilterParams]);
+
+  // --- XÓA LỌC ---
+  const clearFilters = useCallback(() => {
+    setSearch('');
+    setSupplierFilter('');
+    setDateFrom('');
+    setDateTo('');
+    setMinAmount('');
+    setMaxAmount('');
+    fetchInventories(1);
+  }, [fetchInventories]);
+
+  const handleRowClick = useCallback((inventoryId, e) => {
+    if (e.target.closest('button')) return;
+    handleShowDetail(inventoryId);
+  }, [handleShowDetail]);
+
   return (
     <div>
+      {/* HEADER + ADD BUTTON */}
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h3 style={{ fontSize: '1.5rem', fontWeight: '600' }}>Danh Sách Phiếu Nhập Kho</h3>
-        <Button variant="primary" onClick={handleShowAddInventory} style={{ padding: '8px 16px' }}>
+        <h3 style={{ fontSize: '1.5rem', fontWeight: '600' }}>
+          Danh Sách Phiếu Nhập Kho
+        </h3>
+        <Button variant="primary" onClick={handleShowAddInventory}>
           + Thêm Phiếu Nhập
         </Button>
       </div>
-      <div className="table-responsive" style={{ transition: 'opacity 0.3s ease' }}>
+
+      {/* FILTER BAR */}
+      <div className="mb-4 p-3 bg-light rounded border">
+        <Row className="g-3 align-items-end">
+          {/* TÌM KIẾM */}
+          <Col md={4}>
+            <InputGroup>
+              <InputGroup.Text>
+                <Search size={16} />
+              </InputGroup.Text>
+              <Form.Control
+                placeholder="Tìm tên nhà cung cấp..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+              />
+            </InputGroup>
+          </Col>
+
+          {/* NHÀ CUNG CẤP */}
+          <Col md={3}>
+            <Form.Select
+              value={supplierFilter}
+              onChange={(e) => setSupplierFilter(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+            >
+              <option value="">Tất cả nhà cung cấp</option>
+              {suppliers.map((s) => (
+                <option key={s.SupplierId} value={s.SupplierId}>
+                  {s.SupplierName}
+                </option>
+              ))}
+            </Form.Select>
+          </Col>
+
+          {/* NGÀY TỪ */}
+          <Col md={2}>
+            <InputGroup>
+              <InputGroup.Text>
+                <Calendar size={16} />
+              </InputGroup.Text>
+              <Form.Control
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+              />
+            </InputGroup>
+          </Col>
+
+          {/* NGÀY ĐẾN */}
+          <Col md={2}>
+            <InputGroup>
+              <InputGroup.Text>
+                <Calendar size={16} />
+              </InputGroup.Text>
+              <Form.Control
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+              />
+            </InputGroup>
+          </Col>
+
+          {/* NÚT LỌC */}
+          <Col md={1}>
+            <Button variant="primary" onClick={applyFilters} className="w-100">
+              <Filter size={16} />
+            </Button>
+          </Col>
+        </Row>
+
+        {/* LỌC TIỀN */}
+        <Row className="g-3 mt-2">
+          <Col md={3}>
+            <InputGroup size="sm">
+              <InputGroup.Text>
+                <DollarSign size={14} />
+              </InputGroup.Text>
+              <Form.Control
+                type="number"
+                placeholder="Tổng tiền từ"
+                value={minAmount}
+                onChange={(e) => setMinAmount(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+              />
+            </InputGroup>
+          </Col>
+          <Col md={3}>
+            <InputGroup size="sm">
+              <InputGroup.Text>
+                <DollarSign size={14} />
+              </InputGroup.Text>
+              <Form.Control
+                type="number"
+                placeholder="Tổng tiền đến"
+                value={maxAmount}
+                onChange={(e) => setMaxAmount(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+              />
+            </InputGroup>
+          </Col>
+          <Col md={6} className="d-flex justify-content-end">
+            <Button variant="outline-secondary" size="sm" onClick={clearFilters}>
+              <X size={16} /> Xóa bộ lọc
+            </Button>
+          </Col>
+        </Row>
+      </div>
+
+      {/* TABLE */}
+      <div className="table-responsive">
         <Table striped bordered hover responsive className={isLoading ? 'opacity-50' : ''}>
-          <thead>
+          <thead className="table-light">
             <tr>
               <th>Mã Phiếu</th>
               <th>Nhà Cung Cấp</th>
@@ -75,40 +242,65 @@ const InventoryList = memo(({ inventories, isLoading, formatVND, handleShowDelet
               </tr>
             ) : inventories.length === 0 ? (
               <tr>
-                <td colSpan="6" className="text-center py-4">
+                <td colSpan="6" className="text-center py-4 text-muted">
                   Không có dữ liệu
                 </td>
               </tr>
             ) : (
               inventories.map((inventory) => (
-                <tr key={inventory.id}>
+                <tr
+                  key={inventory.id}
+                  onClick={(e) => handleRowClick(inventory.id, e)}
+                  style={{ cursor: 'pointer' }}
+                  className="table-row-hover"
+                >
                   <td>
-                    <span
-                      style={{ cursor: 'pointer', color: '#00448D', textDecoration: 'underline' }}
-                      onClick={() => handleShowDetail(inventory.id)}
-                    >
-                      {inventory.id}
-                    </span>
+                    <strong>{inventory.id}</strong>
                   </td>
-                  <td>{suppliers.find(s => s.SupplierId === inventory.supplierId)?.SupplierName || 'N/A'}</td>
+                  <td>
+                    {suppliers.find((s) => s.SupplierId === inventory.supplierId)?.SupplierName ||
+                      'N/A'}
+                  </td>
                   <td>{new Date(inventory.date).toLocaleDateString('vi-VN')}</td>
                   <td>{formatVND(inventory.total)}</td>
-                  <td>{inventory.note || 'Không có'}</td>
                   <td>
+                    {inventory.note ? (
+                      <span title={inventory.note}>
+                        {inventory.note.length > 30
+                          ? inventory.note.substring(0, 30) + '...'
+                          : inventory.note}
+                      </span>
+                    ) : (
+                      'Không có'
+                    )}
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()}>
                     <Button
                       variant="link"
+                      size="sm"
+                      className="text-info p-0 me-2"
+                      onClick={() => handleShowDetail(inventory.id)}
+                      title="Xem chi tiết"
+                    >
+                      <Eye size={18} />
+                    </Button>
+                    <Button
+                      variant="link"
+                      size="sm"
                       className="text-success p-0 me-2"
                       onClick={() => handleShowEditForm(inventory)}
+                      title="Sửa"
                     >
-                      <PencilIcon />
+                      <PencilIcon size={18} />
                     </Button>
-                    <span>|</span>
                     <Button
                       variant="link"
-                      className="text-danger p-0 ms-2"
+                      size="sm"
+                      className="text-danger p-0"
                       onClick={() => handleShowDeleteModal(inventory.id)}
+                      title="Xóa"
                     >
-                      <Trash />
+                      <Trash size={18} />
                     </Button>
                   </td>
                 </tr>
@@ -117,6 +309,8 @@ const InventoryList = memo(({ inventories, isLoading, formatVND, handleShowDelet
           </tbody>
         </Table>
       </div>
+
+      {/* PAGINATION */}
       {pageCount > 1 && (
         <Pagination
           pageCount={pageCount}
@@ -127,7 +321,8 @@ const InventoryList = memo(({ inventories, isLoading, formatVND, handleShowDelet
       )}
     </div>
   );
-});
+}
+);
 
 const InventoryForm = memo(({ isEditMode, inventory, onSubmit, onCancel, isLoading, suppliers, medicines, formLoading }) => {
   const [items, setItems] = useState(() => {
@@ -539,6 +734,9 @@ const AdminInventory = () => {
   const [formLoading, setFormLoading] = useState(false);
   const cache = useRef(new Map());
   const debounceRef = useRef(null);
+  const [filterParams, setFilterParams] = useState('');
+  const [suppliersReady, setSuppliersReady] = useState(false);
+  const [inventoriesReady, setInventoriesReady] = useState(false);
 
   const showToast = useCallback((type, message) => {
     setToast({ show: true, type, message });
@@ -549,7 +747,10 @@ const AdminInventory = () => {
   }, []);
 
   const fetchSuppliers = useCallback(async () => {
-    if (suppliers.length > 0) return;
+    if (suppliers.length > 0) {
+      setSuppliersReady(true);
+      return;
+    }
     try {
       setIsLoading(true);
       const response = await fetch(`${API_BASE_URL}/api/suppliers/all`, {
@@ -559,6 +760,7 @@ const AdminInventory = () => {
       if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
       const data = await response.json();
       setSuppliers(data.data || []);
+      setSuppliersReady(true); // Đánh dấu sẵn sàng
     } catch (error) {
       console.error('Error fetching suppliers:', error);
       showToast('error', `Lỗi khi tải danh sách nhà cung cấp: ${error.message}`);
@@ -586,43 +788,47 @@ const AdminInventory = () => {
     }
   }, [medicines.length, showToast]);
 
-  const fetchInventories = useCallback(async (page = 1) => {
-    if (cache.current.has(page)) {
-      const { data, last_page } = cache.current.get(page);
+  const fetchInventories = useCallback(async (page = 1, queryString = '') => {
+    const cacheKey = `${page}_${queryString}`;
+    if (cache.current.has(cacheKey)) {
+      const { data, last_page } = cache.current.get(cacheKey);
       setInventories(data);
       setPageCount(last_page);
       setCurrentPage(page - 1);
+      setInventoriesReady(true); // Đảm bảo trạng thái sẵn sàng
       return;
     }
 
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch(`${API_BASE_URL}/api/import-bills?page=${page}`, {
-          headers: { 'Accept': 'application/json' },
-          credentials: 'include',
-        });
-        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-        const paginator = await response.json();
-        const mappedData = paginator.data.map(item => ({
-          id: item.ImportId,
-          supplierId: item.SupplierId,
-          date: item.ImportDate,
-          total: item.TotalAmount,
-          note: item.Notes || '',
-        }));
-        cache.current.set(page, { data: mappedData, last_page: paginator.last_page });
-        setInventories(mappedData);
-        setPageCount(paginator.last_page);
-        setCurrentPage(page - 1);
-      } catch (error) {
-        console.error('Error fetching inventories:', error);
-        showToast('error', `Lỗi khi tải danh sách phiếu nhập kho: ${error.message}`);
-      } finally {
-        setIsLoading(false);
-      }
-    }, 300);
+    try {
+      setIsLoading(true);
+      setInventoriesReady(false); // Reset trước khi fetch
+      const response = await fetch(`${API_BASE_URL}/api/import-bills?page=${page}${queryString ? '&' + queryString : ''}`, {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const res = await response.json();
+
+      const mappedData = res.data.map(item => ({
+        id: item.ImportId,
+        supplierId: item.SupplierId,
+        date: item.ImportDate,
+        total: item.TotalAmount,
+        note: item.Notes || '',
+      }));
+
+      cache.current.set(cacheKey, { data: mappedData, last_page: res.last_page });
+      setInventories(mappedData);
+      setPageCount(res.last_page);
+      setCurrentPage(page - 1);
+      setInventoriesReady(true); // Chỉ set khi thành công
+    } catch (error) {
+      showToast('error', `Lỗi tải dữ liệu: ${error.message}`);
+      setInventories([]); // Đặt rỗng để tránh lỗi
+      setInventoriesReady(true); // Vẫn cho phép render để hiển thị "Không có dữ liệu"
+    } finally {
+      setIsLoading(false);
+    }
   }, [showToast]);
 
   const fetchInventoryDetails = useCallback(async (importId) => {
@@ -805,7 +1011,11 @@ const AdminInventory = () => {
     setCurrentView('list');
     setSelectedInventory(null);
     setDetails([]);
-  }, []);
+    setInventoriesReady(false); // Reset trạng thái
+    setSuppliersReady(suppliers.length > 0);
+    cache.current.clear(); // Xóa cache để tải mới
+    fetchInventories(currentPage + 1, filterParams); // Tải lại với trang hiện tại và bộ lọc
+  }, [currentPage, filterParams, suppliers.length, fetchInventories]);
 
   const handleAddInventory = useCallback(async (e, items) => {
     try {
@@ -918,19 +1128,17 @@ const AdminInventory = () => {
 
   useEffect(() => {
     if (currentView === 'list') {
+      setInventoriesReady(false);
+      setSuppliersReady(suppliers.length > 0);
       fetchInventories(1);
       fetchSuppliers();
-      fetchMedicines();
     }
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [currentView, fetchInventories, fetchSuppliers, fetchMedicines]);
+  }, []); // Chỉ chạy 1 lần khi mount
 
   const handlePageChange = useCallback(({ selected }) => {
-    const nextPage = selected + 1;
-    fetchInventories(nextPage);
-  }, [fetchInventories]);
+    setInventoriesReady(false);
+    fetchInventories(selected + 1, filterParams);
+  }, [fetchInventories, filterParams]);
 
   const formatVND = useCallback((value) => {
     return Number(value).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
@@ -938,23 +1146,34 @@ const AdminInventory = () => {
 
   return (
     <div className='d-flex'>
-      <AdminSidebar />
+      
       <div className='position-relative w-100 flex-grow-1 ms-5 p-4'>
         <h1 className="mb-4" style={{ fontSize: '1.8rem', fontWeight: '600' }}>Quản Lý Kho</h1>
         {currentView === 'list' && (
-          <InventoryList
-            inventories={inventories}
-            isLoading={isLoading}
-            formatVND={formatVND}
-            handleShowDeleteModal={handleShowDeleteModal}
-            handleShowDetail={handleShowDetail}
-            handleShowAddInventory={handleShowAddInventory}
-            handleShowEditForm={handleShowEditForm}
-            pageCount={pageCount}
-            currentPage={currentPage}
-            handlePageChange={handlePageChange}
-            suppliers={suppliers}
-          />
+          <>
+            {(!inventoriesReady || !suppliersReady || isLoading) ? (
+              <div className="text-center py-5">
+                <Spinner animation="border" variant="primary" />
+                <p className="mt-2">Đang tải danh sách phiếu nhập...</p>
+              </div>
+            ) : (
+              <InventoryList
+                inventories={inventories}
+                isLoading={isLoading}
+                formatVND={formatVND}
+                handleShowDeleteModal={handleShowDeleteModal}
+                handleShowDetail={handleShowDetail}
+                handleShowAddInventory={handleShowAddInventory}
+                handleShowEditForm={handleShowEditForm}
+                pageCount={pageCount}
+                currentPage={currentPage}
+                handlePageChange={handlePageChange}
+                suppliers={suppliers}
+                setFilterParams={setFilterParams}
+                fetchInventories={fetchInventories}
+              />
+            )}
+          </>
         )}
         {currentView === 'add' && (
           <ErrorBoundary>

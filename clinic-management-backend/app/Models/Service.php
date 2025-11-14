@@ -27,7 +27,7 @@ class Service extends Model
 {
 	protected $table = 'Services';
 	protected $primaryKey = 'ServiceId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [

@@ -11,6 +11,7 @@ use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
 use Maatwebsite\Excel\Validators\Failure;
 use Maatwebsite\Excel\Concerns\SkipsFailures;
 use Maatwebsite\Excel\Imports\HeadingRowFormatter;
+use Carbon\Carbon;
 
 class MedicinesImport implements ToModel, WithHeadingRow, WithValidation, SkipsOnFailure, SkipsEmptyRows
 {
@@ -35,6 +36,8 @@ class MedicinesImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
             'Price'          => $row['Price'] ?? 0,
             'StockQuantity' => $row['StockQuantity'] ?? 0,
             'Description'    => $row['Description'] ?? '',
+            'ExpiryDate'        => isset($row['ExpiryDate']) ? $this->parseDate($row['ExpiryDate']) : null,
+            'LowStockThreshold' => $row['LowStockThreshold'] ?? 10,
         ]);
     }
 
@@ -49,6 +52,8 @@ class MedicinesImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
             // MedicineId và Description không bắt buộc
             'MedicineId'    => 'sometimes|string|max:50',
             'Description'   => 'nullable|string|max:500',
+            'ExpiryDate'        => 'nullable|date',
+            'LowStockThreshold' => 'nullable|integer|min:0',
         ];
     }
 
@@ -62,6 +67,8 @@ class MedicinesImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
             'StockQuantity' => 'Số lượng tồn kho',
             'MedicineId'    => 'Mã thuốc',
             'Description'   => 'Mô tả',
+            'ExpiryDate'        => 'Hạn sử dụng',
+            'LowStockThreshold' => 'Ngưỡng tồn kho thấp',
         ];
     }
 
@@ -96,6 +103,29 @@ class MedicinesImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
             $data['StockQuantity'] = (int) $data['StockQuantity'];
         }
 
+        if (isset($data['LowStockThreshold'])) {
+            $data['LowStockThreshold'] = (int) $data['LowStockThreshold'];
+        }
+
+        if (isset($data['ExpiryDate'])) {
+            $data['ExpiryDate'] = $this->parseDate($data['ExpiryDate']);
+        }
+
         return $data;
+    }
+
+    /**
+     * Chuyển đổi kiểu ngày linh hoạt (Excel, text, hoặc timestamp)
+     */
+    private function parseDate($value)
+    {
+        try {
+            if (is_numeric($value)) {
+                return Carbon::instance(\PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($value))->format('Y-m-d');
+            }
+            return Carbon::parse($value)->format('Y-m-d');
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 }

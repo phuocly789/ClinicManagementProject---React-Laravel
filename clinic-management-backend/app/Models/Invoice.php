@@ -30,7 +30,7 @@ class Invoice extends Model
 {
 	protected $table = 'Invoices';
 	protected $primaryKey = 'InvoiceId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [
@@ -38,7 +38,8 @@ class Invoice extends Model
 		'AppointmentId' => 'int',
 		'PatientId' => 'int',
 		'TotalAmount' => 'float',
-		'InvoiceDate' => 'datetime'
+		'InvoiceDate' => 'datetime',
+		'Paidat' => 'datetime',
 	];
 
 	protected $fillable = [
@@ -46,7 +47,11 @@ class Invoice extends Model
 		'PatientId',
 		'TotalAmount',
 		'InvoiceDate',
-		'Status'
+		'Status',
+		'PaymentMethod',
+		'OrderId',
+		'TransactionId',
+		'Paidat',
 	];
 
 	public function appointment()
@@ -62,5 +67,14 @@ class Invoice extends Model
 	public function invoice_details()
 	{
 		return $this->hasMany(InvoiceDetail::class, 'InvoiceId');
+	}
+	// Helper method để lấy status đúng
+	public static function getStatusOptions()
+	{
+		return [
+			'pending' => 'Chờ thanh toán',
+			'paid' => 'Đã thanh toán',
+			'cancelled' => 'Đã hủy'
+		];
 	}
 }

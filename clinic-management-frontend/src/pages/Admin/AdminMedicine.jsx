@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
-import { Table, Button, Spinner, Form, Row, Col, Card, Badge, ProgressBar, Alert, Modal } from 'react-bootstrap';
+import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef, memo, useRef } from 'react';
+import { Table, Button, Spinner, Form, Row, Col, Card, Badge, ProgressBar, Alert, Modal, InputGroup } from 'react-bootstrap';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import Pagination from '../../Components/Pagination/Pagination';
 import ConfirmDeleteModal from '../../Components/CustomToast/DeleteConfirmModal';
 import CustomToast from '../../Components/CustomToast/CustomToast';
-import { PencilIcon, Trash, Download, Upload, FileSpreadsheet, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { PencilIcon, Trash, Download, Upload, FileSpreadsheet, AlertCircle, CheckCircle, XCircle, Search, X } from 'lucide-react';
 import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -41,6 +41,8 @@ const availableColumns = [
   { value: 'Unit', label: 'Đơn Vị' },
   { value: 'Price', label: 'Giá Bán' },
   { value: 'StockQuantity', label: 'Tồn Kho' },
+  { value: 'ExpiryDate', label: 'Hết Hạn' },
+  { value: 'LowStockThreshold', label: 'Ngưỡng Thấp' },
   { value: 'Description', label: 'Mô Tả' },
 ];
 
@@ -51,84 +53,197 @@ const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class
 const MedicineList = memo(({
   medicines, isLoading, formatVND, handleShowDeleteModal, handleShowEditForm,
   pageCount, currentPage, handlePageChange,
-  onDownloadTemplate, onShowExportModal, onShowImport
+  onDownloadTemplate, onShowExportModal, onShowImport,
+  applyFilters, clearFilters, filters, setFilters, debounceRef
 }) => {
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h3>Danh Sách Thuốc</h3>
+      {/* HEADER */}
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h3 style={{ fontSize: '1.5rem', fontWeight: '600' }}>
+          Danh Sách Thuốc
+        </h3>
         <div className="d-flex gap-2">
           <Button variant="outline-primary" onClick={onDownloadTemplate}>
             <Download size={16} className="me-1" /> Tải Template
           </Button>
           <Button variant="success" onClick={onShowExportModal}>
-            <FileSpreadsheet size={16} className="me-1" /> Export Excel
+            <FileSpreadsheet size={16} className="me-1" /> Export
           </Button>
           <Button variant="info" onClick={onShowImport}>
-            <Upload size={16} className="me-1" /> Import Excel
+            <Upload size={16} className="me-1" /> Import
           </Button>
-          <Button variant="primary" onClick={() => handleShowEditForm(null)}>Thêm Thuốc Mới</Button>
+          <Button variant="primary" onClick={() => handleShowEditForm(null)}>
+            + Thêm Thuốc
+          </Button>
         </div>
       </div>
 
-      {/* Main Table */}
-      <div className="table-responsive" style={{ transition: 'opacity 0.3s ease' }}>
+      {/* FILTER BAR */}
+      <Card className="mb-4 p-3 bg-light border">
+        <Form onSubmit={(e) => { e.preventDefault(); applyFilters(); }}>
+          <Row className="g-3 align-items-end">
+            {/* TÌM KIẾM TÊN - DEBOUNCE */}
+            <Col md={4}>
+              <InputGroup>
+                <InputGroup.Text><Search size={16} /></InputGroup.Text>
+                <Form.Control
+                  placeholder="Tìm tên thuốc..."
+                  value={filters.search || ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFilters(prev => ({ ...prev, search: value }));
+                  }}
+                />
+              </InputGroup>
+            </Col>
+
+            {/* LỌC LOẠI */}
+            <Col md={2}>
+              <Form.Select
+                value={filters.type || ''}
+                onChange={(e) => applyFilters({ type: e.target.value })}
+              >
+                <option value="">Loại</option>
+                {medicineTypes.map(t => <option key={t} value={t}>{t}</option>)}
+              </Form.Select>
+            </Col>
+
+            {/* LỌC ĐƠN VỊ */}
+            <Col md={2}>
+              <Form.Select
+                value={filters.unit || ''}
+                onChange={(e) => applyFilters({ unit: e.target.value })}
+              >
+                <option value="">Đơn vị</option>
+                {units.map(u => <option key={u} value={u}>{u}</option>)}
+              </Form.Select>
+            </Col>
+
+            {/* KHOẢNG GIÁ */}
+            <Col md={3}>
+              <InputGroup size="sm">
+                <Form.Control
+                  type="number"
+                  placeholder="Giá từ"
+                  value={filters.min_price || ''}
+                  onChange={(e) => setFilters(prev => ({ ...prev, min_price: e.target.value }))}
+                />
+                <InputGroup.Text>→</InputGroup.Text>
+                <Form.Control
+                  type="number"
+                  placeholder="Giá đến"
+                  value={filters.max_price || ''}
+                  onChange={(e) => setFilters(prev => ({ ...prev, max_price: e.target.value }))}
+                />
+              </InputGroup>
+            </Col>
+
+            {/* TỒN KHO THẤP */}
+            <Col md={2}>
+              <Form.Check
+                type="switch"
+                label="Tồn thấp"
+                checked={filters.low_stock === '1'}
+                onChange={(e) => setFilters(prev => ({ ...prev, low_stock: e.target.checked ? '1' : '' }))}
+              />
+            </Col>
+
+            {/* LỌC SẮP HẾT HẠN */}
+            <Col md={2}>
+              <Form.Select
+                value={filters.expiry_status || ''}
+                onChange={(e) => applyFilters({ expiry_status: e.target.value })}
+              >
+                <option value="">Hết hạn</option>
+                <option value="expired">Đã hết</option>
+                <option value="soon">Sắp hết (≤30 ngày)</option>
+              </Form.Select>
+            </Col>
+
+            {/* NÚT TÌM KIẾM & XÓA */}
+            <Col md={12} className="d-flex gap-2 mt-2">
+              <Button type="submit" variant="primary">
+                <Search size={16} className="me-1" /> Tìm kiếm
+              </Button>
+              <Button variant="outline-danger" onClick={clearFilters}>
+                <X size={16} className="me-1" /> Xóa bộ lọc
+              </Button>
+            </Col>
+          </Row>
+        </Form>
+      </Card>
+
+      {/* TABLE */}
+      <div className="table-responsive">
         <Table striped bordered hover responsive className={isLoading ? 'opacity-50' : ''}>
-          <thead>
+          <thead className="table-light">
             <tr>
-              <th>Mã Thuốc</th>
+              <th>Mã</th>
               <th>Tên Thuốc</th>
-              <th>Loại Thuốc</th>
-              <th>Đơn Vị</th>
-              <th>Giá Bán</th>
-              <th>Tồn Kho</th>
+              <th>Loại</th>
+              <th>ĐV</th>
+              <th>Giá</th>
+              <th>Tồn</th>
+              <th>Hết Hạn</th>
+              <th>Ngưỡng Thấp</th>
               <th>Mô Tả</th>
               <th>Hành Động</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
-              <tr>
-                <td colSpan="8" className="text-center">
-                  <Spinner animation="border" variant="primary" />
-                </td>
-              </tr>
+              <tr><td colSpan="8" className="text-center py-4"><Spinner animation="border" /></td></tr>
             ) : medicines.length === 0 ? (
-              <tr>
-                <td colSpan="8" className="text-center">
-                  Trống
-                </td>
-              </tr>
+              <tr><td colSpan="8" className="text-center py-4 text-muted">Không có dữ liệu</td></tr>
             ) : (
-              medicines.map((medicine) => (
-                <tr key={medicine.MedicineId}>
-                  <td>{medicine.MedicineId}</td>
-                  <td>{medicine.MedicineName}</td>
-                  <td>{medicine.MedicineType}</td>
-                  <td>{medicine.Unit}</td>
-                  <td>{formatVND(medicine.Price)}</td>
-                  <td>{medicine.StockQuantity}</td>
-                  <td>{medicine.Description}</td>
+              medicines.map((m) => (
+                <tr
+                  key={m.MedicineId}
+                  className={`
+                    ${m.StockQuantity < m.LowStockThreshold ? 'table-warning' : ''}
+                    ${(() => {
+                      if (!m.ExpiryDate) return '';
+                      const expiry = new Date(m.ExpiryDate);
+                      const today = new Date();
+                      const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+                      if (diffDays < 0) return 'table-danger'; // Đã hết hạn
+                      if (diffDays <= 30) return 'table-warning'; // Sắp hết
+                      return '';
+                    })()}
+                  `.trim()}
+                >
+                  <td><strong>{m.MedicineId}</strong></td>
+                  <td>{m.MedicineName}</td>
+                  <td>{m.MedicineType}</td>
+                  <td>{m.Unit}</td>
+                  <td>{formatVND(m.Price)}</td>
                   <td>
-                    <span>
-                      <a
-                        className="text-success"
-                        href="#"
-                        onClick={() => handleShowEditForm(medicine)}
-                      >
-                        <PencilIcon size={16} />
-                      </a>
-                    </span>
-                    <span className="px-1">/</span>
-                    <span>
-                      <a
-                        className="text-danger"
-                        href="#"
-                        onClick={() => handleShowDeleteModal(medicine.MedicineId)}
-                      >
-                        <Trash size={16} />
-                      </a>
-                    </span>
+                    <Badge bg={m.StockQuantity < 100 ? 'danger' : m.StockQuantity < 500 ? 'warning' : 'success'}>
+                      {m.StockQuantity}
+                    </Badge>
+                  </td>
+                  <td>
+                    {m.ExpiryDate
+                      ? new Date(m.ExpiryDate).toLocaleDateString('vi-VN', {
+                        day: '2-digit', month: '2-digit', year: 'numeric'
+                      })
+                      : '—'
+                    }
+                  </td>
+                  <td>
+                    <Badge bg="info">{m.LowStockThreshold}</Badge>
+                  </td>
+                  <td title={m.Description}>
+                    {m.Description?.length > 30 ? m.Description.substring(0, 30) + '...' : m.Description || '—'}
+                  </td>
+                  <td>
+                    <Button variant="link" size="sm" className="text-success p-0 me-2" onClick={() => handleShowEditForm(m)}>
+                      <PencilIcon size={18} />
+                    </Button>
+                    <Button variant="link" size="sm" className="text-danger p-0" onClick={() => handleShowDeleteModal(m.MedicineId)}>
+                      <Trash size={18} />
+                    </Button>
                   </td>
                 </tr>
               ))
@@ -136,6 +251,7 @@ const MedicineList = memo(({
           </tbody>
         </Table>
       </div>
+
       {pageCount > 1 && (
         <Pagination
           pageCount={pageCount}
@@ -315,15 +431,49 @@ const ExportModal = ({ show, onHide, onExport, filters, onFilterChange, selected
   );
 };
 
-const MedicineForm = memo(({ isEditMode, medicine, onSubmit, onCancel, isLoading }) => {
+const MedicineForm = forwardRef(({
+  isEditMode, medicine, onSubmit, onCancel, isLoading, aiEnabled, setAiEnabled, handleSuggest
+}, ref) => {
   const [errors, setErrors] = useState({
     MedicineName: '',
     MedicineType: '',
     Unit: '',
     Price: '',
     StockQuantity: '',
+    ExpiryDate: '',
+    LowStockThreshold: '',
     Description: '',
   });
+  const [showSuggestModal, setShowSuggestModal] = useState(false);
+  const [suggestedData, setSuggestedData] = useState(null);
+  const [suggestError, setSuggestError] = useState('');
+
+  useImperativeHandle(ref, () => ({
+    openSuggestModal: (data, error = '') => {
+      setSuggestedData(data);
+      setSuggestError(error);
+      setShowSuggestModal(true);
+    }
+  }));
+
+  useEffect(() => {
+    localStorage.setItem('aiEnabled', aiEnabled);
+  }, [aiEnabled]);
+
+  useEffect(() => {
+    if (window.__AI_SUGGESTION__) {
+      const { data, error } = window.__AI_SUGGESTION__;
+      setSuggestedData(data);
+      setSuggestError(error);
+      setShowSuggestModal(true);
+      delete window.__AI_SUGGESTION__;
+    }
+  }, []);
+
+  useEffect(() => {
+    const firstInput = document.querySelector('input[name="MedicineName"]');
+    firstInput?.focus();
+  }, []);
 
   const validateForm = useCallback((formData) => {
     const newErrors = {};
@@ -388,6 +538,25 @@ const MedicineForm = memo(({ isEditMode, medicine, onSubmit, onCancel, isLoading
       isValid = false;
     }
 
+    // Trong validateForm
+    const expiryDate = formData.get('ExpiryDate');
+    if (expiryDate) {
+      const date = new Date(expiryDate);
+      if (isNaN(date.getTime())) {
+        newErrors.ExpiryDate = 'Ngày hết hạn không hợp lệ';
+        isValid = false;
+      } else if (date < new Date()) {
+        newErrors.ExpiryDate = 'Ngày hết hạn không được trong quá khứ';
+        isValid = false;
+      }
+    }
+
+    const lowStockThreshold = parseInt(formData.get('LowStockThreshold'));
+    if (isNaN(lowStockThreshold) || lowStockThreshold < 1) {
+      newErrors.LowStockThreshold = 'Ngưỡng thấp phải ≥ 1';
+      isValid = false;
+    }
+
     // Validate Description
     const description = formData.get('Description')?.trim();
     if (description && description.length > 500) {
@@ -410,6 +579,19 @@ const MedicineForm = memo(({ isEditMode, medicine, onSubmit, onCancel, isLoading
     }
   }, [onSubmit, validateForm]);
 
+  const handleApprove = useCallback(() => {
+    if (suggestedData) {
+      const typeSelect = document.querySelector('select[name="MedicineType"]');
+      const unitSelect = document.querySelector('select[name="Unit"]');
+      const descTextarea = document.querySelector('textarea[name="Description"]');
+
+      if (typeSelect) typeSelect.value = suggestedData.type;
+      if (unitSelect) unitSelect.value = suggestedData.unit;
+      if (descTextarea) descTextarea.value = suggestedData.description;
+    }
+    setShowSuggestModal(false);
+  }, [suggestedData]);
+
   return (
     <div>
       <h3>{isEditMode ? 'Sửa Thuốc' : 'Thêm Thuốc Mới'}</h3>
@@ -418,14 +600,29 @@ const MedicineForm = memo(({ isEditMode, medicine, onSubmit, onCancel, isLoading
           <Col md={6}>
             <Form.Group className="mb-3">
               <Form.Label>Tên Thuốc</Form.Label>
-              <Form.Control
-                type="text"
-                name="MedicineName"
-                defaultValue={isEditMode ? medicine?.MedicineName : ''}
-                placeholder="Nhập tên thuốc"
-                isInvalid={!!errors.MedicineName}
-              />
+              <InputGroup>
+                <Form.Control
+                  type="text"
+                  name="MedicineName"
+                  defaultValue={isEditMode ? medicine?.MedicineName : ''}
+                  placeholder="Nhập tên thuốc"
+                  isInvalid={!!errors.MedicineName}
+                />
+                {aiEnabled && (
+                  <Button variant="info" onClick={handleSuggest} className="ms-2">
+                    Gợi ý bằng AI
+                  </Button>
+                )}
+              </InputGroup>
               <Form.Text className="text-danger">{errors.MedicineName}</Form.Text>
+              {/* Toggle */}
+              <Form.Check
+                type="switch"
+                label="Bật gợi ý AI"
+                checked={aiEnabled}
+                onChange={(e) => setAiEnabled(e.target.checked)}
+                className="mt-2"
+              />
             </Form.Group>
           </Col>
           <Col md={6}>
@@ -484,6 +681,34 @@ const MedicineForm = memo(({ isEditMode, medicine, onSubmit, onCancel, isLoading
         <Row>
           <Col md={6}>
             <Form.Group className="mb-3">
+              <Form.Label>Ngày Hết Hạn</Form.Label>
+              <Form.Control
+                type="date"
+                name="ExpiryDate"
+                defaultValue={isEditMode && medicine?.ExpiryDate ? medicine.ExpiryDate.split('T')[0] : ''}
+                isInvalid={!!errors.ExpiryDate}
+              />
+              <Form.Text className="text-danger">{errors.ExpiryDate}</Form.Text>
+            </Form.Group>
+          </Col>
+          <Col md={6}>
+            <Form.Group className="mb-3">
+              <Form.Label>Ngưỡng Tồn Kho Thấp</Form.Label>
+              <Form.Control
+                type="number"
+                name="LowStockThreshold"
+                defaultValue={isEditMode ? medicine?.LowStockThreshold : 10}
+                min="1"
+                placeholder="Ví dụ: 10"
+                isInvalid={!!errors.LowStockThreshold}
+              />
+              <Form.Text className="text-danger">{errors.LowStockThreshold}</Form.Text>
+            </Form.Group>
+          </Col>
+        </Row>
+        <Row>
+          <Col md={6}>
+            <Form.Group className="mb-3">
               <Form.Label>Tồn Kho</Form.Label>
               <Form.Control
                 type="number"
@@ -514,7 +739,37 @@ const MedicineForm = memo(({ isEditMode, medicine, onSubmit, onCancel, isLoading
         </Button>
         <Button variant="secondary" onClick={onCancel} className="ms-2">Hủy</Button>
       </Form>
-    </div>
+      <Modal show={showSuggestModal} onHide={() => setShowSuggestModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>
+            Gợi Ý AI: {medicine?.MedicineName || 'Thuốc'}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {suggestError && <Alert variant="warning">{suggestError}</Alert>}
+          {suggestedData && (
+            <div>
+              <p><strong>Loại:</strong> {suggestedData.type}</p>
+              <p><strong>Đơn vị:</strong> {suggestedData.unit}</p>
+              <p><strong>Mô tả:</strong> {suggestedData.description}</p>
+              <p><strong>Cảnh báo:</strong> {suggestedData.warnings}</p>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowSuggestModal(false)}>
+            Reject
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleApprove}
+            disabled={!!suggestError}
+          >
+            Approve
+          </Button>
+        </Modal.Footer>
+      </Modal>
+    </div >
   );
 });
 
@@ -536,14 +791,87 @@ const AdminMedicine = () => {
   const [headers, setHeaders] = useState([]); // Auto detect header
   const [dryRunResult, setDryRunResult] = useState(null);
   const [selectedColumns, setSelectedColumns] = useState(availableColumns.map(col => col.value)); // Default all
-  const [filters, setFilters] = useState({});
   const [mapping, setMapping] = useState({});
   const [uploadErrors, setUploadErrors] = useState([]);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showConfirmImportModal, setShowConfirmImportModal] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(localStorage.getItem('aiEnabled') !== 'false');
+  const formRef = useRef(null);
+
+  const [filters, setFilters] = useState({
+    search: '',
+    type: '',
+    unit: '',
+    min_price: '',
+    max_price: '',
+    low_stock: '',
+    expiry_status: '',
+    threshold: 100
+  });
+  const [filterParams, setFilterParams] = useState('');
 
   const showToast = useCallback((type, message) => {
     setToast({ show: true, type, message });
+  }, []);
+
+
+  const fetchMedicines = useCallback(async (page = 1, queryString = '') => {
+    const cacheKey = `${page}_${queryString || 'none'}`;
+    if (cache.current.has(cacheKey)) {
+      const { data, last_page } = cache.current.get(cacheKey);
+      setMedicines(data);
+      setPageCount(last_page);
+      setCurrentPage(page - 1);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const url = `${API_BASE_URL}/api/medicines?page=${page}${queryString ? '&' + queryString : ''}`;
+      const response = await fetch(url, {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const res = await response.json();
+      cache.current.set(cacheKey, { data: res.data, last_page: res.last_page });
+      setMedicines(res.data);
+      setPageCount(res.last_page);
+      setCurrentPage(page - 1);
+    } catch (error) {
+      showToast('error', `Lỗi tải dữ liệu: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast]);
+
+  // ÁP DỤNG LỌC
+  const applyFilters = useCallback((updates = {}) => {
+    const newFilters = { ...filters, ...updates };
+    setFilters(newFilters);
+
+    const params = new URLSearchParams();
+    Object.entries(newFilters).forEach(([key, value]) => {
+      if (value !== '' && value !== null && value !== undefined) {
+        params.append(key, value);
+      }
+    });
+
+    if (newFilters.expiry_status) {
+      params.append('expiry_status', newFilters.expiry_status);
+    }
+
+    const query = params.toString();
+    setFilterParams(query);
+    fetchMedicines(1, query); // Gọi ngay khi nhấn nút hoặc debounce kết thúc
+  }, [filters, fetchMedicines]);
+
+  // XÓA LỌC
+  const clearFilters = useCallback(() => {
+    const reset = { search: '', type: '', unit: '', min_price: '', max_price: '', low_stock: '', expiry_status: '', threshold: 100 };
+    setFilters(reset);
+    setFilterParams('');
+    fetchMedicines(1);
   }, []);
 
   const hideToast = useCallback(() => {
@@ -557,43 +885,6 @@ const AdminMedicine = () => {
   const handleCloseExportModal = useCallback(() => {
     setShowExportModal(false);
   }, []);
-
-
-  const fetchMedicines = useCallback(async (page = 1) => {
-    if (cache.current.has(page)) {
-      const { data, last_page } = cache.current.get(page);
-      setMedicines(data);
-      setPageCount(last_page);
-      setCurrentPage(page - 1);
-      return;
-    }
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch(`${API_BASE_URL}/api/medicines?page=${page}`, {
-          headers: {
-            'Accept': 'application/json',
-          },
-          credentials: 'include',
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        const paginator = await response.json();
-        cache.current.set(page, { data: paginator.data, last_page: paginator.last_page });
-        setMedicines(paginator.data);
-        setPageCount(paginator.last_page);
-        setCurrentPage(page - 1);
-      } catch (error) {
-        console.error('Error fetching medicines:', error);
-        showToast('error', `Lỗi khi tải danh sách thuốc: ${error.message}`);
-      } finally {
-        setIsLoading(false);
-      }
-    }, 300);
-  }, [showToast]);
 
   const getCsrfToken = useCallback(async (retries = 3) => {
     for (let attempt = 1; attempt <= retries; attempt++) {
@@ -643,8 +934,33 @@ const AdminMedicine = () => {
       }
       const result = await response.json();
       showToast('success', result.message || 'Xóa thuốc thành công');
-      cache.current.delete(currentPage + 1);
-      await fetchMedicines(currentPage + 1);
+
+      // XÓA TOÀN BỘ CACHE ĐỂ ĐẢM BẢO DỮ LIỆU MỚI
+      cache.current.clear();
+
+      // GỌI LẠI TRANG HIỆN TẠI
+      const currentApiPage = currentPage + 1;
+      const res = await fetch(`${API_BASE_URL}/api/medicines?page=${currentApiPage}${filterParams ? '&' + filterParams : ''}`, {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'include',
+      });
+
+      if (!res.ok) throw new Error('Không thể tải lại dữ liệu');
+
+      const data = await res.json();
+
+      // Nếu trang hiện tại trống → chuyển về trang trước (nếu có)
+      if (data.data.length === 0 && data.last_page > 0 && currentApiPage > 1) {
+        setCurrentPage(data.last_page - 1); // 0-based
+        setPageCount(data.last_page);
+        await fetchMedicines(data.last_page, filterParams);
+      } else {
+        setMedicines(data.data);
+        setPageCount(data.last_page);
+        // Không cần fetch lại vì đã có data
+      }
+
+
     } catch (error) {
       console.error('Error deleting medicine:', error);
       showToast('error', `Lỗi khi xóa thuốc: ${error.message}`);
@@ -653,7 +969,7 @@ const AdminMedicine = () => {
       setShowDeleteModal(false);
       setMedicineToDelete(null);
     }
-  }, [currentPage, fetchMedicines, getCsrfToken, showToast]);
+  }, [currentPage, filterParams, fetchMedicines, getCsrfToken, showToast]);
 
   const handleShowDeleteModal = useCallback((medicineId) => {
     setMedicineToDelete(medicineId);
@@ -686,6 +1002,8 @@ const AdminMedicine = () => {
         Unit: formData.get('Unit'),
         Price: parseFloat(formData.get('Price')),
         StockQuantity: parseInt(formData.get('StockQuantity')),
+        ExpiryDate: formData.get('ExpiryDate'),
+        LowStockThreshold: parseInt(formData.get('LowStockThreshold')),
         Description: formData.get('Description') || '',
       };
 
@@ -731,6 +1049,8 @@ const AdminMedicine = () => {
         Unit: formData.get('Unit'),
         Price: parseFloat(formData.get('Price')),
         StockQuantity: parseInt(formData.get('StockQuantity')),
+        ExpiryDate: formData.get('ExpiryDate'),
+        LowStockThreshold: parseInt(formData.get('LowStockThreshold')),
         Description: formData.get('Description') || '',
       };
 
@@ -768,17 +1088,16 @@ const AdminMedicine = () => {
 
   useEffect(() => {
     if (currentView === 'list') {
-      fetchMedicines(1);
+      fetchMedicines(1, filterParams);
     }
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [currentView, fetchMedicines]);
+  }, [currentView, fetchMedicines, filterParams]);
 
   const handlePageChange = useCallback(({ selected }) => {
-    const nextPage = selected + 1;
-    fetchMedicines(nextPage);
-  }, [fetchMedicines]);
+    fetchMedicines(selected + 1, filterParams);
+  }, [fetchMedicines, filterParams]);
 
   const formatVND = useCallback((price) => {
     return Number(price).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
@@ -1011,11 +1330,45 @@ const AdminMedicine = () => {
     setUploadErrors([]);
   }, []);
 
+  const handleSuggest = useCallback(async () => {
+    const nameInput = document.querySelector('input[name="MedicineName"]');
+    const name = nameInput?.value.trim();
+    if (!name) {
+      showToast('warning', 'Vui lòng nhập tên thuốc trước');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const response = await fetch(`${API_BASE_URL}/api/medicines/suggest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+
+      if (!response.ok) throw new Error('Lỗi gợi ý AI');
+
+      const data = await response.json();
+
+      // Kiểm tra validation
+      let error = '';
+      if (!medicineTypes.includes(data.type)) error += 'Loại thuốc không hợp lệ. ';
+      if (!units.includes(data.unit)) error += 'Đơn vị không hợp lệ. ';
+
+      // GỌI MODAL TỪ PARENT
+      formRef.current?.openSuggestModal(data, error);
+
+    } catch (error) {
+      showToast('error', error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   const { getRootProps, getInputProps } = useDropzone({ onDrop, noClick: !showImportModal }); // Chỉ active drop khi modal open
 
   return (
     <div className="d-flex">
-      <AdminSidebar />
       <div className="position-relative w-100 flex-grow-1 ms-5 p-4">
         <h1 className="mb-4">Quản Lý Thuốc</h1>
         {currentView === 'list' && (
@@ -1031,23 +1384,36 @@ const AdminMedicine = () => {
             onDownloadTemplate={handleDownloadTemplate}
             onShowExportModal={handleShowExportModal}
             onShowImport={handleShowImport}
+            applyFilters={applyFilters}
+            clearFilters={clearFilters}
+            filters={filters}
+            setFilters={setFilters}
+            debounceRef={debounceRef}
           />
         )}
         {currentView === 'add' && (
           <MedicineForm
+            ref={formRef}
             isEditMode={false}
             onSubmit={handleAddMedicine}
             onCancel={handleCancelForm}
             isLoading={isLoading}
+            aiEnabled={aiEnabled}
+            setAiEnabled={setAiEnabled}
+            handleSuggest={handleSuggest}
           />
         )}
         {currentView === 'edit' && (
           <MedicineForm
+            ref={formRef}
             isEditMode={true}
             medicine={editMedicine}
             onSubmit={handleEditMedicine}
             onCancel={handleCancelForm}
             isLoading={isLoading}
+            aiEnabled={aiEnabled}
+            setAiEnabled={setAiEnabled}
+            handleSuggest={handleSuggest}
           />
         )}
         <ExportModal

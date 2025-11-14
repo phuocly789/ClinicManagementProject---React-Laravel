@@ -10,12 +10,12 @@ use App\Models\UserRole;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
-class UserControllers extends Controller
+class AdminUserController extends Controller
 {
-    //ấy danh sách người dùng với tìm kiếm, lọc và phân trang
+    //Lấy danh sách người dùng với tìm kiếm, lọc và phân trang
     public function index(Request $request)
     {
-        $perPage = $request->input('per_page', 5);
+        $perPage = $request->input('per_page', 10);
 
         $query = User::with('roles')->orderBy('UserId', 'asc');
 
@@ -171,23 +171,56 @@ class UserControllers extends Controller
 
     //Kích hoạt / vô hiệu hóa người dùng
     public function toggleStatus($id)
-{
-    $user = User::find($id);
+    {
+        $user = User::find($id);
 
-    if (!$user) {
-        return response()->json(['message' => 'Người dùng không tồn tại.'], 404);
+        if (!$user) {
+            return response()->json(['message' => 'Người dùng không tồn tại.'], 404);
+        }
+
+        // Đảo trạng thái IsActive
+        $user->IsActive = !$user->IsActive;
+        $user->save();
+
+        return response()->json([
+            'message' => $user->IsActive
+                ? 'Kích hoạt tài khoản thành công!'
+                : 'Vô hiệu hóa tài khoản thành công!',
+            'data' => $user
+        ], 200);
     }
 
-    // Đảo trạng thái IsActive
-    $user->IsActive = !$user->IsActive;
-    $user->save();
+    // THÊM METHOD RESET PASSWORD
+    public function resetPassword(Request $request, $id)
+    {
+        $user = User::find($id);
 
-    return response()->json([
-        'message' => $user->IsActive
-            ? 'Kích hoạt tài khoản thành công!'
-            : 'Vô hiệu hóa tài khoản thành công!',
-        'data' => $user
-    ], 200);
-}
+        if (!$user) {
+            return response()->json(['message' => 'Người dùng không tồn tại.'], 404);
+        }
 
+        $validator = Validator::make($request->all(), [
+            'password' => 'required|string|min:6'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => 'Dữ liệu không hợp lệ', 'errors' => $validator->errors()], 422);
+        }
+
+        try {
+            $validated = $validator->validated();
+            
+            // Cập nhật mật khẩu mới
+            $user->PasswordHash = bcrypt($validated['password']);
+            $user->MustChangePassword = true; // Yêu cầu người dùng đổi mật khẩu khi đăng nhập
+            $user->save();
+
+            return response()->json([
+                'message' => 'Reset mật khẩu thành công! Mật khẩu mới đã được cập nhật.',
+                'data' => $user
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Đã có lỗi xảy ra', 'error' => $e->getMessage()], 500);
+        }
+    }
 }
