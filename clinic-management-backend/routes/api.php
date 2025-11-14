@@ -62,6 +62,7 @@ Route::get('/medicines/template', [MedicinesController::class, 'downloadTemplate
 Route::post('/medicines/dry-run', [MedicinesController::class, 'dryRunImport']);
 Route::post('/medicines/import', [MedicinesController::class, 'import']);
 Route::get('/medicines/export', [MedicinesController::class, 'export']);
+Route::post('/medicines/suggest', [MedicinesController::class, 'suggest']);
 
 Route::get('/schedules', [ScheduleController::class, 'index']);
 Route::post('/schedules', [ScheduleController::class, 'createSchedule']);
@@ -212,6 +213,8 @@ Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
     ->get('/patient/appointments/histories', [PatientController::class, 'appointmentHistories']);
 Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
     ->put('/patient/appointments/cancel', [PatientController::class, 'cancelAppointment']);
+Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
+    ->get('/patient/appointments/detail', [PatientController::class, 'getDetailAppointment']);
 // Route::middleware()->post('/auth/login', [AuthController::class, 'login']);
 
 
@@ -229,10 +232,15 @@ Route::prefix('admin/services')->group(function () {
 // Payment Routes
 // MoMo Payment Routes
 Route::prefix('payments')->group(function () {
+    // Payment APIs
     Route::post('/momo/create', [PaymentController::class, 'createPayment']);
     Route::post('/momo/callback', [PaymentController::class, 'handleCallback'])->name('payment.callback');
     Route::get('/momo/return', [PaymentController::class, 'handleReturn'])->name('payment.return');
 
+    // Reset APIs Payment
+    Route::post('/momo/reset', [PaymentController::class, 'resetPayment']);
+    Route::post('/momo/reset-stuck-invoices', [PaymentController::class, 'resetStuckInvoices']);
+    Route::post('/momo/reset-single-invoice/{invoiceId}', [PaymentController::class, 'resetSingleInvoice']);
 
     // Invoice Routes
     Route::get('/invoices', [InvoiceController::class, 'index']);
