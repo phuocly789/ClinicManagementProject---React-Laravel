@@ -59,7 +59,6 @@ function App() {
 
       {/* Receptionist */}
       <Route path={path.RECEPTIONIST.ROOT} element={<ReceptionSidebar />}>
-        <Route index element={<ReceptionistDashboard />} />
         <Route path={path.RECEPTIONIST.DASHBOARD} element={<ReceptionistDashboard />} />
         <Route path={path.RECEPTIONIST.PATIENT_MANAGEMENT} element={<ReceptionistPatent />} />
       </Route>
