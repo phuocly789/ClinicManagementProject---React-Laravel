@@ -3,7 +3,42 @@ import React from 'react';
 import { Modal, Button, Row, Col, Badge, Table, Card } from 'react-bootstrap';
 
 const InvoiceDetailModal = ({ show, onHide, invoice }) => {
-  if (!invoice) return null;
+  console.log('🔍 InvoiceDetailModal received:', invoice);
+
+  // FIXED: Xử lý nhiều cấu trúc data khác nhau
+  let invoiceData = null;
+  
+  if (invoice) {
+    if (invoice.success !== undefined) {
+      // Structure: {success: true, data: {...}}
+      invoiceData = invoice.data || invoice;
+    } else if (invoice.id) {
+      // Structure: {id: 49, code: 'HD000049', ...} (direct invoice object)
+      invoiceData = invoice;
+    } else {
+      // Structure: {data: {...}} (nested data)
+      invoiceData = invoice.data || invoice;
+    }
+  }
+
+  console.log('📄 Processed invoice data:', invoiceData);
+
+  if (!invoiceData) {
+    console.log('❌ No invoice data available');
+    return (
+      <Modal show={show} onHide={onHide} size="lg" centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Chi tiết hóa đơn</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="text-center text-muted py-4">
+            <i className="fas fa-exclamation-triangle fa-2x mb-3"></i>
+            <p>Không có dữ liệu hóa đơn</p>
+          </div>
+        </Modal.Body>
+      </Modal>
+    );
+  }
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -19,16 +54,35 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
       case 'momo': return 'Ví điện tử MoMo';
       case 'cash': return 'Tiền mặt';
       case 'bank_transfer': return 'Chuyển khoản ngân hàng';
+      case 'insurance': return 'Bảo hiểm';
       default: return 'Chưa thanh toán';
     }
   };
+
+  const {
+    code = 'N/A',
+    patient_name = 'N/A',
+    patient_phone = 'N/A',
+    patient_id,
+    date = 'N/A',
+    total = 0,
+    status = 'N/A',
+    payment_method,
+    transaction_id,
+    order_id,
+    paid_at,
+    appointment_id,
+    invoice_details = []
+  } = invoiceData;
+
+  console.log('📋 Invoice details to render:', invoice_details);
 
   return (
     <Modal show={show} onHide={onHide} size="lg" centered>
       <Modal.Header closeButton className="bg-light">
         <Modal.Title>
           <i className="fas fa-receipt me-2 text-primary"></i>
-          Chi tiết hóa đơn {invoice.code}
+          Chi tiết hóa đơn {code}
         </Modal.Title>
       </Modal.Header>
       
@@ -49,21 +103,21 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
                     <tr>
                       <td width="40%" className="fw-medium text-muted">Mã hóa đơn:</td>
                       <td>
-                        <Badge bg="primary" className="fs-6">{invoice.code}</Badge>
+                        <Badge bg="primary" className="fs-6">{code}</Badge>
                       </td>
                     </tr>
                     <tr>
                       <td className="fw-medium text-muted">Ngày tạo:</td>
-                      <td className="fw-medium">{invoice.date}</td>
+                      <td className="fw-medium">{date}</td>
                     </tr>
                     <tr>
                       <td className="fw-medium text-muted">Trạng thái:</td>
-                      <td>{getStatusBadge(invoice.status)}</td>
+                      <td>{getStatusBadge(status)}</td>
                     </tr>
                     <tr>
                       <td className="fw-medium text-muted">Tổng tiền:</td>
                       <td className="fw-bold text-success fs-5">
-                        {invoice.total?.toLocaleString('vi-VN')} VNĐ
+                        {total?.toLocaleString('vi-VN')} VNĐ
                       </td>
                     </tr>
                   </tbody>
@@ -74,20 +128,20 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
                   <tbody>
                     <tr>
                       <td width="40%" className="fw-medium text-muted">Bệnh nhân:</td>
-                      <td className="fw-medium">{invoice.patient_name || 'N/A'}</td>
+                      <td className="fw-medium">{patient_name}</td>
                     </tr>
                     <tr>
                       <td className="fw-medium text-muted">Số điện thoại:</td>
-                      <td>{invoice.patient_phone || 'N/A'}</td>
+                      <td>{patient_phone}</td>
                     </tr>
                     <tr>
                       <td className="fw-medium text-muted">Mã bệnh nhân:</td>
-                      <td>BN{String(invoice.patient_id).padStart(4, '0')}</td>
+                      <td>BN{String(patient_id).padStart(4, '0')}</td>
                     </tr>
                     <tr>
                       <td className="fw-medium text-muted">Mã cuộc hẹn:</td>
                       <td>
-                        {invoice.appointment_id ? `LH${String(invoice.appointment_id).padStart(4, '0')}` : 'N/A'}
+                        {appointment_id ? `LH${String(appointment_id).padStart(4, '0')}` : 'N/A'}
                       </td>
                     </tr>
                   </tbody>
@@ -97,8 +151,8 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
           </Card.Body>
         </Card>
 
-        {/* Thông tin thanh toán - CHỈ HIỆN KHI ĐÃ THANH TOÁN */}
-        {invoice.status === 'Đã thanh toán' && (
+        {/* Thông tin thanh toán */}
+        {status === 'Đã thanh toán' && (
           <Card className="mb-4 border-success">
             <Card.Header className="bg-success text-white">
               <h6 className="mb-0">
@@ -114,13 +168,13 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
                       <tr>
                         <td width="50%" className="fw-medium text-muted">Phương thức:</td>
                         <td className="fw-medium">
-                          {getPaymentMethodText(invoice.payment_method)}
+                          {getPaymentMethodText(payment_method)}
                         </td>
                       </tr>
                       <tr>
                         <td className="fw-medium text-muted">Mã giao dịch:</td>
                         <td>
-                          <code className="text-primary">{invoice.transaction_id || 'N/A'}</code>
+                          <code className="text-primary">{transaction_id || 'N/A'}</code>
                         </td>
                       </tr>
                     </tbody>
@@ -132,13 +186,13 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
                       <tr>
                         <td width="50%" className="fw-medium text-muted">Mã đơn hàng:</td>
                         <td>
-                          <code>{invoice.order_id || 'N/A'}</code>
+                          <code>{order_id || 'N/A'}</code>
                         </td>
                       </tr>
                       <tr>
                         <td className="fw-medium text-muted">Thời gian thanh toán:</td>
                         <td className="fw-medium text-success">
-                          {invoice.paid_at || 'N/A'}
+                          {paid_at || 'N/A'}
                         </td>
                       </tr>
                     </tbody>
@@ -150,7 +204,7 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
         )}
 
         {/* Chi tiết dịch vụ */}
-        {invoice.invoice_details && invoice.invoice_details.length > 0 && (
+        {invoice_details && invoice_details.length > 0 ? (
           <Card>
             <Card.Header className="bg-info text-white">
               <h6 className="mb-0">
@@ -162,6 +216,7 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
               <Table striped hover className="mb-0">
                 <thead className="table-light">
                   <tr>
+                    <th>#</th>
                     <th>Loại</th>
                     <th>Tên</th>
                     <th>Đơn giá</th>
@@ -170,41 +225,52 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {invoice.invoice_details.map((detail, index) => (
-                    <tr key={index}>
-                      <td>
-                        <Badge bg={detail.service ? 'primary' : 'success'}>
-                          {detail.service ? 'Dịch vụ' : 'Thuốc'}
-                        </Badge>
-                      </td>
-                      <td>
-                        {detail.service?.ServiceName || detail.medicine?.MedicineName || 'N/A'}
-                      </td>
-                      <td>
-                        {detail.unit_price?.toLocaleString('vi-VN')} VNĐ
-                      </td>
-                      <td>{detail.quantity || 1}</td>
-                      <td className="fw-medium text-success">
-                        {(
-                          (detail.unit_price || 0) * (detail.quantity || 1)
-                        )?.toLocaleString('vi-VN')} VNĐ
-                      </td>
-                    </tr>
-                  ))}
+                  {invoice_details.map((detail, index) => {
+                    const isService = !!detail.service;
+                    const itemName = isService 
+                      ? detail.service?.ServiceName 
+                      : detail.medicine?.MedicineName;
+                    const unitPrice = detail.UnitPrice || detail.unit_price || 0;
+                    const quantity = detail.Quantity || detail.quantity || 1;
+                    const subtotal = detail.SubTotal || (unitPrice * quantity);
+
+                    return (
+                      <tr key={detail.InvoiceDetailId || index}>
+                        <td>{index + 1}</td>
+                        <td>
+                          <Badge bg={isService ? 'primary' : 'success'}>
+                            {isService ? 'Dịch vụ' : 'Thuốc'}
+                          </Badge>
+                        </td>
+                        <td className="fw-medium">
+                          {itemName || 'N/A'}
+                          {isService && detail.service?.Description && (
+                            <div>
+                              <small className="text-muted">
+                                {detail.service.Description}
+                              </small>
+                            </div>
+                          )}
+                        </td>
+                        <td>{unitPrice.toLocaleString('vi-VN')} VNĐ</td>
+                        <td>{quantity}</td>
+                        <td className="fw-bold text-success">
+                          {subtotal.toLocaleString('vi-VN')} VNĐ
+                        </td>
+                      </tr>
+                    );
+                  })}
                   <tr className="table-secondary fw-bold">
-                    <td colSpan="4" className="text-end">Tổng cộng:</td>
+                    <td colSpan="5" className="text-end">Tổng cộng:</td>
                     <td className="text-success fs-6">
-                      {invoice.total?.toLocaleString('vi-VN')} VNĐ
+                      {total?.toLocaleString('vi-VN')} VNĐ
                     </td>
                   </tr>
                 </tbody>
               </Table>
             </Card.Body>
           </Card>
-        )}
-
-        {/* Thông báo khi chưa có chi tiết */}
-        {(!invoice.invoice_details || invoice.invoice_details.length === 0) && (
+        ) : (
           <div className="text-center py-4 text-muted">
             <i className="fas fa-info-circle fa-2x mb-3"></i>
             <p>Không có chi tiết dịch vụ nào cho hóa đơn này</p>
@@ -217,7 +283,7 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
           <i className="fas fa-times me-1"></i>
           Đóng
         </Button>
-        {invoice.status === 'Đã thanh toán' && (
+        {status === 'Đã thanh toán' && (
           <Button variant="primary" onClick={() => window.print()}>
             <i className="fas fa-print me-1"></i>
             In hóa đơn

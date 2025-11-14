@@ -31,14 +31,16 @@ const Pagination = ({ pageCount, onPageChange, currentPage, isLoading }) => {
         marginPagesDisplayed={2}
         pageCount={pageCount}
         forcePage={currentPage}
-        containerClassName="d-flex align-items-center gap-3"
+        containerClassName="d-flex mt-3 gap-3"
         pageLinkClassName="btn btn-outline-primary rounded shadow-sm"
         activeLinkClassName="btn btn-primary rounded shadow-sm active"
         previousLinkClassName="btn btn-outline-primary rounded shadow-sm"
         nextLinkClassName="btn btn-outline-primary rounded shadow-sm"
         breakLinkClassName="btn btn-link text-muted px-3"
         disabledLinkClassName="disabled opacity-50 cursor-not-allowed"
-        disabledClassName={isLoading ? "disabled opacity-50 cursor-not-allowed" : ""}
+        disabledClassName={
+          isLoading ? "disabled opacity-50 cursor-not-allowed" : ""
+        }
       />
 
       {/* Last button */}
