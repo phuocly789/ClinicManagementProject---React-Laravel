@@ -41,6 +41,7 @@ export const path = {
         ROOT: "/receptionist",
         DASHBOARD: "/receptionist/dashboard",
         PATIENT_MANAGEMENT: "/receptionist/patient-management",
+        NOTIFICATION: "/receptionist/notification-management",
 
     },
     USER: {
@@ -86,9 +87,9 @@ export const path = {
         TEST_RESULTS: "test-results",
     },
 
-    PayMent:{
-        ROOT:"/payment",
-        PAY_RESULT:"result"
+    PayMent: {
+        ROOT: "/payment",
+        PAY_RESULT: "result"
     }
 };
 
@@ -102,11 +103,11 @@ export const USER_ROLE = {
 
 
 export const ROLE_ROUTE = {
-    [USER_ROLE.ADMIN]: path.ADMIN.ROOT,
+    [USER_ROLE.ADMIN]: path.ADMIN.DASHBOARD,
     [USER_ROLE.PATIENT]: path.PATIENT.ROOT,
     [USER_ROLE.DOCTOR]: path.DOCTOR.ROOT,
     [USER_ROLE.TECHNICIAN]: path.TECHNICIAN.ROOT,
-    [USER_ROLE.RECEPTIONIST]: path.RECEPTIONIST.ROOT,
+    [USER_ROLE.RECEPTIONIST]: path.RECEPTIONIST.DASHBOARD,
 };
 
 export const CRUD_ACTIONS = {
