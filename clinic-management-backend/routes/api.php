@@ -145,6 +145,7 @@ Route::prefix('users')->group(function () {
     Route::put('/{id}', [AdminUserController::class, 'update']);
     Route::delete('/{id}', [AdminUserController::class, 'destroy']);
     Route::put('/toggle-status/{id}', [AdminUserController::class, 'toggleStatus']);
+    Route::put('/reset-password/{id}', [AdminUserController::class, 'resetPassword']);
 });
 
 Route::get('/roles', [AdminUserController::class, 'roles']);
