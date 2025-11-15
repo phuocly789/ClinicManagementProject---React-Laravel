@@ -149,11 +149,22 @@ Route::prefix('users')->group(function () {
 });
 
 Route::get('/roles', [AdminUserController::class, 'roles']);
-// Route::post('/print/export', [InvoicePrintController::class, 'export']); // POST để pass appointment_id + type
-Route::get('/print/{type}/{appointment_id}', [InvoicePrintController::class, 'export']);
-Route::post('/print/prescription/preview', [InvoicePrintController::class, 'previewPrescription']);
-// Route cho PDF Preview
-Route::post('/print/preview-html', [InvoicePrintController::class, 'previewHTML']);
+// Print Routes
+Route::prefix('print')->group(function () {
+    // Các route print hiện có
+    Route::get('/{type}/{appointment_id}', [InvoicePrintController::class, 'export']);
+    Route::post('/prescription/preview', [InvoicePrintController::class, 'previewPrescription']);
+    Route::post('/preview-html', [InvoicePrintController::class, 'previewHTML']);
+
+    // THÊM CÁC ROUTE LOGO VÀO ĐÂY - SỬA LẠI
+    Route::post('/logo/save', [InvoicePrintController::class, 'saveLogo']);
+    Route::get('/logo/{clinicId?}', [InvoicePrintController::class, 'getLogo']);
+    Route::delete('/logo/delete', [InvoicePrintController::class, 'deleteLogo']);
+});
+Route::get('/debug-logo-storage', [InvoicePrintController::class, 'debugLogoStorage']);
+Route::get('/test-logo-simple', [InvoicePrintController::class, 'testLogoSimple']);
+// routes/api.php
+Route::get('/test-logo-visible', [InvoicePrintController::class, 'testLogoVisible']);
 
 
 // Technician Routes

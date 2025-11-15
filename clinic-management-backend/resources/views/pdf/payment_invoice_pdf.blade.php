@@ -28,35 +28,72 @@
             page-break-inside: avoid; 
         }
         
-        /* WATERMARK CUSTOM */
-        @if(isset($pdf_settings['watermark']['enabled']) && $pdf_settings['watermark']['enabled'])
+        /* STYLE CHO LOGO - ĐƠN GIẢN */
+        .logo-container {
+            text-align: center;
+            margin-bottom: 10px;
+            padding: 5px;
+        }
+        
+        .logo-img {
+            width: {{ $logo_data['width'] ?? '50px' }};
+            height: {{ $logo_data['height'] ?? '50px' }};
+            object-fit: contain;
+            max-width: 50%;
+            border: 0;
+        }
+        
+        /* Fallback khi logo không load được */
+        .logo-fallback {
+            width: {{ $logo_data['width'] ?? '50px' }};
+            height: {{ $logo_data['height'] ?? '50px' }};
+            background: #f0f0f0;
+            border: 1px dashed #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: #666;
+            text-align: center;
+            margin: 0 auto;
+        }
+
+        /* WATERMARK STYLES - SỬA LẠI */
         .watermark { 
-            position: absolute; 
+            position: fixed; 
             top: 50%; 
             left: 50%; 
-            transform: translate(-50%, -50%) rotate({{ $pdf_settings['watermark']['rotation'] ?? -45 }}deg); 
-            font-size: {{ $pdf_settings['watermark']['fontSize'] ?? 50 }}px; 
-            color: {{ $pdf_settings['watermark']['color'] ?? 'rgba(0, 0, 0, 0.08)' }}; 
+            transform: translate(-50%, -50%) rotate(-45deg); 
+            font-size: 50px; 
+            color: rgba(0, 0, 0, 0.08); 
             font-weight: bold; 
             text-transform: uppercase; 
             pointer-events: none; 
-            z-index: -1; 
+            z-index: 9999; 
             white-space: nowrap; 
-            opacity: {{ $pdf_settings['watermark']['opacity'] ?? 0.08 }};
+            opacity: 0.08;
             font-family: "DejaVu Sans", sans-serif;
         }
-        @else
-        .watermark { display: none; }
-        @endif
+
+        .watermark-image {
+            position: fixed; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%) rotate(-45deg); 
+            opacity: 0.1;
+            pointer-events: none; 
+            z-index: 9999;
+        }
         
         .header { 
             text-align: center; 
             border-bottom: 1.5px solid #000; 
             padding-bottom: 5px; 
             margin-bottom: 10px; 
+            position: relative;
         }
         .header h2 { 
-            margin: 0; 
+            margin: 5px 0;
             font-size: 16px; 
             text-transform: uppercase; 
             font-weight: bold; 
@@ -208,12 +245,72 @@
 
 <body>
     <div class="page no-break">
-        <!-- WATERMARK CUSTOM -->
-        @if(isset($pdf_settings['watermark']['enabled']) && $pdf_settings['watermark']['enabled'])
-        <div class="watermark">{{ $pdf_settings['watermark']['text'] ?? 'MẪU BẢN QUYỀN' }}</div>
+        <!-- WATERMARK CUSTOM - SỬA LẠI -->
+        @if(isset($watermark_data) && $watermark_data)
+            @if($watermark_data['type'] === 'text')
+            <div class="watermark" style="
+                position: fixed; 
+                top: 50%; 
+                left: 50%; 
+                transform: translate(-50%, -50%) rotate({{ $watermark_data['rotation'] ?? -45 }}deg); 
+                font-size: {{ $watermark_data['fontSize'] ?? 50 }}px; 
+                color: {{ $watermark_data['color'] ?? 'rgba(0, 0, 0, 0.08)' }}; 
+                font-weight: bold; 
+                text-transform: uppercase; 
+                pointer-events: none; 
+                z-index: 9999; 
+                white-space: nowrap; 
+                opacity: {{ $watermark_data['opacity'] ?? 0.08 }};
+                font-family: 'DejaVu Sans', sans-serif;">
+                {{ $watermark_data['text'] }}
+            </div>
+            @elseif($watermark_data['type'] === 'image')
+            <div class="watermark-image" style="
+                position: fixed; 
+                top: 50%; 
+                left: 50%; 
+                transform: translate(-50%, -50%) rotate({{ $watermark_data['rotation'] ?? -45 }}deg); 
+                opacity: {{ $watermark_data['opacity'] ?? 0.1 }};
+                pointer-events: none; 
+                z-index: 9999;">
+                <img src="{{ $watermark_data['url'] }}" 
+                     style="width: {{ $watermark_data['width'] ?? '200px' }}; 
+                            height: {{ $watermark_data['height'] ?? '200px' }}; 
+                            object-fit: contain;">
+            </div>
+            @endif
+        @elseif(isset($pdf_settings['watermark']['enabled']) && $pdf_settings['watermark']['enabled'])
+            <div class="watermark" style="
+                position: fixed; 
+                top: 50%; 
+                left: 50%; 
+                transform: translate(-50%, -50%) rotate({{ $pdf_settings['watermark']['rotation'] ?? -45 }}deg); 
+                font-size: {{ $pdf_settings['watermark']['fontSize'] ?? 50 }}px; 
+                color: {{ $pdf_settings['watermark']['color'] ?? 'rgba(0, 0, 0, 0.08)' }}; 
+                font-weight: bold; 
+                text-transform: uppercase; 
+                pointer-events: none; 
+                z-index: 9999; 
+                white-space: nowrap; 
+                opacity: {{ $pdf_settings['watermark']['opacity'] ?? 0.08 }};
+                font-family: 'DejaVu Sans', sans-serif;">
+                {{ $pdf_settings['watermark']['text'] ?? 'MẪU BẢN QUYỀN' }}
+            </div>
         @endif
 
         <div class="header">
+            <!-- PHẦN LOGO ĐƠN GIẢN -->
+           @if(isset($logo_data) && $logo_data)
+<div class="logo-container" style="text-align: {{ $logo_data['position'] ?? 'left' }}; float: {{ $logo_data['position'] ?? 'left' }};">
+    <img src="{{ $logo_data['url'] }}" 
+         style="width: {{ $logo_data['width'] ?? '30px' }}; 
+                height: {{ $logo_data['height'] ?? '30px' }}; 
+                opacity: {{ $logo_data['opacity'] ?? 1 }};
+                margin-top: {{ $logo_data['marginTop'] ?? '0px' }};
+                display: block;">
+</div>
+@endif
+
             <h2>{{ $pdf_settings['clinicName'] ?? $clinic_name ?? 'PHÒNG KHÁM ĐA KHOA ABC' }}</h2>
             <p>Địa chỉ: {{ $pdf_settings['clinicAddress'] ?? $clinic_address ?? 'Số 53 Võ Văn Ngân, TP. Thủ Đức' }}</p>
             <p>Điện thoại: {{ $pdf_settings['clinicPhone'] ?? $clinic_phone ?? '0123 456 789' }}</p>

@@ -89,7 +89,8 @@ export const path = {
 
     PayMent: {
         ROOT: "/payment",
-        PAY_RESULT: "result"
+        PAY_RESULT: "result",
+        Pay_PDF_EDITOR: "payment-pdf-editor",
     }
 };
 

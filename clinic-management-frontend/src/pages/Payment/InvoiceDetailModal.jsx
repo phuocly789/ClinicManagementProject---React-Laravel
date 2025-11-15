@@ -1,13 +1,15 @@
 // src/components/InvoiceDetailModal.jsx
 import React, { useState } from 'react';
 import { Modal, Button, Row, Col, Badge, Table, Card, Spinner, Alert } from 'react-bootstrap';
-import { Printer, Download, X } from 'lucide-react';
+import { Printer, Download, X, Eye } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const InvoiceDetailModal = ({ show, onHide, invoice }) => {
   console.log('🔍 InvoiceDetailModal received:', invoice);
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState('');
   const [printSuccess, setPrintSuccess] = useState('');
+  const navigate = useNavigate();
 
   // FIXED: Xử lý nhiều cấu trúc data khác nhau
   let invoiceData = null;
@@ -24,7 +26,7 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
 
   console.log('📄 Processed invoice data:', invoiceData);
 
-  // Hàm in hóa đơn - SỬA TYPE THÀNH 'service'
+  // Hàm in hóa đơn - ĐÃ SỬA ĐÚNG CẤU TRÚC CHO BE
   const handlePrintInvoice = async () => {
     try {
       setPrinting(true);
@@ -37,38 +39,48 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
         throw new Error('Không có dữ liệu hóa đơn');
       }
 
-      // SỬA: Dùng type 'service' thay vì 'payment'
+      // ✅ SỬA: Gửi đúng cấu trúc data mà BE expect
       const printData = {
-        type: 'service', // ✅ SỬA THÀNH 'service' hoặc 'prescription'
+        type: 'payment', // ✅ ĐÚNG - dùng 'payment' cho hóa đơn thanh toán
         patient_name: invoiceData.patient_name || 'THÔNG TIN BỆNH NHÂN',
-        age: invoiceData.age || 'N/A',
-        gender: invoiceData.gender || 'N/A',
+        age: String(invoiceData.patient_age || 'N/A'), // ✅ ĐÚNG - string
+        gender: invoiceData.patient_gender || 'N/A', // ✅ ĐÚNG
         phone: invoiceData.patient_phone || 'N/A',
         appointment_date: invoiceData.date || new Date().toLocaleDateString('vi-VN'),
         appointment_time: 'Hoàn tất',
         doctor_name: 'Hệ thống',
-        prescriptions: [],
+        
+        // ✅ QUAN TRỌNG: Đúng cấu trúc services (KHÔNG CÓ prescriptions)
         services: getServicesFromInvoice(invoiceData),
-        diagnoses: ['Khám và điều trị'],
+        
+        // ✅ QUAN TRỌNG: Đúng cấu trúc payment data
         payment_method: getPaymentMethodText(invoiceData.payment_method),
         payment_status: 'Đã thanh toán',
         discount: 0,
         invoice_code: invoiceData.code || `INV_${invoiceData.id}`,
+        
+        // ✅ THÊM các trường mới cho payment
         total_amount: invoiceData.total || 0,
         transaction_id: invoiceData.transaction_id,
         order_id: invoiceData.order_id,
+        
+        // ✅ THÊM diagnoses nếu có
+        diagnoses: ['Khám và điều trị'],
+        
+        // ✅ PDF SETTINGS - đúng cấu trúc
         pdf_settings: {
-          customTitle: 'HÓA ĐƠN THANH TOÁN', // Vẫn giữ tiêu đề hóa đơn
+          customTitle: 'HÓA ĐƠN THANH TOÁN',
           clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
           clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
           clinicPhone: '028 1234 5678',
-          fontFamily: 'Arial'
+          fontFamily: 'Arial',
+          doctorName: 'Hệ thống'
         }
       };
 
       console.log('📤 Sending to Laravel PDF API:', printData);
 
-      // GỌI API LARAVEL PDF
+      // ✅ GỌI ĐÚNG ENDPOINT
       const response = await fetch('http://localhost:8000/api/print/prescription/preview', {
         method: 'POST',
         headers: {
@@ -118,7 +130,156 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
     }
   };
 
-  // Hàm chuyển đổi dữ liệu dịch vụ từ invoice
+  // FUNCTION PREVIEW PDF - GIỐNG SERVICES SECTION
+  const handlePreview = async () => {
+    if (!invoiceData) {
+      setPrintError('Không có dữ liệu hóa đơn');
+      return;
+    }
+
+    const previewData = {
+      type: 'payment',
+      patient_name: invoiceData.patient_name || 'THÔNG TIN BỆNH NHÂN',
+      age: String(invoiceData.patient_age || 'N/A'),
+      gender: invoiceData.patient_gender || 'N/A',
+      phone: invoiceData.patient_phone || 'N/A',
+      appointment_date: invoiceData.date || new Date().toLocaleDateString('vi-VN'),
+      appointment_time: 'Hoàn tất',
+      doctor_name: 'Hệ thống',
+      services: getServicesFromInvoice(invoiceData),
+      payment_method: getPaymentMethodText(invoiceData.payment_method),
+      payment_status: 'Đã thanh toán',
+      discount: 0,
+      invoice_code: invoiceData.code || `INV_${invoiceData.id}`,
+      total_amount: invoiceData.total || 0,
+      transaction_id: invoiceData.transaction_id,
+      order_id: invoiceData.order_id,
+      diagnoses: ['Khám và điều trị'],
+      // THÊM CÁC TRƯỜNG CẦN THIẾT CHO VIỆC CHỈNH SỬA
+      appointment_id: invoiceData.appointment_id,
+      patient_id: invoiceData.patient_id,
+      originalData: {
+        invoiceData: { ...invoiceData },
+        services: getServicesFromInvoice(invoiceData)
+      },
+      timestamp: Date.now(),
+      // PDF SETTINGS
+      pdf_settings: {
+        customTitle: 'HÓA ĐƠN THANH TOÁN',
+        clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
+        clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
+        clinicPhone: '028 1234 5678',
+        fontFamily: 'Arial',
+        doctorName: 'Hệ thống'
+      }
+    };
+
+    console.log('📤 Data preview hóa đơn gửi đến editor:', previewData);
+
+    try {
+      // XÓA DỮ LIỆU CŨ TRƯỚC KHI LƯU MỚI
+      sessionStorage.removeItem('pdfEditorData');
+      sessionStorage.removeItem('shouldRefreshOnReturn');
+      sessionStorage.removeItem('editorSource');
+      
+      // Lưu data MỚI NHẤT vào sessionStorage
+      sessionStorage.setItem('pdfEditorData', JSON.stringify(previewData));
+      sessionStorage.setItem('shouldRefreshOnReturn', 'true');
+      sessionStorage.setItem('editorSource', 'invoice');
+
+      // CHUYỂN HƯỚNG TRONG CÙNG TAB
+      navigate('/payment/payment-pdf-editor', { 
+        state: { 
+          pdfData: previewData,
+          source: 'invoice',
+          timestamp: Date.now()
+        }
+      });
+
+      setPrintSuccess('✅ Đang chuyển đến trình chỉnh sửa PDF...');
+
+    } catch (error) {
+      console.error('Error navigating to PDF editor:', error);
+      setPrintError('❌ Lỗi khi chuyển đến trình chỉnh sửa PDF');
+    }
+  };
+
+  // Hàm xem trước PDF (HTML Preview) - MỞ TRONG TAB MỚI
+  const handlePreviewPDF = async () => {
+    try {
+      setPrinting(true);
+      setPrintError('');
+
+      if (!invoiceData) {
+        throw new Error('Không có dữ liệu hóa đơn');
+      }
+
+      const previewData = {
+        type: 'payment',
+        patient_name: invoiceData.patient_name || 'THÔNG TIN BỆNH NHÂN',
+        age: String(invoiceData.patient_age || 'N/A'),
+        gender: invoiceData.patient_gender || 'N/A',
+        phone: invoiceData.patient_phone || 'N/A',
+        appointment_date: invoiceData.date || new Date().toLocaleDateString('vi-VN'),
+        appointment_time: 'Hoàn tất',
+        doctor_name: 'Hệ thống',
+        services: getServicesFromInvoice(invoiceData),
+        payment_method: getPaymentMethodText(invoiceData.payment_method),
+        payment_status: 'Đã thanh toán',
+        discount: 0,
+        invoice_code: invoiceData.code || `INV_${invoiceData.id}`,
+        total_amount: invoiceData.total || 0,
+        transaction_id: invoiceData.transaction_id,
+        order_id: invoiceData.order_id,
+        diagnoses: ['Khám và điều trị'],
+        pdf_settings: {
+          customTitle: 'HÓA ĐƠN THANH TOÁN',
+          clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
+          clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
+          clinicPhone: '028 1234 5678',
+          fontFamily: 'Arial',
+          doctorName: 'Hệ thống'
+        }
+      };
+
+      console.log('👁️ Sending preview data:', previewData);
+
+      // Gọi API preview HTML
+      const response = await fetch('http://localhost:8000/api/print/preview-html', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(previewData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          // Mở preview trong tab mới
+          const newWindow = window.open('', '_blank');
+          newWindow.document.write(result.html);
+          newWindow.document.close();
+          
+          setPrintSuccess('✅ Đã mở xem trước PDF trong tab mới!');
+        } else {
+          throw new Error(result.message || 'Lỗi xem trước');
+        }
+      } else {
+        const errorText = await response.text();
+        throw new Error(errorText || `Lỗi server: ${response.status}`);
+      }
+
+    } catch (error) {
+      console.error('❌ Preview PDF error:', error);
+      setPrintError('Lỗi khi xem trước PDF: ' + error.message);
+    } finally {
+      setPrinting(false);
+    }
+  };
+
+  // ✅ ĐẢM BẢO HÀM NÀY TRẢ VỀ ĐÚNG CẤU TRÚC
   const getServicesFromInvoice = (invoice) => {
     const services = [];
 
@@ -127,9 +288,9 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
       invoice.invoice_details.forEach(detail => {
         if (detail.service) {
           services.push({
-            ServiceName: detail.service.ServiceName || 'Dịch vụ khám',
-            Price: detail.UnitPrice || detail.unit_price || 0,
-            Quantity: detail.Quantity || detail.quantity || 1
+            ServiceName: detail.service.ServiceName || 'Dịch vụ khám', // ✅ ĐÚNG TRƯỜNG
+            Price: detail.UnitPrice || detail.unit_price || 0, // ✅ ĐÚNG TRƯỜNG
+            Quantity: detail.Quantity || detail.quantity || 1 // ✅ ĐÚNG TRƯỜNG
           });
         } else if (detail.medicine) {
           services.push({
@@ -150,6 +311,7 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
       });
     }
 
+    console.log('🛠️ Processed services:', services);
     return services;
   };
 
@@ -159,6 +321,7 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
       case 'cash': return 'Tiền mặt';
       case 'bank_transfer': return 'Chuyển khoản';
       case 'insurance': return 'Bảo hiểm';
+      case 'napas': return 'Thẻ ATM';
       default: return method || 'Tiền mặt';
     }
   };
@@ -420,24 +583,50 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
         </Button>
 
         {status === 'Đã thanh toán' && (
-          <Button
-            variant="primary"
-            onClick={handlePrintInvoice}
-            disabled={printing}
-            className="d-flex align-items-center"
-          >
-            {printing ? (
-              <>
+          <div className="d-flex gap-2">
+            <Button
+              variant="outline-info"
+              onClick={handlePreviewPDF}
+              disabled={printing}
+              className="d-flex align-items-center"
+            >
+              {printing ? (
                 <Spinner animation="border" size="sm" className="me-2" />
-                Đang tạo PDF...
-              </>
-            ) : (
-              <>
-                <Printer size={18} className="me-1" />
-                Tải PDF Hóa Đơn
-              </>
-            )}
-          </Button>
+              ) : (
+                <Eye size={18} className="me-1" />
+              )}
+              Xem trước
+            </Button>
+
+            <Button
+              variant="outline-warning"
+              onClick={handlePreview}
+              disabled={printing}
+              className="d-flex align-items-center"
+            >
+              <i className="fas fa-edit me-1"></i>
+              Chỉnh sửa PDF
+            </Button>
+            
+            <Button
+              variant="primary"
+              onClick={handlePrintInvoice}
+              disabled={printing}
+              className="d-flex align-items-center"
+            >
+              {printing ? (
+                <>
+                  <Spinner animation="border" size="sm" className="me-2" />
+                  Đang tạo PDF...
+                </>
+              ) : (
+                <>
+                  <Printer size={18} className="me-1" />
+                  Tải PDF
+                </>
+              )}
+            </Button>
+          </div>
         )}
       </Modal.Footer>
     </Modal>
