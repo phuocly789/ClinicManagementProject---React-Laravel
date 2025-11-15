@@ -13,7 +13,16 @@ const patientService = {
         return axios.get(`/api/patient/services`);
     },
     bookingAppointment: async (data) => {
-        return axios.post(`/api/patient/booking-appointment`, data);
+        return axios.post(`/api/patient/appointments/book`, data);
+    },
+    historiesAppointments: async (current = 1, pageSize = 3) => {
+        return axios.get(`/api/patient/appointments/histories?current=${current}&pageSize=${pageSize}`);
+    },
+    cancelAppointment: async (appointment_id) => {
+        return axios.put(`/api/patient/appointments/cancel?id=${appointment_id}`);
+    },
+    getAppointmentDetail: async (appointment_id) => {
+        return axios.get(`/api/patient/appointments/detail?id=${appointment_id}`);
     }
 }
 

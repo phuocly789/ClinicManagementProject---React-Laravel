@@ -130,4 +130,77 @@ class PatientController extends Controller
             ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
+    public function appointmentHistories(Request $request)
+    {
+        $current = $request->query('current');
+        $pageSize = $request->query('pageSize');
+        try {
+            $appointment = $this->patientService->handleGetAppointments($current, $pageSize);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Lấy danh sách lịch sử khám bệnh thành công.',
+                'data' => $appointment,
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (AppErrors $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ], $e->getStatusCode() ?: 400,);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi server: ' . $e->getMessage()
+            ], 500, [], JSON_UNESCAPED_UNICODE);
+        }
+    }
+    public function cancelAppointment(Request $request)
+    {
+        $appointment_id = $request->query('id');
+        try {
+            $appointment = $this->patientService->handleCancelAppointment($appointment_id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Hủy lịch hẹn thành công.',
+                'data' => $appointment,
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (AppErrors $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ], $e->getStatusCode() ?: 400,);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi server: ' . $e->getMessage()
+            ], 500, [], JSON_UNESCAPED_UNICODE);
+        }
+    }
+    public function getDetailAppointment(Request $request)
+    {
+        $appointment_id = $request->query('id');
+        try {
+            $appointment = $this->patientService->handleGetDetailAppointment($appointment_id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Lấy chi tiết lịch hẹn thành công.',
+                'data' => $appointment,
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (AppErrors $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ], $e->getStatusCode() ?: 400,);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi server: ' . $e->getMessage()
+            ], 500, [], JSON_UNESCAPED_UNICODE);
+        }
+    }
 }

@@ -7,6 +7,7 @@
 namespace App\Models;
 
 use Carbon\Carbon;
+use GeneaLabs\LaravelModelCaching\Traits\Cachable;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -16,7 +17,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property int|null $PatientId
  * @property int|null $AppointmentId
  * @property int|null $RecordId
- * @property int $QueueNumber
+ * @property int $TicketNumber
+ * @property int $QueuePosition
  * @property int|null $RoomId
  * @property Carbon $QueueDate
  * @property time without time zone $QueueTime
@@ -35,7 +37,7 @@ class Queue extends Model
 {
 	protected $table = 'Queues';
 	protected $primaryKey = 'QueueId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [
@@ -43,23 +45,25 @@ class Queue extends Model
 		'PatientId' => 'int',
 		'AppointmentId' => 'int',
 		'RecordId' => 'int',
-		'QueueNumber' => 'int',
+		'TicketNumber' => 'int',
 		'RoomId' => 'int',
 		'QueueDate' => 'datetime',
-		'QueueTime' => 'datetime',
-		'CreatedBy' => 'int'
+		'QueueTime' => 'string',
+		'CreatedBy' => 'int',
+        'QueuePosition'=>'int'
 	];
 
 	protected $fillable = [
 		'PatientId',
 		'AppointmentId',
 		'RecordId',
-		'QueueNumber',
+		'TicketNumber',
 		'RoomId',
 		'QueueDate',
 		'QueueTime',
 		'Status',
-		'CreatedBy'
+		'CreatedBy',
+        'QueuePosition'
 	];
 
 	public function patient()
@@ -84,6 +88,6 @@ class Queue extends Model
 
 	public function user()
 	{
-		return $this->belongsTo(User::class, 'CreatedBy');
+		return $this->belongsTo(User::class, 'PatientId', 'UserId');
 	}
 }

@@ -202,12 +202,125 @@ class PatientService
                 'PatientId'       => $patient->PatientId,
                 'AppointmentDate' => $data['date'],
                 'AppointmentTime' => $data['time'],
-                'Symptoms'        => $data['symptoms'] ?? null,
+                'Notes'        => $data['symptoms'] ?? null,
                 'Status'          => 'Đã đặt',
                 'RecordId'        => $record->RecordId,
             ]);
 
             return $appointment;
         });
+    }
+    public function handleGetAppointments(int $current = 1, int $pageSize = 5)
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            throw new AppErrors("Không tìm thấy người dùng", 404);
+        }
+
+        $patient = Patient::where('PatientId', $user->UserId)->first();
+
+        if (!$patient) {
+            throw new AppErrors("Không tìm thấy bệnh nhân", 404);
+        }
+
+        $current = max(1, $current);
+        $pageSize = max(1, $pageSize);
+        $query = Appointment::with([
+            'medical_staff.user:UserId,FullName,Email,Phone'
+        ])
+            ->where('PatientId', $patient->PatientId)
+            ->orderByDesc('CreatedAt');
+
+        $totalItems = $query->count();
+
+        $appointments = $query->skip(($current - 1) * $pageSize)
+            ->take($pageSize)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->AppointmentId,
+                    'date' => $item->AppointmentDate,
+                    'time' => $item->AppointmentTime,
+                    'status'          => $item->Status,
+                    'doctor'  => optional(optional($item->medical_staff)->user)->FullName ?? null,
+                    'service' => optional($item->medical_staff)->Specialty ?? null,
+                ];
+            });
+
+        return [
+            'totalItems'  => $totalItems,
+            'totalPages'  => ceil($totalItems / $pageSize),
+            'current'     => $current,
+            'data'        => $appointments
+        ];
+    }
+    public function handleCancelAppointment($appointment_id)
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            throw new AppErrors("Không tìm thấy người dùng", 404);
+        }
+
+        $patient = Patient::where('PatientId', $user->UserId)->first();
+
+        if (!$patient) {
+            throw new AppErrors("Không tìm thấy bệnh nhân", 404);
+        }
+
+        $appointment = Appointment::where('AppointmentId', $appointment_id)
+            ->where('PatientId', $patient->PatientId)
+            ->first();
+        if (!$appointment) {
+            throw new  AppErrors("Không tìm thấy lịch hẹn", 400);
+        }
+
+        if ($appointment->Status === 'Hủy') {
+            throw new AppErrors("Lịch hẹn đã bị hủy trước đó", 400);
+        }
+        if ($appointment->Status === Appointment::STATUS_IN_PROGRESS || $appointment->Status === Appointment::STATUS_COMPLETED) {
+            throw new AppErrors("Lịch hẹn đã được xử lý", 400);
+        }
+
+        $appointment->Status = Appointment::STATUS_CANCELLED;
+        $appointment->save();
+
+        return $appointment;
+    }
+    public function handleGetDetailAppointment(int $appointment_id)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            throw new AppErrors("Không tìm thấy người dùng", 404);
+        }
+
+        $patient = Patient::where('PatientId', $user->UserId)->first();
+        if (!$patient) {
+            throw new AppErrors("Không tìm thấy bệnh nhân", 404);
+        }
+
+        // Lấy appointment kèm quan hệ
+        $appointment = Appointment::with([
+            'medical_staff.user:UserId,FullName,Email,Phone'
+        ])
+            ->where('AppointmentId', $appointment_id)
+            ->where('PatientId', $patient->PatientId)
+            ->first();
+
+        if (!$appointment) {
+            throw new AppErrors("Không tìm thấy lịch hẹn", 400);
+        }
+
+        return [
+            'id' => $appointment->AppointmentId,
+            'full_name' => $user->FullName,
+            'date' => $appointment->AppointmentDate,
+            'time' => $appointment->AppointmentTime,
+            'status' => $appointment->Status,
+            'doctor' => optional(optional($appointment->medical_staff)->user)->FullName ?? null,
+            'specialty' => optional($appointment->medical_staff)->Specialty ?? null,
+            'notes' => $appointment->Notes
+        ];
     }
 }
