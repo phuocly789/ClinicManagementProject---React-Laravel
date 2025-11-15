@@ -402,6 +402,9 @@ ul {
   color: var(--grey-color);
 }
 
+dl, ol, ul {
+    margin-top: 0;
+    margin-bottom: 0 !important;
 /* src/components/PaymentSection.css */
 .stats-card {
   transition: all 0.3s ease;
@@ -444,8 +447,4 @@ ul {
   .table-responsive {
     font-size: 0.875rem;
   }
-
-dl, ol, ul {
-    margin-top: 0;
-    margin-bottom: 0 !important;
 }
