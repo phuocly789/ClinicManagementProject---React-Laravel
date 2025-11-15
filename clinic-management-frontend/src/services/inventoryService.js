@@ -1,78 +1,62 @@
-// src/services/inventoryService.js
-import axiosInstance from '../axios';
+import axiosInstance from '../axios'; // Giả sử đường dẫn đến axios.js là '../axios', chỉnh nếu cần
+import Cookies from 'js-cookie';
 
-const API_BASE = '/api/import-bills';
+// Hàm lấy CSRF token (gọi trước các request modify)
+async function getCsrfToken(retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await axiosInstance.get('/sanctum/csrf-cookie');
+      const token = Cookies.get('XSRF-TOKEN');
+      if (!token) throw new Error('CSRF token not found in cookies');
+      return decodeURIComponent(token);
+    } catch (error) {
+      console.error(`Attempt ${attempt} to fetch CSRF token failed:`, error);
+      if (attempt === retries) throw new Error(`Không thể lấy CSRF token sau ${retries} lần thử: ${error.message}`);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+}
 
-const inventoryService = {
-  getAll: async (page = 1, query = '') => {
-    const response = await axiosInstance.get(
-      `${API_BASE}?page=${page}${query ? '&' + query : ''}`
-    );
-    return {
-      data: response.data.data.map(item => ({
-        id: item.ImportId,
-        supplierId: item.SupplierId,
-        date: item.ImportDate,
-        total: item.TotalAmount,
-        note: item.Notes || '',
-      })),
-      last_page: response.data.last_page,
-    };
-  },
+// Lấy tất cả suppliers
+export async function getSuppliers() {
+  return axiosInstance.get('/api/suppliers/all');
+}
 
-  getById: async (id) => {
-    const response = await axiosInstance.get(`${API_BASE}/${id}`);
-    const data = response.data.data;
+// Lấy tất cả medicines
+export async function getMedicines() {
+  return axiosInstance.get('/api/medicines/all');
+}
 
-    return {
-      inventory: {
-        id: data.ImportId,
-        supplierId: data.SupplierId,
-        date: data.ImportDate,
-        total: data.TotalAmount,
-        note: data.Notes || '',
-        details: data.import_details || [],
-      },
-      details: (data.import_details || []).map(d => ({
-        id: d.ImportDetailId,
-        medicineId: d.MedicineId,
-        medicineName: d.medicine?.MedicineName || 'N/A',
-        quantity: d.Quantity,
-        price: d.ImportPrice,
-        subTotal: d.SubTotal,
-      })),
-      supplier: data.supplier ? {
-        SupplierId: data.supplier.SupplierId,
-        SupplierName: data.supplier.SupplierName,
-        ContactEmail: data.supplier.ContactEmail,
-        ContactPhone: data.supplier.ContactPhone,
-        Address: data.supplier.Address,
-        Description: data.supplier.Description,
-      } : null,
-    };
-  },
+// Lấy danh sách inventories (import-bills) với pagination và filter
+export async function getInventories(page = 1, queryString = '') {
+  return axiosInstance.get(`/api/import-bills?page=${page}${queryString ? '&' + queryString : ''}`);
+}
 
-  getSuppliers: async () => {
-    const res = await axiosInstance.get('/api/suppliers/all');
-    return res.data.data || [];
-  },
+// Lấy chi tiết một inventory
+export async function getInventoryDetails(importId) {
+  return axiosInstance.get(`/api/import-bills/${importId}`);
+}
 
-  getMedicines: async () => {
-    const res = await axiosInstance.get('/api/medicines/all');
-    return res.data || [];
-  },
+// Xóa một inventory
+export async function deleteInventory(inventoryId) {
+  const token = await getCsrfToken();
+  return axiosInstance.delete(`/api/import-bills/${inventoryId}`, {
+    headers: { 'X-XSRF-TOKEN': token },
+  });
+}
 
-  create: async (data) => {
-    return await axiosInstance.post(API_BASE, data);
-  },
+// Thêm mới inventory
+export async function addInventory(data) {
+  const token = await getCsrfToken();
+  return axiosInstance.post('/api/import-bills', data, {
+    headers: { 'X-XSRF-TOKEN': token },
+  });
+}
 
-  update: async (id, data) => {
-    return await axiosInstance.put(`${API_BASE}/${id}`, data);
-  },
-
-  delete: async (id) => {
-    return await axiosInstance.delete(`${API_BASE}/${id}`);
-  },
-};
-
-export default inventoryService;
+// Sửa inventory
+export async function editInventory(id, data) {
+  const token = await getCsrfToken();
+  return axiosInstance.put(`/api/import-bills/${id}`, data, {
+    headers: { 'X-XSRF-TOKEN': token },
+  });
+}
