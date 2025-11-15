@@ -97,7 +97,49 @@ const paymentService = {
       console.error('❌ Check payment result error:', error);
       throw error;
     }
+  },
+
+  // ==================== RESET APIs ====================
+
+  resetPayment: async (invoiceId) => {
+    console.log('🔄 Resetting payment for invoice:', invoiceId);
+    try {
+      // SỬA: Thêm /momo/ prefix để khớp với route
+      const response = await axios.post('/api/payments/momo/reset', { invoiceId });
+      console.log('✅ Payment reset successfully:', response.data);
+      return response;
+    } catch (error) {
+      console.error('❌ Reset payment error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  resetStuckInvoices: async () => {
+    console.log('🔄 Resetting all stuck invoices');
+    try {
+      // SỬA: Thêm /momo/ prefix để khớp với route
+      const response = await axios.post('/api/payments/momo/reset-stuck-invoices');
+      console.log('✅ All stuck invoices reset successfully:', response.data);
+      return response;
+    } catch (error) {
+      console.error('❌ Reset stuck invoices error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  resetSingleInvoice: async (invoiceId) => {
+    console.log('🔄 Resetting single invoice:', invoiceId);
+    try {
+      // SỬA: Sử dụng route reset single invoice
+      const response = await axios.post(`/api/payments/momo/reset-single-invoice/${invoiceId}`);
+      console.log('✅ Single invoice reset successfully:', response.data);
+      return response;
+    } catch (error) {
+      console.error('❌ Reset single invoice error:', error.response?.data || error.message);
+      throw error;
+    }
   }
+
 };
 
 export { paymentService };

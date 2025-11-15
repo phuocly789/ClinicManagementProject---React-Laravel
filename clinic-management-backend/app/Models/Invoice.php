@@ -30,7 +30,7 @@ class Invoice extends Model
 {
 	protected $table = 'Invoices';
 	protected $primaryKey = 'InvoiceId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [

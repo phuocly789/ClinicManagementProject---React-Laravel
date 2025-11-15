@@ -202,7 +202,7 @@ class PatientService
                 'PatientId'       => $patient->PatientId,
                 'AppointmentDate' => $data['date'],
                 'AppointmentTime' => $data['time'],
-                'Symptoms'        => $data['symptoms'] ?? null,
+                'Notes'        => $data['symptoms'] ?? null,
                 'Status'          => 'Đã đặt',
                 'RecordId'        => $record->RecordId,
             ]);
@@ -287,5 +287,40 @@ class PatientService
         $appointment->save();
 
         return $appointment;
+    }
+    public function handleGetDetailAppointment(int $appointment_id)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            throw new AppErrors("Không tìm thấy người dùng", 404);
+        }
+
+        $patient = Patient::where('PatientId', $user->UserId)->first();
+        if (!$patient) {
+            throw new AppErrors("Không tìm thấy bệnh nhân", 404);
+        }
+
+        // Lấy appointment kèm quan hệ
+        $appointment = Appointment::with([
+            'medical_staff.user:UserId,FullName,Email,Phone'
+        ])
+            ->where('AppointmentId', $appointment_id)
+            ->where('PatientId', $patient->PatientId)
+            ->first();
+
+        if (!$appointment) {
+            throw new AppErrors("Không tìm thấy lịch hẹn", 400);
+        }
+
+        return [
+            'id' => $appointment->AppointmentId,
+            'full_name' => $user->FullName,
+            'date' => $appointment->AppointmentDate,
+            'time' => $appointment->AppointmentTime,
+            'status' => $appointment->Status,
+            'doctor' => optional(optional($appointment->medical_staff)->user)->FullName ?? null,
+            'specialty' => optional($appointment->medical_staff)->Specialty ?? null,
+            'notes' => $appointment->Notes
+        ];
     }
 }
