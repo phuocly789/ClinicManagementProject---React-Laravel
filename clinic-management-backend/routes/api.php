@@ -95,6 +95,7 @@ Route::middleware(['auth:api'])->get('/me', function (Request $request) {
 //admin-revenue
 Route::get('/report-revenue/combined', [ReportRevenueController::class, 'getCombinedStatistics']);
 Route::get('/report-revenue/detail-revenue', [ReportRevenueController::class, 'getDetailRevenueReport']);
+Route::get('/rooms', [RoomController::class, 'getAllRooms']);
 
 
 // Nhóm route cho Bác sĩ
@@ -135,6 +136,7 @@ Route::prefix('doctor')->group(function () {
     // Chỉ định dịch vụ
     Route::post('/appointments/{appointmentId}/assign-services', [ServiceController::class, 'assignServices']);
     Route::get('/doctor/check-roles', [ServiceController::class, 'checkRolesAndTechnicians']);
+
 });
 
 //Nhóm route cho User

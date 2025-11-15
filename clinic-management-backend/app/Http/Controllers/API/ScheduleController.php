@@ -42,6 +42,7 @@ class ScheduleController extends Controller
             'StartTime' => ['required', 'date_format:H:i:s'],
             'EndTime' => ['required', 'date_format:H:i:s', 'after:StartTime'],
             'IsAvailable' => ['required', 'boolean'],
+            'RoomId'=>['required','integer'],
         ], [
             'StaffId.required' => 'Vui lòng cung cấp StaffId.',
             'StaffId.integer' => 'StaffId phải là số nguyên.',
@@ -87,6 +88,7 @@ class ScheduleController extends Controller
             'StartTime' => ['required', 'date_format:H:i:s'],
             'EndTime' => ['required', 'date_format:H:i:s', 'after:StartTime'],
             'IsAvailable' => ['required', 'boolean'],
+            'RoomId'=>['required','integer'],
         ], [
             'WorkDate.required' => 'Vui lòng cung cấp ngày làm việc.',
             'WorkDate.date_format' => 'Ngày làm việc phải có định dạng YYYY-MM-DD.',

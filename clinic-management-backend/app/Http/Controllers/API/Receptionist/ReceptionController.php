@@ -18,13 +18,13 @@ class ReceptionController extends Controller
         $request->validate([
             // Patient data (nếu là bệnh nhân mới)
             'patient' => 'nullable|array',
-            'patient.fullName' => 'required_with:patient|string|max:100',
-            'patient.phone' => 'required_with:patient|string|max:15|unique:Users,Phone',
-            'patient.email' => 'nullable|email|unique:Users,Email',
-            'patient.dateOfBirth' => 'nullable|date',
-            'patient.gender' => 'nullable|string|in:Nam,Nữ',
-            'patient.address' => 'nullable|string|max:200',
-            'patient.medicalHistory' => 'nullable|string',
+            'patient.FullName' => 'required_with:patient|string|max:100',
+            'patient.Phone' => 'required_with:patient|string|max:15|unique:Users,Phone',
+            'patient.Email' => 'nullable|email|unique:Users,Email',
+            'patient.DateOfBirth' => 'nullable|date',
+            'patient.Gender' => 'nullable|string|in:Nam,Nữ',
+            'patient.Address' => 'nullable|string|max:200',
+            'patient.MedicalHistory' => 'nullable|string',
 
             // Appointment data
             'appointment.StaffId' => 'required|integer|exists:MedicalStaff,StaffId',
@@ -52,14 +52,14 @@ class ReceptionController extends Controller
             if (!$patientId && $request->has('patient')) {
                 // Tạo patient mới
                 $user = User::create([
-                    'Username' => $request->patient['phone'], // Sử dụng số điện thoại làm username
-                    'PasswordHash' => bcrypt($request->patient['phone']),
-                    'FullName' => $request->patient['fullName'],
-                    'Email' => $request->patient['email'] ?? null,
-                    'Phone' => $request->patient['phone'],
-                    'Gender' => $request->patient['gender'] ?? null,
-                    'Address' => $request->patient['address'] ?? null,
-                    'DateOfBirth' => $request->patient['dateOfBirth'] ?? null,
+                    'Username' => $request->patient['Phone'], // Sử dụng số điện thoại làm username
+                    'PasswordHash' => bcrypt($request->patient['Phone']),
+                    'FullName' => $request->patient['FullName'],
+                    'Email' => $request->patient['Email'] ?? null,
+                    'Phone' => $request->patient['Phone'],
+                    'Gender' => $request->patient['Gender'] ?? null,
+                    'Address' => $request->patient['Address'] ?? null,
+                    'DateOfBirth' => $request->patient['DateOfBirth'] ?? null,
                     'MustChangePassword' => true,
                     'IsActive' => true
                 ]);

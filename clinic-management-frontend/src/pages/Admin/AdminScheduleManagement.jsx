@@ -15,15 +15,26 @@ import '../../App.css';
 
 const initialFormState = {
     StaffId: '',
+    Role: '',
     WorkDate: new Date().toISOString().split('T')[0],
     StartTime: '08:00:00',
     EndTime: '17:00:00',
     IsAvailable: true,
+    RoomId: ''
 };
+
+const roleOptions = [
+    { value: 'Bác sĩ', label: 'Bác sĩ', icon: FaUserMd },
+    { value: 'Y tá', label: 'Y tá', icon: FaUserNurse },
+    { value: 'Lễ tân', label: 'Lễ tân', icon: FaUserPlus },
+    { value: 'Kĩ thuật viên', label: 'Kĩ thuật viên', icon: FaUserTie }
+];
 
 const AdminScheduleManagement = () => {
     const [schedules, setSchedules] = useState([]);
     const [staffList, setStaffList] = useState([]);
+    const [filteredStaffList, setFilteredStaffList] = useState([]);
+    const [roomList, setRoomList] = useState([]);
     const [loading, setLoading] = useState(true);
     const [toast, setToast] = useState(null);
 
@@ -34,6 +45,38 @@ const AdminScheduleManagement = () => {
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [scheduleFormData, setScheduleFormData] = useState(initialFormState);
 
+    const fetchRooms = async () => {
+        try {
+            const response = await instance.get('/api/rooms');
+            const rooms = response.data || [];
+            setRoomList(rooms);
+        } catch (error) {
+            console.error('Error fetching rooms:', error);
+        }
+    };
+
+    const fetchStaff = async () => {
+        try {
+            const response = await instance.get('/api/staff'); // Giả sử có API này
+            const staff = response.data || [];
+            setStaffList(staff);
+        } catch (error) {
+            console.error('Error fetching staff:', error);
+            // Fallback: lấy từ schedules nếu API staff không có
+            const uniqueStaff = schedules.reduce((acc, current) => {
+                if (!acc.find(item => item.StaffId === current.StaffId)) {
+                    acc.push({
+                        StaffId: current.StaffId,
+                        StaffName: current.StaffName,
+                        Role: current.Role
+                    });
+                }
+                return acc;
+            }, []);
+            setStaffList(uniqueStaff);
+        }
+    };
+
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
@@ -41,9 +84,14 @@ const AdminScheduleManagement = () => {
             const fetchedSchedules = response.data.Items || [];
             setSchedules(fetchedSchedules);
 
+            // Lấy danh sách staff từ schedules
             const uniqueStaff = fetchedSchedules.reduce((acc, current) => {
                 if (!acc.find(item => item.StaffId === current.StaffId)) {
-                    acc.push({ StaffId: current.StaffId, StaffName: current.StaffName, Role: current.Role });
+                    acc.push({
+                        StaffId: current.StaffId,
+                        StaffName: current.StaffName,
+                        Role: current.Role
+                    });
                 }
                 return acc;
             }, []);
@@ -56,7 +104,20 @@ const AdminScheduleManagement = () => {
         }
     }, []);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => {
+        fetchData();
+        fetchRooms();
+    }, [fetchData, fetchRooms]);
+
+    // Lọc staff theo role khi role thay đổi
+    useEffect(() => {
+        if (scheduleFormData.Role) {
+            const filtered = staffList.filter(staff => staff.Role === scheduleFormData.Role);
+            setFilteredStaffList(filtered);
+        } else {
+            setFilteredStaffList(staffList);
+        }
+    }, [scheduleFormData.Role, staffList]);
 
     const ChangeRole = (Role) => {
         switch (Role) {
@@ -82,14 +143,12 @@ const AdminScheduleManagement = () => {
         extendedProps: { ...s }
     }));
 
-   
-    
-
     const handleCloseModals = () => {
         setFormModalOpen(false);
         setDetailModalOpen(false);
         setConfirmModalOpen(false);
         setSelectedEvent(null);
+        setScheduleFormData(initialFormState);
     };
 
     const handleEventClick = (clickInfo) => {
@@ -108,10 +167,12 @@ const AdminScheduleManagement = () => {
         const { extendedProps, startStr, endStr } = event;
         setScheduleFormData({
             StaffId: extendedProps.StaffId,
+            Role: extendedProps.Role,
             WorkDate: startStr.split('T')[0],
             StartTime: startStr.split('T')[1],
             EndTime: endStr.split('T')[1],
             IsAvailable: extendedProps.IsAvailable,
+            RoomId: extendedProps.RoomId || ''
         });
         setSelectedEvent(event);
         setFormModalOpen(true);
@@ -125,22 +186,37 @@ const AdminScheduleManagement = () => {
 
     const handleFormChange = (e) => {
         const { name, value, type, checked } = e.target;
-        setScheduleFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+        setScheduleFormData(prev => ({
+            ...prev,
+            [name]: type === 'checkbox' ? checked : value
+        }));
     };
 
     const handleFormSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
+
         const isEditing = !!selectedEvent;
         const url = isEditing ? `/api/schedules/${selectedEvent.id}` : '/api/schedules';
         const method = isEditing ? 'put' : 'post';
+
         try {
-            const response = await instance[method](url, scheduleFormData);
-            setToast({ type: 'success', message: response.message });
+            // Tìm thông tin staff để gửi kèm nếu cần
+            const selectedStaff = staffList.find(staff => staff.StaffId == scheduleFormData.StaffId);
+            const submitData = {
+                ...scheduleFormData,
+                StaffName: selectedStaff?.StaffName || ''
+            };
+
+            const response = await instance[method](url, submitData);
+            setToast({ type: 'success', message: response.data?.message || 'Thao tác thành công!' });
             handleCloseModals();
             fetchData();
         } catch (error) {
-            setToast({ type: 'error', message: error.response?.data?.message || 'Thao tác thất bại.' });
+            setToast({
+                type: 'error',
+                message: error.response?.data?.message || 'Thao tác thất bại.'
+            });
         } finally {
             setLoading(false);
         }
@@ -151,11 +227,14 @@ const AdminScheduleManagement = () => {
         setLoading(true);
         try {
             const response = await instance.delete(`/api/schedules/${selectedEvent.id}`);
-            setToast({ type: 'success', message: response.message });
+            setToast({ type: 'success', message: response.data?.message || 'Xóa thành công!' });
             handleCloseModals();
             fetchData();
         } catch (error) {
-            setToast({ type: 'error', message: error.response?.data?.message || 'Lỗi khi xóa.' });
+            setToast({
+                type: 'error',
+                message: error.response?.data?.message || 'Lỗi khi xóa.'
+            });
         } finally {
             setLoading(false);
         }
@@ -163,7 +242,12 @@ const AdminScheduleManagement = () => {
 
     const renderEventContent = (eventInfo) => {
         const { Role } = eventInfo.event.extendedProps;
-        const roleIcons = { 'Bác sĩ': <FaUserMd />, 'Y tá': <FaUserNurse />, 'Kĩ thuật viên': <FaUserTie />, 'Lễ tân': <FaUserPlus /> };
+        const roleIcons = {
+            'Bác sĩ': <FaUserMd />,
+            'Y tá': <FaUserNurse />,
+            'Kĩ thuật viên': <FaUserTie />,
+            'Lễ tân': <FaUserPlus />
+        };
         return (
             <div className="event-main-content w-100">
                 <div className="event-icon">{roleIcons[Role] || <FaUserTie />}</div>
@@ -175,6 +259,11 @@ const AdminScheduleManagement = () => {
         );
     };
 
+    const RoleIcon = ({ role, size = 18 }) => {
+        const IconComponent = roleOptions.find(r => r.value === role)?.icon || FaUserTie;
+        return <IconComponent size={size} />;
+    };
+
     // Hàm render các Modal
     const renderModals = () => (
         <>
@@ -184,19 +273,144 @@ const AdminScheduleManagement = () => {
             )}
             <div className={`modal fade ${isFormModalOpen ? 'show d-block' : ''}`} tabIndex="-1" onClick={handleCloseModals}>
                 <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
-                    <div className="modal-content">
-                        <div className="modal-header"><h5 className="modal-title">{selectedEvent ? "Cập Nhật Lịch" : "Thêm Lịch Mới"}</h5><button type="button" className="btn-close" onClick={handleCloseModals}></button></div>
+                    <div className="modal-content border-0 shadow-lg">
+                        <div className="modal-header bg-primary text-white">
+                            <h5 className="modal-title fw-bold">
+                                {selectedEvent ? "Cập Nhật Lịch Làm Việc" : "Thêm Lịch Làm Việc Mới"}
+                            </h5>
+                            <button type="button" className="btn-close btn-close-white" onClick={handleCloseModals}></button>
+                        </div>
                         <form onSubmit={handleFormSubmit}>
-                            <div className="modal-body">
-                                <div className="mb-3"><label className="form-label">Nhân viên</label><select name="StaffId" value={scheduleFormData.StaffId} onChange={handleFormChange} className="form-select" required disabled={!!selectedEvent}><option value="">-- Chọn nhân viên --</option>{staffList.map(staff => <option key={staff.StaffId} value={staff.StaffId}>{staff.StaffName} ({staff.Role})</option>)}</select></div>
-                                <div className="mb-3"><label className="form-label">Ngày làm</label><input type="date" name="WorkDate" value={scheduleFormData.WorkDate} onChange={handleFormChange} className="form-control" required /></div>
-                                <div className="row mb-3">
-                                    <div className="col-md-6"><label className="form-label">Bắt đầu</label><input type="time" name="StartTime" value={scheduleFormData.StartTime} onChange={handleFormChange} className="form-control" step="1" required /></div>
-                                    <div className="col-md-6"><label className="form-label">Kết thúc</label><input type="time" name="EndTime" value={scheduleFormData.EndTime} onChange={handleFormChange} className="form-control" step="1" required /></div>
+                            <div className="modal-body p-4">
+                                <div className="row g-3">
+                                    {/* Chọn Role */}
+                                    <div className="col-12">
+                                        <label className="form-label fw-semibold">Chức vụ <span className="text-danger">*</span></label>
+                                        <select
+                                            name="Role"
+                                            value={scheduleFormData.Role}
+                                            onChange={handleFormChange}
+                                            className="form-select form-select-lg border-secondary-subtle"
+                                            required
+                                        >
+                                            <option value="">-- Chọn chức vụ --</option>
+                                            {roleOptions.map(role => (
+                                                <option key={role.value} value={role.value}>
+                                                    {role.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* Chọn Nhân viên */}
+                                    <div className="col-12">
+                                        <label className="form-label fw-semibold">Nhân viên <span className="text-danger">*</span></label>
+                                        <select
+                                            name="StaffId"
+                                            value={scheduleFormData.StaffId}
+                                            onChange={handleFormChange}
+                                            className="form-select form-select-lg border-secondary-subtle"
+                                            required
+                                            disabled={!!selectedEvent || !scheduleFormData.Role}
+                                        >
+                                            <option value="">-- Chọn nhân viên --</option>
+                                            {filteredStaffList.map(staff => (
+                                                <option key={staff.StaffId} value={staff.StaffId}>
+                                                    {staff.StaffName} ({staff.Role})
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {!scheduleFormData.Role && (
+                                            <div className="form-text text-warning">
+                                                Vui lòng chọn chức vụ trước
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Chọn Phòng */}
+                                    <div className="col-12">
+                                        <label className="form-label fw-semibold">Phòng làm việc <span className="text-danger">*</span></label>
+                                        <select
+                                            name="RoomId"
+                                            value={scheduleFormData.RoomId}
+                                            onChange={handleFormChange}
+                                            className="form-select form-select-lg border-secondary-subtle"
+                                            required
+                                        >
+                                            <option value="">-- Chọn phòng --</option>
+                                            {roomList.map(room => (
+                                                <option key={room.RoomId} value={room.RoomId}>
+                                                    {room.RoomName} - {room.RoomType}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* Ngày làm việc */}
+                                    <div className="col-12">
+                                        <label className="form-label fw-semibold">Ngày làm việc <span className="text-danger">*</span></label>
+                                        <input
+                                            type="date"
+                                            name="WorkDate"
+                                            value={scheduleFormData.WorkDate}
+                                            onChange={handleFormChange}
+                                            className="form-control form-control-lg border-secondary-subtle"
+                                            required
+                                        />
+                                    </div>
+
+                                    {/* Thời gian bắt đầu và kết thúc */}
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold">Giờ bắt đầu <span className="text-danger">*</span></label>
+                                        <input
+                                            type="time"
+                                            name="StartTime"
+                                            value={scheduleFormData.StartTime}
+                                            onChange={handleFormChange}
+                                            className="form-control form-control-lg border-secondary-subtle"
+                                            step="1"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold">Giờ kết thúc <span className="text-danger">*</span></label>
+                                        <input
+                                            type="time"
+                                            name="EndTime"
+                                            value={scheduleFormData.EndTime}
+                                            onChange={handleFormChange}
+                                            className="form-control form-control-lg border-secondary-subtle"
+                                            step="1"
+                                            required
+                                        />
+                                    </div>
+
+                                    {/* Trạng thái */}
+                                    <div className="col-12">
+                                        <div className="form-check form-switch">
+                                            <input
+                                                type="checkbox"
+                                                name="IsAvailable"
+                                                checked={scheduleFormData.IsAvailable}
+                                                onChange={handleFormChange}
+                                                className="form-check-input"
+                                                id="isAvailableCheck"
+                                            />
+                                            <label className="form-check-label fw-semibold" htmlFor="isAvailableCheck">
+                                                {scheduleFormData.IsAvailable ? "🟢 Có mặt" : "🔴 Vắng mặt"}
+                                            </label>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="form-check form-switch"><input type="checkbox" name="IsAvailable" checked={scheduleFormData.IsAvailable} onChange={handleFormChange} className="form-check-input" id="isAvailableCheck" /><label className="form-check-label" htmlFor="isAvailableCheck">Có mặt</label></div>
                             </div>
-                            <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={handleCloseModals}>Hủy</button><button type="submit" className="btn btn-primary"><BiSave /> Lưu</button></div>
+                            <div className="modal-footer border-top-0 bg-light">
+                                <button type="button" className="btn btn-outline-secondary px-4" onClick={handleCloseModals}>
+                                    <BiX className="me-2" /> Hủy
+                                </button>
+                                <button type="submit" className="btn btn-primary px-4">
+                                    <BiSave className="me-2" /> {selectedEvent ? "Cập nhật" : "Thêm mới"}
+                                </button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -208,16 +422,73 @@ const AdminScheduleManagement = () => {
             )}
             <div className={`modal fade ${isDetailModalOpen && selectedEvent ? 'show d-block' : ''}`} tabIndex="-1" onClick={handleCloseModals}>
                 <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
-                    <div className="modal-content">
-                        <div className="modal-header"><h5 className="modal-title">Chi Tiết Lịch Làm Việc</h5><button type="button" className="btn-close" onClick={handleCloseModals}></button></div>
-                        <div className="modal-body">
-                            <div className="info-row"><span className="label">Nhân viên:</span> <span className="value">{selectedEvent?.extendedProps.StaffName}</span></div>
-                            <div className="info-row"><span className="label">Chức vụ:</span> <span className="value">{selectedEvent?.extendedProps.Role}</span></div>
-                            <div className="info-row"><span className="label">Ngày làm:</span> <span className="value">{selectedEvent ? new Date(selectedEvent.startStr).toLocaleDateString('vi-VN') : ''}</span></div>
-                            <div className="info-row"><span className="label">Thời gian:</span> <span className="value">{selectedEvent ? `${new Date(selectedEvent.startStr).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - ${new Date(selectedEvent.endStr).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}` : ''}</span></div>
-                            <div className="info-row"><span className="label">Trạng thái:</span> <span className="value">{selectedEvent?.extendedProps.IsAvailable ? "Có mặt" : "Vắng"}</span></div>
+                    <div className="modal-content border-0 shadow-lg">
+                        <div className="modal-header bg-primary text-white">
+                            <h5 className="modal-title fw-bold">Chi Tiết Lịch Làm Việc</h5>
+                            <button type="button" className="btn-close btn-close-white" onClick={handleCloseModals}></button>
                         </div>
-                        <div className="modal-footer d-flex justify-content-end gap-2"><button className="btn btn-outline-secondary" onClick={() => handleOpenEditModal(selectedEvent)}><BiPencil /> Sửa</button><button className="btn btn-outline-danger" onClick={() => handleOpenDeleteModal(selectedEvent)}><BiTrash /> Xóa</button><button className="btn btn-primary" onClick={handleCloseModals}><BiX /> Đóng</button></div>
+                        <div className="modal-body p-4">
+                            <div className="info-grid">
+                                <div className="info-item">
+                                    <span className="info-label">Nhân viên:</span>
+                                    <span className="info-value d-flex align-items-center gap-2">
+                                        <RoleIcon role={selectedEvent?.extendedProps.Role} />
+                                        {selectedEvent?.extendedProps.StaffName}
+                                    </span>
+                                </div>
+                                <div className="info-item">
+                                    <span className="info-label">Chức vụ:</span>
+                                    <span className="info-value">
+                                        <span className={`badge bg-${ChangeRole(selectedEvent?.extendedProps.Role).toLowerCase()}`}>
+                                            {selectedEvent?.extendedProps.Role}
+                                        </span>
+                                    </span>
+                                </div>
+                                <div className="info-item">
+                                    <span className="info-label">Phòng:</span>
+                                    <span className="info-value">{selectedEvent?.extendedProps.RoomId || 'Chưa cập nhật'}</span>
+                                </div>
+                                <div className="info-item">
+                                    <span className="info-label">Ngày làm:</span>
+                                    <span className="info-value">
+                                        {selectedEvent ? new Date(selectedEvent.startStr).toLocaleDateString('vi-VN', {
+                                            weekday: 'long',
+                                            year: 'numeric',
+                                            month: 'long',
+                                            day: 'numeric'
+                                        }) : ''}
+                                    </span>
+                                </div>
+                                <div className="info-item">
+                                    <span className="info-label">Thời gian:</span>
+                                    <span className="info-value">
+                                        {selectedEvent ? `${new Date(selectedEvent.startStr).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - ${new Date(selectedEvent.endStr).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}` : ''}
+                                    </span>
+                                </div>
+                                <div className="info-item">
+                                    <span className="info-label">Trạng thái:</span>
+                                    <span className="info-value">
+                                        {selectedEvent?.extendedProps.IsAvailable ?
+                                            <span className="badge bg-success">🟢 Có mặt</span> :
+                                            <span className="badge bg-danger">🔴 Vắng mặt</span>
+                                        }
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="modal-footer border-top-0 bg-light d-flex justify-content-between">
+                            <div>
+                                <button className="btn btn-outline-danger me-2" onClick={() => handleOpenDeleteModal(selectedEvent)}>
+                                    <BiTrash className="me-1" /> Xóa
+                                </button>
+                                <button className="btn btn-outline-warning" onClick={() => handleOpenEditModal(selectedEvent)}>
+                                    <BiPencil className="me-1" /> Sửa
+                                </button>
+                            </div>
+                            <button className="btn btn-primary" onClick={handleCloseModals}>
+                                <BiX className="me-1" /> Đóng
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -228,10 +499,32 @@ const AdminScheduleManagement = () => {
             )}
             <div className={`modal fade ${isConfirmModalOpen && selectedEvent ? 'show d-block' : ''}`} tabIndex="-1" onClick={handleCloseModals}>
                 <div className="modal-dialog modal-dialog-centered modal-sm" onClick={e => e.stopPropagation()}>
-                    <div className="modal-content">
-                        <div className="modal-header"><h5 className="modal-title">Xác Nhận Xóa</h5><button type="button" className="btn-close" onClick={handleCloseModals}></button></div>
-                        <div className="modal-body"><p>Bạn có chắc muốn xóa lịch của <strong>{selectedEvent?.extendedProps.StaffName}</strong> vào ngày <strong>{selectedEvent ? new Date(selectedEvent.startStr).toLocaleDateString('vi-VN') : ''}</strong>?</p></div>
-                        <div className="modal-footer"><button className="btn btn-secondary" onClick={handleCloseModals}>Hủy</button><button className="btn btn-danger" onClick={handleDeleteConfirm}>Xác Nhận</button></div>
+                    <div className="modal-content border-0 shadow-lg">
+                        <div className="modal-header bg-danger text-white">
+                            <h5 className="modal-title fw-bold">Xác Nhận Xóa</h5>
+                            <button type="button" className="btn-close btn-close-white" onClick={handleCloseModals}></button>
+                        </div>
+                        <div className="modal-body text-center p-4">
+                            <BiXCircle size={48} className="text-danger mb-3" />
+                            <p className="mb-2">Bạn có chắc muốn xóa lịch làm việc này?</p>
+                            <p className="fw-bold text-primary">{selectedEvent?.extendedProps.StaffName}</p>
+                            <p className="text-muted small">
+                                {selectedEvent ? new Date(selectedEvent.startStr).toLocaleDateString('vi-VN', {
+                                    weekday: 'long',
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric'
+                                }) : ''}
+                            </p>
+                        </div>
+                        <div className="modal-footer border-top-0 justify-content-center">
+                            <button className="btn btn-outline-secondary me-3" onClick={handleCloseModals}>
+                                Hủy
+                            </button>
+                            <button className="btn btn-danger" onClick={handleDeleteConfirm}>
+                                Xác Nhận Xóa
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -240,35 +533,58 @@ const AdminScheduleManagement = () => {
 
     return (
         <div className="d-flex w-100">
+            <AdminSidebar />
             <main className="main-content flex-grow-1 p-4 d-flex flex-column gap-4">
                 {toast && <CustomToast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
-                <header className="d-flex justify-content-between align-items-center flex-shrink-0">
-                    <h1 className="h4 mb-0 fw-bold">Quản Lý Lịch Làm Việc</h1>
+
+                {/* Header */}
+                <header className="d-flex justify-content-between align-items-center flex-shrink-0 bg-white rounded-3 p-4 shadow-sm border">
+                    <div>
+                        <h1 className="h3 mb-1 fw-bold text-primary">Quản Lý Lịch Làm Việc</h1>
+                        <p className="text-muted mb-0">Quản lý và theo dõi lịch làm việc của nhân viên</p>
+                    </div>
                     <div className="d-flex align-items-center gap-3">
                         <div className="legend d-flex align-items-center gap-2">
-                            <span className="badge bg-doctor">Bác sĩ</span><span className="badge bg-nurse">Y tá</span>
-                            <span className="badge bg-receptionist">Lễ tân</span><span className="badge bg-technician">Kĩ thuật viên</span>
+                            <span className="badge bg-doctor px-3 py-2">👨‍⚕️ Bác sĩ</span>
+                            <span className="badge bg-nurse px-3 py-2">👩‍⚕️ Y tá</span>
+                            <span className="badge bg-receptionist px-3 py-2">💼 Lễ tân</span>
+                            <span className="badge bg-technician px-3 py-2">🔧 Kĩ thuật viên</span>
                         </div>
-                        <button className="btn btn-primary d-flex align-items-center gap-2" onClick={handleOpenAddModal}>
-                            <BiCalendarPlus /> Thêm Lịch Mới
+                        <button className="btn btn-primary d-flex align-items-center gap-2 px-4 py-2 fw-semibold" onClick={handleOpenAddModal}>
+                            <BiCalendarPlus size={18} /> Thêm Lịch Mới
                         </button>
                     </div>
                 </header>
 
-                <div className="card shadow-sm border-0 calendar-panel p-3">
+                {/* Calendar */}
+                <div className="card shadow-sm border-0 calendar-panel flex-grow-1">
                     {loading && <Loading isLoading={loading} />}
-                    <div className="flex-grow-1" style={{ visibility: loading ? 'hidden' : 'visible' }}>
+                    <div className="card-body p-0" style={{ visibility: loading ? 'hidden' : 'visible', height: '100%' }}>
                         <FullCalendar
                             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, bootstrap5Plugin]}
                             themeSystem="bootstrap5"
-                            headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridDay' }}
+                            headerToolbar={{
+                                left: 'prev,next today',
+                                center: 'title',
+                                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                            }}
                             initialView="dayGridMonth"
                             locale="vi"
                             height="100%"
                             events={calendarEvents}
                             eventClick={handleEventClick}
                             eventContent={renderEventContent}
-                            buttonText={{ today: 'Hôm nay', month: 'Tháng', day: 'Ngày' }}
+                            buttonText={{
+                                today: 'Hôm nay',
+                                month: 'Tháng',
+                                week: 'Tuần',
+                                day: 'Ngày'
+                            }}
+                            dayMaxEvents={3}
+                            slotMinTime="06:00:00"
+                            slotMaxTime="22:00:00"
+                            allDaySlot={false}
+                            nowIndicator={true}
                         />
                     </div>
                 </div>

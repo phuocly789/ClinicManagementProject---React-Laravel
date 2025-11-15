@@ -32,20 +32,6 @@ const ReceptionSidebar = () => {
                             </NavLink>
                         </li>
 
-                        <li>
-                            <NavLink to="/receptionist/appointment-create" className="nav-item">
-                                <i className="fa-solid fa-calendar-plus"></i>
-                                Đặt Lịch Hẹn
-                            </NavLink>
-                        </li>
-
-                        <li>
-                            <NavLink to="/receptionist/patient-info" className="nav-item">
-                                <i className="fa-solid fa-id-card"></i>
-                                Bệnh Nhân
-                            </NavLink>
-                        </li>
-
                         <li className="border-top mt-auto pt-3">
                             <button
                                 onClick={handleLogout}
