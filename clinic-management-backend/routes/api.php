@@ -68,6 +68,7 @@ Route::get('/schedules', [ScheduleController::class, 'index']);
 Route::post('/schedules', [ScheduleController::class, 'createSchedule']);
 Route::put('/schedules/{scheduleId}', [ScheduleController::class, 'updateSchedule']);
 Route::delete('/schedules/{scheduleId}', [ScheduleController::class, 'deleteSchedule']);
+Route::get('/staff', [ScheduleController::class, 'getStaff']);
 
 
 // Auth
@@ -195,7 +196,7 @@ Route::prefix('receptionist')->group(function () {
 
     // Online appointments
     Route::get('/appointments/online', [AppointmentRecepController::class, 'getOnlineAppointments']);
-    //notification 
+    //notification
     Route::middleware(['auth:api', 'role:Admin,Lễ tân'])
         ->get('/notifications', [ReceptionController::class, 'getNotification']);
 });

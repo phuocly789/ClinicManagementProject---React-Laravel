@@ -4,7 +4,7 @@ import { useUser } from "../../context/userContext";
 import { path } from "../../utils/constant";
 
 const ReceptionSidebar = () => {
-    const { user } = useUser();
+    const { user, handleLogout } = useUser();
 
     return (
         <div className="d-flex" style={{ minHeight: "100vh" }}>
@@ -40,10 +40,13 @@ const ReceptionSidebar = () => {
                         </li>
 
                         <li className="border-top mt-auto pt-3">
-                            <NavLink to="/logout" className="nav-item">
+                            <button
+                                onClick={handleLogout}
+                                className="nav-item logout-btn"
+                            >
                                 <i className="fa-solid fa-right-from-bracket"></i>
                                 Đăng Xuất
-                            </NavLink>
+                            </button>
                         </li>
                     </ul>
                 </nav>
