@@ -26,7 +26,7 @@ const INVOICE_STATUS_LABELS = {
 const PAYMENT_METHODS = {
   MOMO: 'momo',
   CASH: 'cash',
-  BANK_TRANSFER: 'bank_transfer',
+  BANK_TRANSFER: 'napas',
   INSURANCE: 'insurance'
 };
 
@@ -151,13 +151,13 @@ const PaymentSection = () => {
     
     switch (displayStatus.status) {
       case INVOICE_STATUS.PENDING:
-        return <Badge bg="warning">⏳ Chờ thanh toán</Badge>;
+        return <Badge bg="warning"> Chờ thanh toán</Badge>;
       case INVOICE_STATUS.PAID:
-        return <Badge bg="success">✅ Đã thanh toán</Badge>;
+        return <Badge bg="success"> Đã thanh toán</Badge>;
       case INVOICE_STATUS.CANCELLED:
-        return <Badge bg="danger">❌ Đã hủy</Badge>;
+        return <Badge bg="danger">Đã hủy</Badge>;
       case INVOICE_STATUS.PROCESSING:
-        return <Badge bg="info">🔄 Đang xử lý</Badge>;
+        return <Badge bg="info"> Đang xử lý</Badge>;
       default:
         return <Badge bg="secondary">{invoice.status}</Badge>;
     }
@@ -182,7 +182,7 @@ const PaymentSection = () => {
       case PAYMENT_METHODS.CASH:
         return <Badge bg="success">💵 Tiền mặt</Badge>;
       case PAYMENT_METHODS.BANK_TRANSFER:
-        return <Badge bg="info">🏦 Chuyển khoản</Badge>;
+        return <Badge bg="info">🏦 Thẻ napas</Badge>;
       case PAYMENT_METHODS.INSURANCE:
         return <Badge bg="warning">🛡️ Bảo hiểm</Badge>;
       default:
@@ -653,7 +653,7 @@ const PaymentSection = () => {
             <Col md={6}>
               <Form.Control
                 type="text"
-                placeholder="🔍 Tìm kiếm theo mã HD, tên bệnh nhân, số điện thoại..."
+                placeholder="  Tìm kiếm theo mã HD, tên bệnh nhân, số điện thoại..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -663,11 +663,11 @@ const PaymentSection = () => {
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
-                <option value="">📊 Tất cả trạng thái</option>
-                <option value={INVOICE_STATUS.PENDING}>⏳ Chờ thanh toán</option>
-                <option value={INVOICE_STATUS.PAID}>✅ Đã thanh toán</option>
-                <option value={INVOICE_STATUS.PROCESSING}>🔄 Đang xử lý</option>
-                <option value={INVOICE_STATUS.CANCELLED}>❌ Đã hủy</option>
+                <option value="">Tất cả trạng thái</option>
+                <option value={INVOICE_STATUS.PENDING}> Chờ thanh toán</option>
+                <option value={INVOICE_STATUS.PAID}> Đã thanh toán</option>
+                <option value={INVOICE_STATUS.PROCESSING}> Đang xử lý</option>
+                <option value={INVOICE_STATUS.CANCELLED}> Đã hủy</option>
               </Form.Select>
             </Col>
             <Col md={2}>

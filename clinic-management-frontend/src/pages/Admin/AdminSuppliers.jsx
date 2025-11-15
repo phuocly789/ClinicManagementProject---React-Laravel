@@ -4,13 +4,13 @@ import Pagination from '../../Components/Pagination/Pagination';
 import ConfirmDeleteModal from '../../Components/CustomToast/DeleteConfirmModal';
 import CustomToast from '../../Components/CustomToast/CustomToast';
 import { PencilIcon, Trash, Search, Filter, X } from 'lucide-react';
-import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
 
-const API_BASE_URL = 'http://localhost:8000';
+import supplierService from '../../services/supplierService';
 
 const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
 const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class|import|export|\$\w+)/i;
 
+// ==================== DANH SÁCH ====================
 const SupplierList = memo(({
   suppliers,
   isLoading,
@@ -26,7 +26,6 @@ const SupplierList = memo(({
 }) => {
   return (
     <div>
-      {/* HEADER */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h3 style={{ fontSize: '1.5rem', fontWeight: '600' }}>
           Danh Sách Nhà Cung Cấp
@@ -36,43 +35,35 @@ const SupplierList = memo(({
         </Button>
       </div>
 
-      {/* FILTER BAR */}
       <div className="mb-4 p-3 bg-light rounded border">
         <Row className="g-3 align-items-center">
-          {/* TÌM KIẾM TÊN */}
           <Col md={4}>
             <InputGroup>
               <InputGroup.Text><Search size={16} /></InputGroup.Text>
               <Form.Control
                 placeholder="Tìm tên nhà cung cấp..."
                 value={filters.search}
-                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
                 onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
               />
             </InputGroup>
           </Col>
-
-          {/* LỌC EMAIL */}
           <Col md={3}>
             <Form.Control
               placeholder="Lọc theo email..."
               value={filters.email}
-              onChange={(e) => setFilters({ ...filters, email: e.target.value })}
+              onChange={(e) => setFilters(prev => ({ ...prev, email: e.target.value }))}
               onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
             />
           </Col>
-
-          {/* LỌC SỐ ĐIỆN THOẠI */}
           <Col md={3}>
             <Form.Control
               placeholder="Lọc theo số điện thoại..."
               value={filters.phone}
-              onChange={(e) => setFilters({ ...filters, phone: e.target.value })}
+              onChange={(e) => setFilters(prev => ({ ...prev, phone: e.target.value }))}
               onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
             />
           </Col>
-
-          {/* NÚT LỌC & XÓA */}
           <Col md={2} className="d-flex gap-1">
             <Button variant="primary" size="sm" onClick={applyFilters} className="flex-fill">
               <Filter size={16} />
@@ -84,7 +75,6 @@ const SupplierList = memo(({
         </Row>
       </div>
 
-      {/* TABLE */}
       <div className="table-responsive">
         <Table striped bordered hover responsive className={isLoading ? 'opacity-50' : ''}>
           <thead className="table-light">
@@ -104,35 +94,23 @@ const SupplierList = memo(({
             ) : suppliers.length === 0 ? (
               <tr><td colSpan="7" className="text-center py-4 text-muted">Không có dữ liệu</td></tr>
             ) : (
-              suppliers.map((supplier) => (
-                <tr key={supplier.SupplierId}>
-                  <td><strong>{supplier.SupplierId}</strong></td>
-                  <td>{supplier.SupplierName}</td>
-                  <td>{supplier.ContactEmail || '—'}</td>
-                  <td>{supplier.ContactPhone || '—'}</td>
-                  <td>{supplier.Address || '—'}</td>
-                  <td title={supplier.Description}>
-                    {supplier.Description?.length > 40
-                      ? supplier.Description.substring(0, 40) + '...'
-                      : supplier.Description || '—'}
+              suppliers.map((s) => (
+                <tr key={s.SupplierId}>
+                  <td><strong>{s.SupplierId}</strong></td>
+                  <td>{s.SupplierName}</td>
+                  <td>{s.ContactEmail || '—'}</td>
+                  <td>{s.ContactPhone || '—'}</td>
+                  <td>{s.Address || '—'}</td>
+                  <td title={s.Description}>
+                    {s.Description?.length > 40 ? s.Description.substring(0, 40) + '...' : s.Description || '—'}
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="link"
-                      size="sm"
-                      className="text-success p-0 me-2"
-                      onClick={() => handleShowEditForm(supplier)}
-                      title="Sửa"
-                    >
+                    <Button variant="link" size="sm" className="text-success p-0 me-2"
+                      onClick={() => handleShowEditForm(s)} title="Sửa">
                       <PencilIcon size={18} />
                     </Button>
-                    <Button
-                      variant="link"
-                      size="sm"
-                      className="text-danger p-0"
-                      onClick={() => handleShowDeleteModal(supplier.SupplierId)}
-                      title="Xóa"
-                    >
+                    <Button variant="link" size="sm" className="text-danger p-0"
+                      onClick={() => handleShowDeleteModal(s.SupplierId)} title="Xóa">
                       <Trash size={18} />
                     </Button>
                   </td>
@@ -143,7 +121,6 @@ const SupplierList = memo(({
         </Table>
       </div>
 
-      {/* PAGINATION */}
       {pageCount > 1 && (
         <Pagination
           pageCount={pageCount}
@@ -156,60 +133,60 @@ const SupplierList = memo(({
   );
 });
 
+// ==================== FORM THÊM/SỬA ====================
 const SupplierForm = memo(({ isEditMode, supplier, onSubmit, onCancel, isLoading }) => {
-  const [errors, setErrors] = useState({
-    SupplierName: '', ContactEmail: '', ContactPhone: '', Address: '', Description: '',
-  });
+  const [errors, setErrors] = useState({});
 
   const validateForm = useCallback((formData) => {
     const newErrors = {};
-    let isValid = true;
+    let valid = true;
 
     const name = formData.get('SupplierName')?.trim();
     if (!name) {
       newErrors.SupplierName = 'Vui lòng nhập tên nhà cung cấp';
-      isValid = false;
+      valid = false;
     } else if (name.length > 255) {
       newErrors.SupplierName = 'Tên không được vượt quá 255 ký tự';
-      isValid = false;
+      valid = false;
     } else if (specialCharRegex.test(name) || codePatternRegex.test(name)) {
       newErrors.SupplierName = 'Không được chứa ký tự đặc biệt hoặc mã code';
-      isValid = false;
+      valid = false;
     }
 
     const email = formData.get('ContactEmail')?.trim();
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       newErrors.ContactEmail = 'Email không hợp lệ';
-      isValid = false;
+      valid = false;
     }
 
     const phone = formData.get('ContactPhone')?.trim();
-    if (phone && !/^\+?\d{9,15}$/.test(phone)) {
-      newErrors.ContactPhone = 'Số điện thoại không hợp lệ';
-      isValid = false;
+    if (phone && !/^\+?\d{9,15}$/.test(phone.replace(/\s/g, ''))) {
+      newErrors.ContactPhone = 'Số điện thoại không hợp lệ (9-15 số)';
+      valid = false;
     }
 
     ['Address', 'Description'].forEach(field => {
       const value = formData.get(field)?.trim();
       const max = field === 'Address' ? 255 : 500;
       if (value && value.length > max) {
-        newErrors[field] = `${field === 'Address' ? 'Địa chỉ' : 'Mô tả'} không được vượt quá ${max} ký tự`;
-        isValid = false;
-      } else if (value && (specialCharRegex.test(value) || codePatternRegex.test(value))) {
+        newErrors[field] = `${field === 'Address' ? 'Địa chỉ' : 'Mô tả'} không quá ${max} ký tự`;
+        valid = false;
+      }
+      if (value && (specialCharRegex.test(value) || codePatternRegex.test(value))) {
         newErrors[field] = 'Không được chứa ký tự đặc biệt hoặc mã code';
-        isValid = false;
+        valid = false;
       }
     });
 
     setErrors(newErrors);
-    return isValid;
+    return valid;
   }, []);
 
-  const handleSubmit = useCallback((e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    const formData = new FormData(e.target);
-    if (validateForm(formData)) onSubmit(e);
-  }, [onSubmit, validateForm]);
+    const fd = new FormData(e.target);
+    if (validateForm(fd)) onSubmit(fd);
+  };
 
   return (
     <div style={{ padding: '20px', backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
@@ -295,6 +272,7 @@ const SupplierForm = memo(({ isEditMode, supplier, onSubmit, onCancel, isLoading
   );
 });
 
+// ==================== COMPONENT CHÍNH ====================
 const AdminSuppliers = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
@@ -313,215 +291,111 @@ const AdminSuppliers = () => {
     setToast({ show: true, type, message });
   }, []);
 
-  const hideToast = useCallback(() => {
-    setToast({ show: false, type: 'info', message: '' });
-  }, []);
+  const hideToast = () => setToast({ show: false });
 
-  // FETCH + CACHE
-  const fetchSuppliers = useCallback(async (page = 1, queryString = '') => {
-    const cacheKey = `${page}_${queryString}`;
-    if (cache.current.has(cacheKey)) {
-      const { data, last_page } = cache.current.get(cacheKey);
-      setSuppliers(data);
-      setPageCount(last_page);
+  const fetchSuppliers = useCallback(async (page = 1, query = '') => {
+    const key = `${page}_${query || 'none'}`;
+    if (cache.current.has(key)) {
+      const cached = cache.current.get(key);
+      setSuppliers(cached.data);
+      setPageCount(cached.last_page);
       setCurrentPage(page - 1);
       return;
     }
 
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/suppliers?page=${page}${queryString ? '&' + queryString : ''}`, {
-        headers: { 'Accept': 'application/json' },
-        credentials: 'include',
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const res = await response.json();
-      cache.current.set(cacheKey, { data: res.data, last_page: res.last_page });
+      const res = await supplierService.getAll(page, query);
+      cache.current.set(key, { data: res.data, last_page: res.last_page });
       setSuppliers(res.data);
       setPageCount(res.last_page);
       setCurrentPage(page - 1);
-    } catch (error) {
-      showToast('error', `Lỗi tải dữ liệu: ${error.message}`);
+    } catch (err) {
+      showToast('error', err.message || 'Lỗi tải dữ liệu nhà cung cấp');
     } finally {
       setIsLoading(false);
     }
   }, [showToast]);
 
-
-  // ÁP DỤNG LỌC - CHỈ KHI NHẤN NÚT
   const applyFilters = useCallback(() => {
     const params = new URLSearchParams();
-  
-    const search = filters.search.trim();
-    const email = filters.email.trim();
-    const phone = filters.phone.trim();
-  
-    if (search) params.append('search', search);     // GỬI NGUYÊN BẢN
-    if (email) params.append('email', email);
-    if (phone) params.append('phone', phone);
-  
-    const query = params.toString();
-    setFilterParams(query);
-    fetchSuppliers(1, query);
+    if (filters.search.trim()) params.append('search', filters.search.trim());
+    if (filters.email.trim()) params.append('email', filters.email.trim());
+    if (filters.phone.trim()) params.append('phone', filters.phone.trim());
+
+    const q = params.toString();
+    setFilterParams(q);
+    fetchSuppliers(1, q);
   }, [filters, fetchSuppliers]);
 
-  // XÓA LỌC
   const clearFilters = useCallback(() => {
     setFilters({ search: '', email: '', phone: '' });
     setFilterParams('');
     fetchSuppliers(1);
   }, [fetchSuppliers]);
-  const getCsrfToken = useCallback(async (retries = 3) => {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-      try {
-        const response = await fetch(`${API_BASE_URL}/sanctum/csrf-cookie`, {
-          method: 'GET',
-          credentials: 'include',
-        });
-        if (!response.ok) throw new Error(`Failed to fetch CSRF token: ${response.status}`);
-        const token = document.cookie
-          .split('; ')
-          .find((row) => row.startsWith('XSRF-TOKEN='))
-          ?.split('=')[1];
-        if (!token) throw new Error('CSRF token not found in cookies');
-        return decodeURIComponent(token);
-      } catch (error) {
-        console.error(`Attempt ${attempt} to fetch CSRF token failed:`, error);
-        if (attempt === retries) throw new Error(`Không thể lấy CSRF token sau ${retries} lần thử: ${error.message}`);
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
+
+  const handleDelete = useCallback(async (id) => {
+    try {
+      setIsLoading(true);
+      const res = await supplierService.delete(id);
+      showToast('success', res.message || 'Xóa thành công');
+      cache.current.clear();
+      fetchSuppliers(currentPage + 1 || 1, filterParams);
+    } catch (err) {
+      showToast('error', err.message || 'Không thể xóa (có thể đang có phiếu nhập kho)');
+    } finally {
+      setIsLoading(false);
+      setShowDeleteModal(false);
+      setSupplierToDelete(null);
     }
-  }, []);
+  }, [currentPage, filterParams, fetchSuppliers, showToast]);
 
-  const handleDelete = useCallback(
-    async (supplierId) => {
-      try {
-        setIsLoading(true);
-        const token = await getCsrfToken();
-        const response = await fetch(`${API_BASE_URL}/api/suppliers/${supplierId}`, {
-          method: 'DELETE',
-          headers: {
-            Accept: 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-XSRF-TOKEN': token,
-          },
-          credentials: 'include',
-        });
+  const handleAddSupplier = async (formData) => {
+    const data = {
+      SupplierName: formData.get('SupplierName').trim(),
+      ContactEmail: formData.get('ContactEmail')?.trim() || null,
+      ContactPhone: formData.get('ContactPhone')?.trim() || null,
+      Address: formData.get('Address')?.trim() || null,
+      Description: formData.get('Description')?.trim() || null,
+    };
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
-        }
-        const result = await response.json();
-        showToast('success', result.message || 'Xóa nhà cung cấp thành công');
-        cache.current.delete(currentPage + 1);
-        await fetchSuppliers(currentPage + 1);
-      } catch (error) {
-        console.error('Error deleting supplier:', error);
-        showToast('error', `Lỗi khi xóa nhà cung cấp: ${error.message}`);
-      } finally {
-        setIsLoading(false);
-        setShowDeleteModal(false);
-        setSupplierToDelete(null);
-      }
-    },
-    [currentPage, fetchSuppliers, getCsrfToken, showToast]
-  );
+    try {
+      setIsLoading(true);
+      const res = await supplierService.create(data);
+      showToast('success', res.message || 'Thêm thành công');
+      cache.current.clear();
+      fetchSuppliers(1);
+      setCurrentView('list');
+    } catch (err) {
+      showToast('error', err.message || 'Thêm thất bại');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const handleEditSupplier = useCallback(
-    async (e) => {
-      try {
-        setIsLoading(true);
-        const token = await getCsrfToken();
-        const formData = new FormData(e.target);
-        const data = {
-          SupplierName: formData.get('SupplierName'),
-          ContactEmail: formData.get('ContactEmail') || null,
-          ContactPhone: formData.get('ContactPhone') || null,
-          Address: formData.get('Address') || null,
-          Description: formData.get('Description') || null,
-        };
+  const handleEditSupplier = async (formData) => {
+    const data = {
+      SupplierName: formData.get('SupplierName').trim(),
+      ContactEmail: formData.get('ContactEmail')?.trim() || null,
+      ContactPhone: formData.get('ContactPhone')?.trim() || null,
+      Address: formData.get('Address')?.trim() || null,
+      Description: formData.get('Description')?.trim() || null,
+    };
 
-        const response = await fetch(`${API_BASE_URL}/api/suppliers/${editSupplier.SupplierId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-XSRF-TOKEN': token,
-          },
-          credentials: 'include',
-          body: JSON.stringify(data),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
-        }
-        const result = await response.json();
-        showToast('success', result.message || 'Sửa nhà cung cấp thành công');
-        cache.current.clear();
-        await fetchSuppliers(currentPage + 1);
-        setCurrentView('list');
-        setEditSupplier(null);
-      } catch (error) {
-        console.error('Error editing supplier:', error);
-        showToast('error', error.message.includes('CSRF token')
-          ? 'Sửa thất bại: Không thể lấy CSRF token. Vui lòng kiểm tra backend.'
-          : `Sửa thất bại: ${error.message}`);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [currentPage, editSupplier, fetchSuppliers, getCsrfToken, showToast]
-  );
-
-  const handleAddSupplier = useCallback(
-    async (e) => {
-      try {
-        setIsLoading(true);
-        const token = await getCsrfToken();
-        const formData = new FormData(e.target);
-        const data = {
-          SupplierName: formData.get('SupplierName'),
-          ContactEmail: formData.get('ContactEmail') || null,
-          ContactPhone: formData.get('ContactPhone') || null,
-          Address: formData.get('Address') || null,
-          Description: formData.get('Description') || null,
-        };
-
-        const response = await fetch(`${API_BASE_URL}/api/suppliers`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-XSRF-TOKEN': token,
-          },
-          credentials: 'include',
-          body: JSON.stringify(data),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
-        }
-        const result = await response.json();
-        showToast('success', result.message || 'Thêm nhà cung cấp thành công');
-        cache.current.clear();
-        await fetchSuppliers(1);
-        setCurrentView('list');
-      } catch (error) {
-        console.error('Error adding supplier:', error);
-        showToast('error', error.message.includes('CSRF token')
-          ? 'Thêm thất bại: Không thể lấy CSRF token. Vui lòng kiểm tra backend.'
-          : `Thêm thất bại: ${error.message}`);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [fetchSuppliers, getCsrfToken, showToast]
-  );
+    try {
+      setIsLoading(true);
+      const res = await supplierService.update(editSupplier.SupplierId, data);
+      showToast('success', res.message || 'Cập nhật thành công');
+      cache.current.clear();
+      fetchSuppliers(currentPage + 1, filterParams);
+      setCurrentView('list');
+      setEditSupplier(null);
+    } catch (err) {
+      showToast('error', err.message || 'Cập nhật thất bại');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleShowEditForm = useCallback((supplier) => {
     setEditSupplier(supplier);
@@ -533,35 +407,28 @@ const AdminSuppliers = () => {
     setEditSupplier(null);
   }, []);
 
-  const handleShowDeleteModal = useCallback((id) => {
-    setSupplierToDelete(id);
-    setShowDeleteModal(true);
-  }, []);
-
-  const handleCancelDelete = useCallback(() => {
-    setShowDeleteModal(false);
-    setSupplierToDelete(null);
-  }, []);
-
   const handlePageChange = useCallback(({ selected }) => {
     fetchSuppliers(selected + 1, filterParams);
   }, [fetchSuppliers, filterParams]);
 
   useEffect(() => {
-    if (currentView === 'list') fetchSuppliers(1);
-  }, [currentView, fetchSuppliers]);
+    if (currentView === 'list') {
+      fetchSuppliers(1, filterParams);
+    }
+  }, [currentView, filterParams, fetchSuppliers]);
 
   return (
     <div className="d-flex">
-      
       <div className="position-relative w-100 flex-grow-1 ms-5 p-4">
-        <h1 className="mb-4" style={{ fontSize: '1.8rem', fontWeight: '600' }}>Quản Lý Nhà Cung Cấp</h1>
+        <h1 className="mb-4" style={{ fontSize: '1.8rem', fontWeight: '600' }}>
+          Quản Lý Nhà Cung Cấp
+        </h1>
 
         {currentView === 'list' && (
           <SupplierList
             suppliers={suppliers}
             isLoading={isLoading}
-            handleShowDeleteModal={handleShowDeleteModal}
+            handleShowDeleteModal={(id) => { setSupplierToDelete(id); setShowDeleteModal(true); }}
             handleShowEditForm={handleShowEditForm}
             pageCount={pageCount}
             currentPage={currentPage}
@@ -572,37 +439,28 @@ const AdminSuppliers = () => {
             setFilters={setFilters}
           />
         )}
-        {currentView === 'add' && (
+
+        {(currentView === 'add' || currentView === 'edit') && (
           <SupplierForm
-            isEditMode={false}
-            onSubmit={handleAddSupplier}
-            onCancel={handleCancelForm}
-            isLoading={isLoading}
-          />
-        )}
-        {currentView === 'edit' && (
-          <SupplierForm
-            isEditMode={true}
+            isEditMode={currentView === 'edit'}
             supplier={editSupplier}
-            onSubmit={handleEditSupplier}
+            onSubmit={currentView === 'add' ? handleAddSupplier : handleEditSupplier}
             onCancel={handleCancelForm}
             isLoading={isLoading}
           />
         )}
+
         <ConfirmDeleteModal
           isOpen={showDeleteModal}
           title="Xác nhận xóa"
           message="Không thể xóa nếu có phiếu nhập kho liên quan."
           onConfirm={() => handleDelete(supplierToDelete)}
-          onCancel={handleCancelDelete}
+          onCancel={() => setShowDeleteModal(false)}
         />
-        {toast.show &&
-          <CustomToast
-            type={toast.type}
-            message={toast.message}
-            onClose={hideToast}
-          />
-        }
+
+        {toast.show && (
+          <CustomToast type={toast.type} message={toast.message} onClose={hideToast} />
+        )}
       </div>
     </div>
   );
