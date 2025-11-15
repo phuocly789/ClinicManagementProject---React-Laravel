@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\API\Receptionist;
 
+use App\Exceptions\AppErrors;
 use App\Http\Controllers\Controller;
+use App\Http\Services\ReceptionistService;
 use App\Models\Appointment;
 use App\Models\MedicalRecord;
 use App\Models\Patient;
@@ -13,6 +15,11 @@ use Illuminate\Support\Facades\DB;
 
 class ReceptionController extends Controller
 {
+    protected $receptionistService;
+    public function __construct(ReceptionistService $receptionistService)
+    {
+        $this->receptionistService = $receptionistService;
+    }
     public function completeReception(Request $request)
     {
         $request->validate([
@@ -161,6 +168,31 @@ class ReceptionController extends Controller
                 'success' => false,
                 'message' => 'Lỗi khi tiếp nhận bệnh nhân: ' . $e->getMessage()
             ], 500);
+        }
+    }
+    public function getNotification(Request $request)
+    {
+        $current = $request->query('current');
+        $pageSize = $request->query('pageSize');
+        try {
+            $appointment = $this->receptionistService->handleGetNotification($current, $pageSize);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Lấy danh sách thông báo thành công.',
+                'data' => $appointment,
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (AppErrors $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ], $e->getStatusCode() ?: 400,);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi server: ' . $e->getMessage()
+            ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 }

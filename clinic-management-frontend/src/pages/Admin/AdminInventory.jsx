@@ -6,6 +6,9 @@ import CustomToast from '../../Components/CustomToast/CustomToast';
 import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
 import { Eye, PencilIcon, Trash, Search, Filter, Calendar, DollarSign, X } from 'lucide-react';
 
+// Import service mới
+import { getSuppliers, getMedicines, getInventories, getInventoryDetails, deleteInventory, addInventory, editInventory } from '../../services/inventoryService'; // Giả sử đường dẫn là '../../services/inventoryService', chỉnh nếu cần
+
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -21,8 +24,6 @@ class ErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
-
-const API_BASE_URL = 'http://localhost:8000';
 
 const loadHtml2Pdf = () => {
   return new Promise((resolve) => {
@@ -753,14 +754,9 @@ const AdminInventory = () => {
     }
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/suppliers/all`, {
-        headers: { 'Accept': 'application/json' },
-        credentials: 'include',
-      });
-      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-      const data = await response.json();
-      setSuppliers(data.data || []);
-      setSuppliersReady(true); // Đánh dấu sẵn sàng
+      const res = await getSuppliers();
+      setSuppliers(res.data || []);
+      setSuppliersReady(true);
     } catch (error) {
       console.error('Error fetching suppliers:', error);
       showToast('error', `Lỗi khi tải danh sách nhà cung cấp: ${error.message}`);
@@ -773,13 +769,8 @@ const AdminInventory = () => {
     if (medicines.length > 0) return;
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/medicines/all`, {
-        headers: { 'Accept': 'application/json' },
-        credentials: 'include',
-      });
-      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-      const data = await response.json();
-      setMedicines(data || []);
+      const res = await getMedicines();
+      setMedicines(res || []);
     } catch (error) {
       console.error('Error fetching medicines:', error);
       showToast('error', `Lỗi khi tải danh sách thuốc: ${error.message}`);
@@ -795,19 +786,14 @@ const AdminInventory = () => {
       setInventories(data);
       setPageCount(last_page);
       setCurrentPage(page - 1);
-      setInventoriesReady(true); // Đảm bảo trạng thái sẵn sàng
+      setInventoriesReady(true);
       return;
     }
 
     try {
       setIsLoading(true);
-      setInventoriesReady(false); // Reset trước khi fetch
-      const response = await fetch(`${API_BASE_URL}/api/import-bills?page=${page}${queryString ? '&' + queryString : ''}`, {
-        headers: { 'Accept': 'application/json' },
-        credentials: 'include',
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const res = await response.json();
+      setInventoriesReady(false);
+      const res = await getInventories(page, queryString);
 
       const mappedData = res.data.map(item => ({
         id: item.ImportId,
@@ -821,11 +807,11 @@ const AdminInventory = () => {
       setInventories(mappedData);
       setPageCount(res.last_page);
       setCurrentPage(page - 1);
-      setInventoriesReady(true); // Chỉ set khi thành công
+      setInventoriesReady(true);
     } catch (error) {
       showToast('error', `Lỗi tải dữ liệu: ${error.message}`);
-      setInventories([]); // Đặt rỗng để tránh lỗi
-      setInventoriesReady(true); // Vẫn cho phép render để hiển thị "Không có dữ liệu"
+      setInventories([]);
+      setInventoriesReady(true);
     } finally {
       setIsLoading(false);
     }
@@ -836,25 +822,18 @@ const AdminInventory = () => {
       setIsLoading(true);
       setFormLoading(true);
 
-      const response = await fetch(`${API_BASE_URL}/api/import-bills/${importId}`, {
-        headers: { 'Accept': 'application/json' },
-        credentials: 'include',
-      });
-
-      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-
-      const data = await response.json();
+      const res = await getInventoryDetails(importId);
 
       const mappedInventory = {
-        id: data.data.ImportId,
-        supplierId: data.data.SupplierId,
-        date: data.data.ImportDate,
-        total: data.data.TotalAmount,
-        note: data.data.Notes || '',
-        details: data.data.import_details || [],
+        id: res.data.ImportId,
+        supplierId: res.data.SupplierId,
+        date: res.data.ImportDate,
+        total: res.data.TotalAmount,
+        note: res.data.Notes || '',
+        details: res.data.import_details || [],
       };
 
-      const mappedDetails = (data.data.import_details || []).map(detail => ({
+      const mappedDetails = (res.data.import_details || []).map(detail => ({
         id: detail.ImportDetailId,
         importId: detail.ImportId,
         medicineId: detail.MedicineId,
@@ -864,16 +843,15 @@ const AdminInventory = () => {
         subTotal: detail.SubTotal,
       }));
 
-      const mappedSupplier = data.data.supplier ? {
-        SupplierId: data.data.supplier.SupplierId,
-        SupplierName: data.data.supplier.SupplierName,
-        ContactEmail: data.data.supplier.ContactEmail,
-        ContactPhone: data.data.supplier.ContactPhone,
-        Address: data.data.supplier.Address,
-        Description: data.data.supplier.Description
+      const mappedSupplier = res.data.supplier ? {
+        SupplierId: res.data.supplier.SupplierId,
+        SupplierName: res.data.supplier.SupplierName,
+        ContactEmail: res.data.supplier.ContactEmail,
+        ContactPhone: res.data.supplier.ContactPhone,
+        Address: res.data.supplier.Address,
+        Description: res.data.supplier.Description
       } : {};
 
-      // CHỈ SET KHI CÓ DATA
       setSelectedInventory({
         inventory: mappedInventory,
         supplier: mappedSupplier,
@@ -883,59 +861,23 @@ const AdminInventory = () => {
       setDetails(mappedDetails);
       setEditInventory(mappedInventory);
 
-      return mappedInventory; // trả về để handleShowDetail biết thành công
+      return mappedInventory;
     } catch (error) {
       console.error('Error fetching inventory details:', error);
       showToast('error', `Lỗi khi tải chi tiết phiếu nhập: ${error.message}`);
-      return null; // trả về null → handleShowDetail sẽ quay lại list
+      return null;
     } finally {
       setIsLoading(false);
       setFormLoading(false);
     }
   }, [showToast]);
 
-  const getCsrfToken = useCallback(async (retries = 3) => {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-      try {
-        const response = await fetch(`${API_BASE_URL}/sanctum/csrf-cookie`, {
-          method: 'GET',
-          credentials: 'include',
-        });
-        if (!response.ok) throw new Error(`Failed to fetch CSRF token: ${response.status}`);
-        const token = document.cookie
-          .split('; ')
-          .find((row) => row.startsWith('XSRF-TOKEN='))
-          ?.split('=')[1];
-        if (!token) throw new Error('CSRF token not found in cookies');
-        return decodeURIComponent(token);
-      } catch (error) {
-        console.error(`Attempt ${attempt} to fetch CSRF token failed:`, error);
-        if (attempt === retries) throw new Error(`Không thể lấy CSRF token sau ${retries} lần thử: ${error.message}`);
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
-    }
-  }, []);
-
   const handleDelete = useCallback(
     async (inventoryId) => {
       try {
         setIsLoading(true);
-        const token = await getCsrfToken();
-        const response = await fetch(`${API_BASE_URL}/api/import-bills/${inventoryId}`, {
-          method: 'DELETE',
-          headers: {
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-XSRF-TOKEN': token,
-          },
-          credentials: 'include',
-        });
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
-        }
-        const result = await response.json();
-        showToast('success', result.message || 'Xóa phiếu nhập thành công');
+        const res = await deleteInventory(inventoryId);
+        showToast('success', res.message || 'Xóa phiếu nhập thành công');
         cache.current.delete(currentPage + 1);
         await fetchInventories(currentPage + 1);
       } catch (error) {
@@ -947,7 +889,7 @@ const AdminInventory = () => {
         setInventoryToDelete(null);
       }
     },
-    [currentPage, fetchInventories, getCsrfToken, showToast]
+    [currentPage, fetchInventories, showToast]
   );
 
   const handleShowDeleteModal = useCallback((inventoryId) => {
@@ -1020,7 +962,6 @@ const AdminInventory = () => {
   const handleAddInventory = useCallback(async (e, items) => {
     try {
       setIsLoading(true);
-      const token = await getCsrfToken();
       const formData = new FormData(e.target);
       const data = {
         SupplierId: parseInt(formData.get('supplierId')),
@@ -1033,28 +974,8 @@ const AdminInventory = () => {
         })),
       };
 
-      const response = await fetch(`${API_BASE_URL}/api/import-bills`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-XSRF-TOKEN': token,
-        },
-        credentials: 'include',
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.errors
-          ? Object.values(errorData.errors).flat().join(', ')
-          : errorData.message || `Lỗi HTTP! Status: ${response.status}`;
-        throw new Error(errorMessage);
-      }
-
-      const result = await response.json();
-      showToast('success', result.message || 'Thêm phiếu nhập thành công');
+      const res = await addInventory(data);
+      showToast('success', res.message || 'Thêm phiếu nhập thành công');
       cache.current.clear();
       await fetchInventories(1);
       setCurrentView('list');
@@ -1069,12 +990,11 @@ const AdminInventory = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [fetchInventories, getCsrfToken, showToast]);
+  }, [fetchInventories, showToast]);
 
   const handleEditInventory = useCallback(async (e, items) => {
     try {
       setIsLoading(true);
-      const token = await getCsrfToken();
       const formData = new FormData(e.target);
       const data = {
         SupplierId: parseInt(formData.get('supplierId')),
@@ -1087,28 +1007,8 @@ const AdminInventory = () => {
         })),
       };
 
-      const response = await fetch(`${API_BASE_URL}/api/import-bills/${editInventory.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-XSRF-TOKEN': token,
-        },
-        credentials: 'include',
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.errors
-          ? Object.values(errorData.errors).flat().join(', ')
-          : errorData.message || `Lỗi HTTP! Status: ${response.status}`;
-        throw new Error(errorMessage);
-      }
-
-      const result = await response.json();
-      showToast('success', result.message || 'Sửa phiếu nhập thành công');
+      const res = await editInventory(editInventory.id, data);
+      showToast('success', res.message || 'Sửa phiếu nhập thành công');
       cache.current.clear();
       await fetchInventories(currentPage + 1);
       setCurrentView('list');
@@ -1124,7 +1024,7 @@ const AdminInventory = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, editInventory, fetchInventories, getCsrfToken, showToast]);
+  }, [currentPage, editInventory, fetchInventories, showToast]);
 
   useEffect(() => {
     if (currentView === 'list') {
