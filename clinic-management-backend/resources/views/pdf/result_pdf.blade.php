@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>{{ $pdf_settings['customTitle'] ?? $title ?? 'PHIẾU DỊCH VỤ' }}</title>
+    <title>{{ $pdf_settings['customTitle'] ?? $title ?? 'PHIẾU KẾT QUẢ XÉT NGHIỆM' }}</title>
     <style>
         @page {
             size: A4;
@@ -287,17 +287,6 @@
             ;
         }
 
-        .total {
-            text-align: right;
-            font-weight: bold;
-            background: #fafafa;
-            padding: 6px;
-            font-size: 12px !important;
-            font-style:
-                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
-            ;
-        }
-
         /* FOOTER */
         .footer-content {
             display: table;
@@ -341,64 +330,7 @@
             page-break-inside: avoid;
         }
 
-        /* DIAGNOSIS SECTION */
-        .diagnosis-info {
-            background: #f8f9fa;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 15px 0;
-            font-size: 12px !important;
-            font-style:
-                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
-            ;
-            font-weight:
-                {{ $pdf_settings['fontWeight'] ?? 'normal' }}
-            ;
-            line-height:
-                {{ $pdf_settings['lineHeight'] ?? 1.3 }}
-            ;
-        }
-
-        .diagnosis-row {
-            margin-bottom: 5px;
-        }
-
-        .diagnosis-label {
-            font-weight: bold;
-            font-style:
-                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
-            ;
-        }
-
-        /* MONEY IN WORDS SECTION */
-        .money-in-words {
-            background: #f0f8ff;
-            padding: 8px 12px;
-            border-radius: 4px;
-            margin: 12px 0;
-            border-left: 4px solid #2c5aa0;
-            font-size: 12px !important;
-            font-style:
-                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
-            ;
-            font-weight:
-                {{ $pdf_settings['fontWeight'] ?? 'normal' }}
-            ;
-        }
-
-        .money-label {
-            font-weight: bold;
-            color: #2c5aa0;
-            margin-right: 5px;
-            font-size: 12px !important;
-        }
-
-        .money-words {
-            font-style: italic;
-            color: #d9534f;
-            font-size: 12px !important;
-        }
-
+        /* NOTE SECTION */
         .note {
             font-style: italic;
             color: #666;
@@ -494,10 +426,7 @@
             table,
             table th,
             table td,
-            .footer p,
-            .money-in-words,
-            .money-label,
-            .money-words {
+            .footer p {
                 font-size: 12px !important;
                 font-style:
                     {{ $pdf_settings['fontStyle'] ?? 'normal' }}
@@ -506,6 +435,37 @@
                     {{ $pdf_settings['fontWeight'] ?? 'normal' }}
                 ;
             }
+        }
+
+        /* LAB TEST SPECIFIC STYLES */
+        .lab-info {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 15px 0;
+            font-size: 12px !important;
+        }
+
+        .lab-row {
+            margin-bottom: 5px;
+        }
+
+        .lab-label {
+            font-weight: bold;
+        }
+
+        .test-results-table th {
+            background: #e9ecef;
+        }
+
+        .normal-result {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .abnormal-result {
+            color: #dc3545;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -518,8 +478,7 @@
                 <div class="watermark-text">{{ $watermark_data['text'] ?? 'MẪU BẢN QUYỀN' }}</div>
             @elseif($watermark_data['type'] === 'image' && isset($watermark_data['url']))
                 <img src="{{ $watermark_data['url'] }}" class="watermark-image" style="width: {{ $watermark_data['width'] ?? '200px' }};
-                                                            height: {{ $watermark_data['height'] ?? '200px' }};"
-                    alt="Watermark">
+                                                    height: {{ $watermark_data['height'] ?? '200px' }};" alt="Watermark">
             @endif
         @elseif(isset($pdf_settings['watermark']['enabled']) && $pdf_settings['watermark']['enabled'])
             <div class="watermark-text">{{ $pdf_settings['watermark']['text'] ?? 'MẪU BẢN QUYỀN' }}</div>
@@ -535,11 +494,10 @@
                 </div>
 
                 <div class="header-content">
-                    <h2>{{ $pdf_settings['clinicName'] ?? $clinic_name ?? 'PHÒNG KHÁM ĐA KHOA ABC' }}</h2>
+                    <h2>{{ $pdf_settings['clinicName'] ?? $clinic_name ?? 'PHÒNG KHÁM XYZ' }}</h2>
                     <p>Địa chỉ:
-                        {{ $pdf_settings['clinicAddress'] ?? $clinic_address ?? 'Số 53 Võ Văn Ngân, TP. Thủ Đức' }}
+                        {{ $pdf_settings['clinicAddress'] ?? $clinic_address ?? 'Số 53 Võ Văn Nghị, Từ Thủ Đức, TRNCM' }}
                     </p>
-                    <p>Điện thoại: {{ $pdf_settings['clinicPhone'] ?? $clinic_phone ?? '0123 456 789' }}</p>
                 </div>
 
                 <div class="header-placeholder"></div>
@@ -548,162 +506,97 @@
 
         <!-- TITLE -->
         <div class="title">
-            <h3>{{ $pdf_settings['customTitle'] ?? $title ?? 'PHIẾU CHỈ ĐỊNH DỊCH VỤ' }}</h3>
+            <h3>{{ $pdf_settings['customTitle'] ?? $title ?? 'PHIẾU KẾT QUẢ XÉT NGHIỆM' }}</h3>
         </div>
 
         <!-- PATIENT INFO -->
         <div class="info">
             <div class="info-row">
                 <div class="info-cell">
-                    <p><strong>Họ tên:</strong> {{ $patient_name ?? 'N/A' }}</p>
-                    <p><strong>Tuổi:</strong> {{ $age ?? 'N/A' }}</p>
-                    <p><strong>Giới tính:</strong> {{ $gender ?? 'N/A' }}</p>
-                    <p><strong>Điện thoại:</strong> {{ $phone ?? 'N/A' }}</p>
+                    <p><strong>Mã BN:</strong> {{ $patient_code ?? 'LC001' }}</p>
+                    <p><strong>Họ tên BN:</strong> {{ $patient_name ?? 'Nguyễn Văn A' }}</p>
                 </div>
                 <div class="info-cell">
-                    <p><strong>Mã phiếu dịch vụ:</strong> {{ $medical_record_code ?? ($code ?? 'AUTO') }}</p>
-                    <p><strong>Ngày chỉ định:</strong> {{ $appointment_date ?? ($date ?? date('d/m/Y')) }}</p>
-                    <p><strong>Giờ chỉ định:</strong> {{ $appointment_time ?? 'N/A' }}</p>
-                    <p><strong>Bác sĩ chỉ định:</strong>
-                        {{ $doctor_name ?? ($pdf_settings['doctorName'] ?? 'Bác sĩ chưa rõ') }}</p>
+                    <p><strong>Số Xử:</strong> {{ $lab_number ?? 'BN. 03-0701_54' }}</p>
+                    <p><strong>Khoa chỉ định:</strong> {{ $department ?? 'KHOA XÉT NGHIỆM' }}</p>
                 </div>
             </div>
         </div>
-        <!-- THÔNG TIN CHẨN ĐOÁN -->
-        @if(!empty($diagnoses) || !empty($diagnosis) || !empty($symptoms))
-            <div class="diagnosis-info">
-                <div class="section-title">THÔNG TIN CHẨN ĐOÁN</div>
 
-                @if(!empty($symptoms))
-                    <div class="diagnosis-row">
-                        <span class="diagnosis-label">Triệu chứng:</span>
-                        <span>{{ $symptoms }}</span>
-                    </div>
-                @endif
-
-                @if(!empty($diagnosis))
-                    <div class="diagnosis-row">
-                        <span class="diagnosis-label">Chẩn đoán:</span>
-                        <span>{{ $diagnosis }}</span>
-                    </div>
-                @endif
-
-                @if(!empty($diagnoses) && is_array($diagnoses))
-                    @foreach($diagnoses as $diag)
-                        @if(!empty($diag['Symptoms']))
-                            <div class="diagnosis-row">
-                                <span class="diagnosis-label">Triệu chứng:</span>
-                                <span>{{ $diag['Symptoms'] }}</span>
-                            </div>
-                        @endif
-                        @if(!empty($diag['Diagnosis']))
-                            <div class="diagnosis-row">
-                                <span class="diagnosis-label">Chẩn đoán:</span>
-                                <span>{{ $diag['Diagnosis'] }}</span>
-                            </div>
-                        @endif
-                    @endforeach
-                @endif
+        <!-- LAB TECHNICIAN INFO -->
+        <div class="info">
+            <div class="info-row">
+                <div class="info-cell">
+                    <p><strong>Điện vực Xét nghiệm màu</strong></p>
+                    <p><strong>Kỹ thuật viên:</strong> {{ $technician_name ?? 'Trần Văn Hùng' }}</p>
+                </div>
+                <div class="info-cell">
+                    <p><strong>Ngày in:</strong> {{ $print_date ?? \Carbon\Carbon::now()->format('d/m/Y') }}</p>
+                </div>
             </div>
-        @endif
+        </div>
 
-        <!-- PHẦN DỊCH VỤ -->
-        @php
-            $hasServices = !empty($services) && is_array($services) && count($services) > 0;
-            $totalServiceAmount = 0;
-        @endphp
-
-        @if($hasServices)
-            <div class="section-title">DANH SÁCH DỊCH VỤ CHỈ ĐỊNH</div>
-            <table class="no-break">
-                <thead>
-                    <tr>
-                        <th width="5%">STT</th>
-                        <th width="45%">Tên dịch vụ</th>
-                        <th width="15%">Đơn giá</th>
-                        <th width="10%">Số lượng</th>
-                        <th width="15%">Thành tiền</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @php $i = 1; @endphp
-                    @foreach ($services as $service)
-                        @php
-                            $price = $service['Price'] ?? $service['price'] ?? 0;
-                            $quantity = $service['Quantity'] ?? $service['quantity'] ?? 1;
-                            $amount = $price * $quantity;
-                            $totalServiceAmount += $amount;
-                            $serviceName = $service['ServiceName'] ?? $service['service_name'] ?? 'N/A';
-                        @endphp
+        <!-- TEST RESULTS TABLE -->
+        <table class="test-results-table no-break">
+            <thead>
+                <tr>
+                    <th width="30%">XÉT NGHIỆM</th>
+                    <th width="25%">KẾT QUẢ</th>
+                    <th width="10%">ĐƠN VỊ</th>
+                    <th width="20%">GIÁ TRỊ THAM CHIẾU</th>
+                    <th width="15%">PHƯƠNG PHÁP</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if(!empty($test_results) && is_array($test_results))
+                    @foreach($test_results as $test)
                         <tr>
-                            <td class="text-center">{{ $i++ }}</td>
-                            <td>{{ $serviceName }}</td>
-                            <td class="text-right">{{ number_format($price, 0, ',', '.') }} VNĐ</td>
-                            <td class="text-center">{{ $quantity }}</td>
-                            <td class="text-right">{{ number_format($amount, 0, ',', '.') }} VNĐ</td>
+                            <td>{{ $test['test_name'] ?? 'Xét nghiệm màu' }}</td>
+                            <td class="{{ $test['is_normal'] ?? true ? 'normal-result' : 'abnormal-result' }}">
+                                {{ $test['result'] ?? 'Bình thường' }}
+                            </td>
+                            <td>{{ $test['unit'] ?? '' }}</td>
+                            <td>{{ $test['reference_range'] ?? '' }}</td>
+                            <td>{{ $test['method'] ?? 'OTSH.B-02(1)' }}</td>
                         </tr>
                     @endforeach
-                </tbody>
-                <tfoot>
+                @else
+                    <!-- Default test result row -->
                     <tr>
-                        <td colspan="4" class="total">Tổng tiền dịch vụ:</td>
-                        <td class="text-right">{{ number_format($totalServiceAmount, 0, ',', '.') }} VNĐ</td>
+                        <td>Xét nghiệm màu</td>
+                        <td class="normal-result">Bình thường</td>
+                        <td></td>
+                        <td></td>
+                        <td>OTSH.B-02(1)</td>
                     </tr>
-                </tfoot>
-            </table>
+                @endif
+            </tbody>
+        </table>
 
-            <!-- PHẦN ĐỌC SỐ TIỀN THÀNH CHỮ -->
-            @if($totalServiceAmount > 0)
-                <div class="money-in-words">
-                    <span class="money-label">Tổng tiền bằng chữ:</span>
-                    <span class="money-words">
-                        {{ \App\Helpers\NumberHelper::convertToWords($totalServiceAmount) }} đồng
-                    </span>
-                </div>
-            @endif
-
-        @else
-            <div class="section-title">DANH SÁCH DỊCH VỤ CHỈ ĐỊNH</div>
-            <div style="text-align: center; padding: 20px; color: #666;">
-                <p>Chưa có dịch vụ nào được chỉ định</p>
-            </div>
-        @endif
-
-        <!-- HƯỚNG DẪN THỰC HIỆN -->
-        @if(!empty($instructions))
-            <div class="diagnosis-info">
-                <div class="section-title">HƯỚNG DẪN THỰC HIỆN</div>
-                <div class="diagnosis-row">
-                    <span>{{ $instructions }}</span>
-                </div>
-            </div>
-        @endif
-
+        <!-- NOTE -->
         <div class="note">
             <p><strong>Ghi chú:</strong>
                 @if(!empty($pdf_settings['customNote']))
                     {{ $pdf_settings['customNote'] }}
                 @else
-                    Bệnh nhân vui lòng đến phòng dịch vụ để thực hiện các xét nghiệm và chẩn đoán hình ảnh đã được chỉ định.
-                    Mang theo phiếu này khi đến làm dịch vụ.
+                    Kết quả chỉ có giá trị khi phiếu còn nguyên vẹn và có chữ ký xác nhận.
                 @endif
             </p>
         </div>
 
+        <!-- SIGNATURE -->
         <div class="footer no-break">
             <div class="footer-content">
                 <div class="footer-column">
-                    <p><strong>Bệnh nhân/Khách hàng</strong></p>
-                    <p>(Ký và ghi rõ họ tên)</p>
-                    </strong> {{ $patient_name ?? 'N/A' }}
-                </div>
-                <div class="footer-column">
-                    <p><strong>Bác sĩ chỉ định</strong></p>
-                    <p>(Ký và ghi rõ họ tên)</p>
+                    <p><strong>Kỹ thuật viên</strong></p>
+                    <p>(Ký, ghi rõ họ tên)</p>
                     <div class="signature"></div>
                     <p style="margin-top: 10px; font-weight: bold;">
-                        {{ $pdf_settings['doctorName'] ?? $doctor_name ?? 'Bác sĩ chưa rõ' }}
+                        {{ $technician_name ?? 'Trần Văn Hùng' }}
                     </p>
+                </div>
+                <div class="footer-column">
+                    <!-- Có thể thêm chữ ký bác sĩ nếu cần -->
                 </div>
             </div>
         </div>

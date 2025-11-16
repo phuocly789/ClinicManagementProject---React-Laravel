@@ -36,6 +36,15 @@ const PrescriptionSection = ({
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [previewError, setPreviewError] = useState(null);
 
+  // THÊM CẤU HÌNH PDF MẶC ĐỊNH
+  const defaultPdfSettings = {
+    page_size: "A4",
+    orientation: "portrait",
+    margins: { top: 10, right: 10, bottom: 10, left: 10 },
+    header: true,
+    footer: true
+  };
+
   // Reset form khi chuyển trạng thái
   useEffect(() => {
     if (editingIndex === null) {
@@ -79,7 +88,7 @@ const PrescriptionSection = ({
     return () => clearTimeout(delayDebounce);
   }, [newRow.medicine]);
 
-  // FIX: HÀM CHỌN GỢI Ý - LẤY ĐẦY ĐỦ THÔNG TIN TỪ AI
+  // HÀM CHỌN GỢI Ý - LẤY ĐẦY ĐỦ THÔNG TIN TỪ AI
   const handleSelectSuggestion = (medicine) => {
     console.log("🎯 Dữ liệu thuốc từ AI:", medicine);
     
@@ -157,17 +166,19 @@ const PrescriptionSection = ({
       ],
       diagnoses: diagnoses || [],
       services: services || [],
+      // THÊM PDF SETTINGS
+      pdf_settings: defaultPdfSettings,
       // THÊM CÁC TRƯỜNG CẦN THIẾT CHO VIỆC CHỈNH SỬA
       appointment_id: selectedTodayPatient.id || selectedTodayPatient.AppointmentId,
       patient_id: selectedTodayPatient.PatientId || selectedTodayPatient.patient_id,
       originalData: {
-        prescriptionRows: [...prescriptionRows], // COPY DỮ LIỆU MỚI NHẤT
+        prescriptionRows: [...prescriptionRows],
         symptoms,
         diagnosis,
         services,
         diagnoses
       },
-      timestamp: Date.now() // THÊM TIMESTAMP ĐỂ ĐẢM BẢO DỮ LIỆU MỚI
+      timestamp: Date.now()
     };
 
     console.log('📤 Data preview toa thuốc gửi đến editor (LẦN MỚI):', previewData);
@@ -276,13 +287,21 @@ const PrescriptionSection = ({
     setIsLoadingPreview(true);
     setPreviewError(null);
     try {
+      // THÊM PDF SETTINGS VÀO DATA
+      const requestData = {
+        ...data,
+        pdf_settings: defaultPdfSettings
+      };
+
+      console.log('📤 Preview data with PDF settings:', requestData);
+
       const response = await fetch(`${API_BASE_URL}/api/print/preview-html`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(requestData),
       });
 
       // Kiểm tra HTTP status
@@ -430,78 +449,145 @@ const PrescriptionSection = ({
     });
   };
 
-  const handlePrint = async () => {
+ const handlePrint = async () => {
+  if (!selectedTodayPatient || prescriptionRows.length === 0) {
+    setToast({
+      show: true,
+      message: "⚠️ Vui lòng chọn bệnh nhân và thêm ít nhất một đơn thuốc trước khi in.",
+      variant: "warning",
+    });
+    return;
+  }
+
+  try {
+    const printData = {
+      type: 'prescription',
+      patient_name: selectedTodayPatient.name || 'N/A',
+      age: String(selectedTodayPatient.age || 'N/A'),
+      gender: selectedTodayPatient.gender || 'N/A',
+      phone: selectedTodayPatient.phone || 'N/A',
+      appointment_date: selectedTodayPatient.date
+        ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
+        : new Date().toLocaleDateString('vi-VN'),
+      appointment_time: selectedTodayPatient.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      doctor_name: selectedTodayPatient.doctor_name || 'Bác sĩ chưa rõ',
+      prescriptions: [
+        {
+          details: prescriptionRows.map(row => ({
+            medicine: row.medicine || 'N/A',
+            quantity: parseInt(row.quantity) || 1,
+            dosage: row.dosage || 'N/A',
+            unitPrice: parseFloat(row.unitPrice) || 0,
+          })),
+        },
+      ],
+      diagnoses: diagnoses || [],
+      services: services || [],
+      pdf_settings: defaultPdfSettings
+    };
+
+    console.log('📤 Print data with PDF settings:', printData);
+
+    // SỬA: GỌI API TẠO PDF THỰC SỰ (previewPrescription)
+    const response = await fetch(`${API_BASE_URL}/api/print/prescription/preview`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/pdf', // QUAN TRỌNG: Chấp nhận PDF
+      },
+      body: JSON.stringify(printData),
+    });
+
+    // KIỂM TRA KỸ RESPONSE
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Server response error:', errorText);
+      throw new Error(errorText || `Lỗi server: ${response.status}`);
+    }
+
+    // KIỂM TRA CONTENT TYPE - PHẢI LÀ PDF
+    const contentType = response.headers.get('content-type');
+    console.log('📄 Content-Type:', contentType);
+
+    if (!contentType || !contentType.includes('application/pdf')) {
+      const errorData = await response.text();
+      console.error('❌ Not a PDF response:', errorData);
+      throw new Error('Server trả về dữ liệu không phải PDF');
+    }
+
+    // TẠO VÀ TẢI FILE PDF
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    
+    // Tạo link tải về
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `TOA_THUOC_${selectedTodayPatient.name || 'benh_nhan'}_${Date.now()}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    
+    // Dọn dẹp
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+
+    setToast({
+      show: true,
+      message: "✅ Xuất toa thuốc thành công!",
+      variant: "success",
+    });
+
+  } catch (error) {
+    console.error('❌ Error exporting prescription:', error);
+    setToast({
+      show: true,
+      message: `Lỗi khi xuất toa thuốc: ${error.message}`,
+      variant: "danger",
+    });
+  }
+};
+
+  // HÀM XEM TRƯỚC TRONG MODAL (DỰ PHÒNG)
+  const handleModalPreview = async () => {
     if (!selectedTodayPatient || prescriptionRows.length === 0) {
       setToast({
         show: true,
-        message: "⚠️ Vui lòng chọn bệnh nhân và thêm ít nhất một đơn thuốc trước khi in.",
+        message: "⚠️ Vui lòng chọn bệnh nhân và thêm ít nhất một đơn thuốc trước khi xem trước.",
         variant: "warning",
       });
       return;
     }
 
-    try {
-      const printData = {
-        type: 'prescription',
-        patient_name: selectedTodayPatient.name || 'N/A',
-        age: String(selectedTodayPatient.age || 'N/A'),
-        gender: selectedTodayPatient.gender || 'N/A',
-        phone: selectedTodayPatient.phone || 'N/A',
-        appointment_date: selectedTodayPatient.date
-          ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
-          : new Date().toLocaleDateString('vi-VN'),
-        appointment_time: selectedTodayPatient.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        doctor_name: selectedTodayPatient.doctor_name || 'Bác sĩ chưa rõ',
-        prescriptions: [
-          {
-            details: prescriptionRows.map(row => ({
-              medicine: row.medicine || 'N/A',
-              quantity: parseInt(row.quantity) || 1,
-              dosage: row.dosage || 'N/A',
-              unitPrice: parseFloat(row.unitPrice) || 0,
-            })),
-          },
-        ],
-        diagnoses: diagnoses || [],
-        services: services || [],
-      };
-
-      const response = await fetch(`${API_BASE_URL}/api/print/prescription/preview`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
+    const previewData = {
+      type: 'prescription',
+      patient_name: selectedTodayPatient.name || 'N/A',
+      age: String(selectedTodayPatient.age || 'N/A'),
+      gender: selectedTodayPatient.gender || 'N/A',
+      phone: selectedTodayPatient.phone || 'N/A',
+      appointment_date: selectedTodayPatient.date
+        ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
+        : new Date().toLocaleDateString('vi-VN'),
+      appointment_time: selectedTodayPatient.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      doctor_name: selectedTodayPatient.doctor_name || 'Bác sĩ chưa rõ',
+      prescriptions: [
+        {
+          details: prescriptionRows.map(row => ({
+            medicine: row.medicine || 'N/A',
+            quantity: parseInt(row.quantity) || 1,
+            dosage: row.dosage || 'N/A',
+            unitPrice: parseFloat(row.unitPrice) || 0,
+          })),
         },
-        body: JSON.stringify(printData),
-      });
+      ],
+      diagnoses: diagnoses || [],
+      services: services || [],
+      pdf_settings: defaultPdfSettings
+    };
 
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `TOA_THUOC_${selectedTodayPatient.name || 'benh_nhan'}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        setToast({
-          show: true,
-          message: "✅ Xuất toa thuốc thành công!",
-          variant: "success",
-        });
-      } else {
-        const errorText = await response.text();
-        throw new Error(errorText || `Lỗi server: ${response.status}`);
-      }
-    } catch (error) {
-      console.error('Error exporting prescription:', error);
-      setToast({
-        show: true,
-        message: `Lỗi khi xuất toa thuốc: ${error.message}`,
-        variant: "danger",
-      });
-    }
+    setPdfPreviewData(previewData);
+    setShowPDFPreview(true);
+    await loadPreviewHTML(previewData);
   };
 
   return (

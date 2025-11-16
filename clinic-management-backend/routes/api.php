@@ -152,11 +152,19 @@ Route::prefix('users')->group(function () {
 });
 
 Route::get('/roles', [AdminUserController::class, 'roles']);
-// Route::post('/print/export', [InvoicePrintController::class, 'export']); // POST để pass appointment_id + type
-Route::get('/print/{type}/{appointment_id}', [InvoicePrintController::class, 'export']);
-Route::post('/print/prescription/preview', [InvoicePrintController::class, 'previewPrescription']);
-// Route cho PDF Preview
-Route::post('/print/preview-html', [InvoicePrintController::class, 'previewHTML']);
+// Print Routes
+Route::prefix('print')->group(function () {
+    // Các route print hiện có
+    Route::get('/{type}/{appointment_id}', [InvoicePrintController::class, 'export']);
+    Route::post('/prescription/preview', [InvoicePrintController::class, 'previewPrescription']);
+    Route::post('/preview-html', [InvoicePrintController::class, 'previewHTML']);
+
+    // THÊM CÁC ROUTE LOGO VÀO ĐÂY - SỬA LẠI
+    Route::post('/logo/save', [InvoicePrintController::class, 'saveImage']);
+    Route::get('/logo/{clinicId?}', [InvoicePrintController::class, 'getImage']);
+    Route::delete('/logo/delete', [InvoicePrintController::class, 'deleteLogo']);
+});
+
 
 
 // Technician Routes

@@ -5,80 +5,506 @@
     <meta charset="utf-8" />
     <title>{{ $pdf_settings['customTitle'] ?? $title ?? 'TOA THUỐC' }}</title>
     <style>
-        @page { size: A4; margin: 20px; }
-        body { 
-            font-family: "{{ $pdf_settings['fontFamily'] ?? 'DejaVu Sans' }}", "Times New Roman", serif; 
-            background: #fff; 
-            color: #000; 
-            font-size: {{ $pdf_settings['fontSize'] ?? '12px' }}; 
-            line-height: 1.3; 
-            margin: 0; 
-            padding: 0; 
-        }
-        .page { border: 1.5px solid #333; border-radius: 4px; padding: 15px 20px; position: relative; page-break-inside: avoid; }
-        
-        /* WATERMARK CUSTOM */
-        @if(isset($pdf_settings['watermark']['enabled']) && $pdf_settings['watermark']['enabled'])
-        .watermark { 
-            position: absolute; 
-            top: 50%; 
-            left: 50%; 
-            transform: translate(-50%, -50%) rotate({{ $pdf_settings['watermark']['rotation'] ?? -45 }}deg); 
-            font-size: {{ $pdf_settings['watermark']['fontSize'] ?? 50 }}px; 
-            color: {{ $pdf_settings['watermark']['color'] ?? 'rgba(0, 0, 0, 0.08)' }}; 
-            font-weight: bold; 
-            text-transform: uppercase; 
-            pointer-events: none; 
-            z-index: -1; 
-            white-space: nowrap; 
-            opacity: {{ $pdf_settings['watermark']['opacity'] ?? 0.08 }};
-        }
-        @else
-        .watermark { display: none; }
-        @endif
-        
-        .header { text-align: center; border-bottom: 1.5px solid #000; padding-bottom: 5px; margin-bottom: 10px; }
-        .header h2 { margin: 0; font-size: 16px; text-transform: uppercase; font-weight: bold; }
-        .header p { margin: 2px 0; font-size: 11px; }
-        .title { text-align: center; margin: 8px 0 12px; font-size: 15px; font-weight: bold; text-transform: uppercase; }
-        .info { display: table; width: 100%; font-size: 12px; margin-bottom: 12px; }
-        .info-row { display: table-row; }
-        .info-cell { display: table-cell; width: 50%; vertical-align: top; padding: 2px 5px; }
-        .info p { margin: 2px 0; }
-        .diagnosis-section { font-size: 12px; margin-bottom: 12px; text-align: left; }
-        .diagnosis-item { padding: 5px; background: #f9f9f9; border: 1px solid #ddd; margin-bottom: 5px; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 11px; }
-        table th, table td { border: 1px solid #333; padding: 4px 6px; text-align: left; }
-        table th { background: #f0f0f0; font-weight: bold; text-align: center; }
-        .text-center { text-align: center; }
-        .text-right { text-align: right; }
-        .text-left { text-align: left; }
-        .total { text-align: right; font-weight: bold; background: #fafafa; padding: 6px; }
-        .real-money { text-align: left; margin-bottom: 15px; padding: 5px; font-size: 11px; }
-        .footer-content { display: table; width: 100%; margin-top: 30px; }
-        .footer-column { display: table-cell; width: 50%; text-align: center; vertical-align: top; }
-        .footer p { margin: 0; font-size: 11px; }
-        .signature { margin-top: 15px; border-top: 1px solid #000; width: 150px; margin-left: auto; margin-right: auto; height: 40px; }
-        .clearfix::after { content: ""; clear: both; display: table; }
-        .page-break { page-break-before: always; }
-        .no-break { page-break-inside: avoid; }
-        
-        /* Preview mode styles */
-        .preview-mode {
-            border: 2px dashed #007bff;
-            padding: 10px;
-            background-color: #f8f9fa;
+        @page {
+            size: A4;
+            margin: 20px;
         }
 
-        @media screen {
-            /* Khi xem trên browser (preview) */
+        body {
+            font-family:
+                {{ $pdf_settings['fontFamily'] ?? 'Times New Roman' }}
+                , "DejaVu Sans", sans-serif;
+            background: #fff;
+            color:
+                {{ $pdf_settings['fontColor'] ?? '#000000' }}
+            ;
+            font-size:
+                {{ $pdf_settings['fontSize'] ?? '12px' }}
+                !important;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+            font-weight:
+                {{ $pdf_settings['fontWeight'] ?? 'normal' }}
+            ;
+            line-height:
+                {{ $pdf_settings['lineHeight'] ?? 1.3 }}
+            ;
+            margin: 0;
+            padding: 0;
+        }
+
+        .page {
+            border: 1.5px solid
+                {{ $pdf_settings['borderColor'] ?? '#333' }}
+            ;
+            border-radius: 4px;
+            padding: 15px 20px;
+            position: relative;
+            page-break-inside: avoid;
+            background:
+                {{ $pdf_settings['backgroundColor'] ?? '#ffffff' }}
+            ;
+        }
+
+        /* HEADER */
+        .header {
+            border-bottom: 1.5px solid
+                {{ $pdf_settings['borderColor'] ?? '#000' }}
+            ;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+            background:
+                {{ $pdf_settings['headerBgColor'] ?? 'transparent' }}
+            ;
+        }
+
+        .header-container {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            width: 100%;
+            min-height: 65px;
+        }
+
+        .logo-section {
+            flex-shrink: 0;
+            width: 80px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+            padding-top: 0;
+            margin-top: 0;
+        }
+
+        .logo-img {
+            width:
+                {{ isset($logo_data['width']) ? $logo_data['width'] : '60px' }}
+            ;
+            height:
+                {{ isset($logo_data['height']) ? $logo_data['height'] : '60px' }}
+            ;
+            object-fit: contain;
+            opacity:
+                {{ isset($logo_data['opacity']) ? $logo_data['opacity'] : 0.8 }}
+            ;
+            margin-top: 0;
+        }
+
+        .header-content {
+            flex: 1;
+            text-align: center;
+            min-width: 0;
+            padding: 0 10px;
+            margin-top: 0;
+        }
+
+        .header-placeholder {
+            width: 80px;
+            flex-shrink: 0;
+            visibility: hidden;
+        }
+
+        .header h2 {
+            margin: 2px 0 !important;
+            font-size: 18px !important;
+            text-transform: uppercase;
+            font-weight: bold;
+            line-height: 1.2;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+            color:
+                {{ $pdf_settings['primaryColor'] ?? '#2c5aa0' }}
+            ;
+        }
+
+        .header p {
+            margin: 1px 0 !important;
+            font-size: 11px !important;
+            line-height: 1.2;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+            font-weight:
+                {{ $pdf_settings['fontWeight'] ?? 'normal' }}
+            ;
+            color:
+                {{ $pdf_settings['fontColor'] ?? '#000000' }}
+            ;
+        }
+
+        /* SECTION TITLE */
+        .section-title {
+            background:
+                {{ $pdf_settings['primaryColor'] ?? '#2c5aa0' }}
+            ;
+            color: white;
+            padding: 6px 10px;
+            margin: 15px 0 10px 0;
+            font-weight: bold;
+            font-size: 16px !important;
+            text-align: center;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+        }
+
+        .title {
+            text-align: center;
+            margin: 10px 0 15px;
+            font-size: 18px !important;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+            color:
+                {{ $pdf_settings['primaryColor'] ?? '#2c5aa0' }}
+            ;
+        }
+
+        .title h3 {
+            margin: 0;
+            font-size: 18px !important;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+        }
+
+        /* INFO SECTION */
+        .info {
+            display: table;
+            width: 100%;
+            margin-bottom: 15px;
+            font-size:
+                {{ $pdf_settings['fontSize'] ?? '12px' }}
+                !important;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+            font-weight:
+                {{ $pdf_settings['fontWeight'] ?? 'normal' }}
+            ;
+            line-height:
+                {{ $pdf_settings['lineHeight'] ?? 1.3 }}
+            ;
+            color:
+                {{ $pdf_settings['fontColor'] ?? '#000000' }}
+            ;
+        }
+
+        .info-row {
+            display: table-row;
+        }
+
+        .info-cell {
+            display: table-cell;
+            width: 50%;
+            vertical-align: top;
+            padding: 2px 6px;
+        }
+
+        .info p {
+            margin: 2px 0;
+            font-size: 12px !important;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+            font-weight:
+                {{ $pdf_settings['fontWeight'] ?? 'normal' }}
+            ;
+            line-height:
+                {{ $pdf_settings['lineHeight'] ?? 1.3 }}
+            ;
+        }
+
+        /* TABLES */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+            font-size: 12px !important;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+            font-weight:
+                {{ $pdf_settings['fontWeight'] ?? 'normal' }}
+            ;
+            line-height:
+                {{ $pdf_settings['lineHeight'] ?? 1.3 }}
+            ;
+            color:
+                {{ $pdf_settings['fontColor'] ?? '#000000' }}
+            ;
+        }
+
+        table th,
+        table td {
+            border: 1px solid
+                {{ $pdf_settings['borderColor'] ?? '#333' }}
+            ;
+            padding: 4px 6px;
+            text-align: left;
+            font-size: 12px !important;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+            font-weight:
+                {{ $pdf_settings['fontWeight'] ?? 'normal' }}
+            ;
+        }
+
+        table th {
+            background:
+                {{ $pdf_settings['headerBgColor'] ?? '#f0f0f0' }}
+            ;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .text-center {
+            text-align: center;
+            font-size: 12px !important;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+        }
+
+        .text-right {
+            text-align: right;
+            font-size: 12px !important;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+        }
+
+        .text-left {
+            text-align: left;
+            font-size: 12px !important;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+        }
+
+        .total {
+            text-align: right;
+            font-weight: bold;
+            background: #fafafa;
+            padding: 6px;
+            font-size: 12px !important;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+        }
+
+        /* FOOTER */
+        .footer-content {
+            display: table;
+            width: 100%;
+            margin-top: 25px;
+        }
+
+        .footer-column {
+            display: table-cell;
+            width: 50%;
+            text-align: center;
+            vertical-align: top;
+        }
+
+        .footer p {
+            margin: 0;
+            font-size: 12px !important;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+            font-weight:
+                {{ $pdf_settings['fontWeight'] ?? 'normal' }}
+            ;
+            color:
+                {{ $pdf_settings['fontColor'] ?? '#000000' }}
+            ;
+        }
+
+        .signature {
+            margin-top: 15px;
+            border-top: 1px solid
+                {{ $pdf_settings['borderColor'] ?? '#000' }}
+            ;
+            width: 150px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 40px;
+        }
+
+        .no-break {
+            page-break-inside: avoid;
+        }
+
+        /* DIAGNOSIS SECTION */
+        .diagnosis-info {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 15px 0;
+            font-size: 12px !important;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+            font-weight:
+                {{ $pdf_settings['fontWeight'] ?? 'normal' }}
+            ;
+            line-height:
+                {{ $pdf_settings['lineHeight'] ?? 1.3 }}
+            ;
+        }
+
+        .diagnosis-row {
+            margin-bottom: 5px;
+        }
+
+        .diagnosis-label {
+            font-weight: bold;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+        }
+
+        /* MONEY IN WORDS SECTION */
+        .money-in-words {
+            background: #f0f8ff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin: 12px 0;
+            border-left: 4px solid #2c5aa0;
+            font-size: 12px !important;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+            font-weight:
+                {{ $pdf_settings['fontWeight'] ?? 'normal' }}
+            ;
+        }
+
+        .money-label {
+            font-weight: bold;
+            color: #2c5aa0;
+            margin-right: 5px;
+            font-size: 12px !important;
+        }
+
+        .money-words {
+            font-style: italic;
+            color: #d9534f;
+            font-size: 12px !important;
+        }
+
+        .note {
+            font-style: italic;
+            color: #666;
+            margin-top: 10px;
+            font-size: 11px !important;
+            font-weight:
+                {{ $pdf_settings['fontWeight'] ?? 'normal' }}
+            ;
+        }
+
+        /* WATERMARK STYLES */
+        .watermark-text {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate({{ isset($watermark_data['rotation']) ? $watermark_data['rotation'] : -45 }}deg);
+            font-size:
+                {{ isset($watermark_data['fontSize']) ? $watermark_data['fontSize'] : 50 }}
+                px;
+            color:
+                {{ isset($watermark_data['color']) ? $watermark_data['color'] : 'rgba(0, 0, 0, 0.08)' }}
+            ;
+            font-weight: bold;
+            text-transform: uppercase;
+            pointer-events: none;
+            z-index: 100;
+            white-space: nowrap;
+            opacity:
+                {{ isset($watermark_data['opacity']) ? $watermark_data['opacity'] : 0.8 }}
+            ;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+            ;
+        }
+
+        .watermark-image {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate({{ isset($watermark_data['rotation']) ? $watermark_data['rotation'] : -45 }}deg);
+            opacity:
+                {{ isset($watermark_data['opacity']) ? $watermark_data['opacity'] : 0.8 }}
+            ;
+            z-index: 100;
+            pointer-events: none;
+            max-width: 80%;
+            max-height: 80%;
+        }
+
+        /* PRINT STYLES */
+        @media print {
             body {
-                background: white;
-                margin: 10px;
+                font-size:
+                    {{ $pdf_settings['fontSize'] ?? '12px' }}
+                    !important;
+                font-style:
+                    {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+                ;
+                font-weight:
+                    {{ $pdf_settings['fontWeight'] ?? 'normal' }}
+                ;
+                line-height:
+                    {{ $pdf_settings['lineHeight'] ?? 1.3 }}
+                ;
+                color:
+                    {{ $pdf_settings['fontColor'] ?? '#000000' }}
+                ;
             }
-            .page {
-                box-shadow: 0 0 10px rgba(0,0,0,0.1);
-                margin: 0 auto;
+
+            .header h2 {
+                font-size: 18px !important;
+                font-style:
+                    {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+                ;
+            }
+
+            .section-title {
+                font-size: 16px !important;
+                font-style:
+                    {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+                ;
+            }
+
+            .title h3 {
+                font-size: 18px !important;
+                font-style:
+                    {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+                ;
+            }
+
+            .header p,
+            .info p,
+            table,
+            table th,
+            table td,
+            .footer p,
+            .money-in-words,
+            .money-label,
+            .money-words {
+                font-size: 12px !important;
+                font-style:
+                    {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+                ;
+                font-weight:
+                    {{ $pdf_settings['fontWeight'] ?? 'normal' }}
+                ;
             }
         }
     </style>
@@ -86,136 +512,208 @@
 
 <body>
     <div class="page no-break">
-        <!-- WATERMARK CUSTOM -->
-        @if(isset($pdf_settings['watermark']['enabled']) && $pdf_settings['watermark']['enabled'])
-        <div class="watermark">{{ $pdf_settings['watermark']['text'] ?? 'MẪU BẢN QUYỀN' }}</div>
-        @else
-        <div class="watermark">{{ $clinic_name ?? 'PHÒNG KHÁM' }}</div>
+        <!-- WATERMARK -->
+        @if(isset($watermark_data) && !empty($watermark_data) && isset($watermark_data['type']))
+            @if($watermark_data['type'] === 'text')
+                <div class="watermark-text">{{ $watermark_data['text'] ?? 'MẪU BẢN QUYỀN' }}</div>
+            @elseif($watermark_data['type'] === 'image' && isset($watermark_data['url']))
+                <img src="{{ $watermark_data['url'] }}" class="watermark-image" style="width: {{ $watermark_data['width'] ?? '200px' }};
+                                                            height: {{ $watermark_data['height'] ?? '200px' }};"
+                    alt="Watermark">
+            @endif
+        @elseif(isset($pdf_settings['watermark']['enabled']) && $pdf_settings['watermark']['enabled'])
+            <div class="watermark-text">{{ $pdf_settings['watermark']['text'] ?? 'MẪU BẢN QUYỀN' }}</div>
         @endif
 
+        <!-- HEADER -->
         <div class="header">
-            <h2>{{ $pdf_settings['clinicName'] ?? $clinic_name ?? 'PHÒNG KHÁM ĐA KHOA ABC' }}</h2>
-            <p>Địa chỉ: {{ $pdf_settings['clinicAddress'] ?? $clinic_address ?? 'Số 53 Võ Văn Ngân, TP. Thủ Đức' }}</p>
-            <p>Điện thoại: {{ $pdf_settings['clinicPhone'] ?? $clinic_phone ?? '0123 456 789' }}</p>
+            <div class="header-container">
+                <div class="logo-section">
+                    @if(isset($logo_data) && !empty($logo_data) && isset($logo_data['url']))
+                        <img src="{{ $logo_data['url'] }}" class="logo-img" alt="Clinic Logo">
+                    @endif
+                </div>
+
+                <div class="header-content">
+                    <h2>{{ $pdf_settings['clinicName'] ?? $clinic_name ?? 'PHÒNG KHÁM ĐA KHOA ABC' }}</h2>
+                    <p>Địa chỉ:
+                        {{ $pdf_settings['clinicAddress'] ?? $clinic_address ?? 'Số 53 Võ Văn Ngân, TP. Thủ Đức' }}
+                    </p>
+                    <p>Điện thoại: {{ $pdf_settings['clinicPhone'] ?? $clinic_phone ?? '0123 456 789' }}</p>
+                </div>
+
+                <div class="header-placeholder"></div>
+            </div>
         </div>
 
+        <!-- TITLE -->
         <div class="title">
             <h3>{{ $pdf_settings['customTitle'] ?? $title ?? 'TOA THUỐC' }}</h3>
         </div>
 
+        <!-- PATIENT INFO -->
         <div class="info">
             <div class="info-row">
                 <div class="info-cell">
-                    <p><strong>Họ tên:</strong> {{ $patient_name ?? 'N/A' }}</p>
+                    <p><strong>Họ tên bệnh nhân:</strong> {{ $patient_name ?? 'N/A' }}</p>
                     <p><strong>Tuổi:</strong> {{ $age ?? 'N/A' }}</p>
                     <p><strong>Giới tính:</strong> {{ $gender ?? 'N/A' }}</p>
                     <p><strong>Điện thoại:</strong> {{ $phone ?? 'N/A' }}</p>
+
                 </div>
                 <div class="info-cell">
-                    <p><strong>Mã hồ sơ:</strong> {{ $medical_record_code ?? 'AUTO' }}</p>
+                    <p><strong>Mã toa thuốc:</strong> {{ $medical_record_code ?? 'AUTO' }}</p>
                     <p><strong>Ngày khám:</strong> {{ $appointment_date ?? date('d/m/Y') }}</p>
                     <p><strong>Giờ khám:</strong> {{ $appointment_time ?? date('H:i') }}</p>
-                    <p><strong>Bác sĩ:</strong> {{ $pdf_settings['doctorName'] ?? $doctor_name ?? 'N/A' }}</p>
+                    <p><strong>Bác sĩ kê đơn:</strong> {{ $doctor_name ?? 'Bác sĩ chưa rõ' }}</p>
                 </div>
             </div>
         </div>
 
-        @php
-            $diagnosesData = !empty($diagnoses) && is_array($diagnoses) ? $diagnoses : [];
-        @endphp
+        <!-- THÔNG TIN CHẨN ĐOÁN -->
+        @if(!empty($diagnoses) || !empty($diagnosis) || !empty($symptoms))
+            <div class="diagnosis-info">
+                <div class="section-title">THÔNG TIN CHẨN ĐOÁN</div>
 
-        @if(!empty($diagnosesData))
-        <div class="diagnosis-section">
-            <strong>THÔNG TIN CHẨN ĐOÁN:</strong>
-            @foreach ($diagnosesData as $diagnosis)
-            <div class="diagnosis-item">
-                @if(isset($diagnosis['Symptoms']))
-                <p><strong>Triệu chứng:</strong> {{ $diagnosis['Symptoms'] }}</p>
+                @if(!empty($symptoms))
+                    <div class="diagnosis-row">
+                        <span class="diagnosis-label">Triệu chứng:</span>
+                        <span>{{ $symptoms }}</span>
+                    </div>
                 @endif
-                @if(isset($diagnosis['Diagnosis']))
-                <p><strong>Chẩn đoán:</strong> {{ $diagnosis['Diagnosis'] }}</p>
+
+                @if(!empty($diagnosis))
+                    <div class="diagnosis-row">
+                        <span class="diagnosis-label">Chẩn đoán:</span>
+                        <span>{{ $diagnosis }}</span>
+                    </div>
+                @endif
+
+                @if(!empty($diagnoses) && is_array($diagnoses))
+                    @foreach($diagnoses as $diag)
+                        @if(!empty($diag['Symptoms']))
+                            <div class="diagnosis-row">
+                                <span class="diagnosis-label">Triệu chứng:</span>
+                                <span>{{ $diag['Symptoms'] }}</span>
+                            </div>
+                        @endif
+                        @if(!empty($diag['Diagnosis']))
+                            <div class="diagnosis-row">
+                                <span class="diagnosis-label">Chẩn đoán:</span>
+                                <span>{{ $diag['Diagnosis'] }}</span>
+                            </div>
+                        @endif
+                    @endforeach
                 @endif
             </div>
-            @endforeach
-        </div>
         @endif
 
+        <!-- PHẦN THUỐC -->
         @php
-            $i = 1;
-            $tong = 0;
-            $hasPrescriptions = !empty($prescriptions) && is_array($prescriptions) && count($prescriptions) > 0;
+            $hasMedicines = !empty($prescriptions) && is_array($prescriptions) && count($prescriptions) > 0;
+            $totalMedicineAmount = 0;
         @endphp
 
-        @if($hasPrescriptions)
-        <table class="no-break">
-            <thead>
-                <tr>
-                    <th width="5%">STT</th>
-                    <th width="25%">Tên thuốc</th>
-                    <th width="10%">Số lượng</th>
-                    <th width="25%">Liều dùng</th>
-                    <th width="15%">Đơn giá</th>
-                    <th width="20%">Thành tiền</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach ($prescriptions as $prescription)
-                    @if(isset($prescription->prescription_details) && is_array($prescription->prescription_details))
-                        @foreach ($prescription->prescription_details as $detail)
-                            @php
-                                $price = $detail->medicine->Price ?? 0;
-                                $quantity = $detail->Quantity ?? 1;
-                                $amount = $price * $quantity;
-                                $tong += $amount;
-                                $medicineName = $detail->medicine->MedicineName ?? 'N/A';
-                                $usage = $detail->Usage ?? 'N/A';
-                            @endphp
-                            <tr>
-                                <td class="text-center">{{ $i++ }}</td>
-                                <td>{{ $medicineName }}</td>
-                                <td class="text-center">{{ $quantity }}</td>
-                                <td>{{ $usage }}</td>
-                                <td class="text-right">{{ number_format($price, 0, ',', '.') }}</td>
-                                <td class="text-right">{{ number_format($amount, 0, ',', '.') }}</td>
-                            </tr>
-                        @endforeach
-                    @endif
-                @endforeach
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td colspan="5" class="total">Tổng cộng:</td>
-                    <td class="text-right">{{ number_format($tong, 0, ',', '.') }}</td>
-                </tr>
-            </tfoot>
-        </table>
+        @if($hasMedicines)
+            <div class="section-title">ĐƠN THUỐC</div>
+            <table class="no-break">
+                <thead>
+                    <tr>
+                        <th width="5%">STT</th>
+                        <th width="35%">Tên thuốc</th>
+                        <th width="10%">Số lượng</th>
+                        <th width="30%">Liều dùng</th>
+                        <th width="10%">Đơn giá</th>
+                        <th width="10%">Thành tiền</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @php $i = 1; @endphp
+                    @foreach ($prescriptions as $prescription)
+                        @if(isset($prescription->prescription_details) && is_array($prescription->prescription_details))
+                            @foreach ($prescription->prescription_details as $detail)
+                                @php
+                                    $price = $detail->medicine->Price ?? $detail->medicine->price ?? 0;
+                                    $quantity = $detail->Quantity ?? $detail->quantity ?? 1;
+                                    $amount = $price * $quantity;
+                                    $totalMedicineAmount += $amount;
+                                    $medicineName = $detail->medicine->MedicineName ?? $detail->medicine->medicine_name ?? 'N/A';
+                                    $usage = $detail->Usage ?? $detail->dosage ?? 'Theo chỉ định của bác sĩ';
+                                @endphp
+                                <tr>
+                                    <td class="text-center">{{ $i++ }}</td>
+                                    <td>{{ $medicineName }}</td>
+                                    <td class="text-center">{{ $quantity }}</td>
+                                    <td>{{ $usage }}</td>
+                                    <td class="text-right">{{ number_format($price, 0, ',', '.') }} VNĐ</td>
+                                    <td class="text-right">{{ number_format($amount, 0, ',', '.') }} VNĐ</td>
+                                </tr>
+                            @endforeach
+                        @endif
+                    @endforeach
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="5" class="total">Tổng tiền thuốc:</td>
+                        <td class="text-right">{{ number_format($totalMedicineAmount, 0, ',', '.') }} VNĐ</td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            <!-- PHẦN ĐỌC SỐ TIỀN THÀNH CHỮ -->
+            @if($totalMedicineAmount > 0)
+                <div class="money-in-words">
+                    <span class="money-label">Tổng tiền bằng chữ:</span>
+                    <span class="money-words">
+                        {{ \App\Helpers\NumberHelper::convertToWords($totalMedicineAmount) }} đồng
+                    </span>
+                </div>
+            @endif
+
         @else
-        <div class="diagnosis-item">
-            <strong>ĐƠN THUỐC:</strong> Không có đơn thuốc
-        </div>
+            <div class="section-title">ĐƠN THUỐC</div>
+            <div style="text-align: center; padding: 20px; color: #666;">
+                <p>Chưa có thông tin thuốc trong đơn</p>
+            </div>
         @endif
 
-        @if($hasPrescriptions && $tong > 0)
-        <div class="real-money">
-            <p><strong>Số tiền viết bằng chữ:</strong> {{ $tong > 0 ? \App\Helpers\NumberHelper::convertToWords($tong) : 'Không có' }}</p>
-        </div>
+        <!-- HƯỚNG DẪN SỬ DỤNG -->
+        @if(!empty($instructions))
+            <div class="diagnosis-info">
+                <div class="section-title">HƯỚNG DẪN SỬ DỤNG</div>
+                <div class="diagnosis-row">
+                    <span>{{ $instructions }}</span>
+                </div>
+            </div>
         @endif
+
+        <div class="note">
+            <p><strong>Ghi chú:</strong>
+                @if(!empty($pdf_settings['customNote']))
+                    {{ $pdf_settings['customNote'] }}
+                @else
+                    Tuân thủ đúng liều lượng và thời gian sử dụng thuốc. Tái khám theo lịch hẹn của bác sĩ.
+                @endif
+            </p>
+        </div>
 
         <div class="footer no-break">
             <div class="footer-content">
                 <div class="footer-column">
-                    <p><strong>Bệnh nhân</strong></p>
+                    <p><strong>Bệnh nhân/Khách hàng</strong></p>
                     <p>(Ký và ghi rõ họ tên)</p>
-                    <div class="signature"></div>
+                    </strong> {{ $patient_name ?? 'N/A' }}
                 </div>
                 <div class="footer-column">
-                    <p><strong>Bác sĩ kê toa</strong></p>
+                    <p><strong>Bác sĩ kê đơn</strong></p>
                     <p>(Ký và ghi rõ họ tên)</p>
-                    <div class="signature"></div>
-                    <p style="margin-top: 10px; font-weight: bold;">{{ $pdf_settings['doctorName'] ?? $doctor_name ?? 'N/A' }}</p>
+                    <p style="margin-top: 10px; font-weight: bold;">
+                        {{ $pdf_settings['doctorName'] ?? $doctor_name ?? 'Bác sĩ chưa rõ' }}
+                    </p>
                 </div>
             </div>
         </div>
     </div>
 </body>
+
 </html>
