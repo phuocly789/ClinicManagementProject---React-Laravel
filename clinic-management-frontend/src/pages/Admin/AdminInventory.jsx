@@ -55,45 +55,17 @@ const InventoryList = memo(({
   currentPage,
   handlePageChange,
   suppliers,
-  setFilterParams,
-  fetchInventories
+  // Filter props từ parent
+  search, setSearch,
+  supplierFilter, setSupplierFilter,
+  dateFrom, setDateFrom,
+  dateTo, setDateTo,
+  minAmount, setMinAmount,
+  maxAmount, setMaxAmount,
+  // Truyền hàm apply và clear từ parent
+  onApplyFilters,
+  onClearFilters,
 }) => {
-  // --- FILTER STATES ---
-  const [search, setSearch] = useState('');
-  const [supplierFilter, setSupplierFilter] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [minAmount, setMinAmount] = useState('');
-  const [maxAmount, setMaxAmount] = useState('');
-
-  // --- ÁP DỤNG LỌC - CHỈ KHI NHẤN NÚT ---
-  const applyFilters = useCallback(() => {
-    const params = new URLSearchParams();
-    if (search.trim()) params.append('search', search.trim());
-    if (supplierFilter) params.append('supplier_id', supplierFilter);
-    if (dateFrom) params.append('date_from', dateFrom);
-    if (dateTo) params.append('date_to', dateTo);
-    if (minAmount) params.append('min_amount', minAmount);
-    if (maxAmount) params.append('max_amount', maxAmount);
-
-    const queryString = params.toString();
-    setFilterParams(queryString); // Cập nhật filterParams
-    cache.current.clear(); // Xóa cache để tải mới
-    setInventoriesReady(false); // Reset trạng thái
-    fetchInventories(1, queryString);
-  }, [search, supplierFilter, dateFrom, dateTo, minAmount, maxAmount, fetchInventories, setFilterParams]);
-
-  // --- XÓA LỌC ---
-  const clearFilters = useCallback(() => {
-    setSearch('');
-    setSupplierFilter('');
-    setDateFrom('');
-    setDateTo('');
-    setMinAmount('');
-    setMaxAmount('');
-    fetchInventories(1);
-  }, [fetchInventories]);
-
   const handleRowClick = useCallback((inventoryId, e) => {
     if (e.target.closest('button')) return;
     handleShowDetail(inventoryId);
@@ -124,7 +96,7 @@ const InventoryList = memo(({
                 placeholder="Tìm tên nhà cung cấp..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                onKeyDown={(e) => e.key === 'Enter' && onApplyFilters()}
               />
             </InputGroup>
           </Col>
@@ -134,7 +106,7 @@ const InventoryList = memo(({
             <Form.Select
               value={supplierFilter}
               onChange={(e) => setSupplierFilter(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+              onKeyDown={(e) => e.key === 'Enter' && onApplyFilters()}
             >
               <option value="">Tất cả nhà cung cấp</option>
               {suppliers.map((s) => (
@@ -155,7 +127,7 @@ const InventoryList = memo(({
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                onKeyDown={(e) => e.key === 'Enter' && onApplyFilters()}
               />
             </InputGroup>
           </Col>
@@ -170,14 +142,14 @@ const InventoryList = memo(({
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                onKeyDown={(e) => e.key === 'Enter' && onApplyFilters()}
               />
             </InputGroup>
           </Col>
 
           {/* NÚT LỌC */}
           <Col md={1}>
-            <Button variant="primary" onClick={applyFilters} className="w-100">
+            <Button variant="primary" onClick={onApplyFilters} className="w-100">
               <Filter size={16} />
             </Button>
           </Col>
@@ -195,7 +167,7 @@ const InventoryList = memo(({
                 placeholder="Tổng tiền từ"
                 value={minAmount}
                 onChange={(e) => setMinAmount(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                onKeyDown={(e) => e.key === 'Enter' && onApplyFilters()}
               />
             </InputGroup>
           </Col>
@@ -209,12 +181,12 @@ const InventoryList = memo(({
                 placeholder="Tổng tiền đến"
                 value={maxAmount}
                 onChange={(e) => setMaxAmount(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                onKeyDown={(e) => e.key === 'Enter' && onApplyFilters()}
               />
             </InputGroup>
           </Col>
           <Col md={6} className="d-flex justify-content-end">
-            <Button variant="outline-secondary" size="sm" onClick={clearFilters}>
+            <Button variant="outline-secondary" size="sm" onClick={onClearFilters}>
               <X size={16} /> Xóa bộ lọc
             </Button>
           </Col>
@@ -322,8 +294,7 @@ const InventoryList = memo(({
       )}
     </div>
   );
-}
-);
+});
 
 const InventoryForm = memo(({ isEditMode, inventory, onSubmit, onCancel, isLoading, suppliers, medicines, formLoading }) => {
   const [items, setItems] = useState(() => {
@@ -734,10 +705,15 @@ const AdminInventory = () => {
   const [selectedInventory, setSelectedInventory] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
   const cache = useRef(new Map());
-  const debounceRef = useRef(null);
   const [filterParams, setFilterParams] = useState('');
   const [suppliersReady, setSuppliersReady] = useState(false);
   const [inventoriesReady, setInventoriesReady] = useState(false);
+  const [search, setSearch] = useState('');
+  const [supplierFilter, setSupplierFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [minAmount, setMinAmount] = useState('');
+  const [maxAmount, setMaxAmount] = useState('');
 
   const showToast = useCallback((type, message) => {
     setToast({ show: true, type, message });
@@ -878,8 +854,8 @@ const AdminInventory = () => {
         setIsLoading(true);
         const res = await deleteInventory(inventoryId);
         showToast('success', res.message || 'Xóa phiếu nhập thành công');
-        cache.current.delete(currentPage + 1);
-        await fetchInventories(currentPage + 1);
+        cache.current.clear(); // Clear all cache after delete
+        await fetchInventories(currentPage + 1, filterParams);
       } catch (error) {
         console.error('Error deleting inventory:', error);
         showToast('error', `Lỗi khi xóa phiếu nhập: ${error.message}`);
@@ -889,7 +865,7 @@ const AdminInventory = () => {
         setInventoryToDelete(null);
       }
     },
-    [currentPage, fetchInventories, showToast]
+    [currentPage, filterParams, fetchInventories, showToast]
   );
 
   const handleShowDeleteModal = useCallback((inventoryId) => {
@@ -928,8 +904,8 @@ const AdminInventory = () => {
   }, [fetchInventoryDetails, fetchSuppliers, fetchMedicines]);
 
   const handleShowDetail = useCallback(async (inventoryId) => {
-    setIsLoading(true);                 // Hiển thị spinner toàn cục
-    setCurrentView('detail');           // Chuyển view (OK, sẽ render spinner)
+    setIsLoading(true);
+    setCurrentView('detail');
 
     try {
       const data = await fetchInventoryDetails(inventoryId);
@@ -947,16 +923,17 @@ const AdminInventory = () => {
     setEditInventory(null);
     setDetails([]);
     setFormLoading(false);
-  }, []);
+    setInventoriesReady(false);
+    fetchInventories(currentPage + 1, filterParams);
+  }, [currentPage, filterParams, fetchInventories]);
 
   const handleBack = useCallback(() => {
     setCurrentView('list');
     setSelectedInventory(null);
     setDetails([]);
-    setInventoriesReady(false); // Reset trạng thái
+    setInventoriesReady(false);
     setSuppliersReady(suppliers.length > 0);
-    cache.current.clear(); // Xóa cache để tải mới
-    fetchInventories(currentPage + 1, filterParams); // Tải lại với trang hiện tại và bộ lọc
+    fetchInventories(currentPage + 1, filterParams);
   }, [currentPage, filterParams, suppliers.length, fetchInventories]);
 
   const handleAddInventory = useCallback(async (e, items) => {
@@ -977,7 +954,7 @@ const AdminInventory = () => {
       const res = await addInventory(data);
       showToast('success', res.message || 'Thêm phiếu nhập thành công');
       cache.current.clear();
-      await fetchInventories(1);
+      await fetchInventories(1, filterParams); // Giữ filter sau add
       setCurrentView('list');
     } catch (error) {
       console.error('Error adding inventory:', error);
@@ -990,7 +967,7 @@ const AdminInventory = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [fetchInventories, showToast]);
+  }, [filterParams, fetchInventories, showToast]);
 
   const handleEditInventory = useCallback(async (e, items) => {
     try {
@@ -1010,7 +987,7 @@ const AdminInventory = () => {
       const res = await editInventory(editInventory.id, data);
       showToast('success', res.message || 'Sửa phiếu nhập thành công');
       cache.current.clear();
-      await fetchInventories(currentPage + 1);
+      await fetchInventories(currentPage + 1, filterParams); // Giữ filter sau edit
       setCurrentView('list');
       setEditInventory(null);
     } catch (error) {
@@ -1024,16 +1001,56 @@ const AdminInventory = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, editInventory, fetchInventories, showToast]);
+  }, [currentPage, editInventory, filterParams, fetchInventories, showToast]);
+
+  // Di chuyển applyFilters lên parent
+  const applyFilters = useCallback(() => {
+    const params = new URLSearchParams();
+    if (search.trim()) params.append('search', search.trim());
+    if (supplierFilter) params.append('supplier_id', supplierFilter);
+    if (dateFrom) params.append('date_from', dateFrom);
+    if (dateTo) params.append('date_to', dateTo);
+    if (minAmount) params.append('min_amount', minAmount);
+    if (maxAmount) params.append('max_amount', maxAmount);
+
+    const queryString = params.toString();
+    setFilterParams(queryString);
+    cache.current.clear();
+    setInventoriesReady(false);
+    fetchInventories(1, queryString);
+  }, [search, supplierFilter, dateFrom, dateTo, minAmount, maxAmount, fetchInventories]);
+
+  // Di chuyển clearFilters lên parent
+  const clearFilters = useCallback(() => {
+    setSearch('');
+    setSupplierFilter('');
+    setDateFrom('');
+    setDateTo('');
+    setMinAmount('');
+    setMaxAmount('');
+    setFilterParams('');
+    cache.current.clear();
+    setInventoriesReady(false);
+    fetchInventories(1, '');
+  }, [fetchInventories]);
 
   useEffect(() => {
     if (currentView === 'list') {
       setInventoriesReady(false);
       setSuppliersReady(suppliers.length > 0);
-      fetchInventories(1);
+      if (filterParams) {
+        const params = new URLSearchParams(filterParams);
+        setSearch(params.get('search') || '');
+        setSupplierFilter(params.get('supplier_id') || '');
+        setDateFrom(params.get('date_from') || '');
+        setDateTo(params.get('date_to') || '');
+        setMinAmount(params.get('min_amount') || '');
+        setMaxAmount(params.get('max_amount') || '');
+      }
+      fetchInventories(1, filterParams);
       fetchSuppliers();
     }
-  }, []); // Chỉ chạy 1 lần khi mount
+  }, [currentView, filterParams, suppliers.length, fetchInventories, fetchSuppliers]);
 
   const handlePageChange = useCallback(({ selected }) => {
     setInventoriesReady(false);
@@ -1046,7 +1063,6 @@ const AdminInventory = () => {
 
   return (
     <div className='d-flex'>
-      
       <div className='position-relative w-100 flex-grow-1 ms-5 p-4'>
         <h1 className="mb-4" style={{ fontSize: '1.8rem', fontWeight: '600' }}>Quản Lý Kho</h1>
         {currentView === 'list' && (
@@ -1071,6 +1087,20 @@ const AdminInventory = () => {
                 suppliers={suppliers}
                 setFilterParams={setFilterParams}
                 fetchInventories={fetchInventories}
+                search={search}
+                setSearch={setSearch}
+                supplierFilter={supplierFilter}
+                setSupplierFilter={setSupplierFilter}
+                dateFrom={dateFrom}
+                setDateFrom={setDateFrom}
+                dateTo={dateTo}
+                setDateTo={setDateTo}
+                minAmount={minAmount}
+                setMinAmount={setMinAmount}
+                maxAmount={maxAmount}
+                setMaxAmount={setMaxAmount}
+                onApplyFilters={applyFilters} // Truyền hàm apply từ parent
+                onClearFilters={clearFilters} // Truyền hàm clear từ parent
               />
             )}
           </>
