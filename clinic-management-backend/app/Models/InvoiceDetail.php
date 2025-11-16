@@ -29,7 +29,7 @@ class InvoiceDetail extends Model
 {
 	protected $table = 'InvoiceDetails';
 	protected $primaryKey = 'InvoiceDetailId';
-	public $incrementing = false;
+	public $incrementing = true;
 	public $timestamps = false;
 
 	protected $casts = [

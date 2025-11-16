@@ -4,7 +4,7 @@ import CustomToast from '../../Components/CustomToast/CustomToast';
 import Loading from '../../Components/Loading/Loading';
 import instance from '../../axios';
 import dayjs from 'dayjs';
-import { BiUserPlus, BiShow, BiPencil, BiTrash, BiLockOpen, BiLock } from 'react-icons/bi';
+import { BiUserPlus, BiShow, BiPencil, BiTrash, BiLockOpen, BiLock, BiKey } from 'react-icons/bi'; // THÊM BiKey
 import { useDebounce } from 'use-debounce';
 import Pagination from '../../Components/Pagination/Pagination';
 
@@ -14,6 +14,34 @@ const initialFormState = {
   DateOfBirth: '', Address: '', Role: '',
   Specialty: '', LicenseNumber: '', StaffType: '',
 };
+
+// Tách FormField component ra ngoài để tránh re-render
+const FormField = React.memo(({ 
+  label, 
+  name, 
+  type = "text", 
+  required = false, 
+  value,
+  onChange,
+  error,
+  ...props 
+}) => (
+  <div className="mb-3">
+    <label className="form-label">
+      {label} {required && <span className="text-danger">*</span>}
+    </label>
+    <input
+      type={type}
+      name={name}
+      value={value || ''}
+      onChange={onChange}
+      className={`form-control ${error ? 'is-invalid' : ''}`}
+      required={required}
+      {...props}
+    />
+    {error && <div className="invalid-feedback">{error}</div>}
+  </div>
+));
 
 const AdminUserManagement = () => {
   const [users, setUsers] = useState([]);
@@ -34,13 +62,13 @@ const AdminUserManagement = () => {
     status: filters.status,
   }), [debouncedSearchTerm, filters.gender, filters.role, filters.status]);
 
-  // Fetch users với xử lý lỗi tốt hơn
+  // Lấy danh sách người dùng
   const fetchUsers = useCallback(async (page = 1) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ 
         page, 
-        per_page: 5, 
+        per_page: 10, 
         ...apiFilters 
       });
       
@@ -77,7 +105,7 @@ const AdminUserManagement = () => {
     fetchUsers(1);
   }, [apiFilters, fetchUsers]);
 
-  // Fetch roles với xử lý lỗi
+  // Lấy danh sách vai trò
   useEffect(() => {
     const fetchRoles = async () => {
       try {
@@ -104,6 +132,7 @@ const AdminUserManagement = () => {
 
   const handleCloseModal = () => {
     setModal({ type: null, user: null });
+    setFormData(initialFormState);
     setFormErrors({});
   };
 
@@ -124,19 +153,20 @@ const AdminUserManagement = () => {
         DateOfBirth: user.DateOfBirth ? dayjs(user.DateOfBirth).format('YYYY-MM-DD') : '',
         Role: user.roles && user.roles.length > 0 ? user.roles[0].RoleName : user.Role,
       });
+    } else {
+      setFormData(initialFormState);
     }
   };
 
   const handleFormChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    // Clear error khi người dùng bắt đầu nhập
     if (formErrors[name]) {
       setFormErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
 
-  // Validate form
+  // Kiểm tra tính hợp lệ của form
   const validateForm = () => {
     const errors = {};
     
@@ -179,7 +209,6 @@ const AdminUserManagement = () => {
 
     try {
       const payload = { ...formData };
-      // Không gửi password nếu đang edit và không thay đổi password
       if (isEditing && !payload.Password) {
         delete payload.Password;
       }
@@ -250,6 +279,34 @@ const AdminUserManagement = () => {
     }
   };
 
+  // THÊM HÀM RESET MẬT KHẨU
+  const handleResetPassword = async () => {
+    setLoading(true);
+    const { user } = modal;
+    try {
+      const response = await instance.put(`/api/users/reset-password/${user.UserId}`, {
+        password: '123456'
+      });
+      const responseData = response.data || response;
+      
+      setToast({ 
+        type: 'success', 
+        message: responseData.message || responseData.data?.message || 'Reset mật khẩu thành công! Mật khẩu mới là: 123456' 
+      });
+      handleCloseModal();
+      fetchUsers(pagination.currentPage);
+    } catch (err) {
+      console.error('Lỗi khi reset mật khẩu:', err);
+      setToast({ 
+        type: 'error', 
+        message: err.response?.data?.message || err.message || 'Lỗi khi reset mật khẩu.' 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Hàm hiển thị modal
   const renderModal = () => {
     if (!modal.type) return null;
 
@@ -278,26 +335,6 @@ const AdminUserManagement = () => {
       </div>
     );
 
-    const FormField = ({ label, name, type = "text", required = false, children, ...props }) => (
-      <div className="mb-3">
-        <label className="form-label">
-          {label} {required && <span className="text-danger">*</span>}
-        </label>
-        {children || (
-          <input
-            type={type}
-            name={name}
-            value={formData[name] || ''}
-            onChange={handleFormChange}
-            className={`form-control ${formErrors[name] ? 'is-invalid' : ''}`}
-            required={required}
-            {...props}
-          />
-        )}
-        {formErrors[name] && <div className="invalid-feedback">{formErrors[name]}</div>}
-      </div>
-    );
-
     switch (modal.type) {
       case 'add':
       case 'edit':
@@ -312,6 +349,9 @@ const AdminUserManagement = () => {
                   name="Username" 
                   required 
                   disabled={isEditing}
+                  value={formData.Username}
+                  onChange={handleFormChange}
+                  error={formErrors.Username}
                 />
               </div>
               <div className="col-md-6">
@@ -319,6 +359,9 @@ const AdminUserManagement = () => {
                   label="Họ tên" 
                   name="FullName" 
                   required 
+                  value={formData.FullName}
+                  onChange={handleFormChange}
+                  error={formErrors.FullName}
                 />
               </div>
               
@@ -330,6 +373,9 @@ const AdminUserManagement = () => {
                     type="password" 
                     required 
                     minLength={6}
+                    value={formData.Password}
+                    onChange={handleFormChange}
+                    error={formErrors.Password}
                   />
                 </div>
               )}
@@ -340,6 +386,9 @@ const AdminUserManagement = () => {
                   name="Email" 
                   type="email" 
                   required 
+                  value={formData.Email}
+                  onChange={handleFormChange}
+                  error={formErrors.Email}
                 />
               </div>
               <div className="col-md-6">
@@ -348,6 +397,9 @@ const AdminUserManagement = () => {
                   name="Phone" 
                   type="tel" 
                   required 
+                  value={formData.Phone}
+                  onChange={handleFormChange}
+                  error={formErrors.Phone}
                 />
               </div>
               
@@ -357,6 +409,8 @@ const AdminUserManagement = () => {
                   name="DateOfBirth" 
                   type="date"
                   max={dayjs().format('YYYY-MM-DD')}
+                  value={formData.DateOfBirth}
+                  onChange={handleFormChange}
                 />
               </div>
               
@@ -384,6 +438,8 @@ const AdminUserManagement = () => {
                 <FormField 
                   label="Địa chỉ" 
                   name="Address" 
+                  value={formData.Address}
+                  onChange={handleFormChange}
                 />
               </div>
               
@@ -417,6 +473,9 @@ const AdminUserManagement = () => {
                       name="Specialty" 
                       required 
                       placeholder="Nhập chuyên khoa"
+                      value={formData.Specialty}
+                      onChange={handleFormChange}
+                      error={formErrors.Specialty}
                     />
                   </div>
                   <div className="col-md-6">
@@ -425,6 +484,9 @@ const AdminUserManagement = () => {
                       name="LicenseNumber" 
                       required 
                       placeholder="Nhập số giấy phép hành nghề"
+                      value={formData.LicenseNumber}
+                      onChange={handleFormChange}
+                      error={formErrors.LicenseNumber}
                     />
                   </div>
                 </>
@@ -467,6 +529,28 @@ const AdminUserManagement = () => {
             </button>
           </>,
           '450px'
+        );
+
+      // THÊM MODAL RESET PASSWORD
+      case 'reset-password':
+        return modalLayout(
+          'Xác Nhận Reset Mật Khẩu',
+          <>
+            <p>Bạn có chắc muốn reset mật khẩu cho người dùng <strong>{modal.user.FullName}</strong>?</p>
+            <p className="text-warning fw-semibold">
+              Mật khẩu sẽ được đặt lại thành: <strong>123456</strong>
+            </p>
+            <p className="text-muted small">
+              Người dùng nên đổi mật khẩu sau khi đăng nhập lần đầu để bảo mật tài khoản.
+            </p>
+          </>,
+          <>
+            <button className="btn btn-secondary" onClick={handleCloseModal}>Hủy</button>
+            <button className="btn btn-warning" onClick={handleResetPassword} disabled={loading}>
+              {loading ? 'Đang xử lý...' : 'Reset Mật Khẩu'}
+            </button>
+          </>,
+          '500px'
         );
 
       case 'detail':
@@ -626,6 +710,14 @@ const AdminUserManagement = () => {
                             >
                               <BiPencil />
                             </button>
+                            {/* THÊM NÚT RESET PASSWORD */}
+                            <button 
+                              className="btn btn-lg btn-light text-info" 
+                              title="Reset mật khẩu" 
+                              onClick={() => handleOpenModal('reset-password', user)}
+                            >
+                              <BiKey />
+                            </button>
                             <button 
                               className={`btn btn-lg btn-light text-${user.IsActive ? 'warning' : 'success'}`} 
                               title={user.IsActive ? 'Vô hiệu hóa' : 'Kích hoạt'} 
@@ -661,7 +753,8 @@ const AdminUserManagement = () => {
                   <Pagination 
                     pageCount={pagination.totalPages} 
                     onPageChange={({ selected }) => fetchUsers(selected + 1)} 
-                    forcePage={pagination.currentPage - 1} 
+                    currentPage={pagination.currentPage - 1} 
+                    isLoading ={loading}
                   />
                 </div>
               )}
