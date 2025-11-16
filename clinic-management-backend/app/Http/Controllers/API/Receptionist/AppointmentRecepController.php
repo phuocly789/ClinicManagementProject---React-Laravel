@@ -50,95 +50,6 @@ class AppointmentRecepController extends Controller
         ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function CreateAppoitment(Request $request)
-    {
-        $request->validate([
-            'PatientId' => 'required|integer|exists:Patients,PatientId',
-            'StaffId' => 'required|integer|exists:MedicalStaff,StaffId',
-            'Notes' => 'nullable|string'
-        ]);
-
-        $patientId = $request->input('PatientId');
-        $staffId = $request->input('StaffId');
-        $appointmentDate = now('Asia/Ho_Chi_Minh')->format('Y-m-d');
-        $appointmentTime = now('Asia/Ho_Chi_Minh')->format('H:i:s');
-        $notes = $request->input('Notes', '');
-
-        // $createdBy = auth()->user()->UserId;
-        $createdBy = 3;
-
-        //kiểm tra bác sĩ đó có lich làm việc không
-        $schedule = StaffSchedule::where('StaffId', $staffId)
-            ->whereDate('WorkDate', $appointmentDate)
-            ->where('IsAvailable', true)
-            ->first();
-
-        if (!$schedule) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Bác sĩ không có lịch làm việc vào ngày đã chọn.'
-            ], 400);
-        }
-        //kiểm tra trùng lịch hẹn
-        $existingAppointment = Appointment::where('StaffId', $staffId)
-            ->whereDate('AppointmentDate', $appointmentDate)
-            ->where('AppointmentTime', $appointmentTime)
-            ->first();
-
-        if ($existingAppointment) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Bác sĩ đã có lịch hẹn vào thời gian đã chọn.'
-            ], 400);
-        }
-
-        //tạo lịch hẹn mới
-        $record = MedicalRecord::where('PatientId', $patientId)->first();
-        $recordId = $record ? $record->RecordId : null;
-
-        try {
-            DB::beginTransaction();
-            $appointment = Appointment::create([
-                'PatientId' => $patientId,
-                'StaffId' => $staffId,
-                'ScheduleId' => $schedule->ScheduleId,
-                'RecordId' => $recordId,
-                'AppointmentDate' => $appointmentDate,
-                'AppointmentTime' => $appointmentTime,
-                'Status' => 'Đang chờ',
-                'CreatedBy' => $createdBy,
-                'CreatedAt' => now(),
-                'Notes' => $notes
-            ]);
-            DB::commit();
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'AppointmentId' => $appointment->AppointmentId,
-                    'PatientId' => $appointment->PatientId,
-                    'StaffId' => $appointment->StaffId,
-                    'ScheduleId' => $appointment->ScheduleId,
-                    'RecordId' => $appointment->RecordId,
-                    'AppointmentDate' => $appointment->AppointmentDate,
-                    'AppointmentTime' => is_string($appointment->AppointmentTime) ? substr($appointment->AppointmentTime, 0, 5) : '00:00',
-                    'Status' => $appointment->Status,
-                    'Notes' => $appointment->notes ?? '',
-                ],
-                'message' => 'Lịch hẹn được tạo thành công.'
-            ], 201);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Tạo lịch hẹn thất bại. Vui lòng thử lại.'
-            ], 500);
-        }
-    }
-
-
    public function UpdateAppointmentStatus(Request $request, $appointmentId)
     {
         $request->validate([
@@ -163,6 +74,52 @@ class AppointmentRecepController extends Controller
                 'Status' => $appointment->Status,
             ],
             'message' => 'Cập nhật trạng thái lịch hẹn thành công.'
+        ]);
+    }
+
+    //lấy api lịch hẹn online
+    // Trong AppointmentRecepController.php - Bổ sung thêm
+    public function getOnlineAppointments(Request $request)
+    {
+        $request->validate([
+            'status' => 'nullable|string|in:Đã đặt,Đang chờ,Đã khám,Hủy',
+            'date' => 'nullable|date'
+        ]);
+
+        $today = $request->input('date', now()->format('Y-m-d'));
+        $status = $request->input('status', 'Đã đặt');
+
+        $appointments = Appointment::with([
+            'patient.user:UserId,FullName,Phone,Email,DateOfBirth,Gender,Address',
+            'medical_staff.user:UserId,FullName',
+            'medical_record'
+        ])
+            ->whereDate('AppointmentDate', $today)
+            ->where('Status', $status)
+            ->orderBy('AppointmentTime', 'asc')
+            ->get()
+            ->map(function ($appointment) {
+                return [
+                    'AppointmentId' => $appointment->AppointmentId,
+                    'PatientId' => $appointment->PatientId,
+                    'PatientName' => $appointment->patient->user->FullName,
+                    'Phone' => $appointment->patient->user->Phone,
+                    'Email' => $appointment->patient->user->Email,
+                    'DayOfBirth' => $appointment->patient->user->DateOfBirth,
+                    'Gender' => $appointment->patient->user->Gender,
+                    'Address' => $appointment->patient->user->Address,
+                    'DoctorName' => $appointment->medical_staff->user->FullName ?? 'Chưa phân công',
+                    'AppointmentDate' => ($appointment->AppointmentDate),
+                    'AppointmentTime' => substr($appointment->AppointmentTime, 0, 5),
+                    'Status' => $appointment->Status,
+                    'Notes' => $appointment->Notes
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => $appointments,
+            'message' => 'Danh sách lịch hẹn online được tải thành công.'
         ]);
     }
 }

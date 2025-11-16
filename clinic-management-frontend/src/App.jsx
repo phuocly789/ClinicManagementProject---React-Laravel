@@ -29,10 +29,15 @@ import DoctorSchedule from "./pages/Doctors/DoctorSchedule.jsx";
 import HistorySection from "./pages/Doctors/HistorySection.jsx";
 import TodaySection from "./pages/Doctors/TodaySection.jsx";
 import ProtectedRoute from "./Components/ProtectedRoute/ProtectedRoute.jsx";
+import ReceptionSidebar from "./Components/Sidebar/ReceptionSidebar.jsx";
+import ReceptionistDashboard from "./pages/Receptionist/ReceptionistDashboard.jsx";
+import ReceptionistPatent from "./pages/Receptionist/ReceptionistPatent.jsx";
 import PatientManagement from "./pages/Patient/PatientManagement.jsx";
 import AdminServiceManagement from "./pages/Admin/AdminServiceManagement.jsx";
 import PaymentSection from "./pages/Payment/PaymentSection.jsx";
 import WebSocketDemo from "./Components/WebSocketDemo.jsx";
+import PaymentResult from "./pages/Payment/PaymentResult.jsx";
+import NotificationManagement from "./pages/Receptionist/NotificationManagement.jsx";
 function App() {
   return (
     <Routes>
@@ -48,6 +53,9 @@ function App() {
         <Route
           path={path.ADMIN.SCHEDULE.MANAGEMENT}
           element={<AdminScheduleManagement />}
+        />
+        <Route path={path.ADMIN.SERVICE.MANAGEMENT}
+          element={<AdminServiceManagement />}
         />
         <Route
           path={path.ADMIN.USER.MANAGEMENT}
@@ -65,6 +73,22 @@ function App() {
         <Route
           path={path.ADMIN.MEDICINE.MANAGEMENT}
           element={<AdminMedicine />}
+        />
+      </Route>
+      {/* Receptionist */}
+      <Route path={path.RECEPTIONIST.ROOT} element={<ReceptionSidebar />}>
+        <Route index element={<ReceptionistDashboard />} />
+        <Route
+          path={path.RECEPTIONIST.DASHBOARD}
+          element={<ReceptionistDashboard />}
+        />
+        <Route
+          path={path.RECEPTIONIST.PATIENT_MANAGEMENT}
+          element={<ReceptionistPatent />}
+        />
+        <Route
+          path={path.RECEPTIONIST.NOTIFICATION}
+          element={<NotificationManagement />}
         />
       </Route>
       {/* Receptionist */}
@@ -91,8 +115,16 @@ function App() {
           path={path.PATIENT.PROFILE.MANAGEMENT}
           element={<PatientProfile />}
         />
+
         {/* <Route path={path.PATIENT.BOOKING} element={<PatientBooking />} />
           <Route path={path.PATIENT.HISTORY} element={<PatientHistory />} /> */}
+
+        <Route
+          path={path.PATIENT.APPOINTMENT.MANAGEMENT}
+          element={<PatientManagement />}
+        />
+        {/* <Route path={path.PATIENT.HISTORY} element={<PatientHistory />} /> */}
+
       </Route>
       <Route path={path.LOGIN} element={<LoginPage />} />{" "}
       <Route path={path.REGISTER} element={<Register />} />{" "}
@@ -107,6 +139,11 @@ function App() {
         />
       </Route>
       <Route path={"/test"} element={<WebSocketDemo />} />
+      {/* Payment */}
+      <Route path={path.PayMent.ROOT} element={<ReceptionSidebar />}>
+        <Route index element={<PaymentSection />} />
+        <Route path={path.PayMent.PAY_RESULT} element={<PaymentResult />} />
+      </Route>
     </Routes>
   );
 }

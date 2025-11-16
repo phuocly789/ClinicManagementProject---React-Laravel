@@ -42,7 +42,7 @@ class AdminServiceController extends Controller
             }
 
             // Pagination
-            $perPage = $request->per_page ?? 5;
+            $perPage = $request->per_page ?? 10;
             $services = $query->orderBy('ServiceId', 'asc')->paginate($perPage);
 
             // Format response để phù hợp với frontend

@@ -44,6 +44,38 @@ services:
       "
     depends_on:
       - mailhog
+    command: bash -c "if [ ! -d vendor ]; then composer install --no-dev --optimize-autoloader; fi && php artisan serve --host=0.0.0.0 --port=8000"
+  # Scheduler: chạy Laravel Scheduler
+  scheduler:
+    build:
+      context: ./clinic-management-backend
+      dockerfile: ../Dockerfile.backend
+    container_name: laravel-scheduler
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./clinic-management-backend:/var/www/html
+    env_file:
+      - ./clinic-management-backend/.env
+    networks:
+      - app-network
+    command: bash -c "php artisan schedule:work"
+
+  # Queue Worker: xử lý job gửi mail
+  queue-worker:
+    build:
+      context: ./clinic-management-backend
+      dockerfile: ../Dockerfile.backend
+    container_name: laravel-queue
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./clinic-management-backend:/var/www/html
+    env_file:
+      - ./clinic-management-backend/.env
+    networks:
+      - app-network
+    command: bash -c "php artisan queue:work --sleep=3 --tries=3"
 
   # Frontend: React dev server (giữ nguyên)
   frontend:
