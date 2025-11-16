@@ -157,14 +157,11 @@ Route::prefix('print')->group(function () {
     Route::post('/preview-html', [InvoicePrintController::class, 'previewHTML']);
 
     // THÊM CÁC ROUTE LOGO VÀO ĐÂY - SỬA LẠI
-    Route::post('/logo/save', [InvoicePrintController::class, 'saveLogo']);
-    Route::get('/logo/{clinicId?}', [InvoicePrintController::class, 'getLogo']);
+    Route::post('/logo/save', [InvoicePrintController::class, 'saveImage']);
+    Route::get('/logo/{clinicId?}', [InvoicePrintController::class, 'getImage']);
     Route::delete('/logo/delete', [InvoicePrintController::class, 'deleteLogo']);
 });
-Route::get('/debug-logo-storage', [InvoicePrintController::class, 'debugLogoStorage']);
-Route::get('/test-logo-simple', [InvoicePrintController::class, 'testLogoSimple']);
-// routes/api.php
-Route::get('/test-logo-visible', [InvoicePrintController::class, 'testLogoVisible']);
+
 
 
 // Technician Routes

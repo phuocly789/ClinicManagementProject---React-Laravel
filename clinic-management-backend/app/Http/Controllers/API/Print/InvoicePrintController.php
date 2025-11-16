@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API\Print;
 
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
+use App\Models\Invoice;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
 use Illuminate\Http\Request;
@@ -50,88 +51,97 @@ class InvoicePrintController extends Controller
     }
 
     /**
-     * Xử lý logo từ base64 sang file temporary
+     * Xử lý ảnh (dùng chung cho cả logo và watermark) - SỬA LẠI
      */
-    private function processLogo($logoData)
+    private function processImage($imageData, $defaults = [])
     {
-        if (empty($logoData['url']) || !($logoData['enabled'] ?? false)) {
-            Log::info('❌ Logo disabled or no URL');
+        if (empty($imageData['url']) || !($imageData['enabled'] ?? false)) {
             return null;
         }
 
         try {
-            $url = $logoData['url'];
-            Log::info('🔍 Processing logo URL: ' . $url);
+            $url = $imageData['url'];
+            $type = $defaults['type'] ?? 'logo';
 
-            // TRƯỜNG HỢP 1: Base64 image - ĐÃ CÓ
+            Log::info("🔍 Processing {$type} URL: " . $url);
+
+            // TRƯỜNG HỢP 1: Base64 image
             if (strpos($url, 'data:image') === 0) {
-                Log::info('🔄 Processing base64 image');
-                // ... code base64 exists
+                Log::info("🔄 Processing base64 {$type}");
+                return array_merge([
+                    'url' => $url,
+                    'width' => $imageData['width'] ?? $defaults['width'] ?? '50px',
+                    'height' => $imageData['height'] ?? $defaults['height'] ?? '50px',
+                    'opacity' => $imageData['opacity'] ?? $defaults['opacity'] ?? 1,
+                ], $defaults);
             }
 
-            // TRƯỜNG HỢP 2: Storage URL - SỬA LẠI THÀNH BASE64
-            if (strpos($url, '/storage/logos/') !== false) {
-                Log::info('🔄 Processing storage URL');
+            // TRƯỜNG HỢP 2: Storage URL - CHUYỂN SANG BASE64
+            if (strpos($url, '/storage/') !== false) {
+                Log::info("🔄 Processing storage URL for {$type}");
 
-                // Extract filename từ storage URL
                 $filename = basename($url);
-                $storagePath = 'public/logos/' . $filename;
 
-                Log::info('📁 Storage path: ' . $storagePath);
-                Log::info('📁 Storage exists: ' . (Storage::exists($storagePath) ? 'YES' : 'NO'));
+                // QUAN TRỌNG: Chỉ tìm trong thư mục tương ứng với type
+                $directory = "public/{$type}s"; // logos hoặc watermarks
+                $storagePath = $directory . '/' . $filename;
 
                 if (Storage::exists($storagePath)) {
-                    Log::info('✅ Storage file found');
+                    Log::info("✅ Storage file found for {$type}: " . $storagePath);
 
-                    try {
-                        $fileContent = Storage::get($storagePath);
+                    $fileContent = Storage::get($storagePath);
+                    $mimeType = $this->getImageMimeType($storagePath);
+                    $base64Image = 'data:' . $mimeType . ';base64,' . base64_encode($fileContent);
 
-                        // QUAN TRỌNG: Chuyển sang base64 để DomPDF hiểu
-                        $mimeType = $this->getImageMimeType($storagePath);
-                        $base64Image = 'data:' . $mimeType . ';base64,' . base64_encode($fileContent);
+                    $result = array_merge([
+                        'url' => $base64Image,
+                        'width' => $imageData['width'] ?? $defaults['width'] ?? '50px',
+                        'height' => $imageData['height'] ?? $defaults['height'] ?? '50px',
+                        'opacity' => $imageData['opacity'] ?? $defaults['opacity'] ?? 1,
+                    ], $defaults);
 
-                        $result = [
-                            'url' => $base64Image, // Dùng base64 thay vì file path
-                            'width' => $logoData['width'] ?? '50px',
-                            'height' => $logoData['height'] ?? '50px',
-                            'position' => $logoData['position'] ?? 'left',
-                            'opacity' => $logoData['opacity'] ?? 1,
-                            'marginTop' => $logoData['marginTop'] ?? '0px',
-                        ];
-
-                        Log::info('✅ Logo processing SUCCESS - Using base64');
-                        return $result;
-
-                    } catch (\Exception $fileError) {
-                        Log::error('❌ File processing error: ' . $fileError->getMessage());
-                        return null;
-                    }
-                } else {
-                    Log::error('❌ Storage file not found: ' . $storagePath);
-                    return null;
+                    Log::info("✅ {$type} processing SUCCESS");
+                    return $result;
                 }
+
+                Log::error("❌ Storage file not found for {$type}: " . $storagePath);
+                return null;
             }
 
             // TRƯỜNG HỢP 3: Direct HTTP URL - Giữ nguyên
-            if (strpos($url, 'http') === 0 && strpos($url, '/storage/') === false) {
-                Log::info('🌐 Using direct HTTP URL: ' . $url);
-                return [
+            if (strpos($url, 'http') === 0) {
+                Log::info("🌐 Using direct HTTP URL for {$type}: " . $url);
+                return array_merge([
                     'url' => $url,
-                    'width' => $logoData['width'] ?? '50px',
-                    'height' => $logoData['height'] ?? '50px',
-                    'position' => $logoData['position'] ?? 'left',
-                    'opacity' => $logoData['opacity'] ?? 1,
-                    'marginTop' => $logoData['marginTop'] ?? '0px',
-                ];
+                    'width' => $imageData['width'] ?? $defaults['width'] ?? '50px',
+                    'height' => $imageData['height'] ?? $defaults['height'] ?? '50px',
+                    'opacity' => $imageData['opacity'] ?? $defaults['opacity'] ?? 1,
+                ], $defaults);
             }
 
-            Log::warning('⚠️ Unhandled logo URL type: ' . $url);
+            Log::warning("⚠️ Unhandled {$type} URL type: " . $url);
             return null;
 
         } catch (\Exception $e) {
-            Log::error('❌ Error processing logo: ' . $e->getMessage());
+            Log::error("❌ Error processing {$type}: " . $e->getMessage());
             return null;
         }
+    }
+
+
+    /**
+     * Xử lý logo - GỌI processImage
+     */
+    private function processLogo($logoData)
+    {
+        return $this->processImage($logoData, [
+            'type' => 'logo',
+            'width' => '50px',
+            'height' => '50px',
+            'opacity' => $logoData['opacity'] ?? 0.8, // ĐỒNG BỘ OPACITY
+            'position' => 'left',
+            'marginTop' => '0px'
+        ]);
     }
 
     /**
@@ -152,9 +162,9 @@ class InvoicePrintController extends Controller
 
         return $mimeMap[$extension] ?? 'image/jpeg';
     }
-  
+
     /**
-     * Xử lý watermark
+     * Xử lý watermark - ĐÃ SỬA ĐỂ NHẬN OPACITY TỪ FE
      */
     private function processWatermark($watermarkData)
     {
@@ -165,56 +175,42 @@ class InvoicePrintController extends Controller
         Log::info('🔍 Processing watermark data:', $watermarkData);
 
         // Nếu có URL ảnh, xử lý như watermark ảnh
-        if (!empty($watermarkData['url']) && filter_var($watermarkData['url'], FILTER_VALIDATE_URL)) {
-            Log::info('🖼️ Processing image watermark');
+        if (!empty($watermarkData['url'])) {
+            $imageWatermark = $this->processImage($watermarkData, [
+                'type' => 'watermark',
+                'width' => '200px',
+                'height' => '200px',
+                'opacity' => $watermarkData['opacity'] ?? 0.1 // ✅ SỬA: nhận opacity từ FE
+            ]);
 
-            try {
-                // Xử lý ảnh watermark tương tự như logo
-                $watermarkResult = $this->processLogo([
-                    'url' => $watermarkData['url'],
-                    'enabled' => true,
-                    'width' => $watermarkData['imageWidth'] ?? '200px',
-                    'height' => $watermarkData['imageHeight'] ?? '200px',
-                    'opacity' => $watermarkData['opacity'] ?? 0.1
+            if ($imageWatermark) {
+                $result = array_merge($imageWatermark, [
+                    'type' => 'image',
+                    'rotation' => $watermarkData['rotation'] ?? -45,
+                    'opacity' => $watermarkData['opacity'] ?? 0.1 // ✅ THÊM opacity vào result
                 ]);
-
-                if ($watermarkResult) {
-                    $result = [
-                        'type' => 'image',
-                        'url' => $watermarkResult['url'],
-                        'opacity' => $watermarkData['opacity'] ?? 0.1,
-                        'width' => $watermarkData['imageWidth'] ?? '200px',
-                        'height' => $watermarkData['imageHeight'] ?? '200px',
-                        'rotation' => $watermarkData['rotation'] ?? -45,
-                    ];
-
-                    Log::info('✅ Image watermark processed successfully:', $result);
-                    return $result;
-                }
-            } catch (\Exception $e) {
-                Log::error('❌ Error processing image watermark: ' . $e->getMessage());
+                Log::info('✅ Image watermark processed successfully with opacity: ' . ($watermarkData['opacity'] ?? 0.1));
+                return $result;
             }
         }
 
         // Nếu không có URL nhưng có text, xử lý watermark text
         if (!empty($watermarkData['text'])) {
             Log::info('📝 Processing text watermark');
-            $result = [
+            return [
                 'type' => 'text',
                 'text' => $watermarkData['text'],
-                'opacity' => $watermarkData['opacity'] ?? 0.1,
+                'opacity' => $watermarkData['opacity'] ?? 0.1, // ✅ SỬA: nhận opacity từ FE
                 'fontSize' => $watermarkData['fontSize'] ?? 48,
                 'color' => $watermarkData['color'] ?? '#cccccc',
                 'rotation' => $watermarkData['rotation'] ?? -45,
             ];
-
-            Log::info('✅ Text watermark processed successfully:', $result);
-            return $result;
         }
 
         Log::warning('⚠️ No valid watermark data found');
         return null;
     }
+
     /**
      * Dọn dẹp file tạm
      */
@@ -313,241 +309,446 @@ class InvoicePrintController extends Controller
     // Phương thức mới để xuất PDF từ dữ liệu FE
     public function previewPrescription(Request $request)
     {
+        Log::info('🎯 === START previewPrescription ===');
         Log::info('Received previewPrescription data:', $request->all());
 
-        $data = $request->validate([
-            'type' => 'required|string|in:prescription,service,payment',
-            'patient_name' => 'required|string',
-            'age' => 'nullable',
-            'gender' => 'nullable|string',
-            'phone' => 'nullable|string',
-            'address' => 'nullable|string',
-            'appointment_date' => 'required|string',
-            'appointment_time' => 'required|string',
-            'doctor_name' => 'nullable|string',
-            'symptoms' => 'nullable|string',
-            'instructions' => 'nullable|string',
-            'diagnosis' => 'nullable|string',
+        try {
+            // Validate dữ liệu đầu vào
+            $data = $request->validate([
+                'type' => 'required|string|in:prescription,service,payment',
+                'patient_name' => 'required|string',
+                'age' => 'nullable',
+                'gender' => 'nullable|string',
+                'phone' => 'nullable|string',
+                'address' => 'nullable|string',
+                'appointment_date' => 'required|string',
+                'appointment_time' => 'required|string',
+                'doctor_name' => 'nullable|string',
+                'symptoms' => 'nullable|string',
+                'instructions' => 'nullable|string',
+                'diagnosis' => 'nullable|string',
 
-            // Cho toa thuốc
-            'prescriptions' => 'required_if:type,prescription|array',
-            'prescriptions.*.details' => 'required_if:type,prescription|array',
-            'prescriptions.*.details.*.medicine' => 'required_if:type,prescription|string',
-            'prescriptions.*.details.*.quantity' => 'required_if:type,prescription|integer|min:1',
-            'prescriptions.*.details.*.dosage' => 'required_if:type,prescription|string',
-            'prescriptions.*.details.*.unitPrice' => 'required_if:type,prescription|numeric|min:0',
+                // Cho toa thuốc
+                'prescriptions' => 'required_if:type,prescription|array',
+                'prescriptions.*.details' => 'required_if:type,prescription|array',
+                'prescriptions.*.details.*.medicine' => 'required_if:type,prescription|string',
+                'prescriptions.*.details.*.quantity' => 'required_if:type,prescription|integer|min:1',
+                'prescriptions.*.details.*.dosage' => 'required_if:type,prescription|string',
+                'prescriptions.*.details.*.unitPrice' => 'required_if:type,prescription|numeric|min:0',
 
-            // Cho dịch vụ
-            'services' => 'required_if:type,service|array',
-            'services.*.ServiceName' => 'required_if:type,service|string',
-            'services.*.Price' => 'required_if:type,service|numeric|min:0',
-            'services.*.Quantity' => 'nullable|integer|min:1',
+                // Cho dịch vụ
+                'services' => 'required_if:type,service|array',
+                'services.*.ServiceName' => 'required_if:type,service|string',
+                'services.*.Price' => 'required_if:type,service|numeric|min:0',
+                'services.*.Quantity' => 'nullable|integer|min:1',
 
-            // Cho thanh toán
-            'payment_method' => 'required_if:type,payment|string',
-            'payment_status' => 'required_if:type,payment|string',
-            'discount' => 'nullable|numeric|min:0',
-            'tax' => 'nullable|numeric|min:0',
-            'invoice_code' => 'nullable|string',
-            'total_amount' => 'nullable|numeric|min:0',
+                // Cho thanh toán
+                'payment_method' => 'required_if:type,payment|string',
+                'payment_status' => 'required_if:type,payment|string',
+                'discount' => 'nullable|numeric|min:0',
+                'tax' => 'nullable|numeric|min:0',
+                'invoice_code' => 'nullable|string',
+                'total_amount' => 'nullable|numeric|min:0',
 
-            // Chẩn đoán
-            'diagnoses' => 'nullable|array',
-            'diagnoses.*.Symptoms' => 'nullable|string',
-            'diagnoses.*.Diagnosis' => 'nullable|string',
+                // Chẩn đoán
+                'diagnoses' => 'nullable|array',
+                'diagnoses.*.Symptoms' => 'nullable|string',
+                'diagnoses.*.Diagnosis' => 'nullable|string',
 
-            // THÊM VALIDATION CHO PDF SETTINGS - BỔ SUNG LOGO VÀ WATERMARK
-            'pdf_settings' => 'required|array',
-            'pdf_settings.logo' => 'nullable|array',
-            'pdf_settings.logo.enabled' => 'nullable|boolean',
-            'pdf_settings.logo.url' => 'nullable|string',
-            'pdf_settings.logo.width' => 'nullable|string',
-            'pdf_settings.logo.height' => 'nullable|string',
-            'pdf_settings.logo.position' => 'nullable|string',
-            'pdf_settings.logo.opacity' => 'nullable|numeric|min:0|max:1',
-            'pdf_settings.logo.marginTop' => 'nullable|string',
-            'pdf_settings.logo.marginBottom' => 'nullable|string',
+                // THÊM VALIDATION CHO PDF SETTINGS - BỔ SUNG LOGO VÀ WATERMARK
+                'pdf_settings' => 'required|array',
+                'pdf_settings.logo' => 'nullable|array',
+                'pdf_settings.logo.enabled' => 'nullable|boolean',
+                'pdf_settings.logo.url' => 'nullable|string',
+                'pdf_settings.logo.width' => 'nullable|string',
+                'pdf_settings.logo.height' => 'nullable|string',
+                'pdf_settings.logo.position' => 'nullable|string',
+                'pdf_settings.logo.opacity' => 'nullable|numeric|min:0|max:1',
+                'pdf_settings.logo.marginTop' => 'nullable|string',
+                'pdf_settings.logo.marginBottom' => 'nullable|string',
 
-            'pdf_settings.watermark' => 'nullable|array',
-            'pdf_settings.watermark.enabled' => 'nullable|boolean',
-            'pdf_settings.watermark.text' => 'nullable|string',
-            'pdf_settings.watermark.url' => 'nullable|string', // Hỗ trợ ảnh watermark
-            'pdf_settings.watermark.opacity' => 'nullable|numeric|min:0|max:1',
-            'pdf_settings.watermark.fontSize' => 'nullable|integer|min:10|max:100',
-            'pdf_settings.watermark.color' => 'nullable|string',
-            'pdf_settings.watermark.rotation' => 'nullable|numeric|min:-180|max:180',
+                'pdf_settings.watermark' => 'nullable|array',
+                'pdf_settings.watermark.enabled' => 'nullable|boolean',
+                'pdf_settings.watermark.text' => 'nullable|string',
+                'pdf_settings.watermark.url' => 'nullable|string',
+                'pdf_settings.watermark.opacity' => 'nullable|numeric|min:0|max:1',
+                'pdf_settings.watermark.fontSize' => 'nullable|integer|min:10|max:100',
+                'pdf_settings.watermark.color' => 'nullable|string',
+                'pdf_settings.watermark.rotation' => 'nullable|numeric|min:-180|max:180',
 
-            'pdf_settings.fontFamily' => 'nullable|string',
-            'pdf_settings.fontSize' => 'nullable|string',
-            'pdf_settings.lineHeight' => 'nullable|numeric',
-            'pdf_settings.fontColor' => 'nullable|string',
-            'pdf_settings.clinicName' => 'nullable|string',
-            'pdf_settings.clinicAddress' => 'nullable|string',
-            'pdf_settings.clinicPhone' => 'nullable|string',
-            'pdf_settings.clinicTax' => 'nullable|string',
-            'pdf_settings.doctorName' => 'nullable|string',
-            'pdf_settings.doctorDegree' => 'nullable|string',
-            'pdf_settings.customTitle' => 'nullable|string',
+                'pdf_settings.fontFamily' => 'nullable|string',
+                'pdf_settings.fontSize' => 'nullable|string',
+                'pdf_settings.lineHeight' => 'nullable|numeric',
+                'pdf_settings.fontColor' => 'nullable|string',
+                'pdf_settings.clinicName' => 'nullable|string',
+                'pdf_settings.clinicAddress' => 'nullable|string',
+                'pdf_settings.clinicPhone' => 'nullable|string',
+                'pdf_settings.clinicTax' => 'nullable|string',
+                'pdf_settings.doctorName' => 'nullable|string',
+                'pdf_settings.doctorDegree' => 'nullable|string',
+                'pdf_settings.customTitle' => 'nullable|string',
 
-            'pdf_settings.marginTop' => 'nullable|string',
-            'pdf_settings.marginRight' => 'nullable|string',
-            'pdf_settings.marginBottom' => 'nullable|string',
-            'pdf_settings.marginLeft' => 'nullable|string',
-            'pdf_settings.pageOrientation' => 'nullable|string',
-            'pdf_settings.pageSize' => 'nullable|string',
-            'pdf_settings.primaryColor' => 'nullable|string',
-        ], [
-            'type.required' => 'Loại PDF là bắt buộc.',
-            'patient_name.required' => 'Tên bệnh nhân là bắt buộc.',
-            'prescriptions.required_if' => 'Đơn thuốc là bắt buộc cho toa thuốc.',
-            'services.required_if' => 'Danh sách dịch vụ là bắt buộc cho phiếu dịch vụ.',
-            'payment_method.required_if' => 'Phương thức thanh toán là bắt buộc cho hóa đơn.',
-            'payment_status.required_if' => 'Trạng thái thanh toán là bắt buộc cho hóa đơn.',
-        ]);
+                'pdf_settings.marginTop' => 'nullable|string',
+                'pdf_settings.marginRight' => 'nullable|string',
+                'pdf_settings.marginBottom' => 'nullable|string',
+                'pdf_settings.marginLeft' => 'nullable|string',
+                'pdf_settings.pageOrientation' => 'nullable|string',
+                'pdf_settings.pageSize' => 'nullable|string',
+                'pdf_settings.primaryColor' => 'nullable|string',
 
-        // Xác định title và template dựa trên type
-        $typeConfig = [
-            'prescription' => [
-                'title' => $data['pdf_settings']['customTitle'] ?? 'TOA THUỐC',
-                'template' => 'pdf.invoice_pdf',
-                'filename' => 'TOA_THUOC.pdf'
-            ],
-            'service' => [
-                'title' => $data['pdf_settings']['customTitle'] ?? 'PHIẾU CHỈ ĐỊNH DỊCH VỤ',
-                'template' => 'pdf.service_pdf',
-                'filename' => 'PHIEU_DICH_VU.pdf'
-            ],
-            'payment' => [
-                'template' => 'pdf.payment_invoice_pdf',
-                'title' => $data['pdf_settings']['customTitle'] ?? 'HÓA ĐƠN THANH TOÁN',
-                'filename' => 'HOA_DON_THANH_TOAN.pdf'
-            ]
-        ];
+                // THÊM CÁC TRƯỜNG MỚI ĐỂ ĐẢM BẢO TƯƠNG THÍCH
+                'patient_age' => 'nullable',
+                'patient_gender' => 'nullable|string',
+                'patient_phone' => 'nullable|string',
+                'code' => 'nullable|string',
+                'date' => 'nullable|string',
 
-        $config = $typeConfig[$data['type']];
+            ], [
+                'type.required' => 'Loại PDF là bắt buộc.',
+                'patient_name.required' => 'Tên bệnh nhân là bắt buộc.',
+                'prescriptions.required_if' => 'Đơn thuốc là bắt buộc cho toa thuốc.',
+                'services.required_if' => 'Danh sách dịch vụ là bắt buộc cho phiếu dịch vụ.',
+                'payment_method.required_if' => 'Phương thức thanh toán là bắt buộc cho hóa đơn.',
+                'payment_status.required_if' => 'Trạng thái thanh toán là bắt buộc cho hóa đơn.',
+                'pdf_settings.required' => 'Cài đặt PDF là bắt buộc.',
+            ]);
 
-        // Xử lý font chữ an toàn
-        $fontFamily = $data['pdf_settings']['fontFamily'] ?? 'Times New Roman';
-        $safeFontFamily = $this->getSafeFontFamily($fontFamily);
-        $safeFontCSS = $this->getSafeFontCSS($fontFamily);
+            Log::info('✅ Validation passed');
 
-        // Xử lý logo và watermark
-        $logoData = $this->processLogo($data['pdf_settings']['logo'] ?? []);
-        $watermarkData = $this->processWatermark($data['pdf_settings']['watermark'] ?? []);
+            // Xác định title và template dựa trên type
+            $typeConfig = [
+                'prescription' => [
+                    'title' => $data['pdf_settings']['customTitle'] ?? 'TOA THUỐC',
+                    'template' => 'pdf.invoice_pdf',
+                    'filename' => 'TOA_THUOC_' . date('Ymd_His') . '.pdf'
+                ],
+                'service' => [
+                    'title' => $data['pdf_settings']['customTitle'] ?? 'PHIẾU CHỈ ĐỊNH DỊCH VỤ',
+                    'template' => 'pdf.service_pdf',
+                    'filename' => 'PHIEU_DICH_VU_' . date('Ymd_His') . '.pdf'
+                ],
+                'payment' => [
+                    'template' => 'pdf.payment_invoice_pdf',
+                    'title' => $data['pdf_settings']['customTitle'] ?? 'HÓA ĐƠN THANH TOÁN',
+                    'filename' => 'HOA_DON_' . date('Ymd_His') . '.pdf'
+                ]
+            ];
 
-        // Chuẩn bị dữ liệu chung
-        $pdfData = [
-            'title' => $config['title'],
-            'clinic_name' => $data['pdf_settings']['clinicName'] ?? 'PHÒNG KHÁM ĐA KHOA ABC',
-            'clinic_address' => $data['pdf_settings']['clinicAddress'] ?? 'Số 53 Võ Văn Ngân, TP. Thủ Đức',
-            'clinic_phone' => $data['pdf_settings']['clinicPhone'] ?? '0123 456 789',
-            'medical_record_code' => strtoupper(substr($data['type'], 0, 3)) . '-' . Str::random(6),
-            'doctor_name' => $data['pdf_settings']['doctorName'] ?? $data['doctor_name'] ?? 'Bác sĩ chưa rõ',
-            'patient_name' => $data['patient_name'],
-            'age' => (string) ($data['patient_age'] ?? $data['age'] ?? 'N/A'),
-            'gender' => $data['patient_gender'] ?? $data['gender'] ?? 'N/A',
-            'phone' => $data['phone'] ?? 'N/A',
-            'address' => $data['address'] ?? '',
-            'appointment_date' => $data['appointment_date'],
-            'appointment_time' => $data['appointment_time'],
-            'diagnoses' => $data['diagnoses'] ?? [],
-            'symptoms' => $data['symptoms'] ?? '',
-            'instructions' => $data['instructions'] ?? '',
-            'diagnosis' => $data['diagnosis'] ?? '',
+            $config = $typeConfig[$data['type']];
+            Log::info('📄 PDF Config:', $config);
 
-            // THÊM PDF SETTINGS VÀO DATA
-            'pdf_settings' => $data['pdf_settings'] ?? [],
+            // Xử lý font chữ an toàn
+            $fontFamily = $data['pdf_settings']['fontFamily'] ?? 'Times New Roman';
+            $safeFontFamily = $this->getSafeFontFamily($fontFamily);
+            $safeFontCSS = $this->getSafeFontCSS($fontFamily);
 
-            // THÊM LOGO VÀ WATERMARK DATA
-            'logo_data' => $logoData,
-            'watermark_data' => $watermarkData,
+            Log::info('🔤 Font processing:', [
+                'original' => $fontFamily,
+                'safe_font' => $safeFontFamily,
+                'safe_css' => $safeFontCSS
+            ]);
 
-            // THÊM FONT AN TOÀN
-            'safe_font_family' => $safeFontFamily,
-            'safe_font_css' => $safeFontCSS,
-        ];
+            // Xử lý logo và watermark
+            $logoData = $this->processLogo($data['pdf_settings']['logo'] ?? []);
+            $watermarkData = $this->processWatermark($data['pdf_settings']['watermark'] ?? []);
 
-        // Thêm dữ liệu riêng theo type
-        if ($data['type'] === 'prescription') {
-            $pdfData['prescriptions'] = collect($data['prescriptions'])->map(function ($prescription) {
-                return (object) [
-                    'prescription_details' => collect($prescription['details'])->map(function ($detail) {
+            Log::info('🖼️ Media processing:', [
+                'has_logo' => !empty($logoData),
+                'has_watermark' => !empty($watermarkData),
+                'logo_enabled' => $data['pdf_settings']['logo']['enabled'] ?? false,
+                'watermark_enabled' => $data['pdf_settings']['watermark']['enabled'] ?? false
+            ]);
+
+            // 🔥 XỬ LÝ DỮ LIỆU BỆNH NHÂN - ĐẢM BẢO ĐÚNG FORMAT TEMPLATE
+            $patientName = $data['patient_name'] ?? 'Không rõ';
+            $patientAge = $data['patient_age'] ?? $data['age'] ?? 'N/A';
+            $patientGender = $data['patient_gender'] ?? $data['gender'] ?? 'N/A';
+            $patientPhone = $data['patient_phone'] ?? $data['phone'] ?? 'N/A';
+            $patientAddress = $data['address'] ?? '';
+
+            // Xử lý ngày tháng - ĐẢM BẢO ĐÚNG FORMAT
+            $appointmentDate = $data['appointment_date'] ?? $data['date'] ?? now()->format('Y-m-d');
+            $appointmentTime = $data['appointment_time'] ?? 'N/A';
+
+            // Format date cho đẹp - chuyển sang d/m/Y
+            $formattedDate = $appointmentDate;
+            if ($appointmentDate) {
+                try {
+                    if (strpos($appointmentDate, '-') !== false) {
+                        $formattedDate = \Carbon\Carbon::parse($appointmentDate)->format('d/m/Y');
+                    } elseif (strpos($appointmentDate, '/') !== false) {
+                        // Nếu đã là format d/m/Y thì giữ nguyên
+                        $formattedDate = $appointmentDate;
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Date parsing error: ' . $e->getMessage());
+                    $formattedDate = date('d/m/Y');
+                }
+            }
+
+            // Tạo mã hồ sơ
+            $medicalRecordCode = $data['code'] ?? strtoupper(substr($data['type'], 0, 3)) . '_' . date('YmdHis');
+
+            // 🔥 CHUẨN BỊ DỮ LIỆU CHUNG - DÙNG ĐÚNG TÊN BIẾN NHƯ TRONG TEMPLATE
+            $pdfData = [
+                // Thông tin cơ bản
+                'title' => $config['title'],
+                'type' => $data['type'],
+
+                // Thông tin phòng khám
+                'clinic_name' => $data['pdf_settings']['clinicName'] ?? 'PHÒNG KHÁM ĐA KHOA XYZ',
+                'clinic_address' => $data['pdf_settings']['clinicAddress'] ?? 'Số 53 Võ Văn Ngân, TP. Thủ Đức',
+                'clinic_phone' => $data['pdf_settings']['clinicPhone'] ?? '0123 456 789',
+                'clinic_tax' => $data['pdf_settings']['clinicTax'] ?? '',
+
+                // ✅ QUAN TRỌNG: Thông tin bệnh nhân - DÙNG ĐÚNG TÊN BIẾN TEMPLATE
+                'patient_name' => $patientName,
+                'age' => (string) $patientAge,
+                'gender' => $patientGender,
+                'phone' => $patientPhone,
+                'address' => $patientAddress,
+
+                // Thông tin hẹn và mã
+                'medical_record_code' => $medicalRecordCode,
+                'appointment_date' => $formattedDate,
+                'appointment_time' => $appointmentTime,
+                'doctor_name' => $data['pdf_settings']['doctorName'] ?? $data['doctor_name'] ?? 'Bác sĩ chưa rõ',
+                'doctor_degree' => $data['pdf_settings']['doctorDegree'] ?? '',
+
+                // Thông tin y tế
+                'diagnoses' => $data['diagnoses'] ?? [],
+                'symptoms' => $data['symptoms'] ?? '',
+                'instructions' => $data['instructions'] ?? '',
+                'diagnosis' => $data['diagnosis'] ?? '',
+
+                // PDF Settings
+                'pdf_settings' => $data['pdf_settings'] ?? [],
+
+                // Media
+                'logo_data' => $logoData,
+                'watermark_data' => $watermarkData,
+
+                // Font
+                'safe_font_family' => $safeFontFamily,
+                'safe_font_css' => $safeFontCSS,
+
+                // ✅ THÊM CÁC BIẾN DỰ PHÒNG ĐỂ TEMPLATE CÓ THỂ DÙNG
+                'code' => $medicalRecordCode,
+                'date' => $formattedDate,
+                'patient_age' => (string) $patientAge,
+                'patient_gender' => $patientGender,
+                'patient_phone' => $patientPhone,
+            ];
+
+            // 🔥 DEBUG CHI TIẾT: Log dữ liệu đang gửi đến template
+            Log::info('📋 PDF Data being sent to template:', [
+                'patient_info' => [
+                    'name' => $pdfData['patient_name'],
+                    'age' => $pdfData['age'],
+                    'gender' => $pdfData['gender'],
+                    'phone' => $pdfData['phone'],
+                    'address' => $pdfData['address']
+                ],
+                'appointment_info' => [
+                    'date' => $pdfData['appointment_date'],
+                    'time' => $pdfData['appointment_time'],
+                    'code' => $pdfData['medical_record_code']
+                ],
+                'medical_info' => [
+                    'doctor' => $pdfData['doctor_name'],
+                    'symptoms' => $pdfData['symptoms'],
+                    'diagnosis' => $pdfData['diagnosis'],
+                    'instructions' => $pdfData['instructions']
+                ],
+                'clinic_info' => [
+                    'name' => $pdfData['clinic_name'],
+                    'address' => $pdfData['clinic_address'],
+                    'phone' => $pdfData['clinic_phone']
+                ]
+            ]);
+
+            // 🔥 XỬ LÝ DỮ LIỆU RIÊNG THEO TYPE
+            if ($data['type'] === 'prescription') {
+                Log::info('💊 Processing PRESCRIPTION data');
+
+                $pdfData['prescriptions'] = collect($data['prescriptions'])->map(function ($prescription, $index) {
+                    $details = collect($prescription['details'] ?? [])->map(function ($detail, $detailIndex) {
                         return (object) [
                             'medicine' => (object) [
-                                'MedicineName' => $detail['medicine'],
-                                'Price' => $detail['unitPrice'],
+                                'MedicineName' => $detail['medicine'] ?? 'Thuốc chưa đặt tên',
+                                'Price' => floatval($detail['unitPrice'] ?? 0),
                             ],
-                            'Quantity' => $detail['quantity'],
-                            'Usage' => $detail['dosage'],
+                            'Quantity' => intval($detail['quantity'] ?? 1),
+                            'Usage' => $detail['dosage'] ?? 'Theo chỉ dẫn của bác sĩ',
+                            'SubTotal' => floatval(($detail['quantity'] ?? 1) * ($detail['unitPrice'] ?? 0)),
                         ];
-                    })->toArray(),
-                ];
-            })->toArray();
-            $pdfData['services'] = [];
-        } else if ($data['type'] === 'service') {
-            $pdfData['services'] = collect($data['services'])->map(function ($service) {
-                return [
-                    'ServiceName' => $service['ServiceName'],
-                    'Price' => $service['Price'],
-                    'Quantity' => $service['Quantity'] ?? 1,
-                ];
-            })->toArray();
-            $pdfData['prescriptions'] = [];
-        } else if ($data['type'] === 'payment') {
-            // Xử lý dữ liệu cho payment
-            $pdfData['services'] = collect($data['services'])->map(function ($service) {
-                return [
-                    'ServiceName' => $service['ServiceName'] ?? 'Dịch vụ khám bệnh',
-                    'Price' => $service['Price'] ?? 0,
-                    'Quantity' => $service['Quantity'] ?? 1,
-                ];
-            })->toArray();
-            $pdfData['prescriptions'] = [];
+                    })->toArray();
 
-            // Thêm payment data
-            $pdfData['payment_method'] = $data['payment_method'] ?? 'Tiền mặt';
-            $pdfData['payment_status'] = $data['payment_status'] ?? 'Đã thanh toán';
-            $pdfData['discount'] = $data['discount'] ?? 0;
-            $pdfData['tax'] = $data['tax'] ?? 0;
-            $pdfData['payment_date'] = now()->format('d/m/Y H:i');
-            $pdfData['invoice_code'] = $data['invoice_code'] ?? 'INV_' . Str::random(6);
-            $pdfData['total_amount'] = $data['total_amount'] ?? 0;
-        }
+                    return (object) [
+                        'prescription_details' => $details,
+                        'total_amount' => collect($details)->sum('SubTotal')
+                    ];
+                })->toArray();
 
-        try {
-            Log::info('🔍 Generating PDF with config:', [
+                $pdfData['services'] = [];
+
+                Log::info('💊 Prescription data processed:', [
+                    'prescription_count' => count($pdfData['prescriptions']),
+                    'total_prescriptions' => collect($pdfData['prescriptions'])->sum(function ($prescription) {
+                        return count($prescription->prescription_details);
+                    })
+                ]);
+
+            } else if ($data['type'] === 'service') {
+                Log::info('🔧 Processing SERVICE data');
+
+                $pdfData['services'] = collect($data['services'])->map(function ($service, $index) {
+                    $quantity = intval($service['Quantity'] ?? 1);
+                    $price = floatval($service['Price'] ?? 0);
+
+                    return [
+                        'ServiceName' => $service['ServiceName'] ?? 'Dịch vụ chưa đặt tên',
+                        'Price' => $price,
+                        'Quantity' => $quantity,
+                        'SubTotal' => $quantity * $price,
+                        'Index' => $index + 1
+                    ];
+                })->toArray();
+
+                $pdfData['prescriptions'] = [];
+
+                Log::info('🔧 Service data processed:', [
+                    'service_count' => count($pdfData['services']),
+                    'total_services' => count($pdfData['services']),
+                    'total_amount' => collect($pdfData['services'])->sum('SubTotal')
+                ]);
+
+            } else if ($data['type'] === 'payment') {
+                Log::info('💰 Processing PAYMENT data');
+
+                // Xử lý dữ liệu cho payment
+                $pdfData['services'] = collect($data['services'])->map(function ($service, $index) {
+                    $quantity = intval($service['Quantity'] ?? 1);
+                    $price = floatval($service['Price'] ?? 0);
+
+                    return [
+                        'ServiceName' => $service['ServiceName'] ?? 'Dịch vụ khám bệnh',
+                        'Price' => $price,
+                        'Quantity' => $quantity,
+                        'SubTotal' => $quantity * $price,
+                        'Index' => $index + 1
+                    ];
+                })->toArray();
+
+                $pdfData['prescriptions'] = [];
+
+                // Thêm payment data
+                $pdfData['payment_method'] = $data['payment_method'] ?? 'Tiền mặt';
+                $pdfData['payment_status'] = $data['payment_status'] ?? 'Đã thanh toán';
+                $pdfData['discount'] = floatval($data['discount'] ?? 0);
+                $pdfData['tax'] = floatval($data['tax'] ?? 0);
+                $pdfData['payment_date'] = now()->format('d/m/Y H:i');
+                $pdfData['invoice_code'] = $data['invoice_code'] ?? 'INV_' . date('YmdHis');
+                $pdfData['total_amount'] = floatval($data['total_amount'] ?? 0);
+
+                // Tính toán các khoản tiền
+                $servicesTotal = collect($pdfData['services'])->sum('SubTotal');
+                $discountAmount = $servicesTotal * ($pdfData['discount'] / 100);
+                $taxAmount = $servicesTotal * ($pdfData['tax'] / 100);
+                $finalAmount = $servicesTotal - $discountAmount + $taxAmount;
+
+                $pdfData['services_total'] = $servicesTotal;
+                $pdfData['discount_amount'] = $discountAmount;
+                $pdfData['tax_amount'] = $taxAmount;
+                $pdfData['final_amount'] = $finalAmount;
+
+                Log::info('💰 Payment data processed:', [
+                    'invoice_code' => $pdfData['invoice_code'],
+                    'services_count' => count($pdfData['services']),
+                    'services_total' => $servicesTotal,
+                    'discount' => $pdfData['discount'],
+                    'tax' => $pdfData['tax'],
+                    'final_amount' => $finalAmount
+                ]);
+            }
+
+            // 🔥 KIỂM TRA VÀ TẠO PDF
+            Log::info('🔍 Final PDF Generation Config:', [
                 'type' => $data['type'],
                 'template' => $config['template'],
                 'filename' => $config['filename'],
                 'has_logo' => !is_null($logoData),
-                'has_watermark' => !is_null($watermarkData)
+                'has_watermark' => !is_null($watermarkData),
+                'template_exists' => view()->exists($config['template']),
+                'all_template_variables' => array_keys($pdfData)
             ]);
 
+            // ✅ KIỂM TRA TEMPLATE CÓ TỒN TẠI KHÔNG
+            if (!view()->exists($config['template'])) {
+                throw new \Exception("Template {$config['template']} không tồn tại. Các template có sẵn: " .
+                    implode(', ', ['pdf.invoice_pdf', 'pdf.service_pdf', 'pdf.payment_invoice_pdf']));
+            }
+
+            Log::info('🚀 Starting PDF generation...');
+
+            // Tạo PDF
             $pdf = Pdf::loadView($config['template'], $pdfData)
-                ->setPaper('a4', 'portrait');
+                ->setPaper($data['pdf_settings']['pageSize'] ?? 'a4', $data['pdf_settings']['pageOrientation'] ?? 'portrait')
+                ->setOptions([
+                    'defaultFont' => $safeFontFamily,
+                    'isHtml5ParserEnabled' => true,
+                    'isRemoteEnabled' => true,
+                    'chroot' => public_path(),
+                ]);
 
             $pdfContent = $pdf->output();
+
+            Log::info('✅ PDF generated successfully', [
+                'file_size' => strlen($pdfContent),
+                'filename' => $config['filename']
+            ]);
 
             // Clean up temporary files
             $this->cleanupTempFiles([$logoData, $watermarkData]);
 
+            Log::info('🎯 === END previewPrescription - SUCCESS ===');
+
             return response()->make($pdfContent, 200, [
                 'Content-Type' => 'application/pdf',
                 'Content-Disposition' => 'attachment; filename="' . $config['filename'] . '"',
+                'X-Filename' => $config['filename'],
+                'X-Generated-At' => now()->toISOString(),
             ]);
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('❌ Validation Error in previewPrescription:', $e->errors());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi validation dữ liệu',
+                'errors' => $e->errors(),
+            ], 422);
+
         } catch (\Exception $e) {
-            Log::error('Error generating PDF: ' . $e->getMessage());
+            Log::error('❌ Error generating PDF: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
 
             // Clean up temp files even on error
-            $this->cleanupTempFiles([$logoData, $watermarkData]);
+            $this->cleanupTempFiles([
+                $logoData ?? [],
+                $watermarkData ?? []
+            ]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Lỗi khi tạo PDF: ' . $e->getMessage(),
+                'template' => $config['template'] ?? 'unknown',
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
             ], 500);
         }
     }
+
 
 
     public function previewHTML(Request $request)
@@ -769,28 +970,29 @@ class InvoicePrintController extends Controller
     }
 
     /**
-     * Lưu logo từ FE vào storage
+     * Lưu ảnh (dùng chung cho cả logo và watermark)
      */
-    public function saveLogo(Request $request)
+    public function saveImage(Request $request)
     {
         try {
             $request->validate([
-                'logo' => 'required|string', // base64 image
+                'image' => 'required|string', // base64 image
+                'type' => 'required|string|in:logo,watermark',
                 'clinic_id' => 'nullable|integer'
             ]);
 
-            $base64Image = $request->logo;
+            $base64Image = $request->image;
+            $type = $request->type;
             $clinicId = $request->clinic_id ?? 1;
 
-            // Xử lý base64 image
             if (preg_match('/^data:image\/(\w+);base64,/', $base64Image, $matches)) {
                 $imageType = $matches[1];
                 $imageData = substr($base64Image, strpos($base64Image, ',') + 1);
                 $imageData = base64_decode($imageData);
 
                 // Tạo tên file
-                $filename = 'clinic_logo_' . $clinicId . '_' . time() . '.' . $imageType;
-                $directory = 'public/logos';
+                $filename = "clinic_{$type}_{$clinicId}_" . time() . '.' . $imageType;
+                $directory = "public/{$type}s";
                 $filePath = $directory . '/' . $filename;
 
                 // Đảm bảo thư mục tồn tại
@@ -805,7 +1007,7 @@ class InvoicePrintController extends Controller
                 $publicUrl = Storage::url($filePath);
                 $fullUrl = url($publicUrl);
 
-                Log::info('Logo saved successfully', [
+                Log::info("{$type} saved successfully", [
                     'clinic_id' => $clinicId,
                     'filename' => $filename,
                     'url' => $fullUrl
@@ -813,8 +1015,8 @@ class InvoicePrintController extends Controller
 
                 return response()->json([
                     'success' => true,
-                    'message' => 'Logo đã được lưu thành công',
-                    'logo_url' => $fullUrl,
+                    'message' => ucfirst($type) . ' đã được lưu thành công',
+                    'url' => $fullUrl,
                     'filename' => $filename
                 ]);
 
@@ -823,56 +1025,56 @@ class InvoicePrintController extends Controller
             }
 
         } catch (\Exception $e) {
-            Log::error('Error saving logo: ' . $e->getMessage());
+            Log::error("Error saving {$request->type}: " . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Lỗi khi lưu logo: ' . $e->getMessage()
+                'message' => 'Lỗi khi lưu ' . $request->type . ': ' . $e->getMessage()
             ], 500);
         }
     }
 
     /**
-     * Lấy logo đã lưu
+     * Lấy ảnh (dùng chung cho cả logo và watermark)
      */
-    public function getLogo($clinicId = 1)
+    public function getImage($type, $clinicId = 1)
     {
         try {
-            $directory = 'public/logos';
+            $directory = "public/{$type}s";
 
-            // Tìm file logo mới nhất của clinic
+            // Tìm file mới nhất của clinic
             $files = Storage::files($directory);
-            $logoFile = null;
+            $imageFile = null;
             $latestTime = 0;
 
             foreach ($files as $file) {
-                if (str_contains($file, "clinic_logo_{$clinicId}_")) {
+                if (str_contains($file, "clinic_{$type}_{$clinicId}_")) {
                     $time = Storage::lastModified($file);
                     if ($time > $latestTime) {
                         $latestTime = $time;
-                        $logoFile = $file;
+                        $imageFile = $file;
                     }
                 }
             }
 
-            if ($logoFile) {
-                $url = Storage::url($logoFile);
+            if ($imageFile) {
+                $url = Storage::url($imageFile);
                 return response()->json([
                     'success' => true,
-                    'logo_url' => url($url),
-                    'filename' => basename($logoFile)
+                    'url' => url($url),
+                    'filename' => basename($imageFile)
                 ]);
             }
 
             return response()->json([
                 'success' => false,
-                'message' => 'Không tìm thấy logo'
+                'message' => "Không tìm thấy {$type}"
             ], 404);
 
         } catch (\Exception $e) {
-            Log::error('Error getting logo: ' . $e->getMessage());
+            Log::error("Error getting {$type}: " . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Lỗi khi lấy logo'
+                'message' => "Lỗi khi lấy {$type}"
             ], 500);
         }
     }
@@ -918,99 +1120,6 @@ class InvoicePrintController extends Controller
         }
     }
 
-    /**
-     * Debug logo processing với storage URL
-     */
-    public function debugLogoStorage(Request $request)
-    {
-        try {
-            // Lấy logo mới nhất
-            $files = Storage::files('public/logos');
-            $latestFile = null;
-            $latestTime = 0;
-
-            foreach ($files as $file) {
-                if (str_contains($file, 'clinic_logo_1_')) {
-                    $time = Storage::lastModified($file);
-                    if ($time > $latestTime) {
-                        $latestTime = $time;
-                        $latestFile = $file;
-                    }
-                }
-            }
-
-            if (!$latestFile) {
-                return response()->json(['success' => false, 'message' => 'No logo found']);
-            }
-
-            $logoUrl = url(Storage::url($latestFile));
-
-            Log::info('=== DEBUG STORAGE LOGO PROCESSING ===');
-            Log::info('Latest logo: ' . $latestFile);
-            Log::info('Input URL: ' . $logoUrl);
-
-            $logoData = [
-                'url' => $logoUrl,
-                'enabled' => true,
-                'width' => '100px',
-                'height' => '100px'
-            ];
-
-            // Test processLogo
-            $result = $this->processLogo($logoData);
-
-            Log::info('Processing result:');
-            Log::info('Final URL: ' . ($result['url'] ?? 'NULL'));
-            Log::info('Result exists: ' . ($result ? 'YES' : 'NO'));
-
-            if (!$result) {
-                Log::error('❌ processLogo returned null');
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Logo processing failed - processLogo returned null'
-                ]);
-            }
-
-            // Test tạo PDF
-            Log::info('🔄 Generating PDF...');
-
-            try {
-                $pdf = Pdf::loadView('pdf.payment_invoice_pdf', [
-                    'title' => 'DEBUG STORAGE LOGO',
-                    'clinic_name' => 'Test Clinic',
-                    'patient_name' => 'Test Patient',
-                    'logo_data' => $result
-                ]);
-
-                Log::info('✅ PDF generated successfully');
-
-                $pdfContent = $pdf->output();
-
-                // Cleanup
-                $this->cleanupTempFiles([$result]);
-
-                return response($pdfContent, 200, [
-                    'Content-Type' => 'application/pdf',
-                    'Content-Disposition' => 'inline; filename="debug_storage_logo.pdf"'
-                ]);
-
-            } catch (\Exception $pdfError) {
-                Log::error('❌ PDF generation error: ' . $pdfError->getMessage());
-                Log::error('❌ PDF error trace: ' . $pdfError->getTraceAsString());
-                return response()->json([
-                    'success' => false,
-                    'message' => 'PDF generation failed: ' . $pdfError->getMessage()
-                ], 500);
-            }
-
-        } catch (\Exception $e) {
-            Log::error('Debug storage logo error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
 
 
 }
