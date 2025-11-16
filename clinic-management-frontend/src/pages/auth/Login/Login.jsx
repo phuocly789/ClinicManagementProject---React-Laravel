@@ -179,7 +179,7 @@ const LoginPage = () => {
                     className={`form-control form-control-lg ${
                       errors.username ? "is-invalid" : ""
                     }`}
-                    placeholder="Nhập email hoặc số điện thoại"
+                    placeholder="Nhập username"
                     value={formData.username}
                     onChange={handleChange}
                   />

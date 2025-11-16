@@ -26,12 +26,12 @@ const PatientProfile = () => {
     console.log("Check user: ", user);
     if (user) {
       setProfileData({
-        id: user?.id,
+        id: user.id,
         fullName: user.full_name || "",
         email: user.email || "",
         phone: user.phone || "",
-        birthDate: user.date_of_birth
-          ? dayjs(user.date_of_birth).format("YYYY-MM-DD")
+        birthDate: user.birthDate
+          ? dayjs(user.birthDate.split(".")[0]).format("YYYY-MM-DD")
           : "",
         address: user.address || "",
       });
