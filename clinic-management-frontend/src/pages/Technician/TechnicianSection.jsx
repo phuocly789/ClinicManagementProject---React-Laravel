@@ -65,15 +65,23 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
     }
   }, [testResultsData]);
 
-  // ✅ Đồng bộ completedServicesData khi props thay đổi
+  // ✅ Đồng bộ completedServicesData khi props thay đổi - SẮP XẾP MỚI NHẤT LÊN ĐẦU
   useEffect(() => {
     console.log('🔄 [EFFECT] Syncing completedServices with completedServicesData');
     console.log('📥 [EFFECT] Raw completedServicesData:', completedServicesData);
 
     if (completedServicesData && Array.isArray(completedServicesData)) {
-      console.log('✅ [EFFECT] Setting completedServices:', completedServicesData.length, 'items');
-      setCompletedServices(completedServicesData);
-      setCurrentCompletedPage(0); // Reset về trang đầu khi data thay đổi
+      // ✅ SẮP XẾP: Kết quả đã hoàn thành - MỚI NHẤT LÊN ĐẦU
+      const sortedCompletedServices = [...completedServicesData].sort((a, b) => {
+        // Ưu tiên dịch vụ hoàn thành gần đây nhất
+        const dateA = new Date(a.completed_at || a.updated_at || a.order_date || 0);
+        const dateB = new Date(b.completed_at || b.updated_at || b.order_date || 0);
+        return  dateA - dateB; // Mới nhất lên đầu
+      });
+
+      console.log('✅ [EFFECT] Setting sorted completedServices:', sortedCompletedServices.length, 'items');
+      setCompletedServices(sortedCompletedServices);
+      setCurrentCompletedPage(0);
     } else {
       console.log('⚠️ [EFFECT] completedServicesData is not array, setting empty');
       setCompletedServices([]);
