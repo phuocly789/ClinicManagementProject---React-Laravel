@@ -35,9 +35,9 @@ import ReceptionistPatent from "./pages/Receptionist/ReceptionistPatent.jsx";
 import PatientManagement from "./pages/Patient/PatientManagement.jsx";
 import AdminServiceManagement from "./pages/Admin/AdminServiceManagement.jsx";
 import PaymentSection from "./pages/Payment/PaymentSection.jsx";
+import WebSocketDemo from "./Components/WebSocketDemo.jsx";
 import PaymentResult from "./pages/Payment/PaymentResult.jsx";
 import NotificationManagement from "./pages/Receptionist/NotificationManagement.jsx";
-
 function App() {
   return (
     <Routes>
@@ -54,8 +54,7 @@ function App() {
           path={path.ADMIN.SCHEDULE.MANAGEMENT}
           element={<AdminScheduleManagement />}
         />
-        <Route
-          path={path.ADMIN.SERVICE.MANAGEMENT}
+        <Route path={path.ADMIN.SERVICE.MANAGEMENT}
           element={<AdminServiceManagement />}
         />
         <Route
@@ -92,6 +91,7 @@ function App() {
           element={<NotificationManagement />}
         />
       </Route>
+      {/* Receptionist */}
       {/* Doctor */}
       <Route path={path.DOCTOR.ROOT} element={<DoctorSidebar />}>
         <Route index element={<DoctorDashboard />} />
@@ -115,11 +115,16 @@ function App() {
           path={path.PATIENT.PROFILE.MANAGEMENT}
           element={<PatientProfile />}
         />
+
+        {/* <Route path={path.PATIENT.BOOKING} element={<PatientBooking />} />
+          <Route path={path.PATIENT.HISTORY} element={<PatientHistory />} /> */}
+
         <Route
           path={path.PATIENT.APPOINTMENT.MANAGEMENT}
           element={<PatientManagement />}
         />
         {/* <Route path={path.PATIENT.HISTORY} element={<PatientHistory />} /> */}
+
       </Route>
       <Route path={path.LOGIN} element={<LoginPage />} />{" "}
       <Route path={path.REGISTER} element={<Register />} />{" "}
@@ -133,6 +138,7 @@ function App() {
           element={<TechnicianDashboard />}
         />
       </Route>
+      <Route path={"/test"} element={<WebSocketDemo />} />
       {/* Payment */}
       <Route path={path.PayMent.ROOT} element={<ReceptionSidebar />}>
         <Route index element={<PaymentSection />} />
