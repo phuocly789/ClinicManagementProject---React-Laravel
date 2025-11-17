@@ -8,7 +8,8 @@ import {
   Badge,
   ButtonGroup,
   Spinner,
-  Alert
+  Alert,
+  Modal
 } from "react-bootstrap";
 import technicianService from '../../services/technicianService';
 
@@ -21,94 +22,140 @@ const TechSchedule = () => {
   const [scheduleData, setScheduleData] = useState(null);
   const [hasRealData, setHasRealData] = useState(false);
 
-  // ✅ FETCH LỊCH LÀM VIỆC
+  // State cho modal xem tất cả lịch trong ngày
+  const [showDayDetail, setShowDayDetail] = useState(false);
+  const [selectedDaySchedules, setSelectedDaySchedules] = useState([]);
+  const [selectedDayInfo, setSelectedDayInfo] = useState(null);
+
+  // Fetch lịch làm việc
   const fetchWorkSchedule = async () => {
     try {
       setLoading(true);
       setError('');
 
       console.log('🔄 [TechSchedule] Fetching work schedule...');
-      
+
       const response = await technicianService.getWorkSchedule();
-      
-      if (response.data?.success) {
-        console.log('✅ Work schedule data:', response.data.data);
-        
-        // ✅ KIỂM TRA NẾU CÓ DỮ LIỆU THẬT
-        const hasRealSchedules = response.data.data.schedules && 
-                                response.data.data.schedules.length > 0;
-        
-        setScheduleData(response.data.data);
+      console.log('📊 [TechSchedule] Full API response:', response);
+
+      if (response.data) {
+        const data = response.data;
+        console.log('✅ [TechSchedule] Data received:', data);
+
+        // Kiểm tra dữ liệu thật
+        const hasRealSchedules = data.schedules && data.schedules.length > 0;
+
+        setScheduleData(data);
         setHasRealData(hasRealSchedules);
-        
-        if (!hasRealSchedules) {
-          console.log('ℹ️ No real schedule data found, showing empty state');
-        }
+
+        console.log('🔍 [TechSchedule] Data check:', {
+          hasRealSchedules,
+          schedulesCount: data.schedules?.length || 0,
+          hasTechnicianInfo: !!data.technician_info,
+          hasStatistics: !!data.statistics
+        });
+
       } else {
-        setError('Không thể lấy dữ liệu lịch làm việc');
+        console.warn('⚠️ [TechSchedule] No data in response');
+        setError('Không có dữ liệu lịch làm việc');
+        setHasRealData(false);
       }
 
     } catch (err) {
       console.error('❌ [TechSchedule] Error:', err);
       setError('Không thể tải lịch làm việc. Vui lòng thử lại sau.');
+      setHasRealData(false);
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ FETCH LỊCH THEO THÁNG
-  const fetchMonthlySchedule = async (year, month) => {
-    try {
-      setLoading(true);
-      
-      const response = await technicianService.getWorkScheduleByMonth(year, month);
-      
-      if (response.data?.success) {
-        // Chỉ cập nhật nếu có dữ liệu thật
-        if (response.data.data && response.data.data.length > 0) {
-          setScheduleData(prev => ({
-            ...prev,
-            schedules: response.data.data
-          }));
-          setHasRealData(true);
-        }
-      }
-    } catch (err) {
-      console.error('❌ [TechSchedule] Monthly schedule error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ✅ LOAD DATA KHI COMPONENT MOUNT
+  // Load data khi component mount
   useEffect(() => {
     fetchWorkSchedule();
   }, []);
 
-  // ✅ LOAD DATA KHI ĐỔI THÁNG
-  useEffect(() => {
-    if (currentMonth && hasRealData) {
-      const year = currentMonth.getFullYear();
-      const month = currentMonth.getMonth() + 1;
-      fetchMonthlySchedule(year, month);
+  // Hàm mở modal xem chi tiết ngày
+  const handleDayClick = (day) => {
+    if (day.schedule.length > 0) {
+      setSelectedDaySchedules(day.schedule);
+      setSelectedDayInfo({
+        date: day.date,
+        dateString: day.dateString,
+        formattedDate: day.date.toLocaleDateString("vi-VN", {
+          weekday: "long",
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+      });
+      setShowDayDetail(true);
     }
-  }, [currentMonth, hasRealData]);
-
-  // Điều hướng tháng
-  const changeMonth = (offset) => {
-    const newDate = new Date(currentMonth);
-    newDate.setMonth(newDate.getMonth() + offset);
-    setCurrentMonth(newDate);
   };
 
-  // ✅ LỌC LỊCH THEO THÁNG HIỆN TẠI
-  const filteredSchedule = scheduleData?.schedules?.filter((item) => {
-    const itemDate = new Date(item.date);
-    return (
-      itemDate.getMonth() === currentMonth.getMonth() &&
-      itemDate.getFullYear() === currentMonth.getFullYear()
-    );
-  }) || [];
+  // Hàm đóng modal
+  const handleCloseDayDetail = () => {
+    setShowDayDetail(false);
+    setSelectedDaySchedules([]);
+    setSelectedDayInfo(null);
+  };
+
+  // Lấy danh sách schedules
+  const getSchedulesArray = () => {
+    if (!scheduleData || !scheduleData.schedules) return [];
+    return scheduleData.schedules;
+  };
+
+  // ✅ SỬA LẠI: HÀM LỌC LỊCH THEO VIEW MODE
+  const getFilteredSchedules = () => {
+    const allSchedules = getSchedulesArray();
+
+    if (viewMode === "today") {
+      // Lọc lịch cho ngày hôm nay
+      const today = new Date();
+      const todayString = today.toISOString().split('T')[0];
+      console.log('📅 Today filter:', { todayString, allSchedulesCount: allSchedules.length });
+
+      return allSchedules.filter(item => item.date === todayString);
+
+    } else if (viewMode === "week") {
+      // Lọc lịch cho tuần hiện tại
+      const today = new Date();
+      const startOfWeek = new Date(today);
+      startOfWeek.setDate(today.getDate() - today.getDay()); // Chủ Nhật đầu tuần
+      const endOfWeek = new Date(today);
+      endOfWeek.setDate(today.getDate() + (6 - today.getDay())); // Thứ Bảy cuối tuần
+
+      console.log('📅 Week filter:', {
+        startOfWeek: startOfWeek.toISOString().split('T')[0],
+        endOfWeek: endOfWeek.toISOString().split('T')[0],
+        today: today.toISOString().split('T')[0]
+      });
+
+      return allSchedules.filter(item => {
+        const itemDate = new Date(item.date);
+        return itemDate >= startOfWeek && itemDate <= endOfWeek;
+      });
+
+    } else {
+      // Lọc lịch theo tháng hiện tại (viewMode === "month")
+      return allSchedules.filter((item) => {
+        const itemDate = new Date(item.date);
+        return (
+          itemDate.getMonth() === currentMonth.getMonth() &&
+          itemDate.getFullYear() === currentMonth.getFullYear()
+        );
+      });
+    }
+  };
+
+  const filteredSchedule = getFilteredSchedules();
+
+  console.log('📋 Current view:', {
+    viewMode,
+    filteredCount: filteredSchedule.length,
+    currentMonth: currentMonth.toLocaleDateString('vi-VN')
+  });
 
   const getStatusVariant = (status) => {
     switch (status) {
@@ -128,71 +175,262 @@ const TechSchedule = () => {
     }
   };
 
-  // ✅ HÀM TẠO LỊCH THÁNG (CHỈ KHI CÓ DỮ LIỆU)
+  // ✅ HÀM TẠO LỊCH THÁNG - SỬA TIMEZONE
   const generateCalendar = () => {
-    if (!scheduleData || !hasRealData) return [];
+    if (!hasRealData) return [];
 
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
-    
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
+
+    console.log('📅 Generating calendar for:', { year, month: month + 1 });
+
+    // Tạo ngày với timezone cụ thể
+    const firstDay = new Date(Date.UTC(year, month, 1));
+    const lastDay = new Date(Date.UTC(year, month + 1, 0));
+
+    // Ngày bắt đầu calendar (Chủ Nhật đầu tiên)
     const startDate = new Date(firstDay);
-    startDate.setDate(startDate.getDate() - firstDay.getDay());
-    
+    startDate.setDate(startDate.getDate() - startDate.getDay());
+
     const calendar = [];
     const currentDate = new Date(startDate);
-    
+
+    console.log('📅 Calendar dates:', {
+      firstDay: firstDay.toISOString(),
+      lastDay: lastDay.toISOString(),
+      startDate: startDate.toISOString()
+    });
+
+    // Tạo 6 tuần
     for (let week = 0; week < 6; week++) {
       const weekDays = [];
       for (let day = 0; day < 7; day++) {
+        // Sử dụng UTC để tránh timezone issues
         const dateString = currentDate.toISOString().split('T')[0];
-        const daySchedule = scheduleData.schedules.filter(item => item.date === dateString);
+
+        // ✅ SỬA: So sánh date string chính xác
+        const daySchedule = getSchedulesArray().filter(item => {
+          console.log('🔍 Comparing dates:', {
+            scheduleDate: item.date,
+            currentDate: dateString,
+            match: item.date === dateString
+          });
+          return item.date === dateString;
+        });
+
         const isCurrentMonth = currentDate.getMonth() === month;
-        
+
         weekDays.push({
           date: new Date(currentDate),
           dateString,
           isCurrentMonth,
           schedule: daySchedule
         });
-        
+
         currentDate.setDate(currentDate.getDate() + 1);
       }
       calendar.push(weekDays);
     }
-    
+
+    console.log('📅 Final calendar check:', {
+      schedules: getSchedulesArray().map(s => ({ date: s.date, location: s.location })),
+      foundInCalendar: calendar.flat().filter(day => day.schedule.length > 0)
+    });
+
     return calendar;
   };
 
   const calendar = generateCalendar();
   const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
-  // ✅ RENDER TRẠNG THÁI KHÔNG CÓ DỮ LIỆU
-  const renderNoDataState = () => (
-    <div className="text-center py-5">
-      <div className="py-4">
-        <i className="fas fa-calendar-plus text-muted fa-4x mb-3 opacity-50"></i>
-        <h4 className="text-muted fw-light mb-3">Chưa có lịch làm việc</h4>
-        <p className="text-muted mb-3">
-          Hiện tại bạn chưa có lịch làm việc nào được xếp trong tháng {currentMonth.getMonth() + 1}.
-        </p>
-        <div className="bg-light rounded p-4 mx-auto" style={{maxWidth: '500px'}}>
-          <h6 className="text-primary mb-3">
-            <i className="fas fa-info-circle me-2"></i>
-            Thông tin hữu ích
-          </h6>
-          <ul className="text-start text-muted">
-            <li>Liên hệ quản lý phòng ban để được xếp lịch làm việc</li>
-            <li>Lịch làm việc sẽ xuất hiện ở đây sau khi được xếp</li>
-            <li>Bạn có thể xem lịch làm việc theo ngày/tuần/tháng</li>
-          </ul>
+  // Điều hướng tháng
+  const changeMonth = (offset) => {
+    const newDate = new Date(currentMonth);
+    newDate.setMonth(newDate.getMonth() + offset);
+    setCurrentMonth(newDate);
+  };
+
+  // ✅ SỬA LẠI: KHI CHUYỂN VIEW MODE, TỰ ĐỘNG CHUYỂN VỀ THÁNG HIỆN TẠI NẾU LÀ "HÔM NAY" HOẶC "TUẦN NÀY"
+  const handleViewModeChange = (newViewMode) => {
+    setViewMode(newViewMode);
+
+    if (newViewMode === "today" || newViewMode === "week") {
+      // Chuyển về tháng hiện tại khi xem hôm nay/tuần này
+      setCurrentMonth(new Date());
+    }
+  };
+
+  // Component Modal hiển thị chi tiết ngày
+  const DayDetailModal = () => (
+    <Modal show={showDayDetail} onHide={handleCloseDayDetail} size="lg" centered>
+      <Modal.Header closeButton className="bg-primary text-white">
+        <Modal.Title>
+          <i className="fas fa-calendar-day me-2"></i>
+          Lịch làm việc ngày {selectedDayInfo?.formattedDate}
+        </Modal.Title>
+      </Modal.Header>
+      <Modal.Body className="p-4">
+        {selectedDaySchedules.length === 0 ? (
+          <div className="text-center py-4">
+            <i className="fas fa-calendar-times text-muted fa-3x mb-3"></i>
+            <h5 className="text-muted">Không có lịch làm việc</h5>
+          </div>
+        ) : (
+          <div className="schedule-list">
+            {selectedDaySchedules.map((schedule, index) => (
+              <Card key={index} className="border-0 shadow-sm mb-3">
+                <Card.Body className="p-4">
+                  <Row className="align-items-center">
+                    <Col md={8}>
+                      <div className="d-flex align-items-start">
+                        <div className={`bg-${getStatusVariant(schedule.status)} bg-opacity-10 rounded p-3 me-3`}>
+                          <i className={`fas fa-calendar-check text-${getStatusVariant(schedule.status)} fa-lg`}></i>
+                        </div>
+                        <div className="flex-grow-1">
+                          <h6 className="text-dark mb-2">{schedule.location}</h6>
+
+                          <div className="row g-3">
+                            <Col sm={6}>
+                              <div className="d-flex align-items-center">
+                                <i className="fas fa-clock text-success me-2"></i>
+                                <div>
+                                  <small className="text-muted d-block">Thời gian</small>
+                                  <strong className="text-dark">{schedule.time}</strong>
+                                </div>
+                              </div>
+                            </Col>
+
+                            <Col sm={6}>
+                              <div className="d-flex align-items-center">
+                                <i className="fas fa-tag text-info me-2"></i>
+                                <div>
+                                  <small className="text-muted d-block">Loại hình</small>
+                                  <strong className="text-dark">{schedule.type}</strong>
+                                </div>
+                              </div>
+                            </Col>
+
+                            <Col sm={6}>
+                              <div className="d-flex align-items-center">
+                                <i className="fas fa-user-clock text-warning me-2"></i>
+                                <div>
+                                  <small className="text-muted d-block">Trạng thái</small>
+                                  <Badge bg={getStatusVariant(schedule.status)}>
+                                    {getStatusText(schedule.status)}
+                                  </Badge>
+                                </div>
+                              </div>
+                            </Col>
+
+                            <Col sm={6}>
+                              <div className="d-flex align-items-center">
+                                <i className="fas fa-id-badge text-primary me-2"></i>
+                                <div>
+                                  <small className="text-muted d-block">Mã lịch</small>
+                                  <strong className="text-dark">#{schedule.schedule_id}</strong>
+                                </div>
+                              </div>
+                            </Col>
+
+                            {schedule.notes && (
+                              <Col sm={12}>
+                                <div className="d-flex align-items-start">
+                                  <i className="fas fa-sticky-note text-secondary me-2 mt-1"></i>
+                                  <div>
+                                    <small className="text-muted d-block">Ghi chú</small>
+                                    <strong className="text-dark">{schedule.notes}</strong>
+                                  </div>
+                                </div>
+                              </Col>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </Col>
+
+                    <Col md={4} className="text-md-end">
+                      <div className="d-flex flex-column gap-2">
+                        <Button
+                          variant="outline-primary"
+                          size="sm"
+                          className="d-flex align-items-center justify-content-center"
+                        >
+                          <i className="fas fa-directions me-2"></i>
+                          Chỉ đường
+                        </Button>
+                        <Button
+                          variant="outline-success"
+                          size="sm"
+                          className="d-flex align-items-center justify-content-center"
+                        >
+                          <i className="fas fa-calendar-check me-2"></i>
+                          Xác nhận
+                        </Button>
+                        <Button
+                          variant="outline-info"
+                          size="sm"
+                          className="d-flex align-items-center justify-content-center"
+                        >
+                          <i className="fas fa-info-circle me-2"></i>
+                          Chi tiết
+                        </Button>
+                      </div>
+                    </Col>
+                  </Row>
+                </Card.Body>
+              </Card>
+            ))}
+          </div>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <div className="w-100">
+          <div className="d-flex justify-content-between align-items-center">
+            <small className="text-muted">
+              Tổng cộng: <strong>{selectedDaySchedules.length}</strong> lịch trình
+            </small>
+            <Button variant="secondary" onClick={handleCloseDayDetail}>
+              <i className="fas fa-times me-2"></i>
+              Đóng
+            </Button>
+          </div>
         </div>
-      </div>
-    </div>
+      </Modal.Footer>
+    </Modal>
   );
 
-  // ✅ RENDER LOADING
+  // ✅ SỬA LẠI: RENDER TRẠNG THÁI KHÔNG CÓ DỮ LIỆU THEO VIEW MODE
+  const renderNoDataState = () => {
+    let message = "";
+
+    if (viewMode === "today") {
+      message = "Hôm nay không có lịch làm việc nào";
+    } else if (viewMode === "week") {
+      message = "Tuần này không có lịch làm việc nào";
+    } else {
+      message = `Hiện tại bạn chưa có lịch làm việc nào được xếp trong tháng ${currentMonth.getMonth() + 1}/${currentMonth.getFullYear()}.`;
+    }
+
+    return (
+      <div className="text-center py-5">
+        <div className="py-4">
+          <i className="fas fa-calendar-plus text-muted fa-4x mb-3 opacity-50"></i>
+          <h4 className="text-muted fw-light mb-3">Chưa có lịch làm việc</h4>
+          <p className="text-muted mb-3">{message}</p>
+          <Button
+            variant="primary"
+            onClick={fetchWorkSchedule}
+            disabled={loading}
+          >
+            <i className="fas fa-sync me-2"></i>
+            Tải lại dữ liệu
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  // Render loading
   if (loading && !scheduleData) {
     return (
       <div className="section active" id="schedule">
@@ -214,6 +452,9 @@ const TechSchedule = () => {
         </Alert>
       )}
 
+      {/* Modal xem chi tiết ngày */}
+      <DayDetailModal />
+
       <Row className="g-4">
         {/* Thông tin kỹ thuật viên */}
         <Col md={12}>
@@ -225,10 +466,10 @@ const TechSchedule = () => {
                   <h4 className="mb-0 fw-bold">Thông Tin Kỹ Thuật Viên</h4>
                   <small className="opacity-75">Thông tin cá nhân và chuyên môn</small>
                 </div>
-                {!hasRealData && (
-                  <Badge bg="warning" className="ms-2">
-                    <i className="fas fa-clock me-1"></i>
-                    Chờ xếp lịch
+                {hasRealData && (
+                  <Badge bg="success" className="ms-2">
+                    <i className="fas fa-check me-1"></i>
+                    Đã xếp lịch ({getSchedulesArray().length})
                   </Badge>
                 )}
               </div>
@@ -268,22 +509,14 @@ const TechSchedule = () => {
                     </div>
                     <div className="d-flex align-items-center mb-3">
                       <div className="bg-warning bg-opacity-10 rounded p-3 me-3">
-                        <i className="fas fa-calendar-plus text-warning fa-lg"></i>
+                        <i className="fas fa-calendar-check text-warning fa-lg"></i>
                       </div>
                       <div>
-                        <small className="text-muted d-block">Trạng thái lịch làm việc</small>
+                        <small className="text-muted d-block">Tổng số lịch</small>
                         <strong className="text-dark fs-6">
-                          {hasRealData ? (
-                            <Badge bg="success" className="fs-7">
-                              <i className="fas fa-check me-1"></i>
-                              Đã xếp lịch
-                            </Badge>
-                          ) : (
-                            <Badge bg="secondary" className="fs-7">
-                              <i className="fas fa-clock me-1"></i>
-                              Chờ xếp lịch
-                            </Badge>
-                          )}
+                          <Badge bg="primary" className="fs-7">
+                            {scheduleData.statistics?.total_schedules || 0} lịch trình
+                          </Badge>
                         </strong>
                       </div>
                     </div>
@@ -309,15 +542,15 @@ const TechSchedule = () => {
                   <div>
                     <h4 className="mb-0 fw-bold">Lịch Làm Việc</h4>
                     <small className="opacity-75">
-                      {viewMode === 'month' ? 'Lịch làm việc tháng' : 
-                       viewMode === 'week' ? 'Lịch làm việc tuần' : 'Lịch làm việc hôm nay'}
+                      {viewMode === 'month' ? 'Lịch làm việc tháng' :
+                        viewMode === 'week' ? 'Lịch làm việc tuần' : 'Lịch làm việc hôm nay'}
                     </small>
                   </div>
                 </div>
                 {hasRealData && scheduleData?.statistics && (
                   <Badge bg="light" text="dark" className="fs-6">
                     <i className="fas fa-list me-1"></i>
-                    {scheduleData.statistics.total_schedules} lịch trình
+                    {filteredSchedule.length} lịch {viewMode === 'today' ? 'hôm nay' : viewMode === 'week' ? 'tuần này' : 'trong tháng'}
                   </Badge>
                 )}
               </div>
@@ -336,74 +569,82 @@ const TechSchedule = () => {
                 <ButtonGroup>
                   <Button
                     variant={viewMode === "today" ? "success" : "outline-primary"}
-                    onClick={() => setViewMode("today")}
+                    onClick={() => handleViewModeChange("today")}
                     size="sm"
                     className="px-3"
                     disabled={!hasRealData}
                   >
-                    <i className="fas fa-calendar-day me-2"></i> 
+                    <i className="fas fa-calendar-day me-2"></i>
                     Hôm nay
                   </Button>
                   <Button
                     variant={viewMode === "week" ? "success" : "outline-primary"}
-                    onClick={() => setViewMode("week")}
+                    onClick={() => handleViewModeChange("week")}
                     size="sm"
                     className="px-3"
                     disabled={!hasRealData}
                   >
-                    <i className="fas fa-calendar-week me-2"></i> 
+                    <i className="fas fa-calendar-week me-2"></i>
                     Tuần này
                   </Button>
                   <Button
                     variant={viewMode === "month" ? "success" : "outline-primary"}
-                    onClick={() => setViewMode("month")}
+                    onClick={() => handleViewModeChange("month")}
                     size="sm"
                     className="px-3"
                     disabled={!hasRealData}
                   >
-                    <i className="fas fa-calendar me-2"></i> 
+                    <i className="fas fa-calendar me-2"></i>
                     Cả tháng
                   </Button>
                 </ButtonGroup>
 
-                <div className="d-flex align-items-center gap-2">
-                  <Button
-                    variant="outline-primary"
-                    size="sm"
-                    onClick={() => changeMonth(-1)}
-                    className="d-flex align-items-center px-3"
-                    disabled={loading}
-                  >
-                    <i className="fas fa-chevron-left me-2"></i> 
-                    Tháng trước
-                  </Button>
-                  <div className="bg-light rounded px-4 py-2 mx-2">
-                    <strong className="text-primary fs-5">
-                      {currentMonth.toLocaleDateString("vi-VN", {
-                        month: "long",
-                        year: "numeric"
-                      })}
-                    </strong>
+                {/* Chỉ hiển thị điều hướng tháng khi ở chế độ xem tháng */}
+                {viewMode === "month" && (
+                  <div className="d-flex align-items-center gap-2">
+                    <Button
+                      variant="outline-primary"
+                      size="sm"
+                      onClick={() => changeMonth(-1)}
+                      className="d-flex align-items-center px-3"
+                      disabled={loading}
+                    >
+                      <i className="fas fa-chevron-left me-2"></i>
+                      Tháng trước
+                    </Button>
+                    <div className="bg-light rounded px-4 py-2 mx-2">
+                      <strong className="text-primary fs-5">
+                        {currentMonth.toLocaleDateString("vi-VN", {
+                          month: "long",
+                          year: "numeric"
+                        })}
+                      </strong>
+                      {filteredSchedule.length > 0 && (
+                        <div className="small text-success">
+                          <i className="fas fa-check-circle me-1"></i>
+                          {filteredSchedule.length} lịch trình
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      variant="outline-primary"
+                      size="sm"
+                      onClick={() => changeMonth(1)}
+                      className="d-flex align-items-center px-3"
+                      disabled={loading}
+                    >
+                      Tháng sau
+                      <i className="fas fa-chevron-right ms-2"></i>
+                    </Button>
                   </div>
-                  <Button
-                    variant="outline-primary"
-                    size="sm"
-                    onClick={() => changeMonth(1)}
-                    className="d-flex align-items-center px-3"
-                    disabled={loading}
-                  >
-                    Tháng sau 
-                    <i className="fas fa-chevron-right ms-2"></i>
-                  </Button>
-                </div>
+                )}
               </div>
 
-              {/* ✅ HIỂN THỊ THEO TRẠNG THÁI DỮ LIỆU */}
+              {/* Hiển thị theo trạng thái dữ liệu */}
               {!hasRealData ? (
-                // KHÔNG CÓ DỮ LIỆU THẬT
                 renderNoDataState()
               ) : viewMode === "month" ? (
-                // CHẾ ĐỘ XEM LỊCH THÁNG - CÓ DỮ LIỆU
+                // Chế độ xem lịch tháng - có dữ liệu
                 <div className="calendar-month-view">
                   {/* Header các ngày trong tuần */}
                   <div className="row g-0 border-bottom mb-2">
@@ -417,88 +658,99 @@ const TechSchedule = () => {
                   {/* Các tuần trong tháng */}
                   {calendar.map((week, weekIndex) => (
                     <div key={weekIndex} className="row g-0 border-bottom">
-                      {week.map((day, dayIndex) => (
-                        <div 
-                          key={dayIndex} 
-                          className={`col border-end p-2 calendar-day ${
-                            !day.isCurrentMonth ? 'bg-light text-muted' : 
-                            day.dateString === new Date().toISOString().split('T')[0] ? 'bg-primary bg-opacity-10' : ''
-                          }`}
-                          style={{ 
-                            minHeight: '120px',
-                            cursor: day.schedule.length > 0 ? 'pointer' : 'default'
-                          }}
-                          onClick={() => day.schedule.length > 0 && setSelectedDate(
-                            selectedDate === day.dateString ? null : day.dateString
-                          )}
-                        >
-                          <div className="d-flex justify-content-between align-items-start mb-1">
-                            <span className={`fw-semibold ${
-                              day.dateString === new Date().toISOString().split('T')[0] 
-                                ? 'text-primary' 
-                                : ''
-                            }`}>
-                              {day.date.getDate()}
-                            </span>
-                            {day.schedule.length > 0 && (
-                              <Badge bg="success" className="fs-7">
-                                {day.schedule.length}
-                              </Badge>
-                            )}
-                          </div>
+                      {week.map((day, dayIndex) => {
+                        const today = new Date();
+                        const isToday = day.date.toDateString() === today.toDateString();
 
-                          {/* Hiển thị lịch trình trong ngày */}
-                          <div className="calendar-events">
-                            {day.schedule.slice(0, 2).map((schedule, index) => (
-                              <div 
-                                key={index} 
-                                className="calendar-event mb-1 p-1 rounded small"
-                                style={{
-                                  backgroundColor: getStatusVariant(schedule.status) === 'success' 
-                                    ? '#d1e7dd' 
-                                    : getStatusVariant(schedule.status) === 'warning'
-                                    ? '#fff3cd'
-                                    : '#e2e3e5',
-                                  borderLeft: `3px solid var(--bs-${getStatusVariant(schedule.status)})`,
-                                  fontSize: '0.7rem'
-                                }}
-                              >
-                                <div className="fw-semibold text-truncate">
-                                  {schedule.time}
+                        return (
+                          <div
+                            key={dayIndex}
+                            className={`col border-end p-2 calendar-day ${!day.isCurrentMonth ? 'bg-light text-muted' :
+                              isToday ? 'bg-primary bg-opacity-10' : ''
+                              } ${day.schedule.length > 0 ? 'has-schedule' : ''}`}
+                            style={{
+                              minHeight: '120px',
+                              cursor: day.schedule.length > 0 ? 'pointer' : 'default',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onClick={() => handleDayClick(day)}
+                            onMouseEnter={(e) => {
+                              if (day.schedule.length > 0) {
+                                e.currentTarget.style.backgroundColor = '#f8f9fa';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (day.schedule.length > 0) {
+                                e.currentTarget.style.backgroundColor = '';
+                              }
+                            }}
+                          >
+                            <div className="d-flex justify-content-between align-items-start mb-1">
+                              <span className={`fw-semibold ${isToday ? 'text-primary' :
+                                !day.isCurrentMonth ? 'text-muted' : 'text-dark'
+                                }`}>
+                                {day.date.getDate()}
+                              </span>
+                              {day.schedule.length > 0 && (
+                                <Badge
+                                  bg="success"
+                                  className="fs-7"
+                                  style={{ cursor: 'pointer' }}
+                                  title={`${day.schedule.length} lịch trình - Nhấn để xem chi tiết`}
+                                >
+                                  {day.schedule.length}
+                                </Badge>
+                              )}
+                            </div>
+
+                            {/* Hiển thị lịch trình trong ngày (chỉ preview) */}
+                            <div className="calendar-events">
+                              {day.schedule.slice(0, 2).map((schedule, index) => (
+                                <div
+                                  key={index}
+                                  className="calendar-event mb-1 p-1 rounded small"
+                                  style={{
+                                    backgroundColor: getStatusVariant(schedule.status) === 'success'
+                                      ? '#d1e7dd'
+                                      : getStatusVariant(schedule.status) === 'warning'
+                                        ? '#fff3cd'
+                                        : '#e2e3e5',
+                                    borderLeft: `3px solid var(--bs-${getStatusVariant(schedule.status)})`,
+                                    fontSize: '0.7rem'
+                                  }}
+                                >
+                                  <div className="fw-semibold text-truncate" title={schedule.time}>
+                                    {schedule.time}
+                                  </div>
+                                  <div className="text-truncate" title={schedule.location}>
+                                    {schedule.location}
+                                  </div>
                                 </div>
-                                <div className="text-truncate">
-                                  {schedule.location}
+                              ))}
+                              {day.schedule.length > 2 && (
+                                <div
+                                  className="text-center text-primary small fw-semibold"
+                                  style={{ cursor: 'pointer' }}
+                                  title="Nhấn để xem thêm"
+                                >
+                                  +{day.schedule.length - 2} lịch khác
                                 </div>
-                              </div>
-                            ))}
-                            {day.schedule.length > 2 && (
-                              <div className="text-center text-muted small">
-                                +{day.schedule.length - 2} lịch khác
-                              </div>
-                            )}
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ))}
                 </div>
               ) : filteredSchedule.length === 0 ? (
-                // CÓ DỮ LIỆU NHƯNG KHÔNG CÓ LỊCH TRONG THÁNG NÀY
-                <div className="text-center py-5">
-                  <div className="py-4">
-                    <i className="fas fa-calendar-times text-muted fa-4x mb-3 opacity-50"></i>
-                    <h5 className="text-muted fw-light mb-3">Không có lịch làm việc trong tháng này</h5>
-                    <p className="text-muted mb-0">
-                      Không có lịch làm việc nào trong tháng {currentMonth.getMonth() + 1}.
-                    </p>
-                  </div>
-                </div>
+                renderNoDataState()
               ) : (
-                // CHẾ ĐỘ XEM DANH SÁCH (HÔM NAY/TUẦN) - CÓ DỮ LIỆU
+                // Chế độ xem danh sách (Hôm nay/Tuần này)
                 <div className="schedule-list">
                   {filteredSchedule.map((item, index) => (
                     <Card key={index} className="border-0 shadow-sm mb-3">
-                      <Card.Header 
+                      <Card.Header
                         className="bg-white border-bottom-0 py-3"
                         style={{ cursor: "pointer" }}
                         onClick={() =>
@@ -544,12 +796,12 @@ const TechSchedule = () => {
                             >
                               {selectedDate === item.date ? (
                                 <>
-                                  <i className="fas fa-chevron-up me-2"></i> 
+                                  <i className="fas fa-chevron-up me-2"></i>
                                   Thu gọn
                                 </>
                               ) : (
                                 <>
-                                  <i className="fas fa-chevron-down me-2"></i> 
+                                  <i className="fas fa-chevron-down me-2"></i>
                                   Chi tiết
                                 </>
                               )}
@@ -599,16 +851,16 @@ const TechSchedule = () => {
                               </Col>
                               <Col md={4} className="text-md-end">
                                 <div className="d-flex flex-column gap-2">
-                                  <Button 
-                                    variant="outline-primary" 
+                                  <Button
+                                    variant="outline-primary"
                                     size="sm"
                                     className="d-flex align-items-center justify-content-center"
                                   >
                                     <i className="fas fa-directions me-2"></i>
                                     Chỉ đường
                                   </Button>
-                                  <Button 
-                                    variant="outline-success" 
+                                  <Button
+                                    variant="outline-success"
                                     size="sm"
                                     className="d-flex align-items-center justify-content-center"
                                   >
@@ -626,14 +878,18 @@ const TechSchedule = () => {
                 </div>
               )}
 
-              {/* Footer thống kê - CHỈ HIỂN THỊ KHI CÓ DỮ LIỆU */}
+              {/* Footer thống kê */}
               {hasRealData && scheduleData?.statistics && filteredSchedule.length > 0 && (
                 <div className="mt-4 pt-3 border-top">
                   <Row className="align-items-center">
                     <Col md={6}>
                       <small className="text-muted">
                         <i className="fas fa-info-circle me-2 text-primary"></i>
-                        Hiển thị <strong>{filteredSchedule.length}</strong> lịch trình trong tháng
+                        Hiển thị <strong>{filteredSchedule.length}</strong> lịch trình {
+                          viewMode === 'today' ? 'hôm nay' :
+                            viewMode === 'week' ? 'trong tuần này' :
+                              `trong tháng ${currentMonth.getMonth() + 1}`
+                        }
                       </small>
                     </Col>
                     <Col md={6} className="text-md-end">
