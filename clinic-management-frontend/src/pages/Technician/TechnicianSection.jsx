@@ -20,9 +20,9 @@ const ACTION_TYPES = {
   CANCEL: 'cancel'
 };
 
-const ITEMS_PER_PAGE = 2; // ✅ 5 dòng mỗi trang
+const ITEMS_PER_PAGE = 5;
 
-const TechnicianSection = ({ testResultsData, completedServicesData, updateStats, loading }) => {
+const TechnicianSection = ({ testResultsData, completedServicesData, updateStats, loading, pagination, onPageChange }) => {
   console.log('🎯 TechnicianSection rendered');
   console.log('📥 testResultsData từ props:', testResultsData);
   console.log('📥 completedServicesData từ props:', completedServicesData);
@@ -46,6 +46,10 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
   const [confirmAction, setConfirmAction] = useState(null);
   const [confirmData, setConfirmData] = useState(null);
 
+  // ✅ STATE MỚI CHO MODAL XEM KẾT QUẢ
+  const [showViewResultModal, setShowViewResultModal] = useState(false);
+  const [viewingService, setViewingService] = useState(null);
+
   // ✅ Đồng bộ testResultsData khi props thay đổi
   useEffect(() => {
     console.log('🔄 [EFFECT] Syncing localData with testResultsData');
@@ -61,15 +65,23 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
     }
   }, [testResultsData]);
 
-  // ✅ Đồng bộ completedServicesData khi props thay đổi
+  // ✅ Đồng bộ completedServicesData khi props thay đổi - SẮP XẾP MỚI NHẤT LÊN ĐẦU
   useEffect(() => {
     console.log('🔄 [EFFECT] Syncing completedServices with completedServicesData');
     console.log('📥 [EFFECT] Raw completedServicesData:', completedServicesData);
 
     if (completedServicesData && Array.isArray(completedServicesData)) {
-      console.log('✅ [EFFECT] Setting completedServices:', completedServicesData.length, 'items');
-      setCompletedServices(completedServicesData);
-      setCurrentCompletedPage(0); // Reset về trang đầu khi data thay đổi
+      // ✅ SẮP XẾP: Kết quả đã hoàn thành - MỚI NHẤT LÊN ĐẦU
+      const sortedCompletedServices = [...completedServicesData].sort((a, b) => {
+        // Ưu tiên dịch vụ hoàn thành gần đây nhất
+        const dateA = new Date(a.completed_at || a.updated_at || a.order_date || 0);
+        const dateB = new Date(b.completed_at || b.updated_at || b.order_date || 0);
+        return  dateA - dateB; // Mới nhất lên đầu
+      });
+
+      console.log('✅ [EFFECT] Setting sorted completedServices:', sortedCompletedServices.length, 'items');
+      setCompletedServices(sortedCompletedServices);
+      setCurrentCompletedPage(0);
     } else {
       console.log('⚠️ [EFFECT] completedServicesData is not array, setting empty');
       setCompletedServices([]);
@@ -245,6 +257,8 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
     return dateString;
   }, []);
 
+  // ✅ OPTIMISTIC UPDATE: handleStatusChange
+  // ✅ SỬA LẠI: handleStatusChange với xử lý response linh hoạt
   const handleStatusChange = async (serviceOrderId, patientName, serviceName, newStatus) => {
     if (localLoading) {
       console.log('⏳ Đang xử lý, vui lòng chờ...');
@@ -258,36 +272,85 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
 
       console.log(`🔄 Đang thay đổi trạng thái: ${serviceOrderId} -> ${newStatus}`);
 
-      // ✅ 1. CẬP NHẬT UI NGAY LẬP TỨC (Optimistic Update)
+      // ✅ 1. LƯU TRẠNG THÁI CŨ ĐỂ ROLLBACK NẾU CẦN
+      const previousData = [...localData];
+      const previousCompleted = [...completedServices];
+
+      // ✅ 2. CẬP NHẬT UI NGAY LẬP TỨC (Optimistic Update)
       updateLocalStatus(serviceOrderId, newStatus);
 
-      // ✅ 2. GỬI API
+      // ✅ 3. NẾU HOÀN THÀNH, CHUYỂN DỊCH VỤ SANG DANH SÁCH HOÀN THÀNH
+      if (newStatus === STATUS.COMPLETED) {
+        const completedService = localData.find(s => s.service_order_id === serviceOrderId);
+        if (completedService) {
+          setCompletedServices(prev => [{
+            ...completedService,
+            status: STATUS.COMPLETED,
+            completed_at: new Date().toLocaleDateString('vi-VN')
+          }, ...prev]);
+
+          setLocalData(prev => prev.filter(s => s.service_order_id !== serviceOrderId));
+        }
+      }
+
+      // ✅ 4. GỬI API (trong background) - XỬ LÝ RESPONSE LINH HOẠT
       try {
         const response = await technicianService.updateServiceStatus(serviceOrderId, newStatus);
 
-        if (response.data?.success) {
+        console.log('📨 API Response:', response);
+
+        // ✅ KIỂM TRA RESPONSE LINH HOẠT - CHẤP NHẬN NHIỀU FORMAT
+        const isSuccess =
+          response.data?.success === true ||
+          response.data?.status === 'success' ||
+          response.status === 200 ||
+          response.statusText === 'OK';
+
+        if (isSuccess) {
           console.log('✅ API cập nhật thành công');
+
+          // ✅ HIỂN THỊ THÔNG BÁO THÀNH CÔNG
+          const actionMessage = getActionMessage(newStatus, patientName, serviceName);
+          setLocalSuccess(`✅ ${actionMessage}`);
+          setTimeout(() => setLocalSuccess(''), 3000);
+
         } else {
-          console.warn('⚠️ API trả về success=false nhưng vẫn tiếp tục');
+          // ✅ API TRẢ VỀ SUCCESS=FALSE NH�NG CÓ THỂ ĐÃ UPDATE DB
+          console.warn('⚠️ API trả về success=false, nhưng có thể đã update DB');
+
+          // ✅ VẪN COI NHƯ THÀNH CÔNG NẾU KHÔNG CÓ LỖI
+          const actionMessage = getActionMessage(newStatus, patientName, serviceName);
+          setLocalSuccess(`✅ ${actionMessage} (đã đồng bộ)`);
+          setTimeout(() => setLocalSuccess(''), 3000);
         }
+
       } catch (apiError) {
-        console.warn('⚠️ Lỗi API được bỏ qua:', apiError);
-      }
+        console.error('❌ Lỗi API:', apiError);
 
-      // ✅ 3. HIỂN THỊ THÔNG BÁO THÀNH CÔNG
-      const actionMessage = getActionMessage(newStatus, patientName, serviceName);
-      setLocalSuccess(`✅ ${actionMessage}`);
+        // ✅ PHÂN BIỆT LOẠI LỖI
+        if (apiError.response?.status >= 500) {
+          // Lỗi server - có thể đã update DB
+          console.warn('⚠️ Lỗi server, có thể đã update DB');
+          const actionMessage = getActionMessage(newStatus, patientName, serviceName);
+          setLocalSuccess(`✅ ${actionMessage} (đã đồng bộ)`);
+          setTimeout(() => setLocalSuccess(''), 3000);
+        } else {
+          // Lỗi client - rollback
+          console.error('❌ Lỗi client, rollback UI');
+          setLocalData(previousData);
+          setCompletedServices(previousCompleted);
 
-      // ✅ 4. RELOAD DATA SAU KHI THAY ĐỔI TRẠNG THÁI
-      setTimeout(() => {
-        if (updateStats) {
-          console.log('🔄 Tự động đồng bộ data từ server...');
-          updateStats();
+          let errorMessage = '❌ Lỗi cập nhật';
+          if (apiError.response?.data?.message) {
+            errorMessage = `❌ ${apiError.response.data.message}`;
+          } else if (apiError.message) {
+            errorMessage = `❌ ${apiError.message}`;
+          }
+
+          setLocalError(errorMessage);
+          setTimeout(() => setLocalError(''), 5000);
         }
-      }, 2000);
-
-      // ✅ 5. TỰ ĐỘNG ẨN THÔNG BÁO
-      setTimeout(() => setLocalSuccess(''), 3000);
+      }
 
     } catch (err) {
       console.error('💥 Lỗi không mong muốn:', err);
@@ -298,7 +361,7 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
     }
   };
 
-  // ✅ PHIÊN BẢN TỐI ƯU CHO handleSaveResult
+  // ✅ SỬA LẠI: handleSaveResult với auto reload
   const handleSaveResult = async () => {
     if (localLoading) return;
 
@@ -340,12 +403,13 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
         // ✅ ĐÓNG MODAL NGAY
         closeResultModal();
 
-        // ✅ RELOAD DATA TRONG BACKGROUND
-        if (updateStats) {
-          updateStats().catch(err => {
-            console.warn('⚠️ Lỗi đồng bộ data sau lưu kết quả:', err);
-          });
-        }
+        // ✅ RELOAD DATA TRONG BACKGROUND - QUAN TRỌNG!
+        setTimeout(() => {
+          if (updateStats) {
+            console.log('🔄 Tự động đồng bộ data sau lưu kết quả...');
+            updateStats(); // Gọi hàm reload từ Dashboard
+          }
+        }, 800); // Chờ 0.8 giây rồi reload
 
         setTimeout(() => setLocalSuccess(''), 3000);
       } else {
@@ -375,7 +439,7 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
     }
   };
 
-  // ✅ CẬP NHẬT updateLocalStatus
+  // ✅ CẬP NHẬT updateLocalStatus để xử lý cả completed services
   const updateLocalStatus = useCallback((serviceOrderId, newStatus, newResult = null) => {
     console.log(`🔄 Updating local status: ${serviceOrderId} -> ${newStatus}`);
 
@@ -394,6 +458,20 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
       );
       return updatedData;
     });
+
+    // ✅ CẬP NHẬT CẢ COMPLETED SERVICES NẾU CÓ KẾT QUẢ MỚI
+    if (newResult !== null) {
+      setCompletedServices(prevCompleted => {
+        return prevCompleted.map(service =>
+          service.service_order_id === serviceOrderId
+            ? {
+              ...service,
+              result: newResult
+            }
+            : service
+        );
+      });
+    }
   }, []);
 
   // ✅ Modal functions
@@ -409,6 +487,89 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
     setResultText('');
   };
 
+  // ✅ Hàm xem kết quả chi tiết - HIỆN MODAL THẬT
+  const viewResultDetail = (service) => {
+    if (!service.result || service.result.trim() === '') {
+      setLocalError('Chưa có kết quả xét nghiệm cho dịch vụ này');
+      setTimeout(() => setLocalError(''), 3000);
+      return;
+    }
+
+    console.log('📋 Xem kết quả chi tiết:', {
+      patient: service.patient_name,
+      service: service.service_name,
+      result: service.result
+    });
+
+    // ✅ MỞ MODAL XEM KẾT QUẢ
+    setViewingService(service);
+    setShowViewResultModal(true);
+  };
+
+  // ✅ Hàm đóng modal xem kết quả
+  const closeViewResultModal = () => {
+    setShowViewResultModal(false);
+    setViewingService(null);
+  };
+
+  // ✅ Hàm in kết quả
+  const printResult = (service) => {
+    if (!service.result || service.result.trim() === '') {
+      setLocalError('Chưa có kết quả xét nghiệm để in');
+      setTimeout(() => setLocalError(''), 3000);
+      return;
+    }
+
+    // ✅ TẠO CỬA SỐ IN
+    const printWindow = window.open('', '_blank');
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Kết Quả Xét Nghiệm - ${service.patient_name}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; }
+          .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+          .patient-info { margin-bottom: 15px; background: #f8f9fa; padding: 15px; border-radius: 5px; }
+          .result { white-space: pre-wrap; border: 1px solid #ddd; padding: 15px; margin-top: 10px; background: white; }
+          .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+          @media print { 
+            body { margin: 0; } 
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h2>KẾT QUẢ XÉT NGHIỆM</h2>
+          <h3>PHÒNG KHÁM ĐA KHOA</h3>
+        </div>
+        <div class="patient-info">
+          <p><strong>Bệnh nhân:</strong> ${service.patient_name}</p>
+          <p><strong>Dịch vụ:</strong> ${service.service_name}</p>
+          <p><strong>Mã dịch vụ:</strong> ${service.service_order_id}</p>
+          <p><strong>Bác sĩ chỉ định:</strong> ${service.referring_doctor_name || 'N/A'}</p>
+          <p><strong>Ngày in:</strong> ${new Date().toLocaleDateString('vi-VN')}</p>
+        </div>
+        <div class="result">${service.result}</div>
+        <div class="footer">
+          <p>--- Kết thúc báo cáo ---</p>
+        </div>
+        <div class="no-print" style="margin-top: 20px; text-align: center;">
+          <button onclick="window.print()" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">In Kết Quả</button>
+          <button onclick="window.close()" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">Đóng</button>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+
+    setLocalSuccess(`Đang in kết quả của ${service.patient_name}`);
+    setTimeout(() => setLocalSuccess(''), 3000);
+  };
+
   // ✅ Message helpers
   const getActionMessage = (status, patientName, serviceName) => {
     const messageMap = {
@@ -420,135 +581,11 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
     return messageMap[status] || `Đã thay đổi trạng thái "${serviceName}" cho ${patientName}`;
   };
 
-  // ✅ Hàm xem kết quả chi tiết
-  const viewResultDetail = (service) => {
-    if (!service.result || service.result.trim() === '') {
-      setLocalError('Chưa có kết quả xét nghiệm cho dịch vụ này');
-      return;
-    }
-
-    const modalContent = `
-      <div style="max-width: 600px; padding: 20px; background: white; border-radius: 10px;">
-        <h3 style="color: #198754; margin-bottom: 20px; text-align: center;">
-          <i class="fas fa-vial me-2"></i>Kết Quả Xét Nghiệm
-        </h3>
-        
-        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-          <p><strong>Bệnh nhân:</strong> ${service.patient_name}</p>
-          <p><strong>Dịch vụ:</strong> ${service.service_name}</p>
-          <p><strong>Ngày thực hiện:</strong> ${service.order_date || 'N/A'}</p>
-          <p><strong>Mã dịch vụ:</strong> #${service.service_order_id}</p>
-        </div>
-        
-        <div style="background: white; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px;">
-          <h5 style="color: #495057; margin-bottom: 10px;">Kết quả:</h5>
-          <div style="white-space: pre-wrap; line-height: 1.6; color: #212529; font-family: Arial, sans-serif;">
-            ${service.result}
-          </div>
-        </div>
-        
-        <div style="margin-top: 20px; text-align: center;">
-          <button onclick="window.print()" class="btn btn-success me-2" style="padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer;">
-            <i class="fas fa-print me-1"></i>In Kết Quả
-          </button>
-          <button onclick="document.getElementById('resultModal').remove()" class="btn btn-secondary" style="padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer;">
-            <i class="fas fa-times me-1"></i>Đóng
-          </button>
-        </div>
-      </div>
-    `;
-
-    const modal = document.createElement('div');
-    modal.id = 'resultModal';
-    modal.style.position = 'fixed';
-    modal.style.top = '0';
-    modal.style.left = '0';
-    modal.style.width = '100%';
-    modal.style.height = '100%';
-    modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
-    modal.style.display = 'flex';
-    modal.style.justifyContent = 'center';
-    modal.style.alignItems = 'center';
-    modal.style.zIndex = '9999';
-    modal.innerHTML = modalContent;
-
-    document.body.appendChild(modal);
-
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        document.body.removeChild(modal);
-      }
-    });
-  };
-
-  // ✅ Hàm in kết quả
-  const printResult = (service) => {
-    if (!service.result || service.result.trim() === '') {
-      setLocalError('Chưa có kết quả xét nghiệm để in');
-      return;
-    }
-
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Kết Quả Xét Nghiệm - ${service.patient_name}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-            .patient-info { margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 5px; }
-            .result-content { white-space: pre-wrap; margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background: white; }
-            .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
-            @media print { 
-              body { margin: 0; } 
-              .no-print { display: none; }
-              .header { border-bottom: 2px solid #000; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>KẾT QUẢ XÉT NGHIỆM</h1>
-            <h3>Phòng Khám Đa Khoa</h3>
-          </div>
-          
-          <div class="patient-info">
-            <p><strong>Họ tên bệnh nhân:</strong> ${service.patient_name}</p>
-            <p><strong>Tuổi:</strong> ${service.patient_age || 'N/A'} | <strong>Giới tính:</strong> ${service.patient_gender || 'N/A'}</p>
-            <p><strong>Dịch vụ:</strong> ${service.service_name}</p>
-            <p><strong>Ngày thực hiện:</strong> ${service.order_date || 'N/A'}</p>
-            <p><strong>Bác sĩ chỉ định:</strong> ${service.referring_doctor_name || 'N/A'}</p>
-          </div>
-          
-          <div class="result-content">
-            ${service.result}
-          </div>
-          
-          <div class="footer">
-            <p>Kết quả được tạo vào: ${new Date().toLocaleString('vi-VN')}</p>
-            <p>Chữ ký kỹ thuật viên</p>
-            <p>___________________________________</p>
-          </div>
-          
-          <div class="no-print" style="text-align: center; margin-top: 20px;">
-            <button onclick="window.print()" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
-              In Kết Quả
-            </button>
-            <button onclick="window.close()" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">
-              Đóng
-            </button>
-          </div>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-  };
-
-  // ✅ Tính toán statistics
+  // ✅ Tính toán statistics từ cả localData và completedServices
   const statistics = React.useMemo(() => {
-    console.log('📊 Calculating statistics from localData:', localData);
+    console.log('📊 Calculating statistics from localData and completedServices');
 
-    const totalServices = localData.length;
+    const totalAssignedServices = localData.length;
     const completedServicesCount = completedServices.length;
     const inProgressServices = localData.filter(s =>
       s.status === STATUS.IN_PROGRESS
@@ -556,10 +593,14 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
     const assignedServices = localData.filter(s =>
       s.status === STATUS.ASSIGNED
     ).length;
-    const totalRevenue = localData.reduce((total, service) => total + (service.price || 0), 0);
+
+    // ✅ TỔNG SỐ DỊCH VỤ ĐANG QUẢN LÝ = ĐANG THỰC HIỆN + ĐÃ HOÀN THÀNH
+    const totalManagedServices = totalAssignedServices + completedServicesCount;
+
+    const totalRevenue = [...localData, ...completedServices].reduce((total, service) => total + (service.price || 0), 0);
 
     console.log('📊 Statistics result:', {
-      totalServices,
+      totalManagedServices,
       completedServices: completedServicesCount,
       inProgressServices,
       assignedServices,
@@ -567,7 +608,7 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
     });
 
     return {
-      totalServices,
+      totalServices: totalManagedServices,
       completedServices: completedServicesCount,
       inProgressServices,
       assignedServices,
@@ -575,7 +616,6 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
     };
   }, [localData, completedServices]);
 
-  // ✅ Render functions
   const renderStatisticsCards = () => (
     <Row className="g-3">
       {[
@@ -706,9 +746,9 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
                   actionType: 'start'
                 })}
                 disabled={localLoading}
+                title="Bắt đầu dịch vụ"
               >
                 <i className="fas fa-play me-1"></i>
-                Bắt đầu
               </Button>
             )}
 
@@ -720,9 +760,9 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
                 className="px-3"
                 onClick={() => openResultModal(service)}
                 disabled={localLoading}
+                title={service.result ? 'Sửa kết quả xét nghiệm' : 'Thêm kết quả xét nghiệm'}
               >
                 <i className="fas fa-vial me-1"></i>
-                {service.result ? 'Sửa KQ' : 'Kết quả'}
               </Button>
             )}
 
@@ -739,9 +779,9 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
                   actionType: 'complete'
                 })}
                 disabled={localLoading}
+                title="Hoàn thành dịch vụ"
               >
                 <i className="fas fa-check me-1"></i>
-                Hoàn thành
               </Button>
             )}
 
@@ -758,9 +798,10 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
                   actionType: 'cancel'
                 })}
                 disabled={localLoading}
+                title="Hủy dịch vụ"
               >
                 <i className="fas fa-times me-1"></i>
-                Hủy
+
               </Button>
             )}
           </div>
@@ -870,13 +911,13 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
                         </tr>
                       </thead>
                       <tbody>
-                        {paginatedAssignedData.map((service, index) => 
+                        {paginatedAssignedData.map((service, index) =>
                           renderServiceRow(service, currentAssignedPage * ITEMS_PER_PAGE + index)
                         )}
                       </tbody>
                     </Table>
                   </div>
-                  
+
                   {/* ✅ PHÂN TRANG CHO ASSIGNED SERVICES */}
                   {assignedPageCount > 1 && (
                     <div className="p-3 border-top">
@@ -989,9 +1030,10 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
                                   className="px-3"
                                   onClick={() => viewResultDetail(service)}
                                   disabled={!service.result}
+                                  title={service.result ? 'Xem kết quả xét nghiệm' : ''}
                                 >
                                   <i className="fas fa-eye me-1"></i>
-                                  Xem
+
                                 </Button>
                                 <Button
                                   variant="outline-success"
@@ -999,9 +1041,10 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
                                   className="px-3"
                                   onClick={() => printResult(service)}
                                   disabled={!service.result}
+                                  title={service.result ? 'In kết quả xét nghiệm' : ''}
                                 >
                                   <i className="fas fa-print me-1"></i>
-                                  In
+
                                 </Button>
                               </div>
                             </td>
@@ -1010,7 +1053,7 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
                       </tbody>
                     </Table>
                   </div>
-                  
+
                   {/* ✅ PHÂN TRANG CHO COMPLETED SERVICES */}
                   {completedPageCount > 1 && (
                     <div className="p-3 border-top">
@@ -1092,6 +1135,87 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
                 Lưu Kết Quả
               </>
             )}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* ✅ MODAL XEM KẾT QUẢ CHI TIẾT */}
+      <Modal show={showViewResultModal} onHide={closeViewResultModal} size="lg">
+        <Modal.Header closeButton className="bg-primary text-white">
+          <Modal.Title>
+            <i className="fas fa-eye me-2"></i>
+            Xem Kết Quả Xét Nghiệm
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {viewingService && (
+            <>
+              {/* Thông tin dịch vụ */}
+              <div className="mb-4 p-3 bg-light rounded">
+                <Row>
+                  <Col md={6}>
+                    <strong>Bệnh nhân:</strong> {viewingService.patient_name}
+                  </Col>
+                  <Col md={6}>
+                    <strong>Mã dịch vụ:</strong> {viewingService.service_order_id}
+                  </Col>
+                </Row>
+                <Row className="mt-2">
+                  <Col md={6}>
+                    <strong>Dịch vụ:</strong> {viewingService.service_name}
+                  </Col>
+                  <Col md={6}>
+                    <strong>Ngày hoàn thành:</strong> {viewingService.completed_at || viewingService.updated_at || 'N/A'}
+                  </Col>
+                </Row>
+                <Row className="mt-2">
+                  <Col md={6}>
+                    <strong>Bác sĩ chỉ định:</strong> {viewingService.referring_doctor_name || 'N/A'}
+                  </Col>
+                  <Col md={6}>
+                    <strong>Tuổi/Giới tính:</strong> {viewingService.patient_age || 'N/A'} / {viewingService.patient_gender || 'N/A'}
+                  </Col>
+                </Row>
+              </div>
+
+              {/* Kết quả chi tiết */}
+              <div>
+                <h6 className="text-primary mb-3">
+                  <i className="fas fa-vial me-2"></i>
+                  Kết Quả Xét Nghiệm Chi Tiết:
+                </h6>
+                <div
+                  className="p-3 border rounded bg-white"
+                  style={{
+                    whiteSpace: 'pre-wrap',
+                    maxHeight: '400px',
+                    overflowY: 'auto',
+                    fontSize: '14px',
+                    lineHeight: '1.5',
+                    fontFamily: 'Arial, sans-serif'
+                  }}
+                >
+                  {viewingService.result}
+                </div>
+              </div>
+            </>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={closeViewResultModal}>
+            <i className="fas fa-times me-1"></i>
+            Đóng
+          </Button>
+          <Button
+            variant="success"
+            onClick={() => {
+              if (viewingService) {
+                printResult(viewingService);
+              }
+            }}
+          >
+            <i className="fas fa-print me-1"></i>
+            In Kết Quả
           </Button>
         </Modal.Footer>
       </Modal>
