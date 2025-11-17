@@ -1,36 +1,40 @@
-import axios from '../axios'; // ✅ SỬA LẠI IMPORT
+import axios from '../axios';
 
 const technicianService = {
-    // ✅ Lấy danh sách dịch vụ được chỉ định (PHÂN TRANG)
     getAssignedServices: (page = 1) => {
-        return axios.get(`/api/technician/servicesv1`, {
-            params: { page }
-        });
-    },
-
-    // ✅ POST - Cập nhật dữ liệu (thay vì PUT)
-    updateServiceStatus: (serviceOrderId, status) => {
-        console.log(`🔄 Sending status update: ${serviceOrderId} -> ${status}`);
-
-        return axios.post(`/api/technician/services/${serviceOrderId}/status`, { status })
+        console.log('📋 [SERVICE] Calling assigned services endpoint...');
+        return axios.get(`/api/technician/servicesv1`, { params: { page } })
             .then(response => {
-                console.log('✅ Status update success:', response.data);
+                console.log('✅ [SERVICE] Assigned services response received');
                 return response;
             })
             .catch(error => {
-                console.error('❌ Status update error:', error);
+                console.error('❌ [SERVICE] Assigned services error:', error);
                 throw error;
             });
     },
 
-    // SỬA LẠI: Cập nhật kết quả - Dùng JSON thay vì FormData
+    // ✅ CHỈ GIỮ 1 METHOD - Sử dụng parameter nếu cần
+    getCompletedServices: (technicianId = null) => {
+        console.log(`📋 Getting completed services for technician: ${technicianId || 'default'}`);
+        return axios.get('/api/technician/completed-services')
+            .then(response => {
+                console.log('✅ Completed services response received');
+                return response;
+            })
+            .catch(error => {
+                console.error('❌ Completed services error:', error);
+                throw error;
+            });
+    },
+
+    // ✅ Cập nhật kết quả
     updateServiceResult: (serviceOrderId, result) => {
         console.log('🔄 Sending result data:', {
             serviceOrderId,
             resultLength: result.length
         });
 
-        // SỬA: Dùng JSON thay vì FormData
         return axios.post(`/api/technician/service-orders/${serviceOrderId}/result`, {
             result: result
         }, {
@@ -48,28 +52,36 @@ const technicianService = {
             });
     },
 
-    // SỬA LẠI: Lấy danh sách dịch vụ đã hoàn thành
-    getCompletedServices: (technicianId = 5) => {
-        console.log(`📋 Getting completed services for technician: ${technicianId}`);
+    // ✅ THÊM METHOD CẬP NHẬT TRẠNG THÁI (QUAN TRỌNG)
+    updateServiceStatus: (serviceOrderId, status) => {
+        console.log('🔄 Updating service status:', {
+            serviceOrderId,
+            status
+        });
 
-        return axios.get('/api/technician/completed-services')
-            .then(response => {
-                console.log('✅ Completed services response:', response.data);
-                return response;
-            })
-            .catch(error => {
-                console.error('❌ Completed services error:', error);
-                throw error;
-            });
+        return axios.post(`/api/technician/services/${serviceOrderId}/status`, {
+            status: status
+        }, {
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => {
+            console.log('✅ Status update success:', response.data);
+            return response;
+        })
+        .catch(error => {
+            console.error('❌ Status update error:', error);
+            throw error;
+        });
     },
 
-    // ✅ LẤY LỊCH LÀM VIỆC CỦA KTV
+    // Lịch làm việc
     getWorkSchedule: () => {
         console.log('📅 Getting work schedule for technician');
-
         return axios.get('/api/technician/work-schedule')
             .then(response => {
-                console.log('✅ Work schedule response:', response.data);
+                console.log('✅ Work schedule response received');
                 return response;
             })
             .catch(error => {
@@ -78,13 +90,11 @@ const technicianService = {
             });
     },
 
-    // ✅ LẤY LỊCH LÀM VIỆC THEO THÁNG
     getWorkScheduleByMonth: (year, month) => {
         console.log(`📅 Getting work schedule for ${month}/${year}`);
-
         return axios.get(`/api/technician/work-schedule/${year}/${month}`)
             .then(response => {
-                console.log('✅ Monthly work schedule response:', response.data);
+                console.log('✅ Monthly work schedule response received');
                 return response;
             })
             .catch(error => {

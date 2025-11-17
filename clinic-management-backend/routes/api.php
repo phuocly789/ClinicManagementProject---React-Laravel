@@ -169,10 +169,21 @@ Route::prefix('print')->group(function () {
 
 // Technician Routes
 Route::prefix('technician')->group(function () {
-    // Danh sách dịch vụ
+    // Danh sách dịch vụ được chỉ định
     Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
-    // thay đổi trạng thái dịch vụ
+
+    // ✅ THÊM ROUTE MỚI: Danh sách dịch vụ đã hoàn thành
+    Route::get('/completed-services', [TestResultsController::class, 'getCompletedServices']);
+
+    // Thay đổi trạng thái dịch vụ
     Route::post('/services/{serviceOrderId}/status', [TestResultsController::class, 'updateServiceStatus']);
+
+    // ✅ THÊM ROUTE CHO CẬP NHẬT KẾT QUẢ (nếu chưa có)
+    Route::post('/service-orders/{serviceOrderId}/result', [TestResultsController::class, 'updateServiceResult']);
+
+    // ✅ THÊM ROUTE CHO LỊCH LÀM VIỆC
+    Route::get('/work-schedule', [TestResultsController::class, 'getWorkSchedule']);
+    Route::get('/work-schedule/{year}/{month}', [TestResultsController::class, 'getWorkScheduleByMonth']);
 });
 
 //Receptionist Routes
