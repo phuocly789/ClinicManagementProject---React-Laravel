@@ -149,6 +149,8 @@ Route::prefix('users')->group(function () {
     Route::put('/reset-password/{id}', [AdminUserController::class, 'resetPassword']);
     // Tìm kiếm user với Solr
     Route::get('/search', [SearchController::class, 'searchUsers']);
+    Route::get('/roles', [AdminUserController::class, 'roles']);
+
 });
 
 Route::get('/roles', [AdminUserController::class, 'roles']);
@@ -311,4 +313,85 @@ Route::prefix('doctor')->group(function () {
     // Tìm kiếm thuốc cho doctor
     Route::get('/medicines/search-solr', [SearchController::class, 'searchMedicines']);
 });
+// routes/api.php hoặc routes/web.php
 
+Route::get('/solr-test', function () {
+    try {
+        $client = app(\Solarium\Client::class);
+        
+        // Test ping
+        $ping = $client->createPing();
+        $result = $client->ping($ping);
+        
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Solr connection successful',
+            'endpoint' => [
+                'host' => env('SOLR_HOST'),
+                'port' => env('SOLR_PORT'),
+                'path' => env('SOLR_PATH'),
+                'core' => env('SOLR_CORE'),
+                'full_url' => sprintf(
+                    '%s://%s:%s%s/%s/',  // Thêm / giữa path và core
+                    env('SOLR_SCHEME'),
+                    env('SOLR_HOST'),
+                    env('SOLR_PORT'),
+                    env('SOLR_PATH'),
+                    env('SOLR_CORE')
+                )
+            ],
+            'ping_response' => $result->getData()
+        ]);
+    } catch (\Exception $e) {
+            // \Log::error('Solr connection error: ' . $e->getMessage());
+        
+        return response()->json([
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'endpoint' => [
+                'host' => env('SOLR_HOST'),
+                'port' => env('SOLR_PORT'),
+                'path' => env('SOLR_PATH'),
+                'core' => env('SOLR_CORE'),
+                'full_url' => sprintf(
+                    '%s://%s:%s%s/%s/',
+                    env('SOLR_SCHEME'),
+                    env('SOLR_HOST'),
+                    env('SOLR_PORT'),
+                    env('SOLR_PATH'),
+                    env('SOLR_CORE')
+                )
+            ]
+        ], 500);
+    }
+});
+
+Route::get('/solr-debug', function () {
+    try {
+        $client = app(\Solarium\Client::class);
+        
+        // Test ping
+        $ping = $client->createPing();
+        $pingResult = $client->ping($ping);
+        
+        // Test core status
+        $coreAdmin = $client->createCoreAdmin();
+        $status = $coreAdmin->createStatus();
+        $coreAdmin->setAction($status);
+        $result = $client->coreAdmin($coreAdmin);
+        
+        return response()->json([
+            'status' => 'success',
+            'ping' => $pingResult->getStatus(),
+            'core_status' => $result->getStatus(),
+            'endpoints' => $client->getEndpoints(),
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ], 500);
+    }
+});

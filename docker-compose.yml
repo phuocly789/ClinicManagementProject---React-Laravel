@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # Backend: Laravel với PHP built-in server
   backend:
     build:
       context: ./clinic-management-backend
@@ -13,33 +14,89 @@ services:
     env_file:
       - ./clinic-management-backend/.env
     environment:
-
-      # postgresql://postgres.phzrctyceyysendeluac:[YOUR-PASSWORD]@aws-1-ap-south-1.pooler.supabase.com:5432/postgres
+      # Database Configuration
       - DB_CONNECTION=pgsql
-      - DB_HOST=aws-1-ap-south-1.pooler.supabase.com
+      - DB_HOST=103.75.183.156
       - DB_PORT=5432
-      - DB_DATABASE=postgres
-      - DB_USERNAME=postgres.phzrctyceyysendeluac
-      - DB_PASSWORD=lmp@123
-      - DB_SSLMODE=require
+      - DB_DATABASE=clinicdb
+      - DB_USERNAME=phuoc
+      - DB_PASSWORD=Phuoccao@123
+      - DB_SSLMODE=disable 
+      
+      # App Configuration
       - APP_ENV=local
       - APP_DEBUG=true
-      - XDEBUG_MODE=develop,debug
-      - XDEBUG_CONFIG=client_host=host.docker.internal
+
+      # Solr Configuration - SỬA TÊN HOST
       - SOLR_HOST=solr
       - SOLR_PORT=8983
+      - SOLR_PATH=/solr/
       - SOLR_CORE=clinic_management
-      - SOLR_PATH=/solr
+      - SOLR_SCHEME=http
+      - SOLR_TIMEOUT=30
+
+      - XDEBUG_MODE=develop,debug
+      - XDEBUG_CONFIG=client_host=host.docker.internal
+
     ports:
       - "8000:8000"
       - "9003:9003"
     networks:
       - app-network
     depends_on:
-      - solr
+      solr:
+        condition: service_healthy
     command: bash -c "if [ ! -d vendor ]; then composer install --no-dev --optimize-autoloader; fi && php artisan serve --host=0.0.0.0 --port=8000"
 
-  # Frontend: React dev server (giữ nguyên)
+  # Scheduler: chạy Laravel Scheduler
+  scheduler:
+    build:
+      context: ./clinic-management-backend
+      dockerfile: ../Dockerfile.backend
+    container_name: laravel-scheduler
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./clinic-management-backend:/var/www/html
+    env_file:
+      - ./clinic-management-backend/.env
+    environment:
+      - SOLR_HOST=solr
+      - SOLR_PORT=8983
+      - SOLR_PATH=/solr/
+      - SOLR_CORE=clinic_management
+    networks:
+      - app-network
+    depends_on:
+      solr:
+        condition: service_healthy
+    command: bash -c "php artisan schedule:work"
+
+  # Queue Worker: xử lý job gửi mail
+  queue-worker:
+    build:
+      context: ./clinic-management-backend
+      dockerfile: ../Dockerfile.backend
+    container_name: laravel-queue
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./clinic-management-backend:/var/www/html
+    env_file:
+      - ./clinic-management-backend/.env
+    environment:
+      - SOLR_HOST=solr
+      - SOLR_PORT=8983
+      - SOLR_PATH=/solr/
+      - SOLR_CORE=clinic_management
+    networks:
+      - app-network
+    depends_on:
+      solr:
+        condition: service_healthy
+    command: bash -c "php artisan queue:work --sleep=3 --tries=3"
+
+  # Frontend: React dev server
   frontend:
     build:
       context: ./clinic-management-frontend
@@ -69,21 +126,19 @@ services:
       - "8983:8983"
     volumes:
       - solr_data:/var/solr
-      - ./solr/config:/solr-config
     environment:
       - SOLR_HEAP=512m
     networks:
       - app-network
-    command:
-      - solr
-      - -f
-      - -a
-      - "-Dsolr.autoSoftCommit.maxTime=3000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8983/solr/admin/cores?action=STATUS"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/clinic_management/admin/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command:
+      - solr-precreate
+      - clinic_management
 
 volumes:
   solr_data:
