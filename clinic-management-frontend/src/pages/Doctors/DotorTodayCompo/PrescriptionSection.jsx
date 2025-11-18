@@ -149,6 +149,7 @@ const PrescriptionSection = ({
       age: String(selectedTodayPatient.age || 'N/A'),
       gender: selectedTodayPatient.gender || 'N/A',
       phone: selectedTodayPatient.phone || 'N/A',
+      address: selectedTodayPatient.address|| 'N/A',
       appointment_date: selectedTodayPatient.date
         ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
         : new Date().toLocaleDateString('vi-VN'),
