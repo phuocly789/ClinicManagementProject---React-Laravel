@@ -14,19 +14,22 @@ services:
     env_file:
       - ./clinic-management-backend/.env
     environment:
+    # postgresql://phuoc:Phuoccao@123@103.75.183.156:5432/clinicdb
+    - DB_CONNECTION=pgsql
+    - DB_HOST=103.75.183.156
+    - DB_PORT=5432
+    - DB_DATABASE=clinicdb
+    - DB_USERNAME=phuoc
+    - DB_PASSWORD=Phuoccao@123
+    - DB_SSLMODE=disable 
+  
+  
+    - APP_ENV=local
+    - APP_DEBUG=true
 
-      # postgresql://postgres.phzrctyceyysendeluac:[YOUR-PASSWORD]@aws-1-ap-south-1.pooler.supabase.com:5432/postgres
-      - DB_CONNECTION=pgsql
-      - DB_HOST=aws-1-ap-south-1.pooler.supabase.com
-      - DB_PORT=5432
-      - DB_DATABASE=postgres
-      - DB_USERNAME=postgres.phzrctyceyysendeluac
-      - DB_PASSWORD=lmp@123
-      - DB_SSLMODE=require
-      - APP_ENV=local
-      - APP_DEBUG=true
-      - XDEBUG_MODE=develop,debug
-      - XDEBUG_CONFIG=client_host=host.docker.internal
+    - XDEBUG_MODE=develop,debug
+    - XDEBUG_CONFIG=client_host=host.docker.internal
+
     # Thêm các env khác từ .env nếu cần (như APP_KEY, etc.)
     ports:
       - "8000:8000"  # Expose port cho php artisan serve
