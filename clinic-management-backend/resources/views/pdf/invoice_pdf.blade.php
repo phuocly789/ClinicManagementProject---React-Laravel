@@ -535,11 +535,11 @@
                 </div>
 
                 <div class="header-content">
-                    <h2>{{ $pdf_settings['clinicName'] ?? $clinic_name ?? 'PHÒNG KHÁM ĐA KHOA ABC' }}</h2>
+                    <h2>{{ $pdf_settings['clinicName'] ?? $clinic_name ?? 'Phòng Khám Đa Khoa VitaCare' }}</h2>
                     <p>Địa chỉ:
-                        {{ $pdf_settings['clinicAddress'] ?? $clinic_address ?? 'Số 53 Võ Văn Ngân, TP. Thủ Đức' }}
+                        {{ $pdf_settings['clinicAddress'] ?? $clinic_address ?? '123 Đường Sức Khỏe, Phường An Lành, Quận Bình Yên, TP. Hồ Chí Minh' }}
                     </p>
-                    <p>Điện thoại: {{ $pdf_settings['clinicPhone'] ?? $clinic_phone ?? '0123 456 789' }}</p>
+                    <p>Điện thoại: {{ $pdf_settings['clinicPhone'] ?? $clinic_phone ?? '(028) 3812 3456' }}</p>
                 </div>
 
                 <div class="header-placeholder"></div>
@@ -587,23 +587,6 @@
                         <span class="diagnosis-label">Chẩn đoán:</span>
                         <span>{{ $diagnosis }}</span>
                     </div>
-                @endif
-
-                @if(!empty($diagnoses) && is_array($diagnoses))
-                    @foreach($diagnoses as $diag)
-                        @if(!empty($diag['Symptoms']))
-                            <div class="diagnosis-row">
-                                <span class="diagnosis-label">Triệu chứng:</span>
-                                <span>{{ $diag['Symptoms'] }}</span>
-                            </div>
-                        @endif
-                        @if(!empty($diag['Diagnosis']))
-                            <div class="diagnosis-row">
-                                <span class="diagnosis-label">Chẩn đoán:</span>
-                                <span>{{ $diag['Diagnosis'] }}</span>
-                            </div>
-                        @endif
-                    @endforeach
                 @endif
             </div>
         @endif

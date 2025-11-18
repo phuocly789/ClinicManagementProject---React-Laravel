@@ -51,7 +51,7 @@ class InvoicePrintController extends Controller
     }
 
     /**
-     * Xử lý ảnh (dùng chung cho cả logo và watermark) - SỬA LẠI
+     * Xử lý ảnh (dùng chung cho cả logo và watermark)
      */
     private function processImage($imageData, $defaults = [])
     {
@@ -128,7 +128,6 @@ class InvoicePrintController extends Controller
         }
     }
 
-
     /**
      * Xử lý logo - GỌI processImage
      */
@@ -138,7 +137,7 @@ class InvoicePrintController extends Controller
             'type' => 'logo',
             'width' => '50px',
             'height' => '50px',
-            'opacity' => $logoData['opacity'] ?? 0.8, // ĐỒNG BỘ OPACITY
+            'opacity' => $logoData['opacity'] ?? 0.8,
             'position' => 'left',
             'marginTop' => '0px'
         ]);
@@ -180,14 +179,14 @@ class InvoicePrintController extends Controller
                 'type' => 'watermark',
                 'width' => '200px',
                 'height' => '200px',
-                'opacity' => $watermarkData['opacity'] ?? 0.1 // ✅ SỬA: nhận opacity từ FE
+                'opacity' => $watermarkData['opacity'] ?? 0.1
             ]);
 
             if ($imageWatermark) {
                 $result = array_merge($imageWatermark, [
                     'type' => 'image',
                     'rotation' => $watermarkData['rotation'] ?? -45,
-                    'opacity' => $watermarkData['opacity'] ?? 0.1 // ✅ THÊM opacity vào result
+                    'opacity' => $watermarkData['opacity'] ?? 0.1
                 ]);
                 Log::info('✅ Image watermark processed successfully with opacity: ' . ($watermarkData['opacity'] ?? 0.1));
                 return $result;
@@ -200,7 +199,7 @@ class InvoicePrintController extends Controller
             return [
                 'type' => 'text',
                 'text' => $watermarkData['text'],
-                'opacity' => $watermarkData['opacity'] ?? 0.1, // ✅ SỬA: nhận opacity từ FE
+                'opacity' => $watermarkData['opacity'] ?? 0.1,
                 'fontSize' => $watermarkData['fontSize'] ?? 48,
                 'color' => $watermarkData['color'] ?? '#cccccc',
                 'rotation' => $watermarkData['rotation'] ?? -45,
@@ -237,7 +236,6 @@ class InvoicePrintController extends Controller
 
     private function cleanupOldTempFiles()
     {
-        // SỬA: Dùng storage path thay vì public path
         $tempDir = storage_path('app/temp_pdf_logos');
         if (!is_dir($tempDir)) {
             Log::info('Temp directory does not exist: ' . $tempDir);
@@ -263,10 +261,8 @@ class InvoicePrintController extends Controller
         }
     }
 
-
     public function export($type, $appointment_id)
     {
-        // ✅ Lấy dữ liệu chính xác với quan hệ có thật trong model
         $appointment = Appointment::with([
             'patient.user',
             'prescriptions.prescription_details.medicine',
@@ -278,14 +274,13 @@ class InvoicePrintController extends Controller
         $patient = $appointment->patient?->user;
         $doctor = $appointment->medical_staff?->FullName ?? 'Bác sĩ chưa rõ';
 
-        // ✅ Chuẩn bị dữ liệu
         $data = [
             'title' => match ($type) {
                 'prescription' => 'TOA THUỐC',
                 'service' => 'PHIẾU DỊCH VỤ',
                 default => 'HÓA ĐƠN KHÁM BỆNH',
             },
-            'clinic_name' => 'PHÒNG KHÁM ĐA KHOA ABC',
+            'clinic_name' => 'Phòng Khám Đa Khoa VitaCare',
             'doctor_name' => $doctor,
             'patient_name' => $patient?->FullName ?? 'Không rõ',
             'age' => $patient?->DateOfBirth ? \Carbon\Carbon::parse($patient->DateOfBirth)->age : 'N/A',
@@ -299,7 +294,6 @@ class InvoicePrintController extends Controller
             'safe_font_family' => 'times',
         ];
 
-        // ✅ Render view PDF
         $pdf = Pdf::loadView('pdf.invoice_pdf', $data)
             ->setPaper('a4', 'portrait');
 
@@ -315,7 +309,7 @@ class InvoicePrintController extends Controller
         try {
             // Validate dữ liệu đầu vào
             $data = $request->validate([
-                'type' => 'required|string|in:prescription,service,payment',
+                'type' => 'required|string|in:prescription,service,payment,test_result',
                 'patient_name' => 'required|string',
                 'age' => 'nullable',
                 'gender' => 'nullable|string',
@@ -328,13 +322,8 @@ class InvoicePrintController extends Controller
                 'instructions' => 'nullable|string',
                 'diagnosis' => 'nullable|string',
 
-                // Cho toa thuốc
-                'prescriptions' => 'required_if:type,prescription|array',
-                'prescriptions.*.details' => 'required_if:type,prescription|array',
-                'prescriptions.*.details.*.medicine' => 'required_if:type,prescription|string',
-                'prescriptions.*.details.*.quantity' => 'required_if:type,prescription|integer|min:1',
-                'prescriptions.*.details.*.dosage' => 'required_if:type,prescription|string',
-                'prescriptions.*.details.*.unitPrice' => 'required_if:type,prescription|numeric|min:0',
+                // ✅ SỬA: Chỉ validate prescriptions là array, không validate chi tiết (tránh xung đột)
+                'prescriptions' => 'nullable|array',
 
                 // Cho dịch vụ
                 'services' => 'required_if:type,service|array',
@@ -349,6 +338,20 @@ class InvoicePrintController extends Controller
                 'tax' => 'nullable|numeric|min:0',
                 'invoice_code' => 'nullable|string',
                 'total_amount' => 'nullable|numeric|min:0',
+
+                // ✅ THÊM CHO TEST_RESULT
+                'test_results' => 'required_if:type,test_result|array',
+                'test_results.*.test_name' => 'required_if:type,test_result|string',
+                'test_results.*.result' => 'required_if:type,test_result|string',
+                'test_results.*.unit' => 'nullable|string',
+                'test_results.*.reference_range' => 'nullable|string',
+                'test_results.*.method' => 'nullable|string',
+                'test_results.*.is_normal' => 'nullable|boolean',
+
+                'patient_code' => 'nullable|string',
+                'lab_number' => 'nullable|string',
+                'department' => 'nullable|string',
+                'technician_name' => 'nullable|string',
 
                 // Chẩn đoán
                 'diagnoses' => 'nullable|array',
@@ -372,7 +375,7 @@ class InvoicePrintController extends Controller
                 'pdf_settings.watermark.text' => 'nullable|string',
                 'pdf_settings.watermark.url' => 'nullable|string',
                 'pdf_settings.watermark.opacity' => 'nullable|numeric|min:0|max:1',
-                'pdf_settings.watermark.fontSize' => 'nullable|integer|min:10|max:100',
+                'pdf_settings.watermark.fontSize' => 'nullable|integer|min:10|max:500',
                 'pdf_settings.watermark.color' => 'nullable|string',
                 'pdf_settings.watermark.rotation' => 'nullable|numeric|min:-180|max:180',
 
@@ -408,10 +411,12 @@ class InvoicePrintController extends Controller
                 'patient_name.required' => 'Tên bệnh nhân là bắt buộc.',
                 'prescriptions.required_if' => 'Đơn thuốc là bắt buộc cho toa thuốc.',
                 'services.required_if' => 'Danh sách dịch vụ là bắt buộc cho phiếu dịch vụ.',
+                'test_results.required_if' => 'Kết quả xét nghiệm là bắt buộc cho phiếu xét nghiệm.',
                 'payment_method.required_if' => 'Phương thức thanh toán là bắt buộc cho hóa đơn.',
                 'payment_status.required_if' => 'Trạng thái thanh toán là bắt buộc cho hóa đơn.',
                 'pdf_settings.required' => 'Cài đặt PDF là bắt buộc.',
             ]);
+            ;
 
             Log::info('✅ Validation passed');
 
@@ -431,7 +436,12 @@ class InvoicePrintController extends Controller
                     'template' => 'pdf.payment_invoice_pdf',
                     'title' => $data['pdf_settings']['customTitle'] ?? 'HÓA ĐƠN THANH TOÁN',
                     'filename' => 'HOA_DON_' . date('Ymd_His') . '.pdf'
-                ]
+                ],
+                'test_result' => [
+                    'template' => 'pdf.result_pdf',
+                    'title' => $data['pdf_settings']['customTitle'] ?? 'PHIẾU KẾT QUẢ XÉT NGHIỆM',
+                    'filename' => 'PHIEU_XET_NGHIEM_' . date('Ymd_His') . '.pdf'
+                ],
             ];
 
             $config = $typeConfig[$data['type']];
@@ -496,9 +506,9 @@ class InvoicePrintController extends Controller
                 'type' => $data['type'],
 
                 // Thông tin phòng khám
-                'clinic_name' => $data['pdf_settings']['clinicName'] ?? 'PHÒNG KHÁM ĐA KHOA XYZ',
-                'clinic_address' => $data['pdf_settings']['clinicAddress'] ?? 'Số 53 Võ Văn Ngân, TP. Thủ Đức',
-                'clinic_phone' => $data['pdf_settings']['clinicPhone'] ?? '0123 456 789',
+                'clinic_name' => $data['pdf_settings']['clinicName'] ?? 'Phòng Khám Đa Khoa VitaCare',
+                'clinic_address' => $data['pdf_settings']['clinicAddress'] ?? '123 Đường Sức Khỏe, Phường An Lành, Quận Bình Yên, TP. Hồ Chí Minh',
+                'clinic_phone' => $data['pdf_settings']['clinicPhone'] ?? '(028) 3812 3456',
                 'clinic_tax' => $data['pdf_settings']['clinicTax'] ?? '',
 
                 // ✅ QUAN TRỌNG: Thông tin bệnh nhân - DÙNG ĐÚNG TÊN BIẾN TEMPLATE
@@ -531,6 +541,13 @@ class InvoicePrintController extends Controller
                 // Font
                 'safe_font_family' => $safeFontFamily,
                 'safe_font_css' => $safeFontCSS,
+
+                // ✅ THÊM CÁC BIẾN ĐẶC BIỆT CHO TEST_RESULT
+                'patient_code' => $data['patient_code'] ?? $medicalRecordCode,
+                'lab_number' => $data['lab_number'] ?? 'XN_' . date('d-His'),
+                'department' => $data['department'] ?? 'KHOA XÉT NGHIỆM',
+                'technician_name' => $data['technician_name'] ?? 'Kỹ thuật viên',
+                'print_date' => now()->format('d/m/Y'),
 
                 // ✅ THÊM CÁC BIẾN DỰ PHÒNG ĐỂ TEMPLATE CÓ THỂ DÙNG
                 'code' => $medicalRecordCode,
@@ -626,38 +643,75 @@ class InvoicePrintController extends Controller
             } else if ($data['type'] === 'payment') {
                 Log::info('💰 Processing PAYMENT data');
 
-                // Xử lý dữ liệu cho payment
-                $pdfData['services'] = collect($data['services'])->map(function ($service, $index) {
-                    $quantity = intval($service['Quantity'] ?? 1);
-                    $price = floatval($service['Price'] ?? 0);
+                // ✅ FIX: Xử lý services - ĐẢM BẢO ĐÚNG CẤU TRÚC
+                $pdfData['services'] = [];
+                if (!empty($data['services']) && is_array($data['services'])) {
+                    $pdfData['services'] = collect($data['services'])->map(function ($service, $index) {
+                        $quantity = intval($service['Quantity'] ?? 1);
+                        $price = floatval($service['Price'] ?? 0);
 
-                    return [
-                        'ServiceName' => $service['ServiceName'] ?? 'Dịch vụ khám bệnh',
-                        'Price' => $price,
-                        'Quantity' => $quantity,
-                        'SubTotal' => $quantity * $price,
-                        'Index' => $index + 1
-                    ];
-                })->toArray();
+                        return [
+                            'ServiceName' => $service['ServiceName'] ?? 'Dịch vụ',
+                            'Price' => $price,
+                            'Quantity' => $quantity,
+                            'SubTotal' => $quantity * $price, // ✅ THÊM SubTotal
+                            'Index' => $index + 1
+                        ];
+                    })->toArray();
 
+                    Log::info('🩺 Processed services:', $pdfData['services']);
+                }
+
+                // ✅ FIX: Xử lý prescriptions - ĐẢM BẢO ĐÚNG CẤU TRÚC
                 $pdfData['prescriptions'] = [];
+                if (!empty($data['prescriptions']) && is_array($data['prescriptions'])) {
+                    $pdfData['prescriptions'] = collect($data['prescriptions'])->map(function ($medicine, $index) {
+                        $quantity = intval($medicine['Quantity'] ?? 1);
+                        $price = floatval($medicine['Price'] ?? 0);
 
-                // Thêm payment data
-                $pdfData['payment_method'] = $data['payment_method'] ?? 'Tiền mặt';
+                        return [
+                            'MedicineName' => $medicine['MedicineName'] ?? 'Thuốc',
+                            'Price' => $price,
+                            'Quantity' => $quantity,
+                            'Usage' => $medicine['Usage'] ?? 'Theo chỉ định',
+                            'SubTotal' => $quantity * $price, // ✅ THÊM SubTotal
+                            'Index' => $index + 1
+                        ];
+                    })->toArray();
+
+                    Log::info('💊 Processed prescriptions:', $pdfData['prescriptions']);
+                }
+
+                // ✅ THÊM CÁC BIẾN QUAN TRỌNG CHO TEMPLATE VỚI GIÁ TRỊ MẶC ĐỊNH
+                $pdfData['payment_method'] = $data['payment_method'] ?? 'cash';
                 $pdfData['payment_status'] = $data['payment_status'] ?? 'Đã thanh toán';
                 $pdfData['discount'] = floatval($data['discount'] ?? 0);
-                $pdfData['tax'] = floatval($data['tax'] ?? 0);
-                $pdfData['payment_date'] = now()->format('d/m/Y H:i');
+                $pdfData['tax'] = floatval($data['tax'] ?? 0); // ✅ THÊM DÒNG NÀY - QUAN TRỌNG!
                 $pdfData['invoice_code'] = $data['invoice_code'] ?? 'INV_' . date('YmdHis');
-                $pdfData['total_amount'] = floatval($data['total_amount'] ?? 0);
+
+                // ✅ SỬA: Đồng bộ ngày thanh toán
+                $paymentDate = $data['paid_at'] ?? $data['appointment_date'] ?? now()->format('d/m/Y H:i');
+                $pdfData['payment_date'] = $paymentDate;
+
+                Log::info('💰 Final payment data sent to template:', [
+                    'services_count' => count($pdfData['services']),
+                    'prescriptions_count' => count($pdfData['prescriptions']),
+                    'payment_method' => $pdfData['payment_method'],
+                    'invoice_code' => $pdfData['invoice_code'],
+                    'tax' => $pdfData['tax'], // ✅ LOG tax value
+                    'discount' => $pdfData['discount']
+                ]);
 
                 // Tính toán các khoản tiền
                 $servicesTotal = collect($pdfData['services'])->sum('SubTotal');
-                $discountAmount = $servicesTotal * ($pdfData['discount'] / 100);
-                $taxAmount = $servicesTotal * ($pdfData['tax'] / 100);
-                $finalAmount = $servicesTotal - $discountAmount + $taxAmount;
+                $prescriptionsTotal = collect($pdfData['prescriptions'])->sum('SubTotal');
+
+                $discountAmount = ($servicesTotal + $prescriptionsTotal) * ($pdfData['discount'] / 100);
+                $taxAmount = ($servicesTotal + $prescriptionsTotal) * ($pdfData['tax'] / 100); // ✅ SỬA: dùng $pdfData['tax']
+                $finalAmount = ($servicesTotal + $prescriptionsTotal) - $discountAmount + $taxAmount;
 
                 $pdfData['services_total'] = $servicesTotal;
+                $pdfData['prescriptions_total'] = $prescriptionsTotal;
                 $pdfData['discount_amount'] = $discountAmount;
                 $pdfData['tax_amount'] = $taxAmount;
                 $pdfData['final_amount'] = $finalAmount;
@@ -665,10 +719,35 @@ class InvoicePrintController extends Controller
                 Log::info('💰 Payment data processed:', [
                     'invoice_code' => $pdfData['invoice_code'],
                     'services_count' => count($pdfData['services']),
+                    'prescriptions_count' => count($pdfData['prescriptions']),
                     'services_total' => $servicesTotal,
+                    'prescriptions_total' => $prescriptionsTotal,
                     'discount' => $pdfData['discount'],
-                    'tax' => $pdfData['tax'],
+                    'tax' => $pdfData['tax'], // ✅ LOG tax value
+                    'discount_amount' => $discountAmount,
+                    'tax_amount' => $taxAmount,
                     'final_amount' => $finalAmount
+                ]);
+            } else if ($data['type'] === 'test_result') {
+                Log::info('🔬 Processing TEST_RESULT data');
+
+                $pdfData['test_results'] = collect($data['test_results'])->map(function ($test, $index) {
+                    return [
+                        'test_name' => $test['test_name'] ?? 'Xét nghiệm',
+                        'result' => $test['result'] ?? 'Chưa có kết quả',
+                        'unit' => $test['unit'] ?? '',
+                        'reference_range' => $test['reference_range'] ?? '',
+                        'method' => $test['method'] ?? 'OTSH.B-01(1)',
+                        'is_normal' => $test['is_normal'] ?? true,
+                    ];
+                })->toArray();
+
+                $pdfData['prescriptions'] = [];
+                $pdfData['services'] = [];
+
+                Log::info('🔬 Test result data processed:', [
+                    'test_count' => count($pdfData['test_results']),
+                    'tests' => $pdfData['test_results']
                 ]);
             }
 
@@ -686,7 +765,7 @@ class InvoicePrintController extends Controller
             // ✅ KIỂM TRA TEMPLATE CÓ TỒN TẠI KHÔNG
             if (!view()->exists($config['template'])) {
                 throw new \Exception("Template {$config['template']} không tồn tại. Các template có sẵn: " .
-                    implode(', ', ['pdf.invoice_pdf', 'pdf.service_pdf', 'pdf.payment_invoice_pdf']));
+                    implode(', ', ['pdf.invoice_pdf', 'pdf.service_pdf', 'pdf.payment_invoice_pdf', 'pdf.result_pdf']));
             }
 
             Log::info('🚀 Starting PDF generation...');
@@ -749,8 +828,6 @@ class InvoicePrintController extends Controller
         }
     }
 
-
-
     public function previewHTML(Request $request)
     {
         Log::info('=== PDF Preview HTML Request START ===');
@@ -760,7 +837,7 @@ class InvoicePrintController extends Controller
             Log::info('Raw Request Data:', $request->all());
 
             $data = $request->validate([
-                'type' => 'required|string|in:prescription,service,payment',
+                'type' => 'required|string|in:prescription,service,payment,test_result',
                 'patient_name' => 'required|string',
                 'age' => 'nullable',
                 'gender' => 'nullable|string',
@@ -787,6 +864,20 @@ class InvoicePrintController extends Controller
                 'payment_method' => 'nullable|string',
                 'payment_status' => 'nullable|string',
                 'discount' => 'nullable|numeric|min:0',
+
+                // ✅ THÊM CHO TEST_RESULT
+                'test_results' => 'nullable|array',
+                'test_results.*.test_name' => 'nullable|string',
+                'test_results.*.result' => 'nullable|string',
+                'test_results.*.unit' => 'nullable|string',
+                'test_results.*.reference_range' => 'nullable|string',
+                'test_results.*.method' => 'nullable|string',
+                'test_results.*.is_normal' => 'nullable|boolean',
+
+                'patient_code' => 'nullable|string',
+                'lab_number' => 'nullable|string',
+                'department' => 'nullable|string',
+                'technician_name' => 'nullable|string',
 
                 // Chẩn đoán
                 'diagnoses' => 'nullable|array',
@@ -829,6 +920,11 @@ class InvoicePrintController extends Controller
                     'template' => 'pdf.payment_invoice_pdf',
                     'title' => $data['pdf_settings']['customTitle'] ?? 'HÓA ĐƠN THANH TOÁN',
                     'code_prefix' => 'INV'
+                ],
+                'test_result' => [
+                    'template' => 'pdf.result_pdf',
+                    'title' => $data['pdf_settings']['customTitle'] ?? 'PHIẾU KẾT QUẢ XÉT NGHIỆM',
+                    'code_prefix' => 'XN'
                 ]
             ];
 
@@ -843,9 +939,9 @@ class InvoicePrintController extends Controller
             // Chuẩn bị dữ liệu cho template
             $pdfData = [
                 'title' => $config['title'],
-                'clinic_name' => $data['pdf_settings']['clinicName'] ?? 'PHÒNG KHÁM ĐA KHOA ABC',
-                'clinic_address' => $data['pdf_settings']['clinicAddress'] ?? 'Số 53 Võ Văn Ngân, TP. Thủ Đức',
-                'clinic_phone' => $data['pdf_settings']['clinicPhone'] ?? '0123 456 789',
+                'clinic_name' => $data['pdf_settings']['clinicName'] ?? 'Phòng Khám Đa Khoa VitaCare',
+                'clinic_address' => $data['pdf_settings']['clinicAddress'] ?? '123 Đường Sức Khỏe, Phường An Lành, Quận Bình Yên, TP. Hồ Chí Minh',
+                'clinic_phone' => $data['pdf_settings']['clinicPhone'] ?? '(028) 3812 3456',
                 'medical_record_code' => $config['code_prefix'] . '-' . Str::random(6),
                 'doctor_name' => $data['pdf_settings']['doctorName'] ?? $data['doctor_name'] ?? 'Bác sĩ chưa rõ',
                 'patient_name' => $data['patient_name'],
@@ -863,6 +959,15 @@ class InvoicePrintController extends Controller
                 'safe_font_family' => $safeFontFamily,
                 'safe_font_css' => $safeFontCSS,
             ];
+
+            // ✅ THÊM CÁC TRƯỜNG ĐẶC BIỆT CHO TEST_RESULT
+            if ($data['type'] === 'test_result') {
+                $pdfData['patient_code'] = $data['patient_code'] ?? $pdfData['medical_record_code'];
+                $pdfData['lab_number'] = $data['lab_number'] ?? 'XN_' . date('d-His');
+                $pdfData['department'] = $data['department'] ?? 'KHOA XÉT NGHIỆM';
+                $pdfData['technician_name'] = $data['technician_name'] ?? 'Kỹ thuật viên';
+                $pdfData['print_date'] = now()->format('d/m/Y');
+            }
 
             Log::info('Base PDF data prepared:', $pdfData);
 
@@ -906,6 +1011,25 @@ class InvoicePrintController extends Controller
             }
 
             Log::info('Services processed:', $pdfData['services']);
+
+            // ✅ XỬ LÝ test_results NẾU CÓ
+            if (!empty($data['test_results'])) {
+                Log::info('Processing test_results:', $data['test_results']);
+                $pdfData['test_results'] = collect($data['test_results'])->map(function ($test) {
+                    return [
+                        'test_name' => $test['test_name'] ?? 'Xét nghiệm',
+                        'result' => $test['result'] ?? 'Chưa có kết quả',
+                        'unit' => $test['unit'] ?? '',
+                        'reference_range' => $test['reference_range'] ?? '',
+                        'method' => $test['method'] ?? 'OTSH.B-01(1)',
+                        'is_normal' => $test['is_normal'] ?? true,
+                    ];
+                })->toArray();
+            } else {
+                $pdfData['test_results'] = [];
+            }
+
+            Log::info('Test results processed:', $pdfData['test_results']);
 
             // Xử lý diagnoses nếu có
             if (!empty($data['diagnoses'])) {
@@ -1119,7 +1243,4 @@ class InvoicePrintController extends Controller
             ], 500);
         }
     }
-
-
-
 }

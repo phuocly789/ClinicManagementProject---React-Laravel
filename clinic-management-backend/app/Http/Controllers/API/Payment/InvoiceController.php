@@ -113,7 +113,8 @@ class InvoiceController extends Controller
                     'transaction_id' => $invoice->TransactionId,
                     'paid_at' => $invoice->Paidat ? $invoice->Paidat->format('d/m/Y H:i') : null,
                     'appointment_id' => $invoice->AppointmentId,
-                    'can_pay' => $invoice->Status === 'Chờ thanh toán'
+                    'can_pay' => $invoice->Status === 'Chờ thanh toán',
+                    'invoice_details' => $invoice->invoice_details,
                 ];
             });
 

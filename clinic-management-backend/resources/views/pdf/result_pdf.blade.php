@@ -478,7 +478,8 @@
                 <div class="watermark-text">{{ $watermark_data['text'] ?? 'MẪU BẢN QUYỀN' }}</div>
             @elseif($watermark_data['type'] === 'image' && isset($watermark_data['url']))
                 <img src="{{ $watermark_data['url'] }}" class="watermark-image" style="width: {{ $watermark_data['width'] ?? '200px' }};
-                                                    height: {{ $watermark_data['height'] ?? '200px' }};" alt="Watermark">
+                                                            height: {{ $watermark_data['height'] ?? '200px' }};"
+                    alt="Watermark">
             @endif
         @elseif(isset($pdf_settings['watermark']['enabled']) && $pdf_settings['watermark']['enabled'])
             <div class="watermark-text">{{ $pdf_settings['watermark']['text'] ?? 'MẪU BẢN QUYỀN' }}</div>
@@ -494,10 +495,12 @@
                 </div>
 
                 <div class="header-content">
-                    <h2>{{ $pdf_settings['clinicName'] ?? $clinic_name ?? 'PHÒNG KHÁM XYZ' }}</h2>
+                    <h2>{{ $pdf_settings['clinicName'] ?? $clinic_name ?? 'Phòng Khám Đa Khoa VitaCare' }}</h2>
                     <p>Địa chỉ:
-                        {{ $pdf_settings['clinicAddress'] ?? $clinic_address ?? 'Số 53 Võ Văn Nghị, Từ Thủ Đức, TRNCM' }}
+                        {{ $pdf_settings['clinicAddress'] ?? $clinic_address ?? '123 Đường Sức Khỏe, Phường An Lành, Quận Bình Yên, TP. Hồ Chí Minh' }}
                     </p>
+                    <p>Điện thoại: {{ $pdf_settings['clinicPhone'] ?? $clinic_phone ?? '(028) 3812 3456' }}</p>
+
                 </div>
 
                 <div class="header-placeholder"></div>
