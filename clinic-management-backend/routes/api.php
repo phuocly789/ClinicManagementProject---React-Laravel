@@ -32,6 +32,7 @@ use App\Http\Controllers\API\Receptionist\PatientByRecepController;
 use App\Http\Controllers\API\Receptionist\QueueController;
 use App\Http\Controllers\API\Receptionist\ReceptionController;
 use App\Http\Controllers\API\Technician\TestResultsController;
+use App\Http\Controllers\API\SearchController;
 
 Route::get('/user', [UserController::class, 'index']);
 Route::get('/ping', [UserController::class, 'ping']);
@@ -146,6 +147,8 @@ Route::prefix('users')->group(function () {
     Route::delete('/{id}', [AdminUserController::class, 'destroy']);
     Route::put('/toggle-status/{id}', [AdminUserController::class, 'toggleStatus']);
     Route::put('/reset-password/{id}', [AdminUserController::class, 'resetPassword']);
+    // Tìm kiếm user với Solr
+    Route::get('/search', [SearchController::class, 'searchUsers']);
 });
 
 Route::get('/roles', [AdminUserController::class, 'roles']);
@@ -162,6 +165,8 @@ Route::prefix('technician')->group(function () {
     Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
     // thay đổi trạng thái dịch vụ
     Route::post('/services/{serviceOrderId}/status', [TestResultsController::class, 'updateServiceStatus']);
+    // Tìm kiếm dịch vụ với Solr
+    Route::get('/services/search', [SearchController::class, 'searchServices']);
 });
 
 //Receptionist Routes
@@ -179,7 +184,8 @@ Route::prefix('receptionist')->group(function () {
     //Rooms
     Route::get('/rooms', [RoomController::class, 'getAllRooms']);
     //Tiếp nhận patient
-    Route::get('/searchPatient', [PatientByRecepController::class, 'searchPatients']);
+    Route::get('/searchPatient', [PatientByRecepController::class, 'searchPatients']); // Giữ cũ
+    Route::get('/patients/search', [SearchController::class, 'searchPatients']); // Mới với Solr
     Route::post('/patients', [PatientController::class, 'createPatient']);
     Route::get('/patients', [PatientByRecepController::class, 'getPatient']);
     // Thêm route này vào receptionist routes
@@ -193,6 +199,9 @@ Route::prefix('receptionist')->group(function () {
 
     // Online appointments
     Route::get('/appointments/online', [AppointmentRecepController::class, 'getOnlineAppointments']);
+    // Tìm kiếm lịch hẹn với Solr
+    Route::get('/appointments/search', [SearchController::class, 'searchAppointments']);
+    
     //notification 
     Route::middleware(['auth:api', 'role:Admin,Lễ tân'])
         ->get('/notifications', [ReceptionController::class, 'getNotification']);
@@ -230,6 +239,8 @@ Route::prefix('admin/services')->group(function () {
     Route::delete('/{id}', [AdminServiceController::class, 'destroy']);
     Route::get('/types/all', [AdminServiceController::class, 'getServiceTypes']);
     Route::get('/type/{type}', [AdminServiceController::class, 'getServicesByType']);
+    // Tìm kiếm dịch vụ với Solr
+    Route::get('/search', [SearchController::class, 'searchServices']);
 });
 
 // Payment Routes
@@ -250,4 +261,54 @@ Route::prefix('payments')->group(function () {
     Route::get('/invoices/payment-history', [InvoiceController::class, 'paymentHistory']);
     Route::get('/invoices/{id}', [InvoiceController::class, 'show']);
     Route::post('/invoices', [InvoiceController::class, 'store']);
+    // Tìm kiếm hóa đơn với Solr
+    Route::get('/invoices/search', [SearchController::class, 'searchInvoices']);
 });
+
+// ==================== SEARCH ROUTES - TÍCH HỢP SOLR ====================
+Route::prefix('search')->group(function () {
+    // Tìm kiếm tổng quát - tìm tất cả mọi thứ
+    Route::get('/', [SearchController::class, 'search']);
+    
+    // Tìm kiếm chuyên biệt theo từng loại dữ liệu
+    Route::get('/patients', [SearchController::class, 'searchPatients']);
+    Route::get('/medicines', [SearchController::class, 'searchMedicines']);
+    Route::get('/appointments', [SearchController::class, 'searchAppointments']);
+    Route::get('/services', [SearchController::class, 'searchServices']);
+    Route::get('/staff', [SearchController::class, 'searchStaff']);
+    Route::get('/users', [SearchController::class, 'searchUsers']);
+    Route::get('/suppliers', [SearchController::class, 'searchSuppliers']);
+    Route::get('/invoices', [SearchController::class, 'searchInvoices']);
+    Route::get('/test-results', [SearchController::class, 'searchTestResults']);
+    
+    // Health check và quản lý index
+    Route::get('/health', [SearchController::class, 'health']);
+    Route::post('/index', [SearchController::class, 'indexDocument']);
+    Route::post('/bulk-index', [SearchController::class, 'bulkIndex']);
+    Route::delete('/{id}', [SearchController::class, 'deleteDocument']);
+});
+
+// ==================== MEDICINES SEARCH ROUTES ====================
+Route::prefix('medicines')->group(function () {
+    Route::get('/search', [DoctorMedicineSearchController::class, 'search']); // Giữ cũ
+    Route::get('/search-solr', [SearchController::class, 'searchMedicines']); // Mới với Solr
+});
+
+// ==================== SUPPLIERS SEARCH ROUTES ====================
+Route::prefix('suppliers')->group(function () {
+    Route::get('/search', [SearchController::class, 'searchSuppliers']);
+});
+
+// ==================== TEST RESULTS SEARCH ROUTES ====================
+Route::prefix('test-results')->group(function () {
+    Route::get('/search', [SearchController::class, 'searchTestResults']);
+});
+
+// ==================== DOCTOR SPECIFIC SEARCH ROUTES ====================
+Route::prefix('doctor')->group(function () {
+    // Tìm kiếm bệnh nhân cho doctor
+    Route::get('/patients/search', [SearchController::class, 'searchPatients']);
+    // Tìm kiếm thuốc cho doctor
+    Route::get('/medicines/search-solr', [SearchController::class, 'searchMedicines']);
+});
+

@@ -150,6 +150,7 @@ return [
         Illuminate\Translation\TranslationServiceProvider::class,
         Illuminate\Validation\ValidationServiceProvider::class,
         Illuminate\View\ViewServiceProvider::class,
+        
 
         /*
          * Application Service Providers...
@@ -161,6 +162,7 @@ return [
         App\Providers\RouteServiceProvider::class,
         Laravel\Sanctum\SanctumServiceProvider::class,
         Barryvdh\DomPDF\ServiceProvider::class,
+        App\Providers\SolrServiceProvider::class,
     ],
 
     'aliases' => [

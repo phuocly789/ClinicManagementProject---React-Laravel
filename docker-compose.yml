@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # Backend: Laravel với PHP built-in server
   backend:
     build:
       context: ./clinic-management-backend
@@ -14,8 +13,6 @@ services:
     env_file:
       - ./clinic-management-backend/.env
     environment:
-
-      # postgresql://postgres.phzrctyceyysendeluac:[YOUR-PASSWORD]@aws-1-ap-south-1.pooler.supabase.com:5432/postgres
       - DB_CONNECTION=pgsql
       - DB_HOST=aws-1-ap-south-1.pooler.supabase.com
       - DB_PORT=5432
@@ -27,15 +24,20 @@ services:
       - APP_DEBUG=true
       - XDEBUG_MODE=develop,debug
       - XDEBUG_CONFIG=client_host=host.docker.internal
-    # Thêm các env khác từ .env nếu cần (như APP_KEY, etc.)
+      - SOLR_HOST=solr
+      - SOLR_PORT=8983
+      - SOLR_CORE=clinic_management
+      - SOLR_PATH=/solr
     ports:
-      - "8000:8000"  # Expose port cho php artisan serve
-      - "9003:9003" # Xdebug port
+      - "8000:8000"
+      - "9003:9003"
     networks:
       - app-network
+    depends_on:
+      - solr
     command: bash -c "if [ ! -d vendor ]; then composer install --no-dev --optimize-autoloader; fi && php artisan serve --host=0.0.0.0 --port=8000"
 
-  # Frontend: React dev server (giữ nguyên)
+  # Frontend: React (Vite)
   frontend:
     build:
       context: ./clinic-management-frontend
@@ -44,17 +46,45 @@ services:
     restart: unless-stopped
     working_dir: /app
     volumes:
-      - ./clinic-management-frontend:/app  # Mount code React
-      - /app/node_modules  # Không mount node_modules để tránh conflict
+      - ./clinic-management-frontend:/app
+      - /app/node_modules
     ports:
-      - "3000:5173"  # Vite default port là 5173
+      - "3000:5173"
     environment:
-      - CHOKIDAR_USEPOLLING=true  # Để hot reload hoạt động tốt với volume
+      - CHOKIDAR_USEPOLLING=true
     command: npm run dev -- --host 0.0.0.0 --port 5173
     networks:
       - app-network
-    stdin_open: true  # Để attach terminal nếu cần
+    stdin_open: true
     tty: true
+
+  # Solr Search Engine
+  solr:
+    image: solr:8.11
+    container_name: solr-app
+    restart: unless-stopped
+    ports:
+      - "8983:8983"
+    volumes:
+      - solr_data:/var/solr
+      - ./solr/config:/solr-config
+    environment:
+      - SOLR_HEAP=512m
+    networks:
+      - app-network
+    command:
+      - solr
+      - -f
+      - -a
+      - "-Dsolr.autoSoftCommit.maxTime=3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8983/solr/admin/cores?action=STATUS"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  solr_data:
 
 networks:
   app-network:
