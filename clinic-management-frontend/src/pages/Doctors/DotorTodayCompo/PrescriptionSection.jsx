@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Col, Card, Table, Button, Form, Modal, Spinner, Alert } from "react-bootstrap";
 import PDFPreviewEditor from "../PrintsPDF/PDFPreviewEditor";
 import { useNavigate } from "react-router-dom";
+import { printPdfService } from "../../../services/printPdfService";
 
 const PrescriptionSection = ({
   prescriptionRows,
@@ -18,7 +19,7 @@ const PrescriptionSection = ({
 }) => {
   const API_BASE_URL = 'http://localhost:8000';
   const navigate = useNavigate();
-  
+
   const [editingIndex, setEditingIndex] = useState(null);
   const [newRow, setNewRow] = useState({
     medicine: '',
@@ -42,8 +43,58 @@ const PrescriptionSection = ({
     orientation: "portrait",
     margins: { top: 10, right: 10, bottom: 10, left: 10 },
     header: true,
-    footer: true
+    footer: true,
+    // 🔥 CÁC TRƯỜNG BẮT BUỘC THEO VALIDATION
+    fontFamily: 'Times New Roman',
+    fontSize: '14px',
+    fontColor: '#000000',
+    primaryColor: '#2c5aa0',
+    backgroundColor: '#ffffff',
+    borderColor: '#333333',
+    headerBgColor: '#f0f0f0',
+    lineHeight: 1.5,
+    fontStyle: 'normal',
+    fontWeight: 'normal',
+
+    // Clinic info
+    clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
+    clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
+    clinicPhone: '028 1234 5678',
+    doctorName: 'Hệ thống',
+    customTitle: 'Toa Thuốc',
+
+    // Page settings
+    pageOrientation: 'portrait',
+    pageSize: 'A4',
+    marginTop: '15mm',
+    marginBottom: '15mm',
+    marginLeft: '10mm',
+    marginRight: '10mm',
+
+    // Logo settings (disabled)
+    logo: {
+      enabled: false,
+      url: '',
+      width: '80px',
+      height: '80px',
+      position: 'left',
+      opacity: 0.8
+    },
+
+    // Watermark settings (disabled)
+    watermark: {
+      enabled: false,
+      text: 'MẪU BẢN QUYỀN',
+      url: '',
+      opacity: 0.1,
+      fontSize: 48,
+      color: '#cccccc',
+      rotation: -45
+    }
   };
+
+
+
 
   // Reset form khi chuyển trạng thái
   useEffect(() => {
@@ -91,14 +142,14 @@ const PrescriptionSection = ({
   // HÀM CHỌN GỢI Ý - LẤY ĐẦY ĐỦ THÔNG TIN TỪ AI
   const handleSelectSuggestion = (medicine) => {
     console.log("🎯 Dữ liệu thuốc từ AI:", medicine);
-    
+
     const newUnitPrice = medicine.Price ? parseFloat(medicine.Price) : 0;
     const quantity = newRow.quantity || 1;
     const newTotalPrice = quantity * newUnitPrice;
-    
+
     // TẠO LIỀU DÙNG MẶC ĐỊNH TỪ THÔNG TIN AI
     const defaultDosage = generateDosageFromAI(medicine);
-    
+
     setNewRow(prev => ({
       ...prev,
       medicine: medicine.MedicineName,
@@ -107,7 +158,7 @@ const PrescriptionSection = ({
       dosage: defaultDosage
     }));
     setSuggestions([]);
-    
+
     console.log("✅ Đã điền thông tin:", {
       name: medicine.MedicineName,
       price: newUnitPrice,
@@ -149,7 +200,7 @@ const PrescriptionSection = ({
       age: String(selectedTodayPatient.age || 'N/A'),
       gender: selectedTodayPatient.gender || 'N/A',
       phone: selectedTodayPatient.phone || 'N/A',
-      address: selectedTodayPatient.address|| 'N/A',
+      address: selectedTodayPatient.address || 'N/A',
       appointment_date: selectedTodayPatient.date
         ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
         : new Date().toLocaleDateString('vi-VN'),
@@ -189,15 +240,15 @@ const PrescriptionSection = ({
       sessionStorage.removeItem('pdfEditorData');
       sessionStorage.removeItem('shouldRefreshOnReturn');
       sessionStorage.removeItem('editorSource');
-      
+
       // Lưu data MỚI NHẤT vào sessionStorage
       sessionStorage.setItem('pdfEditorData', JSON.stringify(previewData));
       sessionStorage.setItem('shouldRefreshOnReturn', 'true');
       sessionStorage.setItem('editorSource', 'prescription');
 
       // CHUYỂN HƯỚNG TRONG CÙNG TAB
-      navigate('/doctor/print-pdf-editor', { 
-        state: { 
+      navigate('/doctor/print-pdf-editor', {
+        state: {
           pdfData: previewData,
           source: 'prescription',
           timestamp: Date.now()
@@ -229,7 +280,7 @@ const PrescriptionSection = ({
       // Nếu bạn có setDiagnosis prop, thêm vào đây
       // setDiagnosis(updatedData.diagnosis);
     }
-    
+
     setToast({
       show: true,
       message: "✅ Đã cập nhật dữ liệu từ trình chỉnh sửa PDF",
@@ -242,16 +293,16 @@ const PrescriptionSection = ({
     const shouldRefresh = sessionStorage.getItem('shouldRefreshOnReturn');
     const editorSource = sessionStorage.getItem('editorSource');
     const editorData = sessionStorage.getItem('pdfEditorData');
-    
+
     // Chỉ xử lý nếu dữ liệu đến từ PrescriptionSection
     if (shouldRefresh === 'true' && editorSource === 'prescription' && editorData) {
       try {
         const parsedData = JSON.parse(editorData);
-        
+
         // KIỂM TRA TIMESTAMP ĐỂ ĐẢM BẢO LÀ DỮ LIỆU MỚI
         const currentTimestamp = Date.now();
         const dataTimestamp = parsedData.timestamp || 0;
-        
+
         // Chỉ cập nhật nếu dữ liệu không quá cũ (trong vòng 10 phút)
         if (currentTimestamp - dataTimestamp < 10 * 60 * 1000) {
           // Cập nhật dữ liệu từ editor
@@ -262,7 +313,7 @@ const PrescriptionSection = ({
         } else {
           console.log('⚠️ Dữ liệu từ PDF editor đã quá cũ, bỏ qua');
         }
-        
+
       } catch (error) {
         console.error('Error processing editor return data:', error);
       } finally {
@@ -312,7 +363,7 @@ const PrescriptionSection = ({
       }
 
       const result = await response.json();
-      
+
       if (result.success) {
         setPreviewHTML(result.html);
         console.log('✅ Preview HTML loaded successfully');
@@ -352,17 +403,17 @@ const PrescriptionSection = ({
 
   const handleFieldChange = (field, value) => {
     let updatedRow = { ...newRow };
-    
+
     if (field === 'quantity' || field === 'unitPrice') {
       updatedRow[field] = field === 'quantity' ? value : Number(value);
-      
+
       const quantity = field === 'quantity' ? value : newRow.quantity;
       const unitPrice = field === 'unitPrice' ? Number(value) : newRow.unitPrice;
       updatedRow.totalPrice = (quantity || 0) * (unitPrice || 0);
     } else {
       updatedRow[field] = value;
     }
-    
+
     setNewRow(updatedRow);
   };
 
@@ -403,7 +454,7 @@ const PrescriptionSection = ({
     };
 
     setPrescriptionRows(prev => [...prev, newMedicine]);
-    
+
     setNewRow({
       medicine: '',
       quantity: '',
@@ -411,7 +462,7 @@ const PrescriptionSection = ({
       unitPrice: 0,
       totalPrice: 0
     });
-    
+
     setToast({
       show: true,
       message: "✅ Thêm thuốc thành công!",
@@ -440,9 +491,9 @@ const PrescriptionSection = ({
     const updatedRows = [...prescriptionRows];
     updatedRows[editingIndex] = updatedMedicine;
     setPrescriptionRows(updatedRows);
-    
+
     cancelEditing();
-    
+
     setToast({
       show: true,
       message: "✅ Cập nhật thuốc thành công!",
@@ -450,104 +501,59 @@ const PrescriptionSection = ({
     });
   };
 
- const handlePrint = async () => {
-  if (!selectedTodayPatient || prescriptionRows.length === 0) {
-    setToast({
-      show: true,
-      message: "⚠️ Vui lòng chọn bệnh nhân và thêm ít nhất một đơn thuốc trước khi in.",
-      variant: "warning",
-    });
-    return;
-  }
-
-  try {
-    const printData = {
-      type: 'prescription',
-      patient_name: selectedTodayPatient.name || 'N/A',
-      age: String(selectedTodayPatient.age || 'N/A'),
-      gender: selectedTodayPatient.gender || 'N/A',
-      phone: selectedTodayPatient.phone || 'N/A',
-      appointment_date: selectedTodayPatient.date
-        ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
-        : new Date().toLocaleDateString('vi-VN'),
-      appointment_time: selectedTodayPatient.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-      doctor_name: selectedTodayPatient.doctor_name || 'Bác sĩ chưa rõ',
-      prescriptions: [
-        {
-          details: prescriptionRows.map(row => ({
-            medicine: row.medicine || 'N/A',
-            quantity: parseInt(row.quantity) || 1,
-            dosage: row.dosage || 'N/A',
-            unitPrice: parseFloat(row.unitPrice) || 0,
-          })),
-        },
-      ],
-      diagnoses: diagnoses || [],
-      services: services || [],
-      pdf_settings: defaultPdfSettings
-    };
-
-    console.log('📤 Print data with PDF settings:', printData);
-
-    // SỬA: GỌI API TẠO PDF THỰC SỰ (previewPrescription)
-    const response = await fetch(`${API_BASE_URL}/api/print/prescription/preview`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/pdf', // QUAN TRỌNG: Chấp nhận PDF
-      },
-      body: JSON.stringify(printData),
-    });
-
-    // KIỂM TRA KỸ RESPONSE
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Server response error:', errorText);
-      throw new Error(errorText || `Lỗi server: ${response.status}`);
+  const handlePrint = async () => {
+    if (!selectedTodayPatient || prescriptionRows.length === 0) {
+      setToast({
+        show: true,
+        message: "⚠️ Vui lòng chọn bệnh nhân và thêm ít nhất một đơn thuốc trước khi in.",
+        variant: "warning",
+      });
+      return;
     }
 
-    // KIỂM TRA CONTENT TYPE - PHẢI LÀ PDF
-    const contentType = response.headers.get('content-type');
-    console.log('📄 Content-Type:', contentType);
+    try {
+      const printData = {
+        type: 'prescription',
+        patient_name: selectedTodayPatient.name || 'N/A',
+        age: String(selectedTodayPatient.age || 'N/A'),
+        gender: selectedTodayPatient.gender || 'N/A',
+        phone: selectedTodayPatient.phone || 'N/A',
+        appointment_date: selectedTodayPatient.date
+          ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
+          : new Date().toLocaleDateString('vi-VN'),
+        appointment_time: selectedTodayPatient.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        doctor_name: selectedTodayPatient.doctor_name || 'Bác sĩ chưa rõ',
+        prescriptions: [
+          {
+            details: prescriptionRows.map(row => ({
+              medicine: row.medicine || 'N/A',
+              quantity: parseInt(row.quantity) || 1,
+              dosage: row.dosage || 'N/A',
+              unitPrice: parseFloat(row.unitPrice) || 0,
+            })),
+          },
+        ],
+        diagnoses: diagnoses || [],
+        services: services || [],
+        pdf_settings: defaultPdfSettings
+      };
 
-    if (!contentType || !contentType.includes('application/pdf')) {
-      const errorData = await response.text();
-      console.error('❌ Not a PDF response:', errorData);
-      throw new Error('Server trả về dữ liệu không phải PDF');
+      console.log('📤 Print data with PDF settings:', printData);
+
+      // SỬA: GỌI API TẠO PDF THỰC SỰ (previewPrescription)
+      const response = await printPdfService.printPDF(printData);
+      console.log('✅ PDF Service Result:', response)
+      console.log('📥 API Response status:', response.status)
+
+    } catch (error) {
+      console.error('❌ Error exporting prescription:', error);
+      setToast({
+        show: true,
+        message: `Lỗi khi xuất toa thuốc: ${error.message}`,
+        variant: "danger",
+      });
     }
-
-    // TẠO VÀ TẢI FILE PDF
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    
-    // Tạo link tải về
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `TOA_THUOC_${selectedTodayPatient.name || 'benh_nhan'}_${Date.now()}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    
-    // Dọn dẹp
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
-
-    setToast({
-      show: true,
-      message: "✅ Xuất toa thuốc thành công!",
-      variant: "success",
-    });
-
-  } catch (error) {
-    console.error('❌ Error exporting prescription:', error);
-    setToast({
-      show: true,
-      message: `Lỗi khi xuất toa thuốc: ${error.message}`,
-      variant: "danger",
-    });
-  }
-};
+  };
 
   // HÀM XEM TRƯỚC TRONG MODAL (DỰ PHÒNG)
   const handleModalPreview = async () => {
@@ -623,7 +629,7 @@ const PrescriptionSection = ({
                             required
                           />
                           {suggestions.length > 0 && (
-                            <div 
+                            <div
                               className="suggestion-dropdown"
                               style={{
                                 position: 'absolute',
@@ -639,12 +645,12 @@ const PrescriptionSection = ({
                               }}
                             >
                               {suggestions.map((s, i) => (
-                                <div 
-                                  key={i} 
+                                <div
+                                  key={i}
                                   className="suggestion-item p-2 border-bottom"
                                   onClick={() => handleSelectSuggestion(s)}
                                   style={{
-                                    cursor: 'pointer', 
+                                    cursor: 'pointer',
                                     backgroundColor: '#f8f9fa',
                                     transition: 'background-color 0.2s'
                                   }}
@@ -738,7 +744,7 @@ const PrescriptionSection = ({
                   )}
                 </tr>
               ))}
-              
+
               {/* Dòng thêm mới */}
               <tr style={{ backgroundColor: '#f8f9fa' }}>
                 <td>
@@ -751,7 +757,7 @@ const PrescriptionSection = ({
                       disabled={editingIndex !== null}
                     />
                     {suggestions.length > 0 && editingIndex === null && (
-                      <div 
+                      <div
                         className="suggestion-dropdown"
                         style={{
                           position: 'absolute',
@@ -767,12 +773,12 @@ const PrescriptionSection = ({
                         }}
                       >
                         {suggestions.map((s, i) => (
-                          <div 
-                            key={i} 
+                          <div
+                            key={i}
                             className="suggestion-item p-2 border-bottom"
                             onClick={() => handleSelectSuggestion(s)}
                             style={{
-                              cursor: 'pointer', 
+                              cursor: 'pointer',
                               backgroundColor: '#f8f9fa',
                               transition: 'background-color 0.2s'
                             }}
@@ -834,7 +840,7 @@ const PrescriptionSection = ({
               </tr>
             </tbody>
           </Table>
-          
+
           {prescriptionRows.length === 0 && (
             <div className="text-center text-muted py-3">
               Chưa có thuốc nào trong đơn. Hãy thêm thuốc bằng cách điền thông tin vào dòng cuối cùng.
@@ -842,7 +848,7 @@ const PrescriptionSection = ({
           )}
         </Card.Body>
       </Card>
-      
+
       <div className="d-flex gap-2">
         <Button
           variant="outline-info"
@@ -850,16 +856,16 @@ const PrescriptionSection = ({
           disabled={!selectedTodayPatient || prescriptionRows.length === 0}
           className="no-print"
         >
-          👁️ Xem trước PDF
+          <i class="fas fa-eye"></i> Chỉnh sửa PDF
         </Button>
-        
+
         <Button
           variant="outline-success"
           onClick={handlePrint}
           disabled={!selectedTodayPatient || prescriptionRows.length === 0}
           className="no-print"
         >
-          🖨️ Xuất toa thuốc
+          <i class="fas fa-print"></i> Xuất toa thuốc
         </Button>
       </div>
 
@@ -881,15 +887,16 @@ const PrescriptionSection = ({
           <Button variant="secondary" onClick={() => setShowPDFPreview(false)}>
             Đóng
           </Button>
-          <Button 
-            variant="success" 
+          <Button
+            variant="success"
             onClick={() => {
               handlePrint();
               setShowPDFPreview(false);
             }}
             disabled={isLoadingPreview || previewError}
           >
-            {isLoadingPreview ? <Spinner size="sm" /> : '💾 Tải về PDF'}
+            <i class="fas fa-print"></i>
+            {isLoadingPreview ? <Spinner size="sm" /> : 'Tải về PDF'}
           </Button>
         </Modal.Footer>
       </Modal>
