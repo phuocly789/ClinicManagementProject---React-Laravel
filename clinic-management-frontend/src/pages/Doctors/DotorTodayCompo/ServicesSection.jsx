@@ -2,8 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Col, Card, Form, Button, Spinner, Badge, Row, Table } from "react-bootstrap";
 import Pagination from "../../../Components/Pagination/Pagination";
 import { useNavigate } from "react-router-dom";
-
-const API_BASE_URL = 'http://localhost:8000';
+import { printPdfService } from "../../../services/printPdfService";
 
 const ServicesSection = ({
   services,
@@ -34,13 +33,61 @@ const ServicesSection = ({
     totalPrice: 0
   });
 
+
   // THÊM CẤU HÌNH PDF MẶC ĐỊNH
   const defaultPdfSettings = {
     page_size: "A4",
     orientation: "portrait",
     margins: { top: 10, right: 10, bottom: 10, left: 10 },
     header: true,
-    footer: true
+    footer: true,
+    // 🔥 CÁC TRƯỜNG BẮT BUỘC THEO VALIDATION
+    fontFamily: 'Times New Roman',
+    fontSize: '14px',
+    fontColor: '#000000',
+    primaryColor: '#2c5aa0',
+    backgroundColor: '#ffffff',
+    borderColor: '#333333',
+    headerBgColor: '#f0f0f0',
+    lineHeight: 1.5,
+    fontStyle: 'normal',
+    fontWeight: 'normal',
+
+    // Clinic info
+    clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
+    clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
+    clinicPhone: '028 1234 5678',
+    doctorName: 'Hệ thống',
+    customTitle: 'Phiếu Chỉ Định Dịch Vụ',
+
+    // Page settings
+    pageOrientation: 'portrait',
+    pageSize: 'A4',
+    marginTop: '15mm',
+    marginBottom: '15mm',
+    marginLeft: '10mm',
+    marginRight: '10mm',
+
+    // Logo settings (disabled)
+    logo: {
+      enabled: false,
+      url: '',
+      width: '80px',
+      height: '80px',
+      position: 'left',
+      opacity: 0.8
+    },
+
+    // Watermark settings (disabled)
+    watermark: {
+      enabled: false,
+      text: 'MẪU BẢN QUYỀN',
+      url: '',
+      opacity: 0.1,
+      fontSize: 48,
+      color: '#cccccc',
+      rotation: -45
+    }
   };
 
   // FIX: SỬ DỤNG DIRECTLY TỪ PROPS, KHÔNG DÙNG STATE LOCAL TRUNG GIAN
@@ -129,160 +176,109 @@ const ServicesSection = ({
       return;
     }
 
-    // ✅ Tạo data gửi đến BE
+    // ✅ Tạo data gửi đến PDF Editor (GIỐNG PRESCRIPTION)
     const previewData = {
       type: 'service',
       patient_name: selectedTodayPatient.name || 'N/A',
-      patient_age: selectedTodayPatient.age || 'N/A',
-      patient_gender: selectedTodayPatient.gender || 'N/A',
-      patient_phone: selectedTodayPatient.phone || 'N/A',
-      age: selectedTodayPatient.age || 'N/A',
+      age: String(selectedTodayPatient.age || 'N/A'),
       gender: selectedTodayPatient.gender || 'N/A',
       phone: selectedTodayPatient.phone || 'N/A',
-      address: selectedTodayPatient.address || '',
-      code: `DV_${Date.now()}`,
-      date: new Date().toISOString().split('T')[0],
-      doctor: "Bác sĩ điều trị",
-      doctor_name: "Bác sĩ điều trị",
+      address: selectedTodayPatient.address || 'N/A',
+
+      // ✅ THÔNG TIN HẸN KHÁM
+      appointment_date: selectedTodayPatient.date
+        ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
+        : new Date().toLocaleDateString('vi-VN'),
+      appointment_time: selectedTodayPatient.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      doctor_name: selectedTodayPatient.doctor_name || 'Bác sĩ chưa rõ',
+
+      // ✅ SERVICES DATA - CẤU TRÚC CHUẨN
       services: selectedServices,
+
+      // ✅ THÔNG TIN Y TẾ
       symptoms: symptoms || '',
       diagnosis: diagnosis || '',
       instructions: 'Vui lòng thực hiện các dịch vụ theo chỉ định',
-      appointment_date: selectedTodayPatient.date || new Date().toLocaleDateString('vi-VN'),
-      appointment_time: selectedTodayPatient.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
 
-      pdf_settings: {
-        clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
-        clinicAddress: 'Số 53 Võ Văn Ngân, TP. Thủ Đức, TP.HCM',
-        clinicPhone: '024.3574.7788',
-        doctorName: "Bác sĩ điều trị",
-        customTitle: 'PHIẾU CHỈ ĐỊNH DỊCH VỤ',
-        fontFamily: 'Times New Roman',
-        fontSize: '14px',
-        pageSize: 'A4',
-        pageOrientation: 'portrait',
-        marginTop: '15mm',
-        marginRight: '10mm',
-        marginBottom: '15mm',
-        marginLeft: '10mm',
-        primaryColor: '#2c5aa0',
-        logo: {
-          enabled: false,
-          url: '',
-          width: '80px',
-          height: '80px',
-          position: 'left',
-          opacity: 1
-        },
-        watermark: {
-          enabled: false,
-          text: 'MẪU BẢN QUYỀN',
-          opacity: 0.1,
-          fontSize: 48,
-          color: '#cccccc',
-          rotation: -45
-        }
-      }
+      // ✅ PDF SETTINGS
+      pdf_settings: defaultPdfSettings,
+
+      // ✅ THÔNG TIN ID
+      appointment_id: selectedTodayPatient.id || selectedTodayPatient.AppointmentId,
+      patient_id: selectedTodayPatient.PatientId || selectedTodayPatient.patient_id,
+
+      // ✅ ORIGINAL DATA ĐỂ BACKUP
+      originalData: {
+        services: [...selectedServices],
+        symptoms,
+        diagnosis,
+        instructions: 'Vui lòng thực hiện các dịch vụ theo chỉ định',
+      },
+
+      timestamp: Date.now()
     };
 
-    console.log('📤 ServicesSection - Sending to preview-html:', {
+    console.log('📤 Data preview DỊCH VỤ gửi đến PDF Editor:', {
       patient: previewData.patient_name,
       services_count: previewData.services.length,
       services: previewData.services
     });
 
     try {
-      setServiceLoading(true);
+      // ✅ XÓA DỮ LIỆU CŨ TRƯỚC KHI LƯU MỚI
+      sessionStorage.removeItem('pdfEditorData');
+      sessionStorage.removeItem('shouldRefreshOnReturn');
+      sessionStorage.removeItem('editorSource');
 
-      // ✅ GỌI API PREVIEW-HTML ĐỂ LẤY HTML
-      const response = await fetch(`${API_BASE_URL}/api/print/preview-html`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(previewData),
+      // ✅ Lưu data MỚI NHẤT vào sessionStorage
+      sessionStorage.setItem('pdfEditorData', JSON.stringify(previewData));
+      sessionStorage.setItem('shouldRefreshOnReturn', 'true');
+      sessionStorage.setItem('editorSource', 'services');
+      console.log('🚀 BEFORE NAVIGATE - State to send:', {
+        pdfData: previewData,
+        source: 'services',
+        servicesData: selectedServices,
+        patientInfo: {
+          name: previewData.patient_name,
+          age: previewData.age,
+          gender: previewData.gender,
+          phone: previewData.phone,
+          address: previewData.address
+        }
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
-      }
+      navigate('/doctor/print-pdf-editor', {
+        state: {
+          pdfData: previewData,
+          source: 'services',
+          timestamp: Date.now(),
+          fromServices: true,
+          servicesData: selectedServices,
+          patientInfo: {
+            name: previewData.patient_name,
+            age: previewData.age,
+            gender: previewData.gender,
+            phone: previewData.phone,
+            address: previewData.address
+          }
+        }
+      });
 
-      const result = await response.json();
+      console.log('✅ AFTER NAVIGATE - Should be on PDF Editor page');
 
-      if (result.success) {
-        console.log('✅ Received HTML template from BE', result);
-
-        // ✅ QUAN TRỌNG: XÓA VÀ LƯU SESSIONSTORAGE TRƯỚC KHI NAVIGATE
-        sessionStorage.removeItem('pdfEditorData');
-        sessionStorage.removeItem('editorSource');
-        sessionStorage.removeItem('pdfHTMLTemplate');
-        sessionStorage.removeItem('pdfPreviewData');
-
-        // Lưu data vào sessionStorage
-        sessionStorage.setItem('pdfEditorData', JSON.stringify(previewData));
-        sessionStorage.setItem('editorSource', 'services');
-        sessionStorage.setItem('pdfHTMLTemplate', result.html);
-        sessionStorage.setItem('pdfPreviewData', JSON.stringify(result.data));
-
-        // ✅ KIỂM TRA NGAY LẬP TỨC
-        console.log('💾 IMMEDIATE sessionStorage check:', {
-          editorSource: sessionStorage.getItem('editorSource'),
-          hasPdfEditorData: !!sessionStorage.getItem('pdfEditorData'),
-          hasHTML: !!sessionStorage.getItem('pdfHTMLTemplate')
-        });
-
-        // ✅ THÊM DELAY ĐỂ ĐẢM BẢO SESSIONSTORAGE ĐƯỢC LƯU
-        setTimeout(() => {
-          // ✅ KIỂM TRA LẦN CUỐI TRƯỚC KHI NAVIGATE
-          console.log('🔍 FINAL sessionStorage check before navigate:', {
-            editorSource: sessionStorage.getItem('editorSource'),
-            hasData: !!sessionStorage.getItem('pdfEditorData')
-          });
-
-          // ✅ NAVIGATE VỚI STATE TRỰC TIẾP
-          navigate('/doctor/print-pdf-editor', {
-            state: {
-              // ✅ QUAN TRỌNG: TRUYỀN DỮ LIỆU TRỰC TIẾP QUA STATE
-              source: 'services',
-              pdfData: previewData,
-              htmlTemplate: result.html,
-              originalData: result.data,
-              services: previewData.services,
-              patientInfo: {
-                name: previewData.patient_name,
-                age: previewData.patient_age,
-                gender: previewData.patient_gender,
-                phone: previewData.patient_phone,
-                address: previewData.address
-              },
-              // ✅ THÊM TIMESTAMP ĐỂ TRÁNH CACHE
-              timestamp: Date.now(),
-              // ✅ THÊM FLAG ĐẶC BIỆT
-              fromServices: true
-            }
-          });
-
-          setToast({
-            show: true,
-            message: "✅ Đang chuyển đến trình chỉnh sửa PDF...",
-            variant: "success",
-          });
-        }, 50); // Delay ngắn để đảm bảo sessionStorage được lưu
-
-      } else {
-        throw new Error(result.message || 'Lỗi từ server');
-      }
-
-    } catch (error) {
-      console.error('Error getting HTML preview:', error);
       setToast({
         show: true,
-        message: "❌ Lỗi khi tải preview PDF: " + error.message,
+        message: "✅ Đang chuyển đến trình chỉnh sửa PDF...",
+        variant: "success",
+      });
+
+    } catch (error) {
+      console.error('Error navigating to PDF editor:', error);
+      setToast({
+        show: true,
+        message: "❌ Lỗi khi chuyển đến trình chỉnh sửa PDF",
         variant: "danger",
       });
-    } finally {
-      setServiceLoading(false);
     }
   };
 
@@ -326,50 +322,9 @@ const ServicesSection = ({
     };
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/print/prescription/preview`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // ✅ SỬA: XÓA 'Accept': 'application/pdf' VÌ BE CÓ THỂ TRẢ VỀ JSON ERROR
-        },
-        body: JSON.stringify(requestData),
-      });
-
-      // ✅ KIỂM TRA STATUS TRƯỚC
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Server error response:', errorText);
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
-      }
-
-      // ✅ KIỂM TRA CONTENT TYPE
-      const contentType = response.headers.get('content-type');
-      console.log('📄 Content-Type:', contentType);
-
-      if (contentType && contentType.includes('application/pdf')) {
-        // ✅ LÀ PDF - XỬ LÝ BÌNH THƯỜNG
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = `PHIEU_DICH_VU_${selectedTodayPatient.name || 'benh_nhan'}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-
-        setToast({
-          show: true,
-          message: `✅ Đã xuất PDF phiếu dịch vụ với ${requestData.services.length} dịch vụ.`,
-          variant: "success",
-        });
-      } else {
-        // ✅ KHÔNG PHẢI PDF - CÓ THỂ LÀ JSON ERROR
-        const errorData = await response.json();
-        console.error('❌ Server returned error:', errorData);
-        throw new Error(errorData.message || 'Server trả về lỗi không phải PDF');
-      }
+      const response = await printPdfService.printPDF(requestData);
+      console.log('✅ PDF Service Result:', response)
+      console.log('📥 API Response status:', response.status);
 
     } catch (error) {
       console.error('Error printing service document:', error);
@@ -1012,13 +967,14 @@ const ServicesSection = ({
               disabled={isFormDisabled || !Object.values(servicesState).some(v => v) || serviceLoading}
               className="no-print"
             >
+              <i class="fas fa-bell"></i>
               {serviceLoading ? (
                 <>
                   <Spinner animation="border" size="sm" className="me-2" />
                   Đang gửi...
                 </>
               ) : (
-                `🧾 Yêu cầu thực hiện dịch vụ đã chọn (${Object.values(servicesState).filter(v => v).length})`
+                ` Yêu cầu thực hiện dịch vụ đã chọn (${Object.values(servicesState).filter(v => v).length})`
               )}
             </Button>
 
@@ -1028,8 +984,10 @@ const ServicesSection = ({
               onClick={handlePreview}
               disabled={!selectedTodayPatient || !Object.values(servicesState).some(Boolean)}
               className="no-print ms-2"
+              key="preview-button" // 🔥 THÊM KEY NÀY
+
             >
-              👁️ Xem trước PDF
+              <i class="fas fa-eye"></i> Chỉnh sửa PDF
             </Button>
 
             <Button
@@ -1039,7 +997,7 @@ const ServicesSection = ({
               disabled={!selectedTodayPatient || !Object.values(servicesState).some(Boolean)}
               className="no-print ms-2"
             >
-              🖨️ Xuất PDF
+              <i class="fas fa-print"></i> Xuất PDF
             </Button>
           </div>
 

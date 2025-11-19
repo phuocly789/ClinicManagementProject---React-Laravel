@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Modal, Button, Row, Col, Badge, Table, Card, Spinner, Alert } from 'react-bootstrap';
 import { Printer, Download, X, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { printPdfService } from '../../services/printPdfService';
 
 const InvoiceDetailModal = ({ show, onHide, invoice }) => {
   console.log('🔍 InvoiceDetailModal received:', invoice);
@@ -49,7 +50,7 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
         phone: invoiceData.patient_phone || 'N/A',
         appointment_date: invoiceData.date || new Date().toLocaleDateString('vi-VN'),
         appointment_time: 'Hoàn tất',
-        doctor_name: 'Hệ thống',  
+        doctor_name: 'Hệ thống',
 
         // ✅ QUAN TRỌNG: Đúng cấu trúc services (KHÔNG CÓ prescriptions)
         services: services,
@@ -71,58 +72,63 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
 
         // ✅ PDF SETTINGS - đúng cấu trúc
         pdf_settings: {
-          customTitle: 'HÓA ĐƠN THANH TOÁN',
+          // 🔥 CÁC TRƯỜNG BẮT BUỘC THEO VALIDATION
+          fontFamily: 'Times New Roman',
+          fontSize: '14px',
+          fontColor: '#000000',
+          primaryColor: '#2c5aa0',
+          backgroundColor: '#ffffff',
+          borderColor: '#333333',
+          headerBgColor: '#f0f0f0',
+          lineHeight: 1.5,
+          fontStyle: 'normal',
+          fontWeight: 'normal',
+
+          // Clinic info
           clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
           clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
           clinicPhone: '028 1234 5678',
-          fontFamily: 'Arial',
-          doctorName: 'Hệ thống'
+          doctorName: 'Hệ thống',
+          customTitle: 'HÓA ĐƠN THANH TOÁN',
+
+          // Page settings
+          pageOrientation: 'portrait',
+          pageSize: 'A4',
+          marginTop: '15mm',
+          marginBottom: '15mm',
+          marginLeft: '10mm',
+          marginRight: '10mm',
+
+          // Logo settings (disabled)
+          logo: {
+            enabled: false,
+            url: '',
+            width: '80px',
+            height: '80px',
+            position: 'left',
+            opacity: 0.8
+          },
+
+          // Watermark settings (disabled)
+          watermark: {
+            enabled: false,
+            text: 'MẪU BẢN QUYỀN',
+            url: '',
+            opacity: 0.1,
+            fontSize: 48,
+            color: '#cccccc',
+            rotation: -45
+          }
         }
       };
 
       console.log('📤 Sending to Laravel PDF API:', printData);
 
       // ✅ GỌI ĐÚNG ENDPOINT
-      const response = await fetch('http://localhost:8000/api/print/prescription/preview', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(printData),
-      });
-
+      const response = await printPdfService.printPDF(printData);
+      console.log('✅ PDF Service Result:', response)
       console.log('📥 API Response status:', response.status);
 
-      if (response.ok) {
-        const blob = await response.blob();
-        console.log('📄 Received PDF blob:', blob);
-
-        // Tạo URL và tải file PDF
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `HOA_DON_${invoiceData.code || invoiceData.id}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        setPrintSuccess('✅ Đã tải xuống PDF hóa đơn thành công!');
-        console.log('✅ PDF downloaded successfully');
-
-      } else {
-        const errorText = await response.text();
-        console.error('❌ API Error:', errorText);
-
-        // Parse lỗi chi tiết
-        try {
-          const errorData = JSON.parse(errorText);
-          throw new Error(errorData.message || errorData.errors?.type?.[0] || 'Lỗi không xác định');
-        } catch {
-          throw new Error(errorText || `Lỗi server: ${response.status}`);
-        }
-      }
 
     } catch (error) {
       console.error('❌ Print invoice error:', error);

@@ -526,6 +526,8 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
       const pdfData = {
         type: 'test_result',
         patient_name: service.patient_name,
+        age: service.patient_age,
+        gender: service.patient_gender,
         patient_code: `BN${service.patient_id}`,
         lab_number: `XN${service.service_order_id}`,
         department: 'KHOA XÉT NGHIỆM',
@@ -548,13 +550,53 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
 
         // ✅ PDF SETTINGS
         pdf_settings: {
-          clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
-          clinicAddress: 'Số 53 Võ Văn Ngân, TP. Thủ Đức, TP.HCM',
-          clinicPhone: '024.3574.7788',
-          customTitle: 'PHIẾU KẾT QUẢ XÉT NGHIỆM',
+          // 🔥 CÁC TRƯỜNG BẮT BUỘC THEO VALIDATION
           fontFamily: 'Times New Roman',
-          fontSize: '12px',
-          primaryColor: '#2c5aa0'
+          fontSize: '14px',
+          fontColor: '#000000',
+          primaryColor: '#2c5aa0',
+          backgroundColor: '#ffffff',
+          borderColor: '#333333',
+          headerBgColor: '#f0f0f0',
+          lineHeight: 1.5,
+          fontStyle: 'normal',
+          fontWeight: 'normal',
+
+          // Clinic info
+          clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
+          clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
+          clinicPhone: '028 1234 5678',
+          doctorName: 'Hệ thống',
+          customTitle: 'Phiếu KQ Xét Nghiệm',
+
+          // Page settings
+          pageOrientation: 'portrait',
+          pageSize: 'A4',
+          marginTop: '15mm',
+          marginBottom: '15mm',
+          marginLeft: '10mm',
+          marginRight: '10mm',
+
+          // Logo settings (disabled)
+          logo: {
+            enabled: false,
+            url: '',
+            width: '80px',
+            height: '80px',
+            position: 'left',
+            opacity: 0.8
+          },
+
+          // Watermark settings (disabled)
+          watermark: {
+            enabled: false,
+            text: 'MẪU BẢN QUYỀN',
+            url: '',
+            opacity: 0.1,
+            fontSize: 48,
+            color: '#cccccc',
+            rotation: -45
+          }
         }
       };
 
@@ -639,23 +681,44 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
 
         // PDF Settings mặc định
         pdf_settings: {
-          clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
-          clinicAddress: 'Số 53 Võ Văn Ngân, TP. Thủ Đức, TP.HCM',
-          clinicPhone: '024.3574.7788',
-          customTitle: 'PHIẾU KẾT QUẢ XÉT NGHIỆM',
+          // 🔥 CÁC TRƯỜNG BẮT BUỘC THEO VALIDATION
           fontFamily: 'Times New Roman',
-          fontSize: '12px',
+          fontSize: '14px',
+          fontColor: '#000000',
           primaryColor: '#2c5aa0',
+          backgroundColor: '#ffffff',
+          borderColor: '#333333',
+          headerBgColor: '#f0f0f0',
+          lineHeight: 1.5,
+          fontStyle: 'normal',
+          fontWeight: 'normal',
 
-          // Logo và watermark mặc định
+          // Clinic info
+          clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
+          clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
+          clinicPhone: '028 1234 5678',
+          doctorName: 'Hệ thống',
+          customTitle: 'Phiếu KQ Xét Nghiệm',
+
+          // Page settings
+          pageOrientation: 'portrait',
+          pageSize: 'A4',
+          marginTop: '15mm',
+          marginBottom: '15mm',
+          marginLeft: '10mm',
+          marginRight: '10mm',
+
+          // Logo settings (disabled)
           logo: {
             enabled: false,
             url: '',
             width: '80px',
             height: '80px',
             position: 'left',
-            opacity: 1
+            opacity: 0.8
           },
+
+          // Watermark settings (disabled)
           watermark: {
             enabled: false,
             text: 'MẪU BẢN QUYỀN',
@@ -1410,8 +1473,8 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
             ) : (
               <>
                 <i className={`fas fa-${confirmAction === 'start' ? 'play' :
-                    confirmAction === 'complete' ? 'check' :
-                      'times'
+                  confirmAction === 'complete' ? 'check' :
+                    'times'
                   } me-1`}></i>
                 {confirmAction === 'start' ? 'Bắt Đầu' :
                   confirmAction === 'complete' ? 'Hoàn Thành' :

@@ -6,6 +6,7 @@ import InvoiceDetailModal from './InvoiceDetailModal';
 import { paymentService } from '../../services/paymentService';
 import Pagination from '../../Components/Pagination/Pagination';
 import Loading from '../../Components/Loading/Loading';
+import { printPdfService } from '../../services/printPdfService';
 import { AlertTriangle, CreditCard, RotateCcw, History, Eye, CheckCircle, XCircle, Printer } from "lucide-react";
 
 // Constants
@@ -300,7 +301,7 @@ const PaymentSection = () => {
   };
 
   // Hàm in hóa đơn cho từng bệnh nhân đã thanh toán - GIỐNG InvoiceDetailModal
-  // ✅ Hàm in hóa đơn - SỬA LẠI CẤU TRÚC DỮ LIỆU
+  // ✅ Hàm in hóa đơn - THÊM ĐẦY ĐỦ PDF SETTINGS
   const handlePrintInvoice = async (invoice) => {
     try {
       setPrinting(true);
@@ -313,8 +314,8 @@ const PaymentSection = () => {
         throw new Error('Không có dữ liệu hóa đơn');
       }
 
-      // ✅ SỬA: Lấy dữ liệu services và prescriptions ĐÚNG CẤU TRÚC
-      const { services,prescriptions  } = getServicesAndMedicinesFromInvoice(invoice);
+      // ✅ Lấy dữ liệu services và prescriptions ĐÚNG CẤU TRÚC
+      const { services, prescriptions } = getServicesAndMedicinesFromInvoice(invoice);
 
       console.log('📋 Processed data for PDF:', {
         services,
@@ -323,7 +324,7 @@ const PaymentSection = () => {
         hasPrescriptions: prescriptions.length > 0
       });
 
-      // ✅ SỬA: Gửi đúng cấu trúc data mà BE expect
+      // ✅ THÊM ĐẦY ĐỦ PDF SETTINGS THEO VALIDATION CỦA BE
       const printData = {
         type: 'payment',
         patient_name: invoice.patient_name || 'THÔNG TIN BỆNH NHÂN',
@@ -336,7 +337,7 @@ const PaymentSection = () => {
         paid_at: invoice.paid_at || new Date().toLocaleString('vi-VN'),
 
         // ✅ QUAN TRỌNG: Gửi đúng cấu trúc prescriptions và services
-        prescriptions: prescriptions, // Đây là key quan trọng!
+        prescriptions: prescriptions,
         services: services,
 
         // Payment data
@@ -346,59 +347,68 @@ const PaymentSection = () => {
         invoice_code: invoice.code || `INV_${invoice.id}`,
         total_amount: invoice.total || 0,
 
-        // PDF settings
+        // ✅ QUAN TRỌNG: THÊM ĐẦY ĐỦ PDF SETTINGS THEO VALIDATION
         pdf_settings: {
-          customTitle: 'HÓA ĐƠN THANH TOÁN',
+          // 🔥 CÁC TRƯỜNG BẮT BUỘC THEO VALIDATION
+          fontFamily: 'Times New Roman',
+          fontSize: '14px',
+          fontColor: '#000000',
+          primaryColor: '#2c5aa0',
+          backgroundColor: '#ffffff',
+          borderColor: '#333333',
+          headerBgColor: '#f0f0f0',
+          lineHeight: 1.5,
+          fontStyle: 'normal',
+          fontWeight: 'normal',
+
+          // Clinic info
           clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
           clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
           clinicPhone: '028 1234 5678',
-          fontFamily: 'Arial',
-          doctorName: 'Hệ thống'
+          doctorName: 'Hệ thống',
+          customTitle: 'HÓA ĐƠN THANH TOÁN',
+
+          // Page settings
+          pageOrientation: 'portrait',
+          pageSize: 'A4',
+          marginTop: '15mm',
+          marginBottom: '15mm',
+          marginLeft: '10mm',
+          marginRight: '10mm',
+
+          // Logo settings (disabled)
+          logo: {
+            enabled: false,
+            url: '',
+            width: '80px',
+            height: '80px',
+            position: 'left',
+            opacity: 0.8
+          },
+
+          // Watermark settings (disabled)
+          watermark: {
+            enabled: false,
+            text: 'MẪU BẢN QUYỀN',
+            url: '',
+            opacity: 0.1,
+            fontSize: 48,
+            color: '#cccccc',
+            rotation: -45
+          }
         }
       };
 
-      console.log('📤 Sending to Laravel PDF API:', printData);
-
-      // Gọi API
-      const response = await fetch('http://localhost:8000/api/print/prescription/preview', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(printData),
+      console.log('📤 Sending to Laravel PDF API:', {
+        ...printData,
+        pdf_settings: '...' // Ẩn pdf_settings trong log để dễ đọc
       });
 
-      console.log('📥 API Response status:', response.status);
-
-      if (response.ok) {
-        const blob = await response.blob();
-        console.log('📄 Received PDF blob:', blob.size, 'bytes');
-
-        // Tạo URL và tải file PDF
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `HOA_DON_${invoice.code || invoice.id}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        setSuccess(`✅ Đã tải xuống PDF hóa đơn ${invoice.code} thành công!`);
-        console.log('✅ PDF downloaded successfully');
-
-      } else {
-        const errorText = await response.text();
-        console.error('❌ API Error:', errorText);
-
-        try {
-          const errorData = JSON.parse(errorText);
-          throw new Error(errorData.message || errorData.errors?.type?.[0] || 'Lỗi không xác định');
-        } catch {
-          throw new Error(errorText || `Lỗi server: ${response.status}`);
-        }
-      }
+      // Gọi API
+      const result = await printPdfService.printPDF(printData);
+      console.log('✅ PDF Service Result:', result);
+      setSuccess(`✅ Đã tải xuống PDF hóa đơn ${invoice.code} thành công! File: ${result.fileName}`)
+       console.log('✅ PDF downloaded successfully via service');
 
     } catch (error) {
       console.error('❌ Print invoice error:', error);
@@ -406,6 +416,7 @@ const PaymentSection = () => {
     } finally {
       setPrinting(false);
     }
+
   };
 
   // ✅ Hàm lấy services và prescriptions từ invoice - SỬA ĐÚNG CẤU TRÚC
@@ -478,7 +489,7 @@ const PaymentSection = () => {
 
     return { services, prescriptions }; // ĐỔI TÊN: medicines -> prescriptions
   };
-  
+
   // ✅ Hàm chuyển đổi payment method - GIỐNG InvoiceDetailModal
   const getPaymentMethodText = (method) => {
     switch (method) {

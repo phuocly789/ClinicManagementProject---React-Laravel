@@ -1,6 +1,7 @@
 // PDFEditorPage.jsx - COMPLETE VERSION WITH ALL FEATURES
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Form, Spinner, Alert, Modal, Tab, Tabs } from 'react-bootstrap';
+import { printPdfService } from '../../../services/printPdfService';
 
 // Utility functions
 const numberToVietnameseWords = (num) => {
@@ -49,7 +50,7 @@ const formatNumber = (n) => {
 };
 
 const PDFEditorPage = () => {
-  const API_BASE_URL = 'http://localhost:8000';
+
 
   // State chính
   const [type, setType] = useState('prescription');
@@ -88,6 +89,24 @@ const PDFEditorPage = () => {
   const [error, setError] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [isSavingLogo, setIsSavingLogo] = useState(false);
+
+  const fixAssetUrl = (url) => {
+    if (!url) return '';
+
+    // Nếu là base64, giữ nguyên
+    if (url.startsWith('data:image')) return url;
+
+    // Nếu là absolute URL, giữ nguyên  
+    if (url.startsWith('http')) return url;
+
+    // Nếu là relative path, thêm origin
+    if (url.startsWith('/')) {
+      return `${window.location.origin}${url}`;
+    }
+
+    // Fallback: coi như filename trong temp_logo
+    return `${window.location.origin}/temp_logo/${url}`;
+  };
 
   // Cài đặt PDF
   const [pdfSettings, setPdfSettings] = useState({
@@ -270,7 +289,7 @@ const PDFEditorPage = () => {
             color: ${pdfSettings.watermark.color} !important;
             font-size: ${pdfSettings.watermark.fontSize}px !important;
             transform: translate(-50%, -50%) rotate(${pdfSettings.watermark.rotation}deg) !important;
-            z-index: 9999 !important;
+            z-index: -1 !important;
             font-weight: 700 !important;
           }
         </style>
@@ -618,9 +637,10 @@ const PDFEditorPage = () => {
       console.log('🎯 Handling Navigation State:', {
         source: state.source,
         hasPdfData: !!state.pdfData,
-        hasServices: !!state.pdfData?.services,        // ✅ ĐÚNG RỒI
-        hasPatientInfo: !!state.pdfData?.patient_name, // ✅ SỬA THÀNH NÀY
-        servicesCount: state.pdfData?.services?.length || 0,
+        hasServices: !!state.pdfData?.services,  // ✅ SỬA: state.pdfData.services
+        hasPatientInfo: !!state.patientInfo,
+        servicesCount: state.pdfData?.services?.length || 0,  // ✅ SỬA
+        servicesArray: state.pdfData?.services || 'no services',  // ✅ SỬA
         prescriptionsCount: state.pdfData?.prescriptions?.length || 0,
         // 🔥 THÊM DEBUG CHI TIẾT
         pdfData: state.pdfData ? state.pdfData : 'no pdfData',
@@ -631,12 +651,12 @@ const PDFEditorPage = () => {
       if (state.source === 'services') {
         console.log('🚀 PROCESSING SERVICES FROM NAVIGATION STATE');
 
-        // ✅ CẬP NHẬT FORM DATA TRỰC TIẾP TỪ STATE
+        // ✅ CẬP NHẬT FORM DATA TRỰC TIẾP TỪ STATE.pdfData
         const updatedFormData = {
           patientName: state.patientInfo?.name || state.pdfData?.patient_name || 'Nguyễn Thị Lan',
-          patientAge: state.patientInfo?.age || state.pdfData?.patient_age || '32',
-          patientGender: state.patientInfo?.gender || state.pdfData?.patient_gender || 'Nữ',
-          patientPhone: state.patientInfo?.phone || state.pdfData?.patient_phone || '0956789012',
+          patientAge: state.patientInfo?.age || state.pdfData?.age || '32',
+          patientGender: state.patientInfo?.gender || state.pdfData?.gender || 'Nữ',
+          patientPhone: state.patientInfo?.phone || state.pdfData?.phone || '0956789012',
           patientAddress: state.patientInfo?.address || state.pdfData?.address || '',
           code: state.pdfData?.code || `DV_${Date.now()}`,
           date: state.pdfData?.date || new Date().toISOString().split('T')[0],
@@ -651,11 +671,11 @@ const PDFEditorPage = () => {
 
         setFormData(prev => ({ ...prev, ...updatedFormData }));
 
-        // ✅ CẬP NHẬT SERVICE ROWS TRỰC TIẾP TỪ STATE
-        if (state.services && state.services.length > 0) {
-          console.log('🔄 Setting service rows from navigation state:', state.services);
+        // ✅ CẬP NHẬT SERVICE ROWS TRỰC TIẾP TỪ state.pdfData.services
+        if (state.pdfData?.services && state.pdfData.services.length > 0) {
+          console.log('🔄 Setting service rows from navigation state:', state.pdfData.services);
 
-          const services = state.services.map((service, index) => ({
+          const services = state.pdfData.services.map((service, index) => ({
             id: index + 1,
             name: service.ServiceName || service.name || `Dịch vụ ${index + 1}`,
             quantity: parseInt(service.Quantity) || 1,
@@ -672,7 +692,7 @@ const PDFEditorPage = () => {
           ]);
         }
 
-        // ✅ CẬP NHẬT PDF SETTINGS TỪ STATE
+        // ✅ CẬP NHẬT PDF SETTINGS TỪ STATE.pdfData
         if (state.pdfData?.pdf_settings) {
           console.log('🎨 Updating PDF settings from navigation state');
           setPdfSettings(prev => ({
@@ -689,12 +709,6 @@ const PDFEditorPage = () => {
             clinicAddress: 'Số 53 Võ Văn Ngân, TP. Thủ Đức, TP.HCM',
             clinicPhone: '024.3574.7788'
           }));
-        }
-
-        // ✅ CẬP NHẬT HTML TEMPLATE TỪ STATE
-        if (state.htmlTemplate) {
-          console.log('🎨 Setting HTML template from navigation state');
-          setPdfHTML(state.htmlTemplate);
         }
 
         // ✅ SET TYPE CUỐI CÙNG
@@ -861,11 +875,19 @@ const PDFEditorPage = () => {
 
         // ✅ SET TYPE - SỬA THÀNH test_result
         setType('test_result');
+        setPdfSettings(prev => ({
+          ...prev,
+          customTitle: 'Phiếu KQ Xét Nghiệm'
+        }));
 
         console.log('✅ Navigation state from TECHNICIAN processed successfully');
       } else if (state.source === 'invoice') {
         console.log('💰 PROCESSING INVOICE FROM NAVIGATION STATE');
-
+        console.log('📊 Invoice data check:', {
+          services: state.pdfData?.services?.length || 0,
+          prescriptions: state.pdfData?.prescriptions?.length || 0,
+          prescriptionsArray: state.pdfData?.prescriptionsArray?.length || 0
+        });
         // ✅ CẬP NHẬT FORM DATA TRỰC TIẾP TỪ STATE - GIỐNG CÁC SOURCE KHÁC
         const updatedFormData = {
           patientName: state.pdfData?.patient_name || 'THÔNG TIN BỆNH NHÂN',
@@ -1262,36 +1284,7 @@ const PDFEditorPage = () => {
     setDebugInfo(currentDebugInfo);
   }, [type, pdfHTML]);
 
-  // Thêm visual debug trên giao diện
-  const DebugBadge = () => (
-    <div style={{
-      position: 'fixed',
-      top: '10px',
-      right: '10px',
-      background: '#333',
-      color: 'white',
-      padding: '8px 12px',
-      borderRadius: '8px',
-      fontSize: '12px',
-      fontWeight: 'bold',
-      zIndex: 9999,
-      border: '2px solid',
-      borderColor: pdfHTML ? '#28a745' : '#ffc107',
-      minWidth: '200px'
-    }}>
-      <div>🔍 DEBUG PREVIEW MODE</div>
-      <div>Type: <strong>{type}</strong></div>
-      <div>Mode: <strong style={{
-        color: pdfHTML ? '#28a745' : '#ffc107'
-      }}>
-        {pdfHTML ? 'HTML TEMPLATE' : 'REACT COMPONENT'}
-      </strong></div>
-      <div>PDF HTML: <strong>{pdfHTML ? '✅ YES' : '❌ NO'}</strong></div>
-      <div style={{ fontSize: '10px', marginTop: '4px' }}>
-        {debugInfo.timestamp}
-      </div>
-    </div>
-  );
+
   // 🔥 REAL-TIME HTML PREVIEW - KHÔNG CÓ NÚT
   const renderHTMLPreview = () => {
     if (!pdfHTML) {
@@ -1340,6 +1333,19 @@ const PDFEditorPage = () => {
       return getCurrentRows(); // Giữ nguyên cho các type khác
     };
 
+
+    const previewLogoUrl = fixAssetUrl(pdfSettings.logo.url);
+    const previewWatermarkUrl = fixAssetUrl(pdfSettings.watermark.url);
+
+    console.log('🔍 PREVIEW LOGO DEBUG:', {
+      original: pdfSettings.logo.url,
+      fixed: previewLogoUrl,
+      enabled: pdfSettings.logo.enabled
+    });
+
+
+
+    // ... phần còn lại của renderPreviewContent ...
     const currentRows = getPaymentRows();
 
     // 🔥 SỬA: Tính tổng tiền cho payment (cả services và prescriptions)
@@ -1374,7 +1380,7 @@ const PDFEditorPage = () => {
               fontWeight: '700',
               textTransform: 'uppercase',
               pointerEvents: 'none',
-              zIndex: 0,
+              zIndex: -1,
               whiteSpace: 'nowrap'
             }}>
               {pdfSettings.watermark.url ? (
@@ -1411,7 +1417,7 @@ const PDFEditorPage = () => {
                 opacity: pdfSettings.logo.opacity
               }}>
                 <img
-                  src={pdfSettings.logo.url}
+                  src={previewLogoUrl}
                   alt="Clinic Logo"
                   style={{
                     width: pdfSettings.logo.width,
@@ -1656,7 +1662,7 @@ const PDFEditorPage = () => {
               }}>
                 {pdfSettings.logo.enabled && pdfSettings.logo.url && (
                   <img
-                    src={pdfSettings.logo.url}
+                    src={previewWatermarkUrl}
                     alt="Clinic Logo"
                     className="logo-img"
                     style={{
@@ -2203,7 +2209,7 @@ const PDFEditorPage = () => {
             fontWeight: '700',
             textTransform: 'uppercase',
             pointerEvents: 'none',
-            zIndex: 0,
+            zIndex: -1,
             whiteSpace: 'nowrap'
           }}>
             {pdfSettings.watermark.url ? (
@@ -2461,9 +2467,7 @@ const PDFEditorPage = () => {
                   <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
                     {formatNumber(totalAmount)} {type !== 'prescription' && 'VNĐ'}
                   </td>
-                  <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
-                    {formatNumber(totalAmount)} {type !== 'prescription' && 'VNĐ'}
-                  </td>
+                 
                 </tr>
               )}
             </tfoot>
@@ -2814,32 +2818,31 @@ const PDFEditorPage = () => {
 
     setIsSavingLogo(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/print/logo/save`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          image: pdfSettings.logo.url,
-          type: 'logo',
-          clinic_id: 1
-        }),
+      const result = await printPdfService.saveLogo({
+        image: pdfSettings.logo.url,
+        type: 'logo',
+        clinic_id: 1
       });
 
-      const result = await response.json();
+      console.log('🔄 Logo save result:', result);
 
-      if (result.success) {
+      // 🔥 XỬ LÝ KẾT QUẢ - CHỈ CẦN RESULT TỒN TẠI LÀ THÀNH CÔNG
+      if (result) {
         alert('✅ Logo đã được lưu thành công!');
-        // Cập nhật URL logo thành URL từ server
+
+        // Cập nhật URL logo - sử dụng URL từ result hoặc URL mặc định
+        const logoUrl = result.url || `/storage/logos/clinic_1.png`;
         setPdfSettings(prev => ({
           ...prev,
           logo: {
             ...prev.logo,
-            url: result.url
+            url: logoUrl
           }
         }));
+
+        console.log('✅ Logo URL updated to:', logoUrl);
       } else {
-        throw new Error(result.message);
+        throw new Error('Lưu logo thất bại - không có response');
       }
     } catch (err) {
       console.error('Error saving logo:', err);
@@ -2852,10 +2855,12 @@ const PDFEditorPage = () => {
   // Hàm tải logo đã lưu
   const handleLoadSavedLogo = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/print/logo/1`);
-      const result = await response.json();
+      const result = await printPdfService.getLogo(1);
 
-      if (result.success) {
+      console.log('🔄 Logo load result:', result);
+
+      // 🔥 XỬ LÝ KẾT QUẢ - CHỈ CẦN CÓ URL LÀ THÀNH CÔNG
+      if (result && result.url) {
         setPdfSettings(prev => ({
           ...prev,
           logo: {
@@ -2866,7 +2871,7 @@ const PDFEditorPage = () => {
         }));
         alert('✅ Đã tải logo từ server!');
       } else {
-        alert('ℹ️ ' + result.message);
+        alert('ℹ️ ' + (result?.message || 'Không tìm thấy logo trên server'));
       }
     } catch (err) {
       console.error('Error loading logo:', err);
@@ -2875,27 +2880,20 @@ const PDFEditorPage = () => {
   };
 
   // Hàm xóa logo khỏi server
+  // 🔥 CẬP NHẬT HÀM XÓA LOGO
   const handleDeleteLogoFromServer = async () => {
     if (!window.confirm('Bạn có chắc muốn xóa logo khỏi server?')) {
       return;
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/print/logo/delete`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          clinic_id: 1
-        }),
-      });
+      const result = await printPdfService.deleteLogo(1);
 
-      const result = await response.json();
+      console.log('🔄 Logo delete result:', result);
 
-      if (result.success) {
+      // 🔥 XỬ LÝ KẾT QUẢ - CHỈ CẦN RESULT TỒN TẠI LÀ THÀNH CÔNG
+      if (result) {
         alert('✅ Đã xóa logo khỏi server!');
-        // Vô hiệu hóa logo trong settings
         setPdfSettings(prev => ({
           ...prev,
           logo: {
@@ -2905,7 +2903,7 @@ const PDFEditorPage = () => {
           }
         }));
       } else {
-        throw new Error(result.message);
+        throw new Error('Xóa logo thất bại - không có response');
       }
     } catch (err) {
       console.error('Error deleting logo:', err);
@@ -3093,7 +3091,8 @@ const PDFEditorPage = () => {
         // ĐẢM BẢO LOGO CÓ ĐỦ CÁC FIELD BE CẦN
         logo: {
           enabled: pdfSettings.logo.enabled,
-          url: pdfSettings.logo.url,
+          url: fixAssetUrl(pdfSettings.logo.url),  // 🔥 DÙNG HÀM FIX
+          enabled: pdfSettings.logo.enabled && !!pdfSettings.logo.url,
           width: pdfSettings.logo.width,
           height: pdfSettings.logo.height,
           position: pdfSettings.logo.position,
@@ -3105,7 +3104,8 @@ const PDFEditorPage = () => {
         watermark: {
           enabled: pdfSettings.watermark.enabled,
           text: pdfSettings.watermark.text,
-          url: pdfSettings.watermark.url,
+          url: fixAssetUrl(pdfSettings.watermark.url),  // 🔥 DÙNG HÀM FIX
+          enabled: pdfSettings.watermark.enabled && !!pdfSettings.watermark.url,
           width: pdfSettings.watermark.width,
           height: pdfSettings.watermark.height,
           opacity: pdfSettings.watermark.opacity,
@@ -3167,6 +3167,12 @@ const PDFEditorPage = () => {
             Quantity: parseInt(row.quantity) || 1,
             Price: parseFloat(row.unitPrice) || 0
           })),
+          prescriptions: prescriptionRows.map(row => ({
+            MedicineName: row.name || 'Thuốc',
+            Quantity: parseInt(row.quantity) || 1,
+            Price: parseFloat(row.unitPrice) || 0,
+            Usage: row.dosage || 'Theo chỉ định'
+          })),
           payment_method: formData.paymentMethod || 'cash',
           payment_status: 'Đã thanh toán',
           discount: parseFloat(formData.discount) || 0,
@@ -3223,49 +3229,9 @@ const PDFEditorPage = () => {
 
       console.log('📤 Sending data to BE:', printData);
 
-      const response = await fetch(`${API_BASE_URL}/api/print/prescription/preview`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(printData),
-      });
+      const result = await printPdfService.printPDF(printData);
 
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-
-        let fileName = '';
-        switch (type) {
-          case 'prescription':
-            fileName = `TOA_THUOC_${formData.patientName || 'benh_nhan'}_${new Date().getTime()}.pdf`;
-            break;
-          case 'service':
-            fileName = `PHIEU_DICH_VU_${formData.patientName || 'benh_nhan'}_${new Date().getTime()}.pdf`;
-            break;
-          case 'payment':
-            fileName = `HOA_DON_${formData.invoiceCode || 'HD'}_${new Date().getTime()}.pdf`;
-            break;
-          case 'test_result':
-            fileName = `PHIEU_KET_QUA_XET_NGHIEM_${formData.patientName || 'benh_nhan'}_${new Date().getTime()}.pdf`;
-            break;
-        }
-
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        alert(`✅ Xuất ${type === 'prescription' ? 'toa thuốc' : type === 'service' ? 'phiếu dịch vụ' : type === 'payment' ? 'hóa đơn' : type === 'test_result' ? 'phiếu kết quả xét nghiệm' : ''} thành công!`);
-      } else {
-        const errorText = await response.text();
-        console.error('❌ BE Error Response:', errorText);
-        throw new Error(errorText || `Lỗi server: ${response.status}`);
-      }
+      alert(`✅ Xuất ${type === 'prescription' ? 'toa thuốc' : type === 'service' ? 'phiếu dịch vụ' : type === 'payment' ? 'hóa đơn' : type === 'test_result' ? 'phiếu kết quả xét nghiệm' : ''} thành công! File: ${result.fileName}`);
     } catch (err) {
       console.error('Error downloading PDF:', err);
       setError('❌ Lỗi khi xuất PDF: ' + err.message);
@@ -3345,7 +3311,7 @@ const PDFEditorPage = () => {
       maxWidth: '1400px',
       margin: '0 auto',
       padding: '20px'
-    }}><DebugBadge />
+    }}>
       {/* Left Column - Controls */}
       <div className="controls" style={{
         width: '440px',
@@ -3363,7 +3329,7 @@ const PDFEditorPage = () => {
             size="sm"
             onClick={() => setShowSettings(true)}
           >
-            ⚙️ Cài đặt PDF
+            <i class="fa-solid fa-gear"></i> Cài đặt PDF
           </Button>
         </div>
 
@@ -3713,11 +3679,11 @@ const PDFEditorPage = () => {
       {/* Settings Modal - HOÀN CHỈNH VỚI TẤT CẢ TÍNH NĂNG */}
       <Modal show={showSettings} onHide={() => setShowSettings(false)} size="xl" scrollable>
         <Modal.Header closeButton>
-          <Modal.Title>⚙️ Cài đặt PDF Nâng cao</Modal.Title>
+          <Modal.Title><i class="fas fa-cogs"></i> Cài đặt PDF Nâng cao</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Tabs defaultActiveKey="general" className="mb-3">
-            <Tab eventKey="general" title="📄 Chung">
+            <Tab eventKey="general" title={<><i class="fa-solid fa-circle-info"></i> Chung</>} >
               <div className="row g-3">
                 <div className="col-12">
                   <h6 className="fw-bold">Thông tin phòng khám</h6>
@@ -3791,7 +3757,7 @@ const PDFEditorPage = () => {
               </div>
             </Tab>
 
-            <Tab eventKey="logo" title="🖼️ Logo">
+            <Tab eventKey="logo" title={<><i class="fas fa-image me-2"></i>Logo</>} >
               <div className="row g-3">
                 <div className="col-12">
                   <Form.Check
@@ -3832,7 +3798,8 @@ const PDFEditorPage = () => {
                         onClick={handleSaveLogoToServer}
                         disabled={isSavingLogo || !pdfSettings.logo.enabled}
                       >
-                        {isSavingLogo ? <Spinner size="sm" /> : '💾 Lưu Logo lên Server'}
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        {isSavingLogo ? <Spinner size="sm" /> : ' Lưu Logo lên Server'}
                       </Button>
                     )}
                     <Button
@@ -3841,14 +3808,14 @@ const PDFEditorPage = () => {
                       onClick={handleLoadSavedLogo}
                       disabled={!pdfSettings.logo.enabled}
                     >
-                      📥 Tải Logo từ Server
+                      <i class="fas fa-download"></i> Tải Logo từ Server
                     </Button>
                     <Button
                       variant="warning"
                       size="sm"
                       onClick={handleDeleteLogoFromServer}
                     >
-                      🗑️ Xóa Logo khỏi Server
+                      <i class="fas fa-trash"></i> Xóa Logo khỏi Server
                     </Button>
                   </div>
 
@@ -3929,7 +3896,8 @@ const PDFEditorPage = () => {
               </div>
             </Tab>
 
-            <Tab eventKey="watermark" title="💧 Watermark">
+            <Tab eventKey="watermark" title={<><i class="fas fa-tint"></i> Watermark
+            </>}>
               <div className="row g-3">
                 <div className="col-12">
                   <Form.Check
@@ -4069,7 +4037,7 @@ const PDFEditorPage = () => {
               </div>
             </Tab>
 
-            <Tab eventKey="font" title="🎨 Font & Màu sắc">
+            <Tab eventKey="font" title={<><i class="fas fa-palette"></i> Font & Màu sắc</>}>
               <div className="row g-3">
                 <div className="col-6">
                   <Form.Label>Font family</Form.Label>
@@ -4198,7 +4166,7 @@ const PDFEditorPage = () => {
               </div>
             </Tab>
 
-            <Tab eventKey="layout" title="📐 Layout">
+            <Tab eventKey="layout" title={<><i class="fas fa-drafting-compass"></i> Layout</>}>
               <div className="row g-3">
                 <div className="col-6">
                   <Form.Label>Hướng trang</Form.Label>
@@ -4244,10 +4212,10 @@ const PDFEditorPage = () => {
           <div className="d-flex justify-content-between w-100">
             <div>
               <Button variant="outline-secondary" onClick={handleResetSettings}>
-                Reset
+                <i class="fas fa-undo"></i> Reset
               </Button>
               <Button variant="outline-info" onClick={handleExportSettings} className="ms-2">
-                Export
+                <i class="fas fa-file-export"></i> Export
               </Button>
               <Form.Control
                 type="file"
@@ -4261,21 +4229,21 @@ const PDFEditorPage = () => {
                 onClick={() => document.getElementById('import-settings').click()}
                 className="ms-2"
               >
-                Import
+                <i class="fas fa-file-import"></i> Import
               </Button>
             </div>
             <div>
               <Button variant="secondary" onClick={() => setShowSettings(false)}>
-                Hủy
+                <i class="fas fa-window-close"></i> Hủy
               </Button>
               <Button variant="primary" onClick={handleSaveSettings} className="ms-2">
-                Lưu cài đặt
+                <i class="fas fa-save"></i> Lưu cài đặt
               </Button>
             </div>
           </div>
         </Modal.Footer>
       </Modal>
-    </div>
+    </div >
   );
 };
 
