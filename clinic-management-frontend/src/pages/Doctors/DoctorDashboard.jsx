@@ -4,8 +4,6 @@ import TodaySection from './TodaySection';
 import DoctorSchedule from './DoctorSchedule';
 import HistorySection from './HistorySection';
 
-const API_BASE_URL = 'http://localhost:8000';
-
 const DoctorDashboard = () => {
   const [currentSection, setCurrentSection] = useState('today');
   const [todayPatients, setTodayPatients] = useState([]);

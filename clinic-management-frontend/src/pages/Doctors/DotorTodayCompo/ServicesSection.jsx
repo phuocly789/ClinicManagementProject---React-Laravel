@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Col, Card, Form, Button, Spinner, Badge, Row } from "react-bootstrap";
+import { Col, Card, Form, Button, Spinner, Badge, Row, Table } from "react-bootstrap";
 import Pagination from "../../../Components/Pagination/Pagination";
 import { useNavigate } from "react-router-dom";
-
-const API_BASE_URL = 'http://localhost:8000';
+import { printPdfService } from "../../../services/printPdfService";
+import doctorService from "../../../services/doctorService";
+import Swal from 'sweetalert2';
 
 const ServicesSection = ({
   services,
@@ -25,49 +26,234 @@ const ServicesSection = ({
   const [currentPage, setCurrentPage] = useState(0);
   const itemsPerPage = 8;
 
+  // THÊM STATE CHO CHỈNH SỬA GIỐNG PRESCRIPTION
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [newService, setNewService] = useState({
+    serviceName: '',
+    price: 0,
+    quantity: 1,
+    totalPrice: 0
+  });
+
+  // THÊM CẤU HÌNH PDF MẶC ĐỊNH
+  const defaultPdfSettings = {
+    page_size: "A4",
+    orientation: "portrait",
+    margins: { top: 10, right: 10, bottom: 10, left: 10 },
+    header: true,
+    footer: true,
+    fontFamily: 'Times New Roman',
+    fontSize: '14px',
+    fontColor: '#000000',
+    primaryColor: '#2c5aa0',
+    backgroundColor: '#ffffff',
+    borderColor: '#333333',
+    headerBgColor: '#f0f0f0',
+    lineHeight: 1.5,
+    fontStyle: 'normal',
+    fontWeight: 'normal',
+
+    // Clinic info
+    clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
+    clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
+    clinicPhone: '028 1234 5678',
+    doctorName: 'Hệ thống',
+    customTitle: 'Phiếu Chỉ Định Dịch Vụ',
+
+    // Page settings
+    pageOrientation: 'portrait',
+    pageSize: 'A4',
+    marginTop: '15mm',
+    marginBottom: '15mm',
+    marginLeft: '10mm',
+    marginRight: '10mm',
+
+    // Logo settings (disabled)
+    logo: {
+      enabled: false,
+      url: '',
+      width: '80px',
+      height: '80px',
+      position: 'left',
+      opacity: 0.8
+    },
+
+    // Watermark settings (disabled)
+    watermark: {
+      enabled: false,
+      text: 'MẪU BẢN QUYỀN',
+      url: '',
+      opacity: 0.1,
+      fontSize: 48,
+      color: '#cccccc',
+      rotation: -45
+    }
+  };
+
+  // HÀM CHUYỂN DỊCH LỖI BE SANG FE
+  const translateError = (error) => {
+    console.error('🔴 Backend Error:', error);
+    
+    const backendMessage = error.response?.data?.message || error.message || '';
+    
+    // Map các lỗi phổ biến từ BE sang thông báo tiếng Việt thân thiện
+    const errorMap = {
+      'Patient not found': 'Không tìm thấy thông tin bệnh nhân',
+      'No services found': 'Không tìm thấy dịch vụ',
+      'Invalid appointment ID': 'Mã cuộc hẹn không hợp lệ',
+      'Services already assigned': 'Dịch vụ đã được chỉ định trước đó',
+      'Network Error': 'Lỗi kết nối mạng. Vui lòng kiểm tra kết nối internet',
+      'Request failed with status code 404': 'Không tìm thấy dịch vụ',
+      'Request failed with status code 500': 'Lỗi máy chủ. Vui lòng thử lại sau',
+      'timeout of 5000ms exceeded': 'Quá thời gian chờ phản hồi',
+      'No services selected': 'Chưa chọn dịch vụ nào',
+      'Appointment not found': 'Không tìm thấy thông tin cuộc hẹn'
+    };
+
+    // Tìm thông báo tương ứng hoặc trả về mặc định
+    for (const [key, value] of Object.entries(errorMap)) {
+      if (backendMessage.includes(key) || error.message.includes(key)) {
+        return value;
+      }
+    }
+
+    // Fallback cho các lỗi khác
+    if (backendMessage) {
+      return `Lỗi: ${backendMessage}`;
+    }
+
+    return 'Đã xảy ra lỗi không xác định. Vui lòng thử lại sau.';
+  };
+
+  // HÀM HIỂN THỊ CONFIRMATION VỚI SWEETALERT2
+  const showConfirmation = async (options) => {
+    const result = await Swal.fire({
+      title: options.title || 'Xác nhận hành động',
+      text: options.message || 'Bạn có chắc muốn thực hiện hành động này?',
+      icon: options.icon || 'question',
+      showCancelButton: true,
+      confirmButtonColor: options.confirmColor || '#3085d6',
+      cancelButtonColor: options.cancelColor || '#d33',
+      confirmButtonText: options.confirmText || 'Xác nhận',
+      cancelButtonText: options.cancelText || 'Hủy',
+      showLoaderOnConfirm: options.showLoader || false,
+      preConfirm: options.preConfirm || undefined,
+      allowOutsideClick: () => !Swal.isLoading()
+    });
+
+    return result;
+  };
+
+  // HÀM HIỂN THỊ THÔNG BÁO THÀNH CÔNG
+  const showSuccessAlert = (message) => {
+    Swal.fire({
+      title: 'Thành công!',
+      text: message,
+      icon: 'success',
+      confirmButtonColor: '#3085d6',
+      confirmButtonText: 'OK'
+    });
+  };
+
+  // HÀM XỬ LÝ LỖI VÀ HIỂN THỊ THÔNG BÁO
+  const handleError = (error, customMessage = '') => {
+    const translatedError = translateError(error);
+    console.error('❌ Error:', error);
+    
+    Swal.fire({
+      title: 'Lỗi!',
+      text: customMessage || translatedError,
+      icon: 'error',
+      confirmButtonColor: '#d33',
+      confirmButtonText: 'OK'
+    });
+  };
+
   // FIX: SỬ DỤNG DIRECTLY TỪ PROPS, KHÔNG DÙNG STATE LOCAL TRUNG GIAN
   const servicesState = services || {};
 
-  // Fetch services - CHỈ CHẠY 1 LẦN KHI MOUNT
+  // Fetch services - CHỈ CHẠY 1 LẦN KHI MOUNT - ĐÃ SỬA LỖI
   useEffect(() => {
     const fetchServices = async () => {
       try {
         setLocalServicesLoading(true);
-        const response = await fetch(`${API_BASE_URL}/api/doctor/services`);
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        const data = await response.json();
+        console.log('🔄 Đang gọi API services...');
 
-        if (Array.isArray(data)) {
-          setLocalServices(data);
+        const response = await doctorService.getServices();
+        console.log('📥 API Services Response:', response);
+
+        // FIX: API TRẢ VỀ ARRAY TRỰC TIẾP, KHÔNG PHẢI response.data
+        let servicesArray = [];
+
+        if (Array.isArray(response)) {
+          // Case 1: response là array trực tiếp
+          servicesArray = response;
+          console.log('✅ Case 1: response là array trực tiếp');
+        } else if (response && Array.isArray(response.data)) {
+          // Case 2: response có property data là array
+          servicesArray = response.data;
+          console.log('✅ Case 2: response.data là array');
+        } else {
+          console.warn('⚠️ Cấu trúc response không xác định:', response);
+        }
+
+        console.log('📋 Services array cuối cùng:', servicesArray);
+
+        if (servicesArray.length > 0) {
+          console.log('✅ Nhận được danh sách dịch vụ:', servicesArray.length, 'dịch vụ');
+          setLocalServices(servicesArray);
+
           // FIX: Chỉ khởi tạo services nếu chưa có
           if (!services || Object.keys(services).length === 0) {
-            const initialServices = data.reduce((acc, service) => {
+            const initialServices = servicesArray.reduce((acc, service) => {
               return { ...acc, [service.ServiceId]: false };
             }, {});
+            console.log('✅ Đã khởi tạo services state:', initialServices);
             setServices(initialServices);
+          } else {
+            console.log('ℹ️ Services state đã có sẵn');
           }
         } else {
-          throw new Error("Dữ liệu từ API không phải mảng");
+          console.warn('⚠️ Không có dịch vụ nào trong dữ liệu');
+          setLocalServices([]);
+          setToast({
+            show: true,
+            message: "Không có dịch vụ nào khả dụng",
+            variant: "warning",
+          });
         }
+
       } catch (error) {
-        console.error('Error fetching services:', error);
+        const translatedError = translateError(error);
+        console.error('❌ Error fetching services:', error);
         setToast({
           show: true,
-          message: `Lỗi tải danh sách dịch vụ: ${error.message}`,
+          message: `Lỗi tải danh sách dịch vụ: ${translatedError}`,
           variant: "danger",
         });
         setLocalServices([]);
       } finally {
         setLocalServicesLoading(false);
+        console.log('🏁 Kết thúc loading services');
       }
     };
 
     fetchServices();
   }, []); // CHỈ CHẠY 1 LẦN
 
-  // FUNCTION PREVIEW PDF
+  // RESET FORM KHI CHUYỂN TRẠNG THÁI CHỈNH SỬA
+  useEffect(() => {
+    if (editingIndex === null) {
+      setNewService({
+        serviceName: '',
+        price: 0,
+        quantity: 1,
+        totalPrice: 0
+      });
+    }
+  }, [editingIndex]);
+
+  // FUNCTION PREVIEW PDF - ĐÃ THÊM CONFIRMATION
   const handlePreview = async () => {
     if (!selectedTodayPatient) {
       setToast({
@@ -78,7 +264,7 @@ const ServicesSection = ({
       return;
     }
 
-    // CHUYỂN ĐỔI services từ object {id: boolean} sang array
+    // ✅ Lấy data services
     const selectedServices = Object.keys(servicesState)
       .filter(serviceId => servicesState[serviceId])
       .map(serviceId => {
@@ -100,40 +286,108 @@ const ServicesSection = ({
       return;
     }
 
+    // ✅ Hiển thị confirmation trước khi chuyển đến editor
+    const result = await showConfirmation({
+      title: 'Chỉnh sửa PDF dịch vụ',
+      text: `Bạn có muốn chuyển đến trình chỉnh sửa PDF để tùy chỉnh phiếu chỉ định ${selectedServices.length} dịch vụ?`,
+      confirmText: 'Chuyển đến editor',
+      cancelText: 'Hủy',
+      icon: 'question'
+    });
+
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    // ✅ Tạo data gửi đến PDF Editor (GIỐNG PRESCRIPTION)
     const previewData = {
       type: 'service',
       patient_name: selectedTodayPatient.name || 'N/A',
       age: String(selectedTodayPatient.age || 'N/A'),
       gender: selectedTodayPatient.gender || 'N/A',
       phone: selectedTodayPatient.phone || 'N/A',
+      address: selectedTodayPatient.address || 'N/A',
+
+      // ✅ THÔNG TIN HẸN KHÁM
       appointment_date: selectedTodayPatient.date
         ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
         : new Date().toLocaleDateString('vi-VN'),
       appointment_time: selectedTodayPatient.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-      doctor_name: "Bác sĩ điều trị",
+      doctor_name: selectedTodayPatient.doctor_name || 'Bác sĩ chưa rõ',
+
+      // ✅ SERVICES DATA - CẤU TRÚC CHUẨN
       services: selectedServices,
-      diagnoses: diagnoses || [],
+
+      // ✅ THÔNG TIN Y TẾ
+      symptoms: symptoms || '',
+      diagnosis: diagnosis || '',
+      instructions: 'Vui lòng thực hiện các dịch vụ theo chỉ định',
+
+      // ✅ PDF SETTINGS
+      pdf_settings: defaultPdfSettings,
+
+      // ✅ THÔNG TIN ID
       appointment_id: selectedTodayPatient.id || selectedTodayPatient.AppointmentId,
       patient_id: selectedTodayPatient.PatientId || selectedTodayPatient.patient_id,
+
+      // ✅ ORIGINAL DATA ĐỂ BACKUP
       originalData: {
-        services: servicesState,
+        services: [...selectedServices],
         symptoms,
         diagnosis,
-        diagnoses
-      }
+        instructions: 'Vui lòng thực hiện các dịch vụ theo chỉ định',
+      },
+
+      timestamp: Date.now()
     };
 
+    console.log('📤 Data preview DỊCH VỤ gửi đến PDF Editor:', {
+      patient: previewData.patient_name,
+      services_count: previewData.services.length,
+      services: previewData.services
+    });
+
     try {
+      // ✅ XÓA DỮ LIỆU CŨ TRƯỚC KHI LƯU MỚI
+      sessionStorage.removeItem('pdfEditorData');
+      sessionStorage.removeItem('shouldRefreshOnReturn');
+      sessionStorage.removeItem('editorSource');
+
+      // ✅ Lưu data MỚI NHẤT vào sessionStorage
       sessionStorage.setItem('pdfEditorData', JSON.stringify(previewData));
       sessionStorage.setItem('shouldRefreshOnReturn', 'true');
       sessionStorage.setItem('editorSource', 'services');
-
-      navigate('/doctor/print-pdf-editor', { 
-        state: { 
-          pdfData: previewData,
-          source: 'services'
+      console.log('🚀 BEFORE NAVIGATE - State to send:', {
+        pdfData: previewData,
+        source: 'services',
+        servicesData: selectedServices,
+        patientInfo: {
+          name: previewData.patient_name,
+          age: previewData.age,
+          gender: previewData.gender,
+          phone: previewData.phone,
+          address: previewData.address
         }
       });
+
+      navigate('/doctor/print-pdf-editor', {
+        state: {
+          pdfData: previewData,
+          source: 'services',
+          timestamp: Date.now(),
+          fromServices: true,
+          servicesData: selectedServices,
+          patientInfo: {
+            name: previewData.patient_name,
+            age: previewData.age,
+            gender: previewData.gender,
+            phone: previewData.phone,
+            address: previewData.address
+          }
+        }
+      });
+
+      console.log('✅ AFTER NAVIGATE - Should be on PDF Editor page');
 
       setToast({
         show: true,
@@ -143,15 +397,11 @@ const ServicesSection = ({
 
     } catch (error) {
       console.error('Error navigating to PDF editor:', error);
-      setToast({
-        show: true,
-        message: "❌ Lỗi khi chuyển đến trình chỉnh sửa PDF",
-        variant: "danger",
-      });
+      handleError(error, 'Lỗi khi chuyển đến trình chỉnh sửa PDF');
     }
   };
 
-  // FUNCTION DOWNLOAD PDF
+  // FUNCTION DOWNLOAD PDF - ĐÃ THÊM CONFIRMATION
   const printDocument = async () => {
     if (!selectedTodayPatient) {
       setToast({ show: true, message: "⚠️ Chưa chọn bệnh nhân.", variant: "warning" });
@@ -175,6 +425,19 @@ const ServicesSection = ({
       return;
     }
 
+    // ✅ Hiển thị confirmation trước khi xuất PDF
+    const result = await showConfirmation({
+      title: 'Xuất PDF dịch vụ',
+      text: `Bạn có chắc muốn xuất phiếu chỉ định ${selectedServices.length} dịch vụ ra file PDF?`,
+      confirmText: 'Xuất PDF',
+      cancelText: 'Hủy',
+      icon: 'question'
+    });
+
+    if (!result.isConfirmed) {
+      return;
+    }
+
     const requestData = {
       type: 'service',
       patient_name: selectedTodayPatient.name,
@@ -186,49 +449,239 @@ const ServicesSection = ({
       doctor_name: "Bác sĩ điều trị",
       diagnoses: diagnoses.length > 0 ? diagnoses : [{ Symptoms: symptoms, Diagnosis: diagnosis }],
       services: selectedServices,
+      // THÊM PDF SETTINGS VÀO ĐÂY
+      pdf_settings: defaultPdfSettings
     };
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/print/prescription/preview`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(requestData),
-      });
+      const response = await printPdfService.printPDF(requestData);
+      console.log('✅ PDF Service Result:', response)
+      console.log('📥 API Response status:', response.status);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = 'PHIEU_DICH_VU.pdf';
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      setToast({
-        show: true,
-        message: `✅ Đã xuất PDF phiếu dịch vụ với ${requestData.services.length} dịch vụ.`,
-        variant: "success",
-      });
+      showSuccessAlert('Đã xuất phiếu chỉ định dịch vụ thành công!');
 
     } catch (error) {
       console.error('Error printing service document:', error);
-      setToast({
-        show: true,
-        message: `Lỗi xuất PDF dịch vụ: ${error.message}`,
-        variant: "danger",
-      });
+      handleError(error, 'Lỗi xuất PDF dịch vụ');
     }
   };
+
+  // HÀM XỬ LÝ THAY ĐỔI TRƯỜNG DỮ LIỆU
+  const handleFieldChange = (field, value) => {
+    let updatedService = { ...newService };
+
+    if (field === 'quantity' || field === 'price') {
+      updatedService[field] = field === 'quantity' ? parseInt(value) || 0 : parseFloat(value) || 0;
+
+      const quantity = field === 'quantity' ? parseInt(value) || 0 : newService.quantity;
+      const price = field === 'price' ? parseFloat(value) || 0 : newService.price;
+      updatedService.totalPrice = quantity * price;
+    } else {
+      updatedService[field] = value;
+    }
+
+    setNewService(updatedService);
+  };
+
+  // HÀM THÊM DỊCH VỤ MỚI - ĐÃ THÊM CONFIRMATION
+  const handleAddNew = async () => {
+    if (!newService.serviceName.trim()) {
+      setToast({
+        show: true,
+        message: "⚠️ Vui lòng nhập tên dịch vụ!",
+        variant: "warning",
+      });
+      return;
+    }
+
+    if (newService.price < 0) {
+      setToast({
+        show: true,
+        message: "⚠️ Giá dịch vụ không được âm!",
+        variant: "warning",
+      });
+      return;
+    }
+
+    const result = await showConfirmation({
+      title: 'Thêm dịch vụ mới',
+      text: `Bạn có chắc muốn thêm dịch vụ "${newService.serviceName}" với giá ${newService.price.toLocaleString()} VNĐ?`,
+      confirmText: 'Thêm dịch vụ',
+      cancelText: 'Hủy',
+      icon: 'question'
+    });
+
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    const newServiceItem = {
+      ServiceName: newService.serviceName.trim(),
+      Price: newService.price,
+      Quantity: newService.quantity,
+      totalPrice: newService.totalPrice
+    };
+
+    // Tìm serviceId tương ứng trong localServices
+    const matchedService = localServices.find(s =>
+      s.ServiceName.toLowerCase() === newService.serviceName.toLowerCase()
+    );
+
+    if (matchedService) {
+      // Nếu tìm thấy dịch vụ trong danh sách, cập nhật state
+      setServices(prev => ({
+        ...prev,
+        [matchedService.ServiceId]: true
+      }));
+    }
+
+    setNewService({
+      serviceName: '',
+      price: 0,
+      quantity: 1,
+      totalPrice: 0
+    });
+
+    showSuccessAlert('Thêm dịch vụ thành công!');
+  };
+
+  // HÀM BẮT ĐẦU CHỈNH SỬA
+  const startEditing = (serviceId) => {
+    const service = localServices.find(s => s.ServiceId == serviceId);
+    if (service) {
+      setNewService({
+        serviceName: service.ServiceName,
+        price: service.Price || 0,
+        quantity: 1,
+        totalPrice: service.Price || 0
+      });
+      setEditingIndex(serviceId);
+    }
+  };
+
+  // HÀM HỦY CHỈNH SỬA - ĐÃ THÊM CONFIRMATION
+  const handleCancelEditing = async () => {
+    if (newService.serviceName || newService.price > 0) {
+      const result = await showConfirmation({
+        title: 'Hủy chỉnh sửa',
+        text: 'Bạn có chắc muốn hủy thao tác chỉnh sửa? Dữ liệu chưa lưu sẽ bị mất.',
+        confirmText: 'Hủy bỏ',
+        cancelText: 'Tiếp tục chỉnh sửa',
+        icon: 'warning'
+      });
+
+      if (!result.isConfirmed) {
+        return;
+      }
+    }
+
+    cancelEditing();
+  };
+
+  const cancelEditing = () => {
+    setEditingIndex(null);
+    setNewService({
+      serviceName: '',
+      price: 0,
+      quantity: 1,
+      totalPrice: 0
+    });
+  };
+
+  // HÀM CẬP NHẬT DỊCH VỤ - ĐÃ THÊM CONFIRMATION
+  const handleUpdate = async () => {
+    if (!newService.serviceName.trim()) {
+      setToast({
+        show: true,
+        message: "⚠️ Vui lòng nhập tên dịch vụ!",
+        variant: "warning",
+      });
+      return;
+    }
+
+    const result = await showConfirmation({
+      title: 'Cập nhật dịch vụ',
+      text: `Bạn có chắc muốn cập nhật thông tin dịch vụ thành "${newService.serviceName}"?`,
+      confirmText: 'Cập nhật',
+      cancelText: 'Hủy',
+      icon: 'question'
+    });
+
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    // Ở đây có thể thêm logic cập nhật dịch vụ nếu cần
+    // Hiện tại chỉ reset form
+
+    cancelEditing();
+
+    showSuccessAlert('Cập nhật dịch vụ thành công!');
+  };
+
+  // HÀM XÓA DỊCH VỤ - ĐÃ THÊM CONFIRMATION
+  const handleRemoveService = async (serviceId, serviceName) => {
+    const result = await showConfirmation({
+      title: 'Xóa dịch vụ',
+      text: `Bạn có chắc muốn xóa dịch vụ "${serviceName}" khỏi danh sách đã chọn?`,
+      confirmText: 'Xóa',
+      cancelText: 'Giữ lại',
+      icon: 'warning',
+      confirmColor: '#d33'
+    });
+
+    if (result.isConfirmed) {
+      setServices(prev => ({
+        ...prev,
+        [serviceId]: false
+      }));
+
+      showSuccessAlert(`Đã xóa dịch vụ "${serviceName}" thành công!`);
+    }
+  };
+
+  // FIX: Handle test change - ĐÃ THÊM CONFIRMATION CHO VIỆC BỎ CHỌN VỚI SWEETALERT2
+  const handleTestChange = useCallback((serviceId, serviceName) => async (e) => {
+    const isChecked = e.target.checked;
+
+    // Nếu đang bỏ chọn (uncheck), hiển thị confirmation với SweetAlert2
+    if (!isChecked) {
+      const result = await showConfirmation({
+        title: 'Bỏ chọn dịch vụ',
+        text: `Bạn có chắc muốn bỏ chọn dịch vụ "${serviceName}"?`,
+        confirmText: 'Bỏ chọn',
+        cancelText: 'Giữ lại',
+        icon: 'warning',
+        confirmColor: '#d33'
+      });
+
+      if (!result.isConfirmed) {
+        // Nếu người dùng không xác nhận, giữ nguyên trạng thái checked
+        e.preventDefault();
+        return;
+      }
+    }
+
+    // Cập nhật trực tiếp prop state
+    setServices(prev => ({
+      ...prev,
+      [serviceId]: isChecked
+    }));
+
+    if (isChecked) {
+      setToast({
+        show: true,
+        message: `✅ Đã chọn dịch vụ "${serviceName}"`,
+        variant: "success",
+      });
+    } else {
+      setToast({
+        show: true,
+        message: `✅ Đã bỏ chọn dịch vụ "${serviceName}"`,
+        variant: "info",
+      });
+    }
+  }, [setServices, setToast, showConfirmation]);
 
   // Memoize testLabels
   const testLabels = useMemo(() => {
@@ -248,7 +701,7 @@ const ServicesSection = ({
     return { pageCount, currentItems };
   }, [localServices, currentPage, itemsPerPage]);
 
-  // Service suggestions
+  // Service suggestions - ĐÃ SỬA
   useEffect(() => {
     const trimmedDiagnosis = diagnosis?.trim();
     if (!trimmedDiagnosis || trimmedDiagnosis.length < 3) {
@@ -259,20 +712,27 @@ const ServicesSection = ({
     setServiceLoading(true);
     const timeout = setTimeout(async () => {
       try {
-        const fetchUrl = `${API_BASE_URL}/api/doctor/ai/suggestion?diagnosis=${encodeURIComponent(trimmedDiagnosis)}&type=service`;
-        const res = await fetch(fetchUrl);
+        const response = await doctorService.suggestService(trimmedDiagnosis);
 
-        if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
-        const data = await res.json();
+        let suggestions = [];
 
-        if (Array.isArray(data)) {
-          const normalizedData = data.map(item => ({
+        // XỬ LÝ CẤU TRÚC RESPONSE
+        if (Array.isArray(response)) {
+          suggestions = response;
+        } else if (response && Array.isArray(response.data)) {
+          suggestions = response.data;
+        } else {
+          console.warn('⚠️ Cấu trúc response không xác định:', response);
+        }
+
+        if (suggestions.length > 0) {
+          const normalizedData = suggestions.map(item => ({
             ...item,
             ServiceName: item.ServiceName || item.MedicineName || item.name || 'Unknown Service'
           }));
           setServiceSuggestions(normalizedData);
         } else {
-          throw new Error("Dữ liệu gợi ý dịch vụ không phải mảng JSON");
+          setServiceSuggestions([]);
         }
       } catch (err) {
         console.error("Service suggestion error:", err);
@@ -320,24 +780,14 @@ const ServicesSection = ({
     return bestScore > 0.5 ? bestKey : null;
   }, []);
 
-  // FIX: Handle test change - XỬ LÝ TRỰC TIẾP
-  const handleTestChange = useCallback((serviceId) => (e) => {
-    const isChecked = e.target.checked;
-    
-    // Cập nhật trực tiếp prop state
-    setServices(prev => ({
-      ...prev,
-      [serviceId]: isChecked
-    }));
-  }, [setServices]);
-
-  // FUNCTION: Handle request service
+  // FUNCTION: Handle request service - ĐÃ THÊM CONFIRMATION VÀ XỬ LÝ LỖI
   const handleRequestService = useCallback(async () => {
     console.log('🔍 DEBUG selectedTodayPatient:', selectedTodayPatient);
 
     const selected = Object.keys(servicesState).filter((k) => servicesState[k]);
+    const selectedCount = selected.length;
 
-    if (selected.length === 0) {
+    if (selectedCount === 0) {
       setToast({
         show: true,
         message: "⚠️ Bạn chưa chọn dịch vụ nào.",
@@ -370,83 +820,71 @@ const ServicesSection = ({
       return;
     }
 
-    try {
-      setServiceLoading(true);
+    // ✅ Hiển thị confirmation trước khi gửi yêu cầu
+    const result = await showConfirmation({
+      title: 'Yêu cầu thực hiện dịch vụ',
+      text: `Bạn có chắc muốn gửi yêu cầu thực hiện ${selectedCount} dịch vụ cho bệnh nhân ${selectedTodayPatient.name}?`,
+      confirmText: 'Gửi yêu cầu',
+      cancelText: 'Hủy',
+      icon: 'question',
+      showLoader: true,
+      preConfirm: async () => {
+        try {
+          setServiceLoading(true);
 
-      const requestData = {
-        selectedServices: selected.map(id => parseInt(id)),
-        diagnosis: diagnosis || '',
-        symptoms: symptoms || '',
-        notes: "Chỉ định từ bác sĩ"
-      };
+          const requestData = {
+            selectedServices: selected.map(id => parseInt(id)),
+            diagnosis: diagnosis || '',
+            symptoms: symptoms || '',
+            notes: "Chỉ định từ bác sĩ"
+          };
 
-      const response = await fetch(
-        `${API_BASE_URL}/api/doctor/appointments/${appointmentId}/assign-services`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestData),
+          console.log('📤 Gửi request assign services:', {
+            appointmentId,
+            requestData
+          });
+
+          // GỌI API
+          const response = await doctorService.assignServices(appointmentId, requestData);
+
+          console.log('📥 API Response:', response);
+
+          // FIX: CHECK SUCCESS Ở RESPONSE LEVEL
+          if (response && response.success === true) {
+            const successMessage = response.message || `✅ Đã chỉ định ${selectedCount} dịch vụ thành công!`;
+
+            const updatedRequestedServices = { ...requestedServices };
+            selected.forEach(serviceId => {
+              updatedRequestedServices[serviceId] = true;
+            });
+            setRequestedServices(updatedRequestedServices);
+
+            console.log('✅ Đã cập nhật requested services:', updatedRequestedServices);
+            
+            return successMessage;
+          } else {
+            // FIX: XỬ LÝ KHI KHÔNG THÀNH CÔNG
+            const errorMessage = response?.message || 'Lỗi không xác định từ server';
+            throw new Error(errorMessage);
+          }
+
+        } catch (error) {
+          const translatedError = translateError(error);
+          throw new Error(translatedError);
+        } finally {
+          setServiceLoading(false);
         }
-      );
-
-      const responseText = await response.text();
-      let result;
-      try {
-        result = JSON.parse(responseText);
-      } catch (parseError) {
-        throw new Error(`Lỗi định dạng từ server: ${responseText.substring(0, 100)}...`);
       }
+    });
 
-      if (!response.ok) {
-        let userMessage = 'Lỗi hệ thống';
-        if (result && result.message) {
-          userMessage = result.message
-            .replace(/Lỗi hệ thống khi chỉ định dịch vụ: /g, '')
-            .replace(/SQLSTATE.*$/g, '')
-            .replace(/\(Connection:.*$/g, '')
-            .trim();
-          if (!userMessage) userMessage = result.message;
-        }
-        setToast({ show: true, message: `❌ ${userMessage}`, variant: "danger" });
-        return;
-      }
-
-      if (result.success) {
-        setToast({
-          show: true,
-          message: result.message || `✅ Đã chỉ định ${selected.length} dịch vụ thành công!`,
-          variant: "success",
-        });
-
-        const updatedRequestedServices = { ...requestedServices };
-        selected.forEach(serviceId => {
-          updatedRequestedServices[serviceId] = true;
-        });
-        setRequestedServices(updatedRequestedServices);
-      } else {
-        setToast({
-          show: true,
-          message: `⚠️ ${result.message || 'Lỗi không xác định từ server'}`,
-          variant: "warning",
-        });
-      }
-
-    } catch (error) {
-      console.error('❌ Error:', error);
-      let userMessage = error.message;
-      if (error.message.includes('Failed to fetch') || error.message.includes('Network')) {
-        userMessage = 'Lỗi kết nối mạng. Vui lòng kiểm tra kết nối internet.';
-      }
-      setToast({ show: true, message: `❌ ${userMessage}`, variant: "danger" });
-    } finally {
-      setServiceLoading(false);
+    if (result.isConfirmed) {
+      showSuccessAlert(result.value || `Đã gửi yêu cầu ${selectedCount} dịch vụ thành công!`);
     }
-  }, [servicesState, selectedTodayPatient, diagnosis, symptoms, requestedServices, setRequestedServices, setToast]);
 
-  // FIX: Render services - sử dụng trực tiếp từ props
-  const renderServices = useCallback(() => {
+  }, [servicesState, selectedTodayPatient, diagnosis, symptoms, requestedServices, setRequestedServices, setToast, showConfirmation, translateError]);
+
+  // RENDER DANH SÁCH DỊCH VỤ ĐỂ CHỌN (CHECKBOX)
+  const renderServicesCheckbox = () => {
     const half = Math.ceil(currentItems.length / 2);
     const leftColumn = currentItems.slice(0, half);
     const rightColumn = currentItems.slice(half);
@@ -462,7 +900,7 @@ const ServicesSection = ({
                 id={`checkbox-${service.ServiceId}`}
                 type="checkbox"
                 checked={checked}
-                onChange={handleTestChange(service.ServiceId)}
+                onChange={handleTestChange(service.ServiceId, service.ServiceName)}
                 disabled={isFormDisabled}
                 className="form-check-input me-2"
               />
@@ -485,7 +923,163 @@ const ServicesSection = ({
         <Col md={6}>{renderServiceColumn(rightColumn)}</Col>
       </Row>
     );
-  }, [currentItems, servicesState, requestedServices, isFormDisabled, handleTestChange]);
+  };
+
+  // RENDER DỊCH VỤ ĐÃ CHỌN DẠNG TABLE GIỐNG PRESCRIPTION
+  const renderSelectedServicesTable = () => {
+    const selectedServices = localServices.filter(service => servicesState[service.ServiceId]);
+
+    return (
+      <>
+        <h6 className="mt-4">Danh sách dịch vụ đã chọn:</h6>
+        {selectedServices.length === 0 ? (
+          <p className="text-muted">Chưa có dịch vụ nào được chọn.</p>
+        ) : (
+          <Table striped bordered hover responsive>
+            <thead>
+              <tr>
+                <th width="40%">Tên dịch vụ</th>
+                <th width="15%">Đơn giá (VND)</th>
+                <th width="10%">Số lượng</th>
+                <th width="15%">Thành tiền (VND)</th>
+                <th width="20%">Hành động</th>
+              </tr>
+            </thead>
+            <tbody>
+              {selectedServices.map((service, index) => (
+                <tr key={service.ServiceId}>
+                  {editingIndex === service.ServiceId ? (
+                    <>
+                      <td>
+                        <Form.Control
+                          type="text"
+                          value={newService.serviceName}
+                          onChange={(e) => handleFieldChange('serviceName', e.target.value)}
+                          required
+                        />
+                      </td>
+                      <td>
+                        <Form.Control
+                          type="number"
+                          min="0"
+                          step="1000"
+                          value={newService.price}
+                          onChange={(e) => handleFieldChange('price', e.target.value)}
+                          required
+                        />
+                      </td>
+                      <td>
+                        <Form.Control
+                          type="number"
+                          min="1"
+                          value={newService.quantity}
+                          onChange={(e) => handleFieldChange('quantity', e.target.value)}
+                          required
+                        />
+                      </td>
+                      <td className="align-middle">
+                        {newService.totalPrice?.toLocaleString() || 0}
+                      </td>
+                      <td>
+                        <Button
+                          variant="outline-success"
+                          size="sm"
+                          onClick={handleUpdate}
+                        >
+                          <i class="fas fa-save"></i> Lưu
+                        </Button>
+                        <Button
+                          variant="outline-secondary"
+                          size="sm"
+                          className="ms-1 mt-1"
+                          onClick={handleCancelEditing}
+                        >
+                          <i class="fas fa-times"></i> Hủy
+                        </Button>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td>{service.ServiceName}</td>
+                      <td>{service.Price?.toLocaleString() || 0}</td>
+                      <td>1</td>
+                      <td>{service.Price?.toLocaleString() || 0}</td>
+                      <td>
+                        <Button
+                          variant="outline-danger"
+                          size="sm"
+                          onClick={() => handleRemoveService(service.ServiceId, service.ServiceName)}
+                          disabled={isFormDisabled}
+                        >
+                          <i class="fas fa-trash"></i> Xóa
+                        </Button>
+                        <Button
+                          variant="outline-secondary"
+                          size="sm"
+                          className="ms-1 mt-1"
+                          onClick={() => startEditing(service.ServiceId)}
+                          disabled={isFormDisabled}
+                        >
+                          <i class="fas fa-wrench"></i>Sửa
+                        </Button>
+                      </td>
+                    </>
+                  )}
+                </tr>
+              ))}
+
+              {/* Dòng thêm mới */}
+              <tr style={{ backgroundColor: '#f8f9fa' }}>
+                <td>
+                  <Form.Control
+                    type="text"
+                    placeholder="Nhập tên dịch vụ..."
+                    value={newService.serviceName}
+                    onChange={(e) => handleFieldChange('serviceName', e.target.value)}
+                    disabled={editingIndex !== null}
+                  />
+                </td>
+                <td>
+                  <Form.Control
+                    type="number"
+                    min="0"
+                    step="1000"
+                    placeholder="0"
+                    value={newService.price}
+                    onChange={(e) => handleFieldChange('price', e.target.value)}
+                    disabled={editingIndex !== null}
+                  />
+                </td>
+                <td>
+                  <Form.Control
+                    type="number"
+                    min="1"
+                    placeholder="1"
+                    value={newService.quantity}
+                    onChange={(e) => handleFieldChange('quantity', e.target.value)}
+                    disabled={editingIndex !== null}
+                  />
+                </td>
+                <td className="align-middle">
+                  <strong>{newService.totalPrice?.toLocaleString() || 0}</strong>
+                </td>
+                <td>
+                  <Button
+                    variant="outline-primary"
+                    size="sm"
+                    onClick={handleAddNew}
+                    disabled={editingIndex !== null || isFormDisabled}
+                  >
+                    <i class="fas fa-plus"></i> Thêm
+                  </Button>
+                </td>
+              </tr>
+            </tbody>
+          </Table>
+        )}
+      </>
+    );
+  };
 
   const handlePageChange = useCallback(({ selected }) => {
     setCurrentPage(selected);
@@ -514,10 +1108,25 @@ const ServicesSection = ({
                           <Button
                             variant="outline-primary"
                             size="sm"
-                            onClick={() => {
+                            onClick={async () => {
                               if (serviceKey) {
                                 const isCurrentlyChecked = servicesState[serviceKey] || false;
                                 const newValue = !isCurrentlyChecked;
+
+                                // Hiển thị confirmation khi chọn dịch vụ từ gợi ý AI
+                                if (newValue) {
+                                  const result = await showConfirmation({
+                                    title: 'Chọn dịch vụ từ gợi ý AI',
+                                    text: `Bạn có muốn chọn dịch vụ "${serviceName}" từ gợi ý AI?`,
+                                    confirmText: 'Chọn dịch vụ',
+                                    cancelText: 'Hủy',
+                                    icon: 'info'
+                                  });
+
+                                  if (!result.isConfirmed) {
+                                    return;
+                                  }
+                                }
 
                                 setServices(prev => ({
                                   ...prev,
@@ -564,7 +1173,7 @@ const ServicesSection = ({
               <p className="text-muted">Không có dịch vụ nào khả dụng.</p>
             ) : (
               <>
-                {renderServices()}
+                {renderServicesCheckbox()}
                 <Pagination
                   pageCount={pageCount}
                   onPageChange={handlePageChange}
@@ -573,6 +1182,9 @@ const ServicesSection = ({
                 />
               </>
             )}
+
+            {/* HIỂN THỊ DANH SÁCH DỊCH VỤ ĐÃ CHỌN DẠNG TABLE */}
+            {renderSelectedServicesTable()}
           </Form.Group>
 
           <div className="text-end">
@@ -583,13 +1195,14 @@ const ServicesSection = ({
               disabled={isFormDisabled || !Object.values(servicesState).some(v => v) || serviceLoading}
               className="no-print"
             >
+              <i className="fas fa-bell"></i>
               {serviceLoading ? (
                 <>
                   <Spinner animation="border" size="sm" className="me-2" />
                   Đang gửi...
                 </>
               ) : (
-                `🧾 Yêu cầu thực hiện dịch vụ đã chọn (${Object.values(servicesState).filter(v => v).length})`
+                ` Yêu cầu thực hiện dịch vụ đã chọn (${Object.values(servicesState).filter(v => v).length})`
               )}
             </Button>
 
@@ -599,8 +1212,9 @@ const ServicesSection = ({
               onClick={handlePreview}
               disabled={!selectedTodayPatient || !Object.values(servicesState).some(Boolean)}
               className="no-print ms-2"
+              key="preview-button"
             >
-              👁️ Xem trước PDF
+              <i className="fas fa-eye"></i> Chỉnh sửa PDF
             </Button>
 
             <Button
@@ -610,7 +1224,7 @@ const ServicesSection = ({
               disabled={!selectedTodayPatient || !Object.values(servicesState).some(Boolean)}
               className="no-print ms-2"
             >
-              🖨️ Xuất PDF
+              <i className="fas fa-print"></i> Xuất PDF
             </Button>
           </div>
 

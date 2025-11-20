@@ -26,7 +26,7 @@ class TestResultsController extends Controller
         try {
             Log::info('🔄 Technician ID:', ['technician_id' => $this->technicianId]);
 
-            // Query lấy dịch vụ
+            // Query lấy dịch vụ - CHỈ THÊM SẮP XẾP
             $services = ServiceOrder::with([
                 'appointment.patient.user',
                 'service',
@@ -35,7 +35,7 @@ class TestResultsController extends Controller
             ])
                 ->where('AssignedStaffId', $this->technicianId)
                 ->whereIn('Status', ['Đã chỉ định', 'Đang chờ', 'Đang thực hiện'])
-                ->orderBy('OrderDate', 'desc')
+                ->orderBy('OrderDate', 'asc') // ✅ CHỈ THÊM: Sắp xếp sớm nhất lên đầu
                 ->paginate(10);
 
             // Format data
@@ -145,7 +145,7 @@ class TestResultsController extends Controller
 
             // ✅ THÊM THỜI GIAN HOÀN THÀNH NẾU LÀ TRẠNG THÁI HOÀN THÀNH
             if ($newStatus === 'Hoàn thành') {
-                $updateData['CompletedAt'] = now();
+                $updateData['CompletedAt'] = now('Asia/Ho_Chi_Minh');
             }
 
             $serviceOrder->update($updateData);
@@ -295,6 +295,8 @@ class TestResultsController extends Controller
             ])
                 ->where('AssignedStaffId', $this->technicianId)
                 ->where('Status', 'Hoàn thành')
+                ->orderBy('OrderDate', 'desc') 
+
                 ->get();
 
             // Format data
@@ -557,6 +559,8 @@ class TestResultsController extends Controller
             'patient_age' => !empty($user->DateOfBirth)
                 ? \Carbon\Carbon::parse($user->DateOfBirth)->age
                 : 'N/A',
+            'patient_phone' => $user->Phone ?? 'N/A',
+            'patient_address' => $user->Address ?? 'N/A',
             'patient_gender' => $user->Gender ?? 'N/A',
             'service_name' => $order->service->ServiceName ?? 'N/A',
             'service_type' => $order->service->ServiceType ?? 'N/A',

@@ -5,7 +5,6 @@ import { path } from "../../utils/constant";
 
 const ReceptionSidebar = () => {
     const { user, handleLogout } = useUser();
-
     return (
         <div className="d-flex" style={{ minHeight: "100vh" }}>
             {/* SIDEBAR */}
@@ -38,6 +37,12 @@ const ReceptionSidebar = () => {
                                 Quản lý thah toán
                             </NavLink>
                         </li>
+                        <li>
+              <NavLink to={path.RECEPTIONIST.NOTIFICATION} className="nav-item">
+                <i className="fa-solid fa-bell"></i>
+                Quản lý thông báo
+              </NavLink>
+            </li>
 
                         <li className="border-top mt-auto pt-3">
                             <button

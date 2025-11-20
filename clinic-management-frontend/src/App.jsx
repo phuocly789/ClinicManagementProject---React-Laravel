@@ -132,11 +132,16 @@ function App() {
           path={path.TECHNICIAN.TEST_RESULTS}
           element={<TechnicianDashboard />}
         />
+        <Route
+          path={path.TECHNICIAN.TECHNICIAN_PRINT_PDF}
+          element={<PDFEditorPage />}
+        />
       </Route>
       {/* Payment */}
       <Route path={path.PayMent.ROOT} element={<ReceptionSidebar />}>
         <Route index element={<PaymentSection />} />
         <Route path={path.PayMent.PAY_RESULT} element={<PaymentResult />} />
+        <Route path={path.PayMent.Pay_PDF_EDITOR} element={<PDFEditorPage/>} />
       </Route>
     </Routes>
   );

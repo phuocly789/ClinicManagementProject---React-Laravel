@@ -48,7 +48,7 @@ class MedicalStaff extends Model
 
     public function user()
     {
-        return $this->belongsTo(User::class, 'StaffId');
+        return $this->belongsTo(User::class, 'StaffId', 'UserId');
     }
 
     public function staff_schedules()
