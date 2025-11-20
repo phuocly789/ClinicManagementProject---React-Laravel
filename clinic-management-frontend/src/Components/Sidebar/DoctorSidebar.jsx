@@ -107,7 +107,7 @@ const DoctorSidebar = () => {
                 Đăng Xuất
               </button>
             </li>
-          </ul>
+          </div>
         </nav>
       </div>
 

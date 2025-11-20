@@ -2,20 +2,21 @@ import { useCallback, useEffect, useState, useMemo } from 'react';
 import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
 import Loading from '../../Components/Loading/Loading';
 import CustomToast from '../../Components/CustomToast/CustomToast';
-import instance from '../../axios';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import bootstrap5Plugin from '@fullcalendar/bootstrap5';
 import 'bootstrap-icons/font/bootstrap-icons.css';
-import { BiCalendarPlus, BiPencil, BiSave, BiTrash, BiX, BiXCircle } from 'react-icons/bi';
+import { BiCalendarPlus, BiPencil, BiSave, BiTrash, BiX, BiXCircle, BiUser, BiTime, BiCalendar } from 'react-icons/bi';
 import { FaUserMd, FaUserNurse, FaUserPlus, FaUserTie } from 'react-icons/fa';
 import '../../App.css';
+import axiosInstance from '../../axios';
 
+// QUAY LẠI dùng Role (chuỗi) vì API trả về chuỗi
 const initialFormState = {
     StaffId: '',
-    Role: '',
+    Role: '', // DÙNG LẠI Role (chuỗi)
     WorkDate: new Date().toISOString().split('T')[0],
     StartTime: '08:00',
     EndTime: '17:00',
@@ -23,15 +24,17 @@ const initialFormState = {
     RoomId: ''
 };
 
+// Giữ nguyên roleOptions với value là chuỗi
 const roleOptions = [
-    { value: 'Bác sĩ', label: 'Bác sĩ', icon: FaUserMd },
-    { value: 'Y tá', label: 'Y tá', icon: FaUserNurse },
-    { value: 'Lễ tân', label: 'Lễ tân', icon: FaUserPlus },
-    { value: 'Kĩ thuật viên', label: 'Kĩ thuật viên', icon: FaUserTie }
+    { value: 'Bác sĩ', label: 'Bác sĩ', icon: FaUserMd, color: 'primary' },
+    { value: 'Y tá', label: 'Y tá', icon: FaUserNurse, color: 'success' },
+    { value: 'Lễ tân', label: 'Lễ tân', icon: FaUserPlus, color: 'warning' },
+    { value: 'Kĩ thuật viên', label: 'Kĩ thuật viên', icon: FaUserTie, color: 'info' }
 ];
 
-const getRoleClass = (role) => {
-    switch (role) {
+// Sửa hàm getRoleClass để nhận roleName (chuỗi)
+const getRoleClass = (roleName) => {
+    switch (roleName) {
         case 'Bác sĩ': return 'doctor';
         case 'Y tá': return 'nurse';
         case 'Lễ tân': return 'receptionist';
@@ -40,8 +43,9 @@ const getRoleClass = (role) => {
     }
 };
 
-const getBootstrapClass = (role) => {
-    switch (role) {
+// Sửa hàm getBootstrapClass
+const getBootstrapClass = (roleName) => {
+    switch (roleName) {
         case 'Bác sĩ': return 'primary';
         case 'Y tá': return 'success';
         case 'Lễ tân': return 'warning';
@@ -50,14 +54,14 @@ const getBootstrapClass = (role) => {
     }
 };
 
-// Hàm map StaffType từ API sang Role cho form
-const mapStaffTypeToRole = (staffType) => {
-    switch (staffType) {
-        case 'Bác sĩ': return 'Bác sĩ';
-        case 'Y tá': return 'Y tá';
-        case 'Lễ tân': return 'Lễ tân';
-        case 'Kĩ thuật viên': return 'Kĩ thuật viên';
-        default: return staffType;
+// Hàm map roleName sang roleId để filter staff (nếu cần)
+const mapRoleNameToRoleId = (roleName) => {
+    switch (roleName) {
+        case 'Lễ tân': return '3';
+        case 'Bác sĩ': return '4';
+        case 'Kĩ thuật viên': return '5';
+        case 'Y tá': return '6';
+        default: return '';
     }
 };
 
@@ -77,8 +81,8 @@ const AdminScheduleManagement = () => {
 
     const fetchRooms = useCallback(async () => {
         try {
-            const response = await instance.get('/api/rooms');
-            const rooms = response.data || [];
+            const response = await axiosInstance.get('/api/rooms');
+            const rooms = response.data;
             setRoomList(rooms);
         } catch (error) {
             console.error('Error fetching rooms:', error);
@@ -91,19 +95,30 @@ const AdminScheduleManagement = () => {
 
     const fetchStaff = useCallback(async () => {
         try {
-            const response = await instance.get('/api/staff');
-            const staffFromApi = response.data || [];
+            const response = await axiosInstance.get('/api/staff');
+            const staffFromApi = response.data;
 
-            // Transform data từ API sang format cần thiết
-            const transformedStaff = staffFromApi.map(staff => ({
-                StaffId: staff.StaffId,
-                StaffName: staff.user?.FullName || `NV${staff.StaffId}`,
-                Role: mapStaffTypeToRole(staff.StaffType),
-                StaffType: staff.StaffType,
-                Specialty: staff.Specialty,
-                LicenseNumber: staff.LicenseNumber,
-                FullName: staff.user?.FullName
-            }));
+            const transformedStaff = staffFromApi.map(staff => {
+                // Map StaffType số sang tên role
+                let roleName = 'Không xác định';
+                switch (parseInt(staff.StaffType)) {
+                    case 3: roleName = 'Lễ tân'; break;
+                    case 4: roleName = 'Bác sĩ'; break;
+                    case 5: roleName = 'Kĩ thuật viên'; break;
+                    case 6: roleName = 'Y tá'; break;
+                    default: roleName = 'Không xác định';
+                }
+
+                return {
+                    StaffId: staff.StaffId,
+                    StaffName: staff.user?.FullName || `NV${staff.StaffId}`,
+                    Role: roleName, // DÙNG Role (chuỗi)
+                    StaffType: staff.StaffType,
+                    Specialty: staff.Specialty,
+                    LicenseNumber: staff.LicenseNumber,
+                    FullName: staff.user?.FullName
+                };
+            });
 
             setStaffList(transformedStaff);
         } catch (error) {
@@ -114,22 +129,21 @@ const AdminScheduleManagement = () => {
                     acc.push({
                         StaffId: current.StaffId,
                         StaffName: current.StaffName || `NV${current.StaffId}`,
-                        Role: current.Role
+                        Role: current.Role || 'Không xác định'
                     });
                 }
                 return acc;
             }, []);
             setStaffList(uniqueStaff);
         }
-    }, []);
+    }, [schedules]);
 
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const response = await instance.get('/api/schedules');
-            const fetchedSchedules = response.data.Items || [];
+            const response = await axiosInstance.get('/api/schedules');
+            const fetchedSchedules = response.data.Items;
             setSchedules(fetchedSchedules);
-
         } catch (error) {
             console.error('Error fetching schedules:', error);
             setToast({
@@ -144,25 +158,47 @@ const AdminScheduleManagement = () => {
     useEffect(() => {
         fetchData();
         fetchRooms();
-        fetchStaff();
     }, []);
 
+    useEffect(() => {
+        if (schedules.length > 0) {
+            fetchStaff();
+        }
+    }, [schedules]);
+
+    // SỬA: Filter staff theo Role (chuỗi)
     const filteredStaffList = useMemo(() => {
+   
+        console.log('staff lítttttttttttt'+staffList);
+        
         if (scheduleFormData.Role) {
-            return staffList.filter(staff => staff.Role === scheduleFormData.Role);
+            return staffList.filter(staff => staff.StaffType === scheduleFormData.Role);
         }
         return staffList;
     }, [scheduleFormData.Role, staffList]);
 
     const calendarEvents = useMemo(() => {
-        return schedules.map(schedule => ({
-            id: schedule.ScheduleId?.toString(),
-            title: schedule.StaffName || `NV${schedule.StaffId}`,
-            start: `${schedule.WorkDate}T${schedule.StartTime || '08:00:00'}`,
-            end: `${schedule.WorkDate}T${schedule.EndTime || '17:00:00'}`,
-            className: `event-${getRoleClass(schedule.Role)}`,
-            extendedProps: { ...schedule }
-        }));
+        return schedules.map(schedule => {
+            let date = schedule.WorkDate;
+            if (typeof date === 'string' && date.includes('T')) {
+                date = date.split('T')[0];
+            }
+
+            // DEBUG: Log để xem dữ liệu thực tế
+            console.log('Schedule data:', schedule);
+
+            return {
+                id: schedule.ScheduleId?.toString(),
+                title: schedule.StaffName || `NV${schedule.StaffId}`,
+                start: `${date}T${schedule.StartTime || '08:00:00'}`,
+                end: `${date}T${schedule.EndTime || '17:00:00'}`,
+                className: `event-${getRoleClass(schedule.Role)}`, // DÙNG schedule.Role (chuỗi)
+                extendedProps: {
+                    ...schedule,
+                    Role: schedule.Role // Đảm bảo có Role trong extendedProps
+                }
+            };
+        });
     }, [schedules]);
 
     const handleCloseModals = () => {
@@ -197,15 +233,17 @@ const AdminScheduleManagement = () => {
             return new Date(date).toISOString().split('T')[0];
         };
 
+        // SỬA: Dùng Role (chuỗi) từ extendedProps
         setScheduleFormData({
             StaffId: extendedProps.StaffId || '',
-            Role: extendedProps.Role || '',
+            Role: extendedProps.Role || '', // DÙNG Role (chuỗi)
             WorkDate: formatDateForInput(start),
             StartTime: formatTimeForInput(start),
             EndTime: formatTimeForInput(end),
             IsAvailable: extendedProps.IsAvailable !== false,
             RoomId: extendedProps.RoomId || ''
         });
+        setDetailModalOpen(false);
         setSelectedEvent(event);
         setFormModalOpen(true);
     };
@@ -233,20 +271,22 @@ const AdminScheduleManagement = () => {
         const method = isEditing ? 'put' : 'post';
 
         try {
-            const selectedStaff = staffList.find(staff => staff.StaffId == scheduleFormData.StaffId);
+            // CHUẨN BỊ DATA - KHÔNG gửi Role vì API không cần
             const submitData = {
-                ...scheduleFormData,
+                StaffId: scheduleFormData.StaffId,
+                WorkDate: scheduleFormData.WorkDate,
                 StartTime: scheduleFormData.StartTime.length === 5 ? `${scheduleFormData.StartTime}:00` : scheduleFormData.StartTime,
                 EndTime: scheduleFormData.EndTime.length === 5 ? `${scheduleFormData.EndTime}:00` : scheduleFormData.EndTime,
-                StaffName: selectedStaff?.StaffName || `NV${scheduleFormData.StaffId}`
+                IsAvailable: scheduleFormData.IsAvailable,
+                RoomId: scheduleFormData.RoomId
             };
 
-            const response = await instance[method](url, submitData);
+            const response = await axiosInstance[method](url, submitData);
 
-            if (response.status === 'Success' || response.message) {
+            if (response.data?.status === 'Success' || response.status === 'Success' || response.message) {
                 setToast({
                     type: 'success',
-                    message: response.message || 'Thao tác thành công!'
+                    message: response.data?.message || response.message || 'Thao tác thành công!'
                 });
                 handleCloseModals();
                 await fetchData();
@@ -257,7 +297,8 @@ const AdminScheduleManagement = () => {
             console.error('Error submitting form:', error);
             setToast({
                 type: 'error',
-                message: error.response?.message ||
+                message: error.response?.data?.message ||
+                    error.response?.message ||
                     error.response?.errors?.[0] ||
                     error.message ||
                     'Thao tác thất bại.'
@@ -271,12 +312,12 @@ const AdminScheduleManagement = () => {
         if (!selectedEvent) return;
         setLoading(true);
         try {
-            const response = await instance.delete(`/api/schedules/${selectedEvent.id}`);
+            const response = await axiosInstance.delete(`/api/schedules/${selectedEvent.id}`);
 
-            if (response.status === 'Success' || response.message) {
+            if (response.data?.status === 'Success' || response.status === 'Success' || response.message) {
                 setToast({
                     type: 'success',
-                    message: response.message || 'Xóa thành công!'
+                    message: response.data?.message || response.message || 'Xóa thành công!'
                 });
                 handleCloseModals();
                 await fetchData();
@@ -287,7 +328,8 @@ const AdminScheduleManagement = () => {
             console.error('Error deleting schedule:', error);
             setToast({
                 type: 'error',
-                message: error.response?.message ||
+                message: error.response?.data?.message ||
+                    error.response?.message ||
                     error.message ||
                     'Lỗi khi xóa.'
             });
@@ -297,19 +339,21 @@ const AdminScheduleManagement = () => {
     };
 
     const renderEventContent = (eventInfo) => {
-        const { Role } = eventInfo.event.extendedProps;
+        const roleName = eventInfo.event.extendedProps.Role;
+
         const roleIcons = {
-            'Bác sĩ': <FaUserMd />,
-            'Y tá': <FaUserNurse />,
-            'Kĩ thuật viên': <FaUserTie />,
-            'Lễ tân': <FaUserPlus />
+            'Bác sĩ': <FaUserMd className="text-primary" />,
+            'Y tá': <FaUserNurse className="text-success" />,
+            'Kĩ thuật viên': <FaUserTie className="text-info" />,
+            'Lễ tân': <FaUserPlus className="text-warning" />
         };
+
         return (
-            <div className="event-main-content w-100">
-                <div className="event-icon">{roleIcons[Role] || <FaUserTie />}</div>
+            <div className="event-main-content">
+                <div className="event-icon">{roleIcons[roleName] || <FaUserTie />}</div>
                 <div className="event-details">
                     <div className="event-title">{eventInfo.event.title}</div>
-                    <div className="event-role">{Role}</div>
+                    <div className="event-role">{roleName}</div>
                 </div>
             </div>
         );
@@ -320,6 +364,8 @@ const AdminScheduleManagement = () => {
         return <IconComponent size={size} />;
     };
 
+    // PHẦN RENDER MODALS GIỮ NGUYÊN, chỉ cần đảm bảo dùng Role (chuỗi)
+
     const renderModals = () => {
         if (!isFormModalOpen && !isDetailModalOpen && !isConfirmModalOpen) return null;
 
@@ -329,9 +375,9 @@ const AdminScheduleManagement = () => {
 
                 {isFormModalOpen && (
                     <div className="modal fade show d-block" tabIndex="-1">
-                        <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-dialog modal-dialog-centered modal-lg">
                             <div className="modal-content border-0 shadow-lg">
-                                <div className="modal-header bg-primary text-white">
+                                <div className="modal-header bg-primary text-white border-0">
                                     <h5 className="modal-title fw-bold">
                                         {selectedEvent ? "Cập Nhật Lịch Làm Việc" : "Thêm Lịch Làm Việc Mới"}
                                     </h5>
@@ -340,13 +386,13 @@ const AdminScheduleManagement = () => {
                                 <form onSubmit={handleFormSubmit}>
                                     <div className="modal-body p-4">
                                         <div className="row g-3">
-                                            <div className="col-12">
+                                            <div className="col-md-6">
                                                 <label className="form-label fw-semibold">Chức vụ <span className="text-danger">*</span></label>
                                                 <select
-                                                    name="Role"
+                                                    name="Role" // DÙNG Role (chuỗi)
                                                     value={scheduleFormData.Role}
                                                     onChange={handleFormChange}
-                                                    className="form-select form-select-lg border-secondary-subtle"
+                                                    className="form-select"
                                                     required
                                                 >
                                                     <option value="">-- Chọn chức vụ --</option>
@@ -358,20 +404,20 @@ const AdminScheduleManagement = () => {
                                                 </select>
                                             </div>
 
-                                            <div className="col-12">
+                                            <div className="col-md-6">
                                                 <label className="form-label fw-semibold">Nhân viên <span className="text-danger">*</span></label>
                                                 <select
                                                     name="StaffId"
                                                     value={scheduleFormData.StaffId}
                                                     onChange={handleFormChange}
-                                                    className="form-select form-select-lg border-secondary-subtle"
+                                                    className="form-select"
                                                     required
                                                     disabled={!!selectedEvent || !scheduleFormData.Role}
                                                 >
                                                     <option value="">-- Chọn nhân viên --</option>
                                                     {filteredStaffList.map(staff => (
                                                         <option key={staff.StaffId} value={staff.StaffId}>
-                                                            {staff.StaffName} - {staff.Role} {staff.Specialty ? `(${staff.Specialty})` : ''}
+                                                            {staff.StaffName} - {staff.StaffType} {staff.Specialty ? `(${staff.Specialty})` : ''}
                                                         </option>
                                                     ))}
                                                 </select>
@@ -382,13 +428,14 @@ const AdminScheduleManagement = () => {
                                                 )}
                                             </div>
 
-                                            <div className="col-12">
+                                            {/* Các trường khác giữ nguyên */}
+                                            <div className="col-md-6">
                                                 <label className="form-label fw-semibold">Phòng làm việc <span className="text-danger">*</span></label>
                                                 <select
                                                     name="RoomId"
                                                     value={scheduleFormData.RoomId}
                                                     onChange={handleFormChange}
-                                                    className="form-select form-select-lg border-secondary-subtle"
+                                                    className="form-select"
                                                     required
                                                 >
                                                     <option value="">-- Chọn phòng --</option>
@@ -400,14 +447,14 @@ const AdminScheduleManagement = () => {
                                                 </select>
                                             </div>
 
-                                            <div className="col-12">
+                                            <div className="col-md-6">
                                                 <label className="form-label fw-semibold">Ngày làm việc <span className="text-danger">*</span></label>
                                                 <input
                                                     type="date"
                                                     name="WorkDate"
                                                     value={scheduleFormData.WorkDate}
                                                     onChange={handleFormChange}
-                                                    className="form-control form-control-lg border-secondary-subtle"
+                                                    className="form-control"
                                                     required
                                                 />
                                             </div>
@@ -419,8 +466,7 @@ const AdminScheduleManagement = () => {
                                                     name="StartTime"
                                                     value={scheduleFormData.StartTime}
                                                     onChange={handleFormChange}
-                                                    className="form-control form-control-lg border-secondary-subtle"
-                                                    step="1"
+                                                    className="form-control"
                                                     required
                                                 />
                                             </div>
@@ -431,14 +477,13 @@ const AdminScheduleManagement = () => {
                                                     name="EndTime"
                                                     value={scheduleFormData.EndTime}
                                                     onChange={handleFormChange}
-                                                    className="form-control form-control-lg border-secondary-subtle"
-                                                    step="1"
+                                                    className="form-control"
                                                     required
                                                 />
                                             </div>
 
                                             <div className="col-12">
-                                                <div className="form-check form-switch">
+                                                <div className="form-check form-switch mt-2">
                                                     <input
                                                         type="checkbox"
                                                         name="IsAvailable"
@@ -454,11 +499,11 @@ const AdminScheduleManagement = () => {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="modal-footer border-top-0 bg-light">
-                                        <button type="button" className="btn btn-outline-secondary px-4" onClick={handleCloseModals}>
+                                    <div className="modal-footer border-top">
+                                        <button type="button" className="btn btn-outline-secondary" onClick={handleCloseModals}>
                                             <BiX className="me-2" /> Hủy
                                         </button>
-                                        <button type="submit" className="btn btn-primary px-4" disabled={loading}>
+                                        <button type="submit" className="btn btn-primary" disabled={loading}>
                                             <BiSave className="me-2" />
                                             {loading ? 'Đang xử lý...' : (selectedEvent ? "Cập nhật" : "Thêm mới")}
                                         </button>
@@ -473,106 +518,106 @@ const AdminScheduleManagement = () => {
                     <div className="modal fade show d-block" tabIndex="-1">
                         <div className="modal-dialog modal-dialog-centered">
                             <div className="modal-content border-0 shadow-lg">
-                                <div className="modal-header bg-primary text-white">
+                                <div className="modal-header bg-primary text-white border-0">
                                     <h5 className="modal-title fw-bold">Chi Tiết Lịch Làm Việc</h5>
                                     <button type="button" className="btn-close btn-close-white" onClick={handleCloseModals}></button>
                                 </div>
                                 <div className="modal-body p-4">
-                                    <div className="info-grid">
-                                        <div className="info-item">
-                                            <span className="info-label">Nhân viên:</span>
-                                            <span className="info-value d-flex align-items-center gap-2">
-                                                <RoleIcon role={selectedEvent.extendedProps.Role} />
-                                                {selectedEvent.extendedProps.StaffName}
-                                            </span>
+                                    <div className="row g-3">
+                                        <div className="col-12">
+                                            <div className="d-flex align-items-center gap-3 p-3 bg-light rounded">
+                                                <RoleIcon role={selectedEvent.extendedProps.Role} size={24} />
+                                                <div>
+                                                    <div className="fw-bold text-dark">{selectedEvent.extendedProps.StaffName}</div>
+                                                    <span className={`badge bg-${getBootstrapClass(selectedEvent.extendedProps.Role)}`}>
+                                                        {selectedEvent.extendedProps.Role}
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="info-item">
-                                            <span className="info-label">Chức vụ:</span>
-                                            <span className="info-value">
-                                                <span className={`badge bg-${getBootstrapClass(selectedEvent.extendedProps.Role)}`}>
-                                                    {selectedEvent.extendedProps.Role}
-                                                </span>
-                                            </span>
+
+                                        <div className="col-md-6">
+                                            <label className="form-label text-muted small mb-1">Phòng làm việc</label>
+                                            <div className="fw-semibold">
+                                                {selectedEvent.extendedProps.RoomName || 'Chưa cập nhật'}
+                                            </div>
                                         </div>
-                                        <div className="info-item">
-                                            <span className="info-label">Phòng:</span>
-                                            <span className="info-value">
-                                                {roomList.find(room => room.RoomId == selectedEvent.extendedProps.RoomId)?.RoomName || selectedEvent.extendedProps.RoomId || 'Chưa cập nhật'}
-                                            </span>
-                                        </div>
-                                        <div className="info-item">
-                                            <span className="info-label">Ngày làm:</span>
-                                            <span className="info-value">
+
+                                        <div className="col-md-6">
+                                            <label className="form-label text-muted small mb-1">Ngày làm việc</label>
+                                            <div className="fw-semibold">
                                                 {new Date(selectedEvent.start).toLocaleDateString('vi-VN', {
                                                     weekday: 'long',
                                                     year: 'numeric',
                                                     month: 'long',
                                                     day: 'numeric'
                                                 })}
-                                            </span>
+                                            </div>
                                         </div>
-                                        <div className="info-item">
-                                            <span className="info-label">Thời gian:</span>
-                                            <span className="info-value">
+
+                                        <div className="col-md-6">
+                                            <label className="form-label text-muted small mb-1">Thời gian</label>
+                                            <div className="fw-semibold">
                                                 {`${new Date(selectedEvent.start).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - ${new Date(selectedEvent.end).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`}
-                                            </span>
+                                            </div>
                                         </div>
-                                        <div className="info-item">
-                                            <span className="info-label">Trạng thái:</span>
-                                            <span className="info-value">
+
+                                        <div className="col-md-6">
+                                            <label className="form-label text-muted small mb-1">Trạng thái</label>
+                                            <div>
                                                 {selectedEvent.extendedProps.IsAvailable ?
                                                     <span className="badge bg-success">🟢 Có mặt</span> :
                                                     <span className="badge bg-danger">🔴 Vắng mặt</span>
                                                 }
-                                            </span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                                <div className="modal-footer border-top-0 bg-light d-flex justify-content-between">
-                                    <div>
-                                        <button className="btn btn-outline-danger me-2" onClick={() => handleOpenDeleteModal(selectedEvent)}>
-                                            <BiTrash className="me-1" /> Xóa
-                                        </button>
-                                        <button className="btn btn-outline-warning" onClick={() => handleOpenEditModal(selectedEvent)}>
-                                            <BiPencil className="me-1" /> Sửa
+                                <div className="modal-footer border-top">
+                                    <div className="d-flex gap-2 w-100 justify-content-between">
+                                        <div>
+                                            <button className="btn btn-outline-danger btn-sm" onClick={() => handleOpenDeleteModal(selectedEvent)}>
+                                                <BiTrash className="me-1" /> Xóa
+                                            </button>
+                                            <button className="btn btn-outline-warning btn-sm ms-2" onClick={() => handleOpenEditModal(selectedEvent)}>
+                                                <BiPencil className="me-1" /> Sửa
+                                            </button>
+                                        </div>
+                                        <button className="btn btn-primary btn-sm" onClick={handleCloseModals}>
+                                            <BiX className="me-1" /> Đóng
                                         </button>
                                     </div>
-                                    <button className="btn btn-primary" onClick={handleCloseModals}>
-                                        <BiX className="me-1" /> Đóng
-                                    </button>
                                 </div>
                             </div>
                         </div>
                     </div>
                 )}
 
+                {/* Confirm Modal giữ nguyên */}
+                {/* THÊM MODAL XÁC NHẬN XÓA */}
                 {isConfirmModalOpen && selectedEvent && (
                     <div className="modal fade show d-block" tabIndex="-1">
                         <div className="modal-dialog modal-dialog-centered modal-sm">
                             <div className="modal-content border-0 shadow-lg">
-                                <div className="modal-header bg-danger text-white">
-                                    <h5 className="modal-title fw-bold">Xác Nhận Xóa</h5>
-                                    <button type="button" className="btn-close btn-close-white" onClick={handleCloseModals}></button>
+                                <div className="modal-header bg-danger text-white border-0 justify-content-center">
+                                    <BiXCircle size={24} />
                                 </div>
                                 <div className="modal-body text-center p-4">
-                                    <BiXCircle size={48} className="text-danger mb-3" />
-                                    <p className="mb-2">Bạn có chắc muốn xóa lịch làm việc này?</p>
-                                    <p className="fw-bold text-primary">{selectedEvent.extendedProps.StaffName}</p>
-                                    <p className="text-muted small">
-                                        {new Date(selectedEvent.start).toLocaleDateString('vi-VN', {
-                                            weekday: 'long',
-                                            year: 'numeric',
-                                            month: 'long',
-                                            day: 'numeric'
-                                        })}
-                                    </p>
+                                    <h6 className="fw-bold mb-3">Xác Nhận Xóa</h6>
+                                    <p className="text-muted mb-3 small">Bạn có chắc muốn xóa lịch làm việc này?</p>
+                                    <div className="bg-light rounded p-3 mb-3">
+                                        <div className="fw-bold text-primary">{selectedEvent.extendedProps.StaffName}</div>
+                                        <div className="text-muted small">
+                                            {new Date(selectedEvent.start).toLocaleDateString('vi-VN')}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="modal-footer border-top-0 justify-content-center">
-                                    <button className="btn btn-outline-secondary me-3" onClick={handleCloseModals}>
+                                <div className="modal-footer border-top justify-content-center">
+                                    <button className="btn btn-outline-secondary btn-sm" onClick={handleCloseModals}>
                                         Hủy
                                     </button>
-                                    <button className="btn btn-danger" onClick={handleDeleteConfirm} disabled={loading}>
-                                        {loading ? 'Đang xóa...' : 'Xác Nhận Xóa'}
+                                    <button className="btn btn-danger btn-sm ms-2" onClick={handleDeleteConfirm} disabled={loading}>
+                                        {loading ? 'Đang xóa...' : 'Xóa'}
                                     </button>
                                 </div>
                             </div>
@@ -583,8 +628,10 @@ const AdminScheduleManagement = () => {
         );
     };
 
+    // PHẦN RETURN GIỮ NGUYÊN
+
     return (
-        <div className="d-flex w-100">
+        <div className="d-flex">
             <main className="main-content flex-grow-1 p-4 d-flex flex-column gap-4">
                 {toast && (
                     <CustomToast
@@ -594,38 +641,40 @@ const AdminScheduleManagement = () => {
                     />
                 )}
 
-                <header className="d-flex justify-content-between align-items-center flex-shrink-0 bg-white rounded-3 p-4 shadow-sm border">
+                {/* Header */}
+                <div className="d-flex justify-content-between align-items-center">
                     <div>
-                        <h1 className="h3 mb-1 fw-bold text-primary">Quản Lý Lịch Làm Việc</h1>
+                        <h1 className="h4 fw-bold text-dark mb-1">Quản Lý Lịch Làm Việc</h1>
                         <p className="text-muted mb-0">Quản lý và theo dõi lịch làm việc của nhân viên</p>
                     </div>
                     <div className="d-flex align-items-center gap-3">
-                        <div className="legend d-flex align-items-center gap-2">
-                            <span className="badge bg-primary px-3 py-2">👨‍⚕️ Bác sĩ</span>
-                            <span className="badge bg-success px-3 py-2">👩‍⚕️ Y tá</span>
-                            <span className="badge bg-warning px-3 py-2">💼 Lễ tân</span>
-                            <span className="badge bg-info px-3 py-2">🔧 Kĩ thuật viên</span>
+                        <div className="d-flex gap-2">
+                            {roleOptions.map(role => (
+                                <span key={role.value} className={`badge bg-${role.color} d-flex align-items-center gap-1 px-2 py-1`}>
+                                    <role.icon size={12} />
+                                    <small>{role.label}</small>
+                                </span>
+                            ))}
                         </div>
                         <button
-                            className="btn btn-primary d-flex align-items-center gap-2 px-4 py-2 fw-semibold"
+                            className="btn btn-primary d-flex align-items-center gap-2"
                             onClick={handleOpenAddModal}
                             disabled={loading}
                         >
-                            <BiCalendarPlus size={18} /> Thêm Lịch Mới
+                            <BiCalendarPlus size={16} />
+                            Thêm Lịch
                         </button>
                     </div>
-                </header>
+                </div>
 
-                <div className="card shadow-sm border-0 calendar-panel flex-grow-1 position-relative">
-                    {loading && <Loading isLoading={loading} />}
-                    <div
-                        className="card-body p-0"
-                        style={{
-                            opacity: loading ? 0.5 : 1,
-                            height: '100%',
-                            transition: 'opacity 0.3s ease'
-                        }}
-                    >
+                {/* Calendar */}
+                <div className="card border-0 shadow-sm flex-grow-1">
+                    <div className="card-body p-0 position-relative">
+                        {loading && (
+                            <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-white bg-opacity-75 z-3">
+                                <Loading isLoading={loading} />
+                            </div>
+                        )}
                         <FullCalendar
                             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, bootstrap5Plugin]}
                             themeSystem="bootstrap5"
@@ -658,6 +707,61 @@ const AdminScheduleManagement = () => {
                 </div>
 
                 {renderModals()}
+
+                <style jsx>{`
+                    .event-main-content {
+                        display: flex;
+                        align-items: center;
+                        gap: 6px;
+                        padding: 2px 4px;
+                    }
+                    
+                    .event-icon {
+                        font-size: 12px;
+                        flex-shrink: 0;
+                    }
+                    
+                    .event-details {
+                        flex-grow: 1;
+                        min-width: 0;
+                    }
+                    
+                    .event-title {
+                        font-weight: 600;
+                        font-size: 11px;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        line-height: 1.2;
+                    }
+                    
+                    .event-role {
+                        font-size: 9px;
+                        opacity: 0.8;
+                        line-height: 1;
+                    }
+
+                    .fc .fc-toolbar {
+                        padding: 1rem;
+                        margin-bottom: 0;
+                    }
+
+                    .fc .fc-toolbar-title {
+                        font-size: 1.25rem;
+                        font-weight: 600;
+                    }
+
+                    .fc .fc-button {
+                        padding: 0.375rem 0.75rem;
+                        font-size: 0.875rem;
+                    }
+
+                    .fc .fc-event {
+                        border: none;
+                        padding: 2px 4px;
+                    }
+
+                `}</style>
             </main>
         </div>
     );

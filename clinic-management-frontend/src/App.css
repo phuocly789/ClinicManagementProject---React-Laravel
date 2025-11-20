@@ -19,6 +19,8 @@
   --danger-color: #ef4444;
   --yellow-color: #ffc107;
   --grey-color: #6c757d;
+  --info-color: #17a2b8;
+
 
   /* Màu văn bản */
   --text-primary: #1d2d3d;
@@ -335,19 +337,19 @@ ul {
 
 /* Màu viền trái cho event */
 .event-doctor {
-  border-left-color: var(--green-color) !important;
+  border-left-color: var(--primary-color) !important;
 }
 
 .event-nurse {
-  border-left-color: var(--yellow-color) !important;
+  border-left-color: var(--green-color) !important;
 }
 
 .event-receptionist {
-  border-left-color: var(--danger-color) !important;
+  border-left-color: var(--yellow-color) !important;
 }
 
 .event-technician {
-  border-left-color: var(--grey-color) !important;
+  border-left-color: var(--info-color) !important;
 }
 
 /* Nội dung bên trong event */
@@ -402,51 +404,56 @@ ul {
   color: var(--grey-color);
 }
 
+dl,
+ol,
+ul {
+  margin-top: 0;
+  margin-bottom: 0 !important;
 dl, ol, ul {
   margin-top: 0;
   margin-bottom: 0 !important;
-    margin-top: 0;
-    margin-bottom: 0 !important;
-/* src/components/PaymentSection.css */
-.stats-card {
-  transition: all 0.3s ease;
-  border-radius: 12px;
-}
 
-.stats-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
-}
-
-.hover-effect:hover {
-  background-color: #f8f9fa;
-  transform: translateX(5px);
-  transition: all 0.3s ease;
-}
-
-.dashboard-tab {
-  animation: fadeIn 0.5s ease-in-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
+  /* src/components/PaymentSection.css */
+  .stats-card {
+    transition: all 0.3s ease;
+    border-radius: 12px;
   }
 
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .stats-card .fs-2 {
-    font-size: 1.5rem !important;
+  .stats-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
   }
 
-  .table-responsive {
-    font-size: 0.875rem;
+  .hover-effect:hover {
+    background-color: #f8f9fa;
+    transform: translateX(5px);
+    transition: all 0.3s ease;
+  }
+
+  .dashboard-tab {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .stats-card .fs-2 {
+      font-size: 1.5rem !important;
+    }
+
+    .table-responsive {
+      font-size: 0.875rem;
+    }
   }
 }
