@@ -1,282 +1,19 @@
-import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
-import { Table, Button, Spinner, Form, Row, Col, InputGroup } from 'react-bootstrap';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import '../../App.css';
 import Pagination from '../../Components/Pagination/Pagination';
-import ConfirmDeleteModal from '../../Components/CustomToast/DeleteConfirmModal';
 import CustomToast from '../../Components/CustomToast/CustomToast';
-import { PencilIcon, Trash, Search, Filter, X } from 'lucide-react';
-
+import Loading from '../../Components/Loading/Loading';
+import { BiPlus, BiPencil, BiTrash, BiSearch } from 'react-icons/bi';
 import supplierService from '../../services/supplierService';
 
 const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
 const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class|import|export|\$\w+)/i;
 
-// ==================== DANH SÁCH ====================
-const SupplierList = memo(({
-  suppliers,
-  isLoading,
-  handleShowDeleteModal,
-  handleShowEditForm,
-  pageCount,
-  currentPage,
-  handlePageChange,
-  applyFilters,
-  clearFilters,
-  filters,
-  setFilters
-}) => {
-  return (
-    <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h3 style={{ fontSize: '1.5rem', fontWeight: '600' }}>
-          Danh Sách Nhà Cung Cấp
-        </h3>
-        <Button variant="primary" onClick={() => handleShowEditForm(null)}>
-          + Thêm Nhà Cung Cấp
-        </Button>
-      </div>
-
-      <div className="mb-4 p-3 bg-light rounded border">
-        <Row className="g-3 align-items-center">
-          <Col md={4}>
-            <InputGroup>
-              <InputGroup.Text><Search size={16} /></InputGroup.Text>
-              <Form.Control
-                placeholder="Tìm tên nhà cung cấp..."
-                value={filters.search}
-                onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
-              />
-            </InputGroup>
-          </Col>
-          <Col md={3}>
-            <Form.Control
-              placeholder="Lọc theo email..."
-              value={filters.email}
-              onChange={(e) => setFilters(prev => ({ ...prev, email: e.target.value }))}
-              onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
-            />
-          </Col>
-          <Col md={3}>
-            <Form.Control
-              placeholder="Lọc theo số điện thoại..."
-              value={filters.phone}
-              onChange={(e) => setFilters(prev => ({ ...prev, phone: e.target.value }))}
-              onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
-            />
-          </Col>
-          <Col md={2} className="d-flex gap-1">
-            <Button variant="primary" size="sm" onClick={applyFilters} className="flex-fill">
-              <Filter size={16} />
-            </Button>
-            <Button variant="outline-secondary" size="sm" onClick={clearFilters} className="flex-fill">
-              <X size={16} />
-            </Button>
-          </Col>
-        </Row>
-      </div>
-
-      <div className="table-responsive">
-        <Table striped bordered hover responsive className={isLoading ? 'opacity-50' : ''}>
-          <thead className="table-light">
-            <tr>
-              <th>Mã NCC</th>
-              <th>Tên Nhà Cung Cấp</th>
-              <th>Email</th>
-              <th>Số Điện Thoại</th>
-              <th>Địa Chỉ</th>
-              <th>Mô Tả</th>
-              <th>Hành Động</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr><td colSpan="7" className="text-center py-4"><Spinner animation="border" /></td></tr>
-            ) : suppliers.length === 0 ? (
-              <tr><td colSpan="7" className="text-center py-4 text-muted">Không có dữ liệu</td></tr>
-            ) : (
-              suppliers.map((s) => (
-                <tr key={s.SupplierId}>
-                  <td><strong>{s.SupplierId}</strong></td>
-                  <td>{s.SupplierName}</td>
-                  <td>{s.ContactEmail || '—'}</td>
-                  <td>{s.ContactPhone || '—'}</td>
-                  <td>{s.Address || '—'}</td>
-                  <td title={s.Description}>
-                    {s.Description?.length > 40 ? s.Description.substring(0, 40) + '...' : s.Description || '—'}
-                  </td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <Button variant="link" size="sm" className="text-success p-0 me-2"
-                      onClick={() => handleShowEditForm(s)} title="Sửa">
-                      <PencilIcon size={18} />
-                    </Button>
-                    <Button variant="link" size="sm" className="text-danger p-0"
-                      onClick={() => handleShowDeleteModal(s.SupplierId)} title="Xóa">
-                      <Trash size={18} />
-                    </Button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </Table>
-      </div>
-
-      {pageCount > 1 && (
-        <Pagination
-          pageCount={pageCount}
-          onPageChange={handlePageChange}
-          currentPage={currentPage}
-          isLoading={isLoading}
-        />
-      )}
-    </div>
-  );
-});
-
-// ==================== FORM THÊM/SỬA ====================
-const SupplierForm = memo(({ isEditMode, supplier, onSubmit, onCancel, isLoading }) => {
-  const [errors, setErrors] = useState({});
-
-  const validateForm = useCallback((formData) => {
-    const newErrors = {};
-    let valid = true;
-
-    const name = formData.get('SupplierName')?.trim();
-    if (!name) {
-      newErrors.SupplierName = 'Vui lòng nhập tên nhà cung cấp';
-      valid = false;
-    } else if (name.length > 255) {
-      newErrors.SupplierName = 'Tên không được vượt quá 255 ký tự';
-      valid = false;
-    } else if (specialCharRegex.test(name) || codePatternRegex.test(name)) {
-      newErrors.SupplierName = 'Không được chứa ký tự đặc biệt hoặc mã code';
-      valid = false;
-    }
-
-    const email = formData.get('ContactEmail')?.trim();
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      newErrors.ContactEmail = 'Email không hợp lệ';
-      valid = false;
-    }
-
-    const phone = formData.get('ContactPhone')?.trim();
-    if (phone && !/^\+?\d{9,15}$/.test(phone.replace(/\s/g, ''))) {
-      newErrors.ContactPhone = 'Số điện thoại không hợp lệ (9-15 số)';
-      valid = false;
-    }
-
-    ['Address', 'Description'].forEach(field => {
-      const value = formData.get(field)?.trim();
-      const max = field === 'Address' ? 255 : 500;
-      if (value && value.length > max) {
-        newErrors[field] = `${field === 'Address' ? 'Địa chỉ' : 'Mô tả'} không quá ${max} ký tự`;
-        valid = false;
-      }
-      if (value && (specialCharRegex.test(value) || codePatternRegex.test(value))) {
-        newErrors[field] = 'Không được chứa ký tự đặc biệt hoặc mã code';
-        valid = false;
-      }
-    });
-
-    setErrors(newErrors);
-    return valid;
-  }, []);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    if (validateForm(fd)) onSubmit(fd);
-  };
-
-  return (
-    <div style={{ padding: '20px', backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-      <h2 className="mb-4">{isEditMode ? 'Sửa Nhà Cung Cấp' : 'Thêm Nhà Cung Cấp'}</h2>
-      <Form onSubmit={handleSubmit}>
-        <Row>
-          <Col md={6}>
-            <Form.Group className="mb-3">
-              <Form.Label>Tên Nhà Cung Cấp <span className="text-danger">*</span></Form.Label>
-              <Form.Control
-                name="SupplierName"
-                defaultValue={isEditMode ? supplier?.SupplierName : ''}
-                placeholder="Nhập tên"
-                isInvalid={!!errors.SupplierName}
-              />
-              <Form.Control.Feedback type="invalid">{errors.SupplierName}</Form.Control.Feedback>
-            </Form.Group>
-          </Col>
-          <Col md={6}>
-            <Form.Group className="mb-3">
-              <Form.Label>Email</Form.Label>
-              <Form.Control
-                name="ContactEmail"
-                type="email"
-                defaultValue={isEditMode ? supplier?.ContactEmail : ''}
-                placeholder="email@example.com"
-                isInvalid={!!errors.ContactEmail}
-              />
-              <Form.Control.Feedback type="invalid">{errors.ContactEmail}</Form.Control.Feedback>
-            </Form.Group>
-          </Col>
-        </Row>
-        <Row>
-          <Col md={6}>
-            <Form.Group className="mb-3">
-              <Form.Label>Số Điện Thoại</Form.Label>
-              <Form.Control
-                name="ContactPhone"
-                defaultValue={isEditMode ? supplier?.ContactPhone : ''}
-                placeholder="0901234567"
-                isInvalid={!!errors.ContactPhone}
-              />
-              <Form.Control.Feedback type="invalid">{errors.ContactPhone}</Form.Control.Feedback>
-            </Form.Group>
-          </Col>
-          <Col md={6}>
-            <Form.Group className="mb-3">
-              <Form.Label>Địa Chỉ</Form.Label>
-              <Form.Control
-                name="Address"
-                defaultValue={isEditMode ? supplier?.Address : ''}
-                placeholder="Nhập địa chỉ"
-                isInvalid={!!errors.Address}
-              />
-              <Form.Control.Feedback type="invalid">{errors.Address}</Form.Control.Feedback>
-            </Form.Group>
-          </Col>
-        </Row>
-        <Row>
-          <Col md={12}>
-            <Form.Group className="mb-3">
-              <Form.Label>Mô Tả</Form.Label>
-              <Form.Control
-                as="textarea"
-                name="Description"
-                rows={3}
-                defaultValue={isEditMode ? supplier?.Description : ''}
-                placeholder="Mô tả nhà cung cấp..."
-                isInvalid={!!errors.Description}
-              />
-              <Form.Control.Feedback type="invalid">{errors.Description}</Form.Control.Feedback>
-            </Form.Group>
-          </Col>
-        </Row>
-        <div className="d-flex justify-content-end gap-2 mt-4">
-          <Button variant="secondary" onClick={onCancel} disabled={isLoading}>Hủy</Button>
-          <Button variant="primary" type="submit" disabled={isLoading}>
-            {isLoading ? <Spinner size="sm" /> : isEditMode ? 'Lưu' : 'Thêm'}
-          </Button>
-        </div>
-      </Form>
-    </div>
-  );
-});
-
-// ==================== COMPONENT CHÍNH ====================
 const AdminSuppliers = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [pageCount, setPageCount] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState(null);
@@ -299,6 +36,7 @@ const AdminSuppliers = () => {
       const cached = cache.current.get(key);
       setSuppliers(cached.data);
       setPageCount(cached.last_page);
+      setTotalItems(cached.total || 0);
       setCurrentPage(page - 1);
       return;
     }
@@ -306,9 +44,14 @@ const AdminSuppliers = () => {
     try {
       setIsLoading(true);
       const res = await supplierService.getAll(page, query);
-      cache.current.set(key, { data: res.data, last_page: res.last_page });
+      cache.current.set(key, {
+        data: res.data,
+        last_page: res.last_page,
+        total: res.total || 0
+      });
       setSuppliers(res.data);
       setPageCount(res.last_page);
+      setTotalItems(res.total || 0);
       setCurrentPage(page - 1);
     } catch (err) {
       showToast('error', err.message || 'Lỗi tải dữ liệu nhà cung cấp');
@@ -334,10 +77,10 @@ const AdminSuppliers = () => {
     fetchSuppliers(1);
   }, [fetchSuppliers]);
 
-  const handleDelete = useCallback(async (id) => {
+  const handleDelete = useCallback(async (supplier) => {
     try {
       setIsLoading(true);
-      const res = await supplierService.delete(id);
+      const res = await supplierService.delete(supplier.SupplierId);
       showToast('success', res.message || 'Xóa thành công');
       cache.current.clear();
       fetchSuppliers(currentPage + 1 || 1, filterParams);
@@ -407,6 +150,11 @@ const AdminSuppliers = () => {
     setEditSupplier(null);
   }, []);
 
+  const handleShowDeleteModal = useCallback((supplier) => {
+    setSupplierToDelete(supplier);
+    setShowDeleteModal(true);
+  }, []);
+
   const handlePageChange = useCallback(({ selected }) => {
     fetchSuppliers(selected + 1, filterParams);
   }, [fetchSuppliers, filterParams]);
@@ -417,51 +165,390 @@ const AdminSuppliers = () => {
     }
   }, [currentView, filterParams, fetchSuppliers]);
 
+  // Validate form function
+  const validateForm = (formData) => {
+    const errors = {};
+    let valid = true;
+
+    const name = formData.get('SupplierName')?.trim();
+    if (!name) {
+      errors.SupplierName = 'Vui lòng nhập tên nhà cung cấp';
+      valid = false;
+    } else if (name.length > 255) {
+      errors.SupplierName = 'Tên không được vượt quá 255 ký tự';
+      valid = false;
+    } else if (specialCharRegex.test(name) || codePatternRegex.test(name)) {
+      errors.SupplierName = 'Không được chứa ký tự đặc biệt hoặc mã code';
+      valid = false;
+    }
+
+    const email = formData.get('ContactEmail')?.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.ContactEmail = 'Email không hợp lệ';
+      valid = false;
+    }
+
+    const phone = formData.get('ContactPhone')?.trim();
+    if (phone && !/^\+?\d{9,15}$/.test(phone.replace(/\s/g, ''))) {
+      errors.ContactPhone = 'Số điện thoại không hợp lệ (9-15 số)';
+      valid = false;
+    }
+
+    ['Address', 'Description'].forEach(field => {
+      const value = formData.get(field)?.trim();
+      const max = field === 'Address' ? 255 : 500;
+      if (value && value.length > max) {
+        errors[field] = `${field === 'Address' ? 'Địa chỉ' : 'Mô tả'} không quá ${max} ký tự`;
+        valid = false;
+      }
+      if (value && (specialCharRegex.test(value) || codePatternRegex.test(value))) {
+        errors[field] = 'Không được chứa ký tự đặc biệt hoặc mã code';
+        valid = false;
+      }
+    });
+
+    return { errors, valid };
+  };
+
+  // Render form modal
+  const renderFormModal = () => {
+    if (currentView !== 'add' && currentView !== 'edit') return null;
+
+    const isEditMode = currentView === 'edit';
+    const [errors, setErrors] = useState({});
+
+    const handleFormSubmit = (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const { errors: formErrors, valid } = validateForm(fd);
+      setErrors(formErrors);
+
+      if (valid) {
+        if (isEditMode) {
+          handleEditSupplier(fd);
+        } else {
+          handleAddSupplier(fd);
+        }
+      }
+    };
+
+    const modalLayout = (title, body, maxWidth = '700px') => (
+      <>
+        <div className="modal-backdrop fade show"></div>
+        <div className="modal fade show d-block" tabIndex="-1" onClick={handleCancelForm}>
+          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth }} onClick={e => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg">
+              <div className="modal-header">
+                <h5 className="modal-title fw-semibold">{title}</h5>
+                <button type="button" className="btn-close" onClick={handleCancelForm}></button>
+              </div>
+              <div className="modal-body">{body}</div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+
+    return modalLayout(
+      isEditMode ? 'Cập Nhật Thông Tin Nhà Cung Cấp' : 'Thêm Nhà Cung Cấp Mới',
+      <form onSubmit={handleFormSubmit}>
+        <div className="row g-3">
+          <div className="col-12">
+            <div className="mb-3">
+              <label className="form-label">
+                Tên nhà cung cấp <span className="text-danger">*</span>
+              </label>
+              <input
+                type="text"
+                name="SupplierName"
+                className={`form-control ${errors.SupplierName ? 'is-invalid' : ''}`}
+                defaultValue={isEditMode ? editSupplier?.SupplierName : ''}
+                placeholder="Nhập tên nhà cung cấp..."
+              />
+              {errors.SupplierName && <div className="invalid-feedback">{errors.SupplierName}</div>}
+            </div>
+          </div>
+          <div className="col-md-6">
+            <div className="mb-3">
+              <label className="form-label">Email</label>
+              <input
+                type="email"
+                name="ContactEmail"
+                className={`form-control ${errors.ContactEmail ? 'is-invalid' : ''}`}
+                defaultValue={isEditMode ? editSupplier?.ContactEmail : ''}
+                placeholder="email@example.com"
+              />
+              {errors.ContactEmail && <div className="invalid-feedback">{errors.ContactEmail}</div>}
+            </div>
+          </div>
+          <div className="col-md-6">
+            <div className="mb-3">
+              <label className="form-label">Số điện thoại</label>
+              <input
+                type="text"
+                name="ContactPhone"
+                className={`form-control ${errors.ContactPhone ? 'is-invalid' : ''}`}
+                defaultValue={isEditMode ? editSupplier?.ContactPhone : ''}
+                placeholder="0901234567"
+              />
+              {errors.ContactPhone && <div className="invalid-feedback">{errors.ContactPhone}</div>}
+            </div>
+          </div>
+          <div className="col-12">
+            <div className="mb-3">
+              <label className="form-label">Địa chỉ</label>
+              <input
+                type="text"
+                name="Address"
+                className={`form-control ${errors.Address ? 'is-invalid' : ''}`}
+                defaultValue={isEditMode ? editSupplier?.Address : ''}
+                placeholder="Nhập địa chỉ..."
+              />
+              {errors.Address && <div className="invalid-feedback">{errors.Address}</div>}
+            </div>
+          </div>
+          <div className="col-12">
+            <div className="mb-3">
+              <label className="form-label">Mô tả</label>
+              <textarea
+                name="Description"
+                className={`form-control ${errors.Description ? 'is-invalid' : ''}`}
+                rows="3"
+                defaultValue={isEditMode ? editSupplier?.Description : ''}
+                placeholder="Nhập mô tả nhà cung cấp..."
+              />
+              {errors.Description && <div className="invalid-feedback">{errors.Description}</div>}
+            </div>
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="btn btn-secondary" onClick={handleCancelForm} disabled={isLoading}>Hủy</button>
+          <button type="submit" className="btn btn-primary" disabled={isLoading}>
+            {isLoading ? 'Đang xử lý...' : (isEditMode ? 'Cập Nhật' : 'Thêm Mới')}
+          </button>
+        </div>
+      </form>
+    );
+  };
+
+  // Render delete modal
+  const renderDeleteModal = () => {
+    if (!showDeleteModal) return null;
+
+    return (
+      <>
+        <div className="modal-backdrop fade show"></div>
+        <div className="modal fade show d-block" tabIndex="-1" onClick={() => setShowDeleteModal(false)}>
+          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '450px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg">
+              <div className="modal-header">
+                <h5 className="modal-title fw-semibold">Xác Nhận Xóa</h5>
+                <button type="button" className="btn-close" onClick={() => setShowDeleteModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                <p>Bạn có chắc chắn muốn xóa nhà cung cấp <strong>"{supplierToDelete?.SupplierName}"</strong>?</p>
+                <p className="text-muted small">Không thể xóa nếu có phiếu nhập kho liên quan.</p>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>Hủy</button>
+                <button className="btn btn-danger" onClick={() => handleDelete(supplierToDelete)} disabled={isLoading}>
+                  {isLoading ? 'Đang xóa...' : 'Xác Nhận Xóa'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  };
+
   return (
     <div className="d-flex">
-      <div className="position-relative w-100 flex-grow-1 ms-5 p-4">
-        <h1 className="mb-4" style={{ fontSize: '1.8rem', fontWeight: '600' }}>
-          Quản Lý Nhà Cung Cấp
-        </h1>
-
-        {currentView === 'list' && (
-          <SupplierList
-            suppliers={suppliers}
-            isLoading={isLoading}
-            handleShowDeleteModal={(id) => { setSupplierToDelete(id); setShowDeleteModal(true); }}
-            handleShowEditForm={handleShowEditForm}
-            pageCount={pageCount}
-            currentPage={currentPage}
-            handlePageChange={handlePageChange}
-            applyFilters={applyFilters}
-            clearFilters={clearFilters}
-            filters={filters}
-            setFilters={setFilters}
-          />
-        )}
-
-        {(currentView === 'add' || currentView === 'edit') && (
-          <SupplierForm
-            isEditMode={currentView === 'edit'}
-            supplier={editSupplier}
-            onSubmit={currentView === 'add' ? handleAddSupplier : handleEditSupplier}
-            onCancel={handleCancelForm}
-            isLoading={isLoading}
-          />
-        )}
-
-        <ConfirmDeleteModal
-          isOpen={showDeleteModal}
-          title="Xác nhận xóa"
-          message="Không thể xóa nếu có phiếu nhập kho liên quan."
-          onConfirm={() => handleDelete(supplierToDelete)}
-          onCancel={() => setShowDeleteModal(false)}
-        />
-
+      <main className="main-content flex-grow-1 p-4 d-flex flex-column gap-4">
         {toast.show && (
           <CustomToast type={toast.type} message={toast.message} onClose={hideToast} />
         )}
-      </div>
+
+        <header className="d-flex justify-content-between align-items-center flex-shrink-0">
+          <h1 className="h4 mb-0">Quản Lý Nhà Cung Cấp</h1>
+          <button
+            className="btn btn-primary d-flex align-items-center gap-2"
+            onClick={() => handleShowEditForm(null)}
+            disabled={isLoading}
+          >
+            <BiPlus size={18} /> Thêm Nhà Cung Cấp
+          </button>
+        </header>
+
+        {currentView === 'list' && (
+          <>
+            {/* Bộ lọc - GIỐNG ADMIN SERVICE */}
+            <div className="card shadow-sm border-0 flex-shrink-0">
+              <div className="card-body p-4">
+                <div className="row g-3">
+                  <div className="col-md-4">
+                    <div className="input-group">
+                      <span className="input-group-text">
+                        <BiSearch />
+                      </span>
+                      <input
+                        type="text"
+                        name="search"
+                        className="form-control"
+                        placeholder="Tìm theo tên nhà cung cấp..."
+                        value={filters.search}
+                        onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                        onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                        disabled={isLoading}
+                      />
+                    </div>
+                  </div>
+                  <div className="col-md-3">
+                    <input
+                      type="text"
+                      name="email"
+                      className="form-control"
+                      placeholder="Lọc theo email..."
+                      value={filters.email}
+                      onChange={(e) => setFilters(prev => ({ ...prev, email: e.target.value }))}
+                      onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <div className="col-md-3">
+                    <input
+                      type="text"
+                      name="phone"
+                      className="form-control"
+                      placeholder="Lọc theo số điện thoại..."
+                      value={filters.phone}
+                      onChange={(e) => setFilters(prev => ({ ...prev, phone: e.target.value }))}
+                      onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <div className="col-md-2">
+                    <button
+                      className="btn btn-outline-secondary w-100 h-100"
+                      onClick={clearFilters}
+                      disabled={isLoading}
+                    >
+                      Xóa lọc
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bảng dữ liệu - GIỐNG ADMIN SERVICE */}
+            <div className="card shadow-sm border-0 table-panel flex-grow-1">
+              {isLoading ? (
+                <Loading isLoading={isLoading} />
+              ) : (
+                <>
+                  <div className="d-flex justify-content-between align-items-center p-4 border-bottom">
+                    <h6 className="mb-0 text-muted">
+                      Tổng cộng: <strong>{totalItems}</strong> nhà cung cấp
+                    </h6>
+                    <small className="text-muted">
+                      Trang {currentPage + 1} / {pageCount}
+                    </small>
+                  </div>
+
+                  <div className="table-responsive-container">
+                    <table className="table table-hover clinic-table mb-0">
+                      <thead className="p-4">
+                        <tr>
+                          <th className="px-4">Mã NCC</th>
+                          <th>Tên Nhà Cung Cấp</th>
+                          <th>Email</th>
+                          <th>Số Điện Thoại</th>
+                          <th>Địa Chỉ</th>
+                          <th>Mô Tả</th>
+                          <th className="text-center px-4">Hành Động</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {suppliers.length > 0 ? suppliers.map(supplier => (
+                          <tr key={supplier.SupplierId}>
+                            <td className="px-4">
+                              <span className='user-id'>{`#${supplier.SupplierId}`}</span>
+                            </td>
+                            <td className="fw-semibold">{supplier.SupplierName}</td>
+                            <td>{supplier.ContactEmail || '—'}</td>
+                            <td>{supplier.ContactPhone || '—'}</td>
+                            <td>
+                              <div
+                                className="text-truncate"
+                                style={{ maxWidth: '150px' }}
+                                title={supplier.Address}
+                              >
+                                {supplier.Address || '—'}
+                              </div>
+                            </td>
+                            <td>
+                              <div
+                                className="text-truncate"
+                                style={{ maxWidth: '200px' }}
+                                title={supplier.Description}
+                              >
+                                {supplier.Description || '—'}
+                              </div>
+                            </td>
+                            <td className="text-center px-4">
+                              <div className="d-flex gap-2 justify-content-center">
+                                <button
+                                  className="btn btn-lg btn-light"
+                                  title="Sửa"
+                                  onClick={() => handleShowEditForm(supplier)}
+                                  disabled={isLoading}
+                                >
+                                  <BiPencil />
+                                </button>
+                                <button
+                                  className="btn btn-lg btn-light text-danger"
+                                  title="Xóa"
+                                  onClick={() => handleShowDeleteModal(supplier)}
+                                  disabled={isLoading}
+                                >
+                                  <BiTrash />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )) : (
+                          <tr>
+                            <td colSpan="7" className="text-center p-5 text-muted">
+                              <BiSearch size={48} className="mb-3 opacity-50" />
+                              <p className="mb-0 fs-5">Không tìm thấy nhà cung cấp</p>
+                              <small>Thử thay đổi bộ lọc hoặc thêm nhà cung cấp mới</small>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* PHÂN TRANG */}
+                  {pageCount > 1 && (
+                    <div className="card-footer p-3 border-0 flex-shrink-0">
+                      <Pagination
+                        pageCount={pageCount}
+                        onPageChange={handlePageChange}
+                        currentPage={currentPage}
+                        isLoading={isLoading}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </>
+        )}
+
+        {renderFormModal()}
+        {renderDeleteModal()}
+      </main>
     </div>
   );
 };

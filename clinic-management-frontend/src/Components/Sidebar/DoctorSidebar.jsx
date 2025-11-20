@@ -2,8 +2,10 @@
 import React from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { path } from "../../utils/constant";
+import { useUser } from "../../context/userContext";
 
 const DoctorSidebar = () => {
+   const {handleLogout } = useUser();
   return (
     <div className="d-flex" style={{ minHeight: "100vh" }}>
       {/* Sidebar */}
@@ -87,20 +89,15 @@ const DoctorSidebar = () => {
             </div>
             
             {/* Logout */}
-            <div className="nav-item mt-auto">
-              <NavLink 
-                to="/logout"
-                className="nav-link py-3 px-3 rounded d-flex align-items-center text-white transition-all"
-                style={{ 
-                  background: 'transparent', 
-                  border: 'none',
-                  textDecoration: 'none'
-                }}
+            <li className="border-top mt-auto pt-3">
+              <button
+                onClick={handleLogout}
+                className="nav-item logout-btn"
               >
-                <i className="fa-solid fa-right-from-bracket me-3" style={{ width: '20px' }}></i>
-                <span className="fw-medium">Đăng Xuất</span>
-              </NavLink>
-            </div>
+                <i className="fa-solid fa-right-from-bracket"></i>
+                Đăng Xuất
+              </button>
+            </li>
           </div>
         </nav>
       </div>
