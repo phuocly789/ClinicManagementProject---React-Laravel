@@ -2,6 +2,7 @@ import React from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import "../../App.css";
 import { useUser } from "../../context/userContext";
+
 const TechnicianSidebar = () => {
   const { handleLogout } = useUser();
   const { user } = useUser();

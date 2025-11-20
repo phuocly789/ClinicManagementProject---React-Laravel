@@ -1,6 +1,7 @@
 // PDFEditorPage.jsx - COMPLETE VERSION WITH ALL FEATURES
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Form, Spinner, Alert, Modal, Tab, Tabs } from 'react-bootstrap';
+import { printPdfService } from '../../../services/printPdfService';
 
 // Utility functions
 const numberToVietnameseWords = (num) => {
@@ -49,7 +50,7 @@ const formatNumber = (n) => {
 };
 
 const PDFEditorPage = () => {
-  const API_BASE_URL = 'http://localhost:8000';
+
 
   // State chính
   const [type, setType] = useState('prescription');
@@ -66,7 +67,7 @@ const PDFEditorPage = () => {
     diagnosis: 'Viêm họng cấp',
     instructions: 'Uống thuốc theo chỉ dẫn. Tái khám nếu cần.',
     invoiceCode: 'HD001',
-    paymentMethod: 'cash',
+    paymentMethod: '',
     paymentStatus: 'paid',
     discount: 0,
     tax: 10,
@@ -88,6 +89,24 @@ const PDFEditorPage = () => {
   const [error, setError] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [isSavingLogo, setIsSavingLogo] = useState(false);
+
+  const fixAssetUrl = (url) => {
+    if (!url) return '';
+
+    // Nếu là base64, giữ nguyên
+    if (url.startsWith('data:image')) return url;
+
+    // Nếu là absolute URL, giữ nguyên  
+    if (url.startsWith('http')) return url;
+
+    // Nếu là relative path, thêm origin
+    if (url.startsWith('/')) {
+      return `${window.location.origin}${url}`;
+    }
+
+    // Fallback: coi như filename trong temp_logo
+    return `${window.location.origin}/temp_logo/${url}`;
+  };
 
   // Cài đặt PDF
   const [pdfSettings, setPdfSettings] = useState({
@@ -187,7 +206,7 @@ const PDFEditorPage = () => {
     try {
       // 🔄 REAL-TIME UPDATES: Thay thế các biến dynamic trong HTML
       const replacements = {
-        // Clinic info
+        // Clinic info - CÁC BIẾN BLADE HIỆN TẠI
         '{{pdf_settings\\.customTitle}}': pdfSettings.customTitle || 'PHIẾU CHỈ ĐỊNH DỊCH VỤ',
         '{{pdf_settings\\.clinicName}}': pdfSettings.clinicName || 'PHÒNG KHÁM ĐA KHOA XYZ',
         '{{pdf_settings\\.clinicAddress}}': pdfSettings.clinicAddress || '',
@@ -216,7 +235,42 @@ const PDFEditorPage = () => {
         '{{payment_method}}': formData.paymentMethod === 'cash' ? 'Tiền mặt' :
           formData.paymentMethod === 'momo' ? 'MoMo' :
             formData.paymentMethod === 'napas' ? 'Thẻ napas' : 'Tiền mặt',
-        '{{payment_status}}': 'Đã thanh toán'
+        '{{payment_status}}': 'Đã thanh toán',
+
+        // 🔥 THÊM CÁC BIẾN BLADE TRONG CSS VÀ HTML - SỬA LẠI REGEX
+        // CSS Variables - SỬ DỤNG REGEX ĐƠN GIẢN HƠN
+        '\\{\\{ \\$pdf_settings\\[\\\'fontFamily\\\'\\] \\?\\? \\\'Times New Roman\\\' \\}\\}': pdfSettings.fontFamily || 'Times New Roman',
+        '\\{\\{ \\$pdf_settings\\[\\\'fontSize\\\'\\] \\?\\? \\\'12px\\\' \\}\\}': pdfSettings.fontSize || '12px',
+        '\\{\\{ \\$pdf_settings\\[\\\'fontColor\\\'\\] \\?\\? \\\'#000000\\\' \\}\\}': pdfSettings.fontColor || '#000000',
+        '\\{\\{ \\$pdf_settings\\[\\\'fontStyle\\\'\\] \\?\\? \\\'normal\\\' \\}\\}': pdfSettings.fontStyle || 'normal',
+        '\\{\\{ \\$pdf_settings\\[\\\'fontWeight\\\'\\] \\?\\? \\\'normal\\\' \\}\\}': pdfSettings.fontWeight || 'normal',
+        '\\{\\{ \\$pdf_settings\\[\\\'lineHeight\\\'\\] \\?\\? 1\\.3 \\}\\}': pdfSettings.lineHeight || 1.3,
+        '\\{\\{ \\$pdf_settings\\[\\\'borderColor\\\'\\] \\?\\? \\\'#333\\\' \\}\\}': pdfSettings.borderColor || '#333',
+        '\\{\\{ \\$pdf_settings\\[\\\'backgroundColor\\\'\\] \\?\\? \\\'#ffffff\\\' \\}\\}': pdfSettings.backgroundColor || '#ffffff',
+        '\\{\\{ \\$pdf_settings\\[\\\'headerBgColor\\\'\\] \\?\\? \\\'transparent\\\' \\}\\}': pdfSettings.headerBgColor || 'transparent',
+        '\\{\\{ \\$pdf_settings\\[\\\'primaryColor\\\'\\] \\?\\? \\\'#2c5aa0\\\' \\}\\}': pdfSettings.primaryColor || '#2c5aa0',
+
+        // Watermark variables - SỬA LẠI CÁC BIẾN NÀY
+        '\\{\\{ isset\\(\\$watermark_data\\[\\\'rotation\\\'\\]\\) \\? \\$watermark_data\\[\\\'rotation\\\'\\] : -45 \\}\\}': pdfSettings.watermark.rotation || -45,
+        '\\{\\{ isset\\(\\$watermark_data\\[\\\'fontSize\\\'\\]\\) \\? \\$watermark_data\\[\\\'fontSize\\\'\\] : 50 \\}\\}': pdfSettings.watermark.fontSize || 50,
+        '\\{\\{ isset\\(\\$watermark_data\\[\\\'color\\\'\\]\\) \\? \\$watermark_data\\[\\\'color\\\'\\] : \\\'rgba\\(0, 0, 0, 0\\.08\\)\\\' \\}\\}': pdfSettings.watermark.color || 'rgba(0, 0, 0, 0.08)',
+        '\\{\\{ isset\\(\\$watermark_data\\[\\\'opacity\\\'\\]\\) \\? \\$watermark_data\\[\\\'opacity\\\'\\] : 0\\.8 \\}\\}': pdfSettings.watermark.opacity || 0.8,
+
+        // Logo variables
+        '\\{\\{ isset\\(\\$logo_data\\[\\\'width\\\'\\]\\) \\? \\$logo_data\\[\\\'width\\\'\\] : \\\'60px\\\' \\}\\}': pdfSettings.logo.width || '60px',
+        '\\{\\{ isset\\(\\$logo_data\\[\\\'height\\\'\\]\\) \\? \\$logo_data\\[\\\'height\\\'\\] : \\\'60px\\\' \\}\\}': pdfSettings.logo.height || '60px',
+        '\\{\\{ isset\\(\\$logo_data\\[\\\'opacity\\\'\\]\\) \\? \\$logo_data\\[\\\'opacity\\\'\\] : 0\\.8 \\}\\}': pdfSettings.logo.opacity || 0.8,
+
+        // Other template variables
+        '\\{\\{ \\$title \\?\\? \\\'TOA THUỐC\\\' \\}\\}': pdfSettings.customTitle || 'TOA THUỐC',
+        '\\{\\{ \\$clinic_name \\?\\? \\\'Phòng Khám Đa Khoa VitaCare\\\' \\}\\}': pdfSettings.clinicName || 'Phòng Khám Đa Khoa VitaCare',
+        '\\{\\{ \\$clinic_address \\?\\? \\\'123 Đường Sức Khỏe, Phường An Lành, Quận Bình Yên, TP\\. Hồ Chí Minh\\\' \\}\\}': pdfSettings.clinicAddress || '123 Đường Sức Khỏe, Phường An Lành, Quận Bình Yên, TP. Hồ Chí Minh',
+        '\\{\\{ \\$clinic_phone \\?\\? \\\'\\(028\\) 3812 3456\\\' \\}\\}': pdfSettings.clinicPhone || '(028) 3812 3456',
+        '\\{\\{ \\$medical_record_code \\?\\? \\\'AUTO\\\' \\}\\}': formData.code || 'AUTO',
+        '\\{\\{ \\$appointment_date \\?\\? date\\(\\\'d/m/Y\\\'\\) \\}\\}': new Date(formData.date).toLocaleDateString('vi-VN') || new Date().toLocaleDateString('vi-VN'),
+        '\\{\\{ \\$appointment_time \\?\\? date\\(\\\'H:i\\\'\\) \\}\\}': new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        '\\{\\{ \\$doctor_name \\?\\? \\\'Bác sĩ chưa rõ\\\' \\}\\}': formData.doctor || 'Bác sĩ chưa rõ',
+        '\\{\\{ \\$pdf_settings\\[\\\'customNote\\\'\\] \\}\\}': pdfSettings.customNote || 'Tuân thủ đúng liều lượng và thời gian sử dụng thuốc. Tái khám theo lịch hẹn của bác sĩ.'
       };
 
       // Thực hiện tất cả replacements
@@ -225,84 +279,133 @@ const PDFEditorPage = () => {
         enhancedHTML = enhancedHTML.replace(regex, value);
       });
 
-      // 🔥 THÊM DYNAMIC STYLES CHO REAL-TIME UPDATES
-      const dynamicStyles = `
+      // 🔥 THÊM PHẦN XỬ LÝ ĐẶC BIỆT CHO WATERMARK VÀ FONT
+      // Xử lý watermark - THÊM STYLE TRỰC TIẾP
+      if (pdfSettings.watermark.enabled) {
+        const watermarkStyle = `
         <style>
-          /* 🔄 REAL-TIME STYLES */
-          body {
-            font-family: ${pdfSettings.fontFamily || 'Times New Roman'} !important;
-            font-size: ${pdfSettings.fontSize || '14px'} !important;
-            color: ${pdfSettings.fontColor || '#000000'} !important;
-            background-color: ${pdfSettings.backgroundColor || '#ffffff'} !important;
-            line-height: ${pdfSettings.lineHeight || 1.5} !important;
-          }
-          
-          .header h2 {
-            color: ${pdfSettings.primaryColor || '#2c5aa0'} !important;
-            font-weight: ${pdfSettings.fontWeight || 'bold'} !important;
-            font-style: ${pdfSettings.fontStyle || 'normal'} !important;
-          }
-          
-          .section-title {
-            background-color: ${pdfSettings.primaryColor || '#2c5aa0'} !important;
-            color: white !important;
-          }
-          
-          /* 🔄 REAL-TIME LOGO */
-          .logo-img {
-            width: ${pdfSettings.logo.width || '80px'} !important;
-            height: ${pdfSettings.logo.height || '80px'} !important;
-            opacity: ${pdfSettings.logo.opacity || 1} !important;
-            display: ${pdfSettings.logo.enabled && pdfSettings.logo.url ? 'block' : 'none'} !important;
-            position: ${pdfSettings.logo.position || 'absolute'} !important;
-            ${pdfSettings.logo.position === 'left' ? 'left: 20px;' : ''}
-            ${pdfSettings.logo.position === 'right' ? 'right: 20px;' : ''}
-            ${pdfSettings.logo.position === 'center' ? 'left: 50%; transform: translateX(-50%);' : ''}
-            top: ${pdfSettings.logo.marginTop || '0px'} !important;
-          }
-          
-          /* 🔥 FIX: Cập nhật logo URL */
-          .logo-img[src] {
-            src: url("${pdfSettings.logo.url}") !important;
-          }
-          
-          /* 🔄 REAL-TIME WATERMARK */
           .watermark-text, .watermark-image {
-            opacity: ${pdfSettings.watermark.opacity || 0.1} !important;
-            color: ${pdfSettings.watermark.color || '#cccccc'} !important;
-            font-size: ${pdfSettings.watermark.fontSize || 48}px !important;
-            transform: translate(-50%, -50%) rotate(${pdfSettings.watermark.rotation || -45}deg) !important;
-            display: ${pdfSettings.watermark.enabled ? 'block' : 'none'} !important;
-          }
-          
-          /* 🔥 FIX: Cập nhật watermark image URL */
-          .watermark-image[src] {
-            src: url("${pdfSettings.watermark.url}") !important;
-            width: ${pdfSettings.watermark.width || '200px'} !important;
-            height: ${pdfSettings.watermark.height || '200px'} !important;
-          }
-          
-          table th {
-            background-color: ${pdfSettings.headerBgColor || '#f0f0f0'} !important;
-            border-color: ${pdfSettings.borderColor || '#333333'} !important;
-          }
-          
-          table td {
-            border-color: ${pdfSettings.borderColor || '#333333'} !important;
-          }
-          
-          .page {
-            border-color: ${pdfSettings.borderColor || '#333333'} !important;
+            opacity: ${pdfSettings.watermark.opacity} !important;
+            color: ${pdfSettings.watermark.color} !important;
+            font-size: ${pdfSettings.watermark.fontSize}px !important;
+            transform: translate(-50%, -50%) rotate(${pdfSettings.watermark.rotation}deg) !important;
+            z-index: -1 !important;
+            font-weight: 700 !important;
           }
         </style>
       `;
 
-      // Chèn styles vào head
-      if (enhancedHTML.includes('</head>')) {
-        enhancedHTML = enhancedHTML.replace('</head>', dynamicStyles + '</head>');
-      } else {
-        enhancedHTML = dynamicStyles + enhancedHTML;
+        // Thêm style vào head
+        if (enhancedHTML.includes('</head>')) {
+          enhancedHTML = enhancedHTML.replace('</head>', watermarkStyle + '</head>');
+        }
       }
+
+      // 🔥 THÊM DYNAMIC STYLES OVERRIDE - ĐÈ LÊN CSS CŨ
+      const dynamicStylesOverride = `
+      <style>
+        /* 🔥 OVERRIDE TẤT CẢ STYLES VỚI !important */
+        body {
+          font-family: ${pdfSettings.fontFamily || 'Times New Roman'} !important;
+          font-size: ${pdfSettings.fontSize || '12px'} !important;
+          color: ${pdfSettings.fontColor || '#000000'} !important;
+          background-color: ${pdfSettings.backgroundColor || '#ffffff'} !important;
+          line-height: ${pdfSettings.lineHeight || 1.3} !important;
+          font-style: ${pdfSettings.fontStyle || 'normal'} !important;
+          font-weight: ${pdfSettings.fontWeight || 'normal'} !important;
+        }
+        
+        .header h2 {
+          color: ${pdfSettings.primaryColor || '#2c5aa0'} !important;
+          font-weight: ${pdfSettings.fontWeight || 'bold'} !important;
+          font-style: ${pdfSettings.fontStyle || 'normal'} !important;
+        }
+        
+        .section-title {
+          background-color: ${pdfSettings.primaryColor || '#2c5aa0'} !important;
+          color: white !important;
+          font-style: ${pdfSettings.fontStyle || 'normal'} !important;
+          font-weight: ${pdfSettings.fontWeight || 'bold'} !important;
+        }
+        
+        .title h3 {
+          color: ${pdfSettings.primaryColor || '#2c5aa0'} !important;
+          font-weight: ${pdfSettings.fontWeight || 'bold'} !important;
+          font-style: ${pdfSettings.fontStyle || 'normal'} !important;
+        }
+        
+        .header p,
+        .info p,
+        table,
+        table th,
+        table td,
+        .footer p,
+        .money-in-words,
+        .money-label,
+        .money-words,
+        .diagnosis-info,
+        .note {
+          font-family: ${pdfSettings.fontFamily || 'Times New Roman'} !important;
+          font-size: ${pdfSettings.fontSize || '12px'} !important;
+          font-style: ${pdfSettings.fontStyle || 'normal'} !important;
+          font-weight: ${pdfSettings.fontWeight || 'normal'} !important;
+          color: ${pdfSettings.fontColor || '#000000'} !important;
+          line-height: ${pdfSettings.lineHeight || 1.3} !important;
+        }
+        
+        table th {
+          background-color: ${pdfSettings.headerBgColor || '#f0f0f0'} !important;
+          border-color: ${pdfSettings.borderColor || '#333333'} !important;
+        }
+        
+        table td {
+          border-color: ${pdfSettings.borderColor || '#333333'} !important;
+        }
+        
+        .page {
+          border-color: ${pdfSettings.borderColor || '#333333'} !important;
+          background-color: ${pdfSettings.backgroundColor || '#ffffff'} !important;
+        }
+      </style>
+    `;
+
+      // Chèn override styles vào CUỐI CÙNG của head
+      if (enhancedHTML.includes('</head>')) {
+        enhancedHTML = enhancedHTML.replace('</head>', dynamicStylesOverride + '</head>');
+      }
+
+      // 🔥 XỬ LÝ CÁC BLADE DIRECTIVES ĐẶC BIỆT
+      // Xử lý @if @endif cho watermark
+      if (pdfSettings.watermark.enabled) {
+        const watermarkHTML = pdfSettings.watermark.url ?
+          `<img src="${pdfSettings.watermark.url}" class="watermark-image" style="width: ${pdfSettings.watermark.width || '200px'}; height: ${pdfSettings.watermark.height || '200px'}; opacity: ${pdfSettings.watermark.opacity || 0.1};" alt="Watermark">` :
+          `<div class="watermark-text" style="opacity: ${pdfSettings.watermark.opacity || 0.1}; color: ${pdfSettings.watermark.color || '#cccccc'}; font-size: ${pdfSettings.watermark.fontSize || 48}px; transform: translate(-50%, -50%) rotate(${pdfSettings.watermark.rotation || -45}deg);">${pdfSettings.watermark.text || 'MẪU BẢN QUYỀN'}</div>`;
+
+        enhancedHTML = enhancedHTML.replace(
+          /<!-- WATERMARK -->[\s\S]*?<!-- HEADER -->/,
+          `<!-- WATERMARK -->\n${watermarkHTML}\n\n<!-- HEADER -->`
+        );
+      } else {
+        enhancedHTML = enhancedHTML.replace(
+          /<!-- WATERMARK -->[\s\S]*?<!-- HEADER -->/,
+          '<!-- WATERMARK -->\n\n<!-- HEADER -->'
+        );
+      }
+
+      // Xử lý @if @endif cho logo
+      if (pdfSettings.logo.enabled && pdfSettings.logo.url) {
+        enhancedHTML = enhancedHTML.replace(
+          /<div class="logo-section">[\s\S]*?<\\/div
+            `<div class="logo-section">\n<img src="${pdfSettings.logo.url}" class="logo-img" alt="Clinic Logo" style="width: ${pdfSettings.logo.width || '60px'}; height: ${pdfSettings.logo.height || '60px'}; opacity: ${pdfSettings.logo.opacity || 0.8};">\n</div>`
+        );
+      }
+
+      console.log('✅ Template processed with settings:', {
+        fontFamily: pdfSettings.fontFamily,
+        fontSize: pdfSettings.fontSize,
+        watermarkOpacity: pdfSettings.watermark.opacity,
+        watermarkFontSize: pdfSettings.watermark.fontSize
+      });
 
     } catch (error) {
       console.error('❌ Error in createEnhancedHTML:', error);
@@ -390,8 +493,15 @@ const PDFEditorPage = () => {
           console.log('🚨 PROCESSING NAVIGATION STATE FROM PRESCRIPTION');
           await handleNavigationState(locationState);
           return;
+        } else if (locationState.source == 'invoice') {
+          console.log('🚨 PROCESSING NAVIGATION STATE FROM payments');
+          await handleNavigationState(locationState);
+          return;
+        } else if (locationState?.source === 'technician') {
+          console.log('🚨 PROCESSING NAVIGATION STATE FROM TECHNICIAN');
+          await handleNavigationState(locationState);
+          return;
         }
-
         // 2. XỬ LÝ PDF SETTINGS
         if (savedSettings) {
           try {
@@ -465,6 +575,10 @@ const PDFEditorPage = () => {
         else if (editorSource === 'prescription') {
           console.log('💊 Processing PRESCRIPTION from sessionStorage');
           await handlePrescriptionData(pdfEditorDataRaw, pdfHTMLTemplate);
+        } else if (editorSource === 'technician') {
+          console.log('🔬 Processing TECHNICIAN from sessionStorage');
+          await handleTechnicianData(pdfEditorDataRaw, pdfHTMLTemplate);
+          return;
         }
         else {
           console.log('🔍 No specific editor source, using default data');
@@ -523,19 +637,26 @@ const PDFEditorPage = () => {
       console.log('🎯 Handling Navigation State:', {
         source: state.source,
         hasPdfData: !!state.pdfData,
-        hasServices: !!state.services,
-        hasPatientInfo: !!state.patientInfo
+        hasServices: !!state.pdfData?.services,  // ✅ SỬA: state.pdfData.services
+        hasPatientInfo: !!state.patientInfo,
+        servicesCount: state.pdfData?.services?.length || 0,  // ✅ SỬA
+        servicesArray: state.pdfData?.services || 'no services',  // ✅ SỬA
+        prescriptionsCount: state.pdfData?.prescriptions?.length || 0,
+        // 🔥 THÊM DEBUG CHI TIẾT
+        pdfData: state.pdfData ? state.pdfData : 'no pdfData',
+        servicesArray: state.pdfData?.services || 'no services',
+        prescriptionsArray: state.pdfData?.prescriptions || 'no prescriptions',
       });
 
       if (state.source === 'services') {
         console.log('🚀 PROCESSING SERVICES FROM NAVIGATION STATE');
 
-        // ✅ CẬP NHẬT FORM DATA TRỰC TIẾP TỪ STATE
+        // ✅ CẬP NHẬT FORM DATA TRỰC TIẾP TỪ STATE.pdfData
         const updatedFormData = {
           patientName: state.patientInfo?.name || state.pdfData?.patient_name || 'Nguyễn Thị Lan',
-          patientAge: state.patientInfo?.age || state.pdfData?.patient_age || '32',
-          patientGender: state.patientInfo?.gender || state.pdfData?.patient_gender || 'Nữ',
-          patientPhone: state.patientInfo?.phone || state.pdfData?.patient_phone || '0956789012',
+          patientAge: state.patientInfo?.age || state.pdfData?.age || '32',
+          patientGender: state.patientInfo?.gender || state.pdfData?.gender || 'Nữ',
+          patientPhone: state.patientInfo?.phone || state.pdfData?.phone || '0956789012',
           patientAddress: state.patientInfo?.address || state.pdfData?.address || '',
           code: state.pdfData?.code || `DV_${Date.now()}`,
           date: state.pdfData?.date || new Date().toISOString().split('T')[0],
@@ -544,17 +665,17 @@ const PDFEditorPage = () => {
           diagnosis: state.pdfData?.diagnosis || '',
           instructions: state.pdfData?.instructions || 'Vui lòng thực hiện các dịch vụ theo chỉ định',
           invoiceCode: '',
-          paymentMethod: 'cash',
-          paymentStatus: 'paid'
+          paymentMethod: state.patientInfo?.payment_method || 'cash',
+          paymentStatus: 'paid',
         };
 
         setFormData(prev => ({ ...prev, ...updatedFormData }));
 
-        // ✅ CẬP NHẬT SERVICE ROWS TRỰC TIẾP TỪ STATE
-        if (state.services && state.services.length > 0) {
-          console.log('🔄 Setting service rows from navigation state:', state.services);
+        // ✅ CẬP NHẬT SERVICE ROWS TRỰC TIẾP TỪ state.pdfData.services
+        if (state.pdfData?.services && state.pdfData.services.length > 0) {
+          console.log('🔄 Setting service rows from navigation state:', state.pdfData.services);
 
-          const services = state.services.map((service, index) => ({
+          const services = state.pdfData.services.map((service, index) => ({
             id: index + 1,
             name: service.ServiceName || service.name || `Dịch vụ ${index + 1}`,
             quantity: parseInt(service.Quantity) || 1,
@@ -571,7 +692,7 @@ const PDFEditorPage = () => {
           ]);
         }
 
-        // ✅ CẬP NHẬT PDF SETTINGS TỪ STATE
+        // ✅ CẬP NHẬT PDF SETTINGS TỪ STATE.pdfData
         if (state.pdfData?.pdf_settings) {
           console.log('🎨 Updating PDF settings from navigation state');
           setPdfSettings(prev => ({
@@ -590,12 +711,6 @@ const PDFEditorPage = () => {
           }));
         }
 
-        // ✅ CẬP NHẬT HTML TEMPLATE TỪ STATE
-        if (state.htmlTemplate) {
-          console.log('🎨 Setting HTML template from navigation state');
-          setPdfHTML(state.htmlTemplate);
-        }
-
         // ✅ SET TYPE CUỐI CÙNG
         setType('service');
 
@@ -604,7 +719,7 @@ const PDFEditorPage = () => {
       // 🔥 THÊM PHẦN NÀY: XỬ LÝ PRESCRIPTION TỪ NAVIGATION STATE
       else if (state.source === 'prescription') {
         console.log('💊 PROCESSING PRESCRIPTION FROM NAVIGATION STATE');
-        
+
 
         // ✅ CẬP NHẬT FORM DATA TRỰC TIẾP TỪ STATE
         const updatedFormData = {
@@ -681,7 +796,7 @@ const PDFEditorPage = () => {
             clinicPhone: '024.3574.7788'
           }));
         }
-         // ✅ CẬP NHẬT HTML TEMPLATE TỪ STATE
+        // ✅ CẬP NHẬT HTML TEMPLATE TỪ STATE
         if (state.htmlTemplate) {
           console.log('🎨 Setting HTML template from navigation state');
           setPdfHTML(state.htmlTemplate);
@@ -691,6 +806,187 @@ const PDFEditorPage = () => {
         setType('prescription');
 
         console.log('✅ Navigation state from PRESCRIPTION processed successfully');
+      }
+      else if (state.source === 'technician') {
+        console.log('🔬 PROCESSING TECHNICIAN FROM NAVIGATION STATE');
+
+        // ✅ CẬP NHẬT FORM DATA
+        const updatedFormData = {
+          patientName: state.pdfData?.patient_name || 'Bệnh nhân',
+          patientAge: state.pdfData?.patient_age || '',
+          patientGender: state.pdfData?.patient_gender || '',
+          patientPhone: state.pdfData?.patient_phone || '',
+          patientAddress: state.pdfData?.patient_address || '',
+          code: state.pdfData?.lab_number || `XN_${Date.now()}`,
+          date: state.pdfData?.date || new Date().toISOString().split('T')[0],
+          doctor: state.pdfData?.doctor_name || 'Kỹ thuật viên Xét nghiệm',
+          symptoms: state.pdfData?.symptoms || '',
+          diagnosis: state.pdfData?.diagnosis || '',
+          instructions: state.pdfData?.instructions || 'Kết quả có giá trị tham khảo'
+        };
+
+        setFormData(prev => ({ ...prev, ...updatedFormData }));
+
+        // ✅ CẬP NHẬT SERVICE ROWS TỪ TEST RESULTS
+        if (state.pdfData?.test_results && state.pdfData.test_results.length > 0) {
+          console.log('🔄 Setting service rows from technician test results');
+
+          const serviceRows = state.pdfData.test_results.map((test, index) => ({
+            id: index + 1,
+            name: test.test_name || 'Xét nghiệm',
+            quantity: 1,
+            unitPrice: 0,
+            totalPrice: 0,
+            dosage: test.result || '', // Hiển thị kết quả trong cột dosage
+            unit: test.unit || '',
+            reference: test.reference_range || '',
+            method: test.method || 'OTSH.B-02(1)',
+            isNormal: test.is_normal || true
+          }));
+
+          setServiceRows(serviceRows);
+        } else {
+          console.warn('⚠️ No test results in navigation state, using default');
+          setServiceRows([
+            {
+              id: 1,
+              name: state.pdfData?.service_name || 'Xét nghiệm',
+              quantity: 1,
+              unitPrice: 0,
+              totalPrice: 0,
+              dosage: state.pdfData?.test_results?.[0]?.result || '',
+              unit: '',
+              reference: '',
+              method: 'OTSH.B-02(1)',
+              isNormal: true
+            }
+          ]);
+        }
+
+        // ✅ CẬP NHẬT PDF SETTINGS
+        if (state.pdfData?.pdf_settings) {
+          console.log('🎨 Updating PDF settings from navigation state');
+          setPdfSettings(prev => ({
+            ...prev,
+            ...state.pdfData.pdf_settings,
+            customTitle: state.pdfData.pdf_settings.customTitle || 'PHIẾU KẾT QUẢ XÉT NGHIỆM'
+          }));
+        }
+
+        // ✅ SET TYPE - SỬA THÀNH test_result
+        setType('test_result');
+        setPdfSettings(prev => ({
+          ...prev,
+          customTitle: 'Phiếu KQ Xét Nghiệm'
+        }));
+
+        console.log('✅ Navigation state from TECHNICIAN processed successfully');
+      } else if (state.source === 'invoice') {
+        console.log('💰 PROCESSING INVOICE FROM NAVIGATION STATE');
+        console.log('📊 Invoice data check:', {
+          services: state.pdfData?.services?.length || 0,
+          prescriptions: state.pdfData?.prescriptions?.length || 0,
+          prescriptionsArray: state.pdfData?.prescriptionsArray?.length || 0
+        });
+        // ✅ CẬP NHẬT FORM DATA TRỰC TIẾP TỪ STATE - GIỐNG CÁC SOURCE KHÁC
+        const updatedFormData = {
+          patientName: state.pdfData?.patient_name || 'THÔNG TIN BỆNH NHÂN',
+          patientAge: String(state.pdfData?.age || state.pdfData?.patient_age || 'N/A'),
+          patientGender: state.pdfData?.gender || state.pdfData?.patient_gender || 'N/A',
+          patientPhone: state.pdfData?.phone || state.pdfData?.patient_phone || 'N/A',
+          patientAddress: state.pdfData?.appointment?.patient?.user?.Address || '',
+          code: state.pdfData?.code || `INV_${Date.now()}`,
+          date: state.pdfData?.appointment_date ?
+            (() => {
+              const dateStr = state.pdfData.appointment_date;
+              // Nếu là format dd/MM/yyyy thì chuyển đổi
+              if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+                const parts = dateStr.split('/');
+                return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+              }
+              return dateStr;
+            })() :
+            new Date().toISOString().split('T')[0], doctor: state.pdfData?.doctor_name || 'Hệ thống',
+          symptoms: state.pdfData?.symptoms || '',
+          diagnosis: state.pdfData?.diagnosis || '',
+          instructions: state.pdfData?.instructions || '',
+          invoiceCode: state.pdfData?.invoice_code || `HD_${Date.now()}`,
+          paymentMethod: state.pdfData?.payment_method || 'cash',
+          paymentStatus: 'Đã thanh toán',
+          transactionId: state.pdfData.transaction_id || 'N/A',
+          discount: state.pdfData?.discount || 0,
+          tax: state.pdfData?.tax || 0,
+          total_amount: state.pdfData?.total_amount || 0
+        };
+
+        setFormData(prev => ({ ...prev, ...updatedFormData }));
+
+        // ✅ CẬP NHẬT SERVICE ROWS TRỰC TIẾP TỪ STATE - GIỐNG CÁC SOURCE KHÁC
+        if (state.pdfData?.services && state.pdfData.services.length > 0) {
+          console.log('🔄 Setting service rows from invoice navigation state:', state.pdfData.services);
+
+          const services = state.pdfData.services.map((service, index) => ({
+            id: index + 1,
+            name: service.ServiceName || service.name || `Dịch vụ ${index + 1}`,
+            quantity: parseInt(service.Quantity) || 1,
+            unitPrice: parseFloat(service.Price) || 0,
+            totalPrice: (parseInt(service.Quantity) || 1) * (parseFloat(service.Price) || 0),
+            dosage: ''
+          }));
+
+          setServiceRows(services);
+        } else {
+          console.warn('⚠️ No services in invoice navigation state, using default');
+          setServiceRows([
+            { id: 1, name: 'Khám bệnh', quantity: 1, unitPrice: 100000, totalPrice: 100000, dosage: '' }
+          ]);
+        }
+
+        // ✅ CẬP NHẬT PRESCRIPTION ROWS TỪ INVOICE DATA
+        if (state.pdfData?.prescriptions && state.pdfData.prescriptions.length > 0) {
+          console.log('💊 Setting prescription rows from invoice:', state.pdfData.prescriptions);
+
+          const prescriptionRows = state.pdfData.prescriptions.map((prescription, index) => ({
+            id: index + 1,
+            name: prescription.MedicineName || 'Thuốc',
+            quantity: parseInt(prescription.Quantity) || 1,
+            dosage: prescription.Usage || 'Theo chỉ định',
+            unitPrice: parseFloat(prescription.Price) || 0,
+            totalPrice: (parseInt(prescription.Quantity) || 1) * (parseFloat(prescription.Price) || 0)
+          }));
+
+          setPrescriptionRows(prescriptionRows);
+        }
+
+        // ✅ CẬP NHẬT PDF SETTINGS TỪ STATE - GIỐNG CÁC SOURCE KHÁC
+        if (state.pdfData?.pdf_settings) {
+          console.log('🎨 Updating PDF settings from invoice navigation state');
+          setPdfSettings(prev => ({
+            ...prev,
+            ...state.pdfData.pdf_settings,
+            customTitle: state.pdfData.pdf_settings.customTitle || 'HÓA ĐƠN THANH TOÁN'
+          }));
+        } else {
+          console.log('🎨 Setting default PDF settings for invoice');
+          setPdfSettings(prev => ({
+            ...prev,
+            customTitle: 'HÓA ĐƠN THANH TOÁN',
+            clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
+            clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
+            clinicPhone: '028 1234 5678'
+          }));
+        }
+
+        // ✅ CẬP NHẬT HTML TEMPLATE TỪ STATE - GIỐNG CÁC SOURCE KHÁC
+        if (state.htmlTemplate) {
+          console.log('🎨 Setting HTML template from invoice navigation state');
+          setPdfHTML(state.htmlTemplate);
+        }
+
+        // ✅ SET TYPE CUỐI CÙNG - GIỐNG CÁC SOURCE KHÁC
+        setType('payment');
+
+        console.log('✅ Navigation state from INVOICE processed successfully');
       }
     };
 
@@ -718,7 +1014,7 @@ const PDFEditorPage = () => {
           diagnosis: serviceData.diagnosis || '',
           instructions: serviceData.instructions || 'Vui lòng thực hiện các dịch vụ theo chỉ định',
           invoiceCode: '',
-          paymentMethod: 'momo',
+          paymentMethod: serviceData.payment_method || 'cash',
           paymentStatus: 'paid'
         };
 
@@ -800,7 +1096,8 @@ const PDFEditorPage = () => {
           date: invoiceData.appointment_date || new Date().toISOString().split('T')[0],
           paymentMethod: invoiceData.payment_method || 'cash',
           paymentStatus: 'paid',
-          doctor: invoiceData.doctor_name || 'Hệ thống'
+          doctor: invoiceData.doctor_name || 'Hệ thống',
+          transactionId: invoiceData.transaction_id || 'N/A',
         }));
 
         if (invoiceData.services && invoiceData.services.length > 0) {
@@ -855,6 +1152,106 @@ const PDFEditorPage = () => {
       }
     };
 
+    // 🔥 THÊM VÀO PDFEditorPage - XỬ LÝ DỮ LIỆU TỪ TECHNICIAN
+    const handleTechnicianData = async (pdfEditorDataRaw, pdfHTMLTemplate) => {
+      if (!pdfEditorDataRaw) {
+        console.error('❌ No pdfEditorData found for technician');
+        return;
+      }
+
+      try {
+        const technicianData = JSON.parse(pdfEditorDataRaw);
+        console.log('🔬 PROCESSING TECHNICIAN DATA:', technicianData);
+
+        // ✅ CẬP NHẬT FORM DATA TỪ TECHNICIAN
+        const updatedFormData = {
+          patientName: technicianData.patient_name || '',
+          patientAge: technicianData.patient_age || '',
+          patientGender: technicianData.patient_gender || '',
+          patientPhone: technicianData.patient_phone || '',
+          patientAddress: technicianData.patient_address || '',
+          code: technicianData.lab_number || `XN_${Date.now()}`,
+          date: technicianData.date || new Date().toISOString().split('T')[0],
+          doctor: technicianData.doctor_name || 'Kỹ thuật viên Xét nghiệm',
+          symptoms: technicianData.symptoms || '',
+          diagnosis: technicianData.diagnosis || '',
+          instructions: technicianData.instructions || 'Kết quả có giá trị tham khảo. Vui lòng liên hệ bác sĩ để được tư vấn.'
+        };
+
+        setFormData(prev => ({ ...prev, ...updatedFormData }));
+
+        // ✅ CẬP NHẬT SERVICE ROWS TỪ TEST RESULTS
+        if (technicianData.test_results && technicianData.test_results.length > 0) {
+          console.log('🔄 Setting service rows from technician test results:', technicianData.test_results);
+
+          const serviceRows = technicianData.test_results.map((test, index) => ({
+            id: index + 1,
+            name: test.test_name || 'Xét nghiệm',
+            quantity: 1,
+            unitPrice: 0,
+            totalPrice: 0,
+            dosage: test.result || '',
+            unit: test.unit || '',
+            reference: test.reference_range || '',
+            method: test.method || 'OTSH.B-02(1)',
+            isNormal: test.is_normal || true
+          }));
+
+          setServiceRows(serviceRows);
+        } else {
+          console.warn('⚠️ No test results found, using default');
+          setServiceRows([
+            {
+              id: 1,
+              name: technicianData.service_name || 'Xét nghiệm',
+              quantity: 1,
+              unitPrice: 0,
+              totalPrice: 0,
+              dosage: technicianData.test_results?.[0]?.result || '',
+              unit: '',
+              reference: '',
+              method: 'OTSH.B-02(1)',
+              isNormal: true
+            }
+          ]);
+        }
+
+        // ✅ CẬP NHẬT PDF SETTINGS
+        if (technicianData.pdf_settings) {
+          console.log('🎨 Updating PDF settings from technician data');
+          setPdfSettings(prev => ({
+            ...prev,
+            ...technicianData.pdf_settings,
+            customTitle: technicianData.pdf_settings.customTitle || 'PHIẾU KẾT QUẢ XÉT NGHIỆM'
+          }));
+        } else {
+          console.log('🎨 Setting default PDF settings for technician');
+          setPdfSettings(prev => ({
+            ...prev,
+            customTitle: 'PHIẾU KẾT QUẢ XÉT NGHIỆM',
+            clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
+            clinicAddress: 'Số 53 Võ Văn Ngân, TP. Thủ Đức, TP.HCM',
+            clinicPhone: '024.3574.7788'
+          }));
+        }
+
+        // ✅ XỬ LÝ HTML TEMPLATE
+        if (pdfHTMLTemplate) {
+          console.log('🎨 Setting HTML template from technician');
+          setPdfHTML(pdfHTMLTemplate);
+        }
+
+        // ✅ SET TYPE - SỬA THÀNH test_result
+        setType('test_result');
+
+        console.log('✅ TECHNICIAN data processed successfully');
+
+      } catch (error) {
+        console.error('❌ Error processing technician data:', error);
+        setError('Lỗi xử lý dữ liệu từ kỹ thuật viên: ' + error.message);
+      }
+    };
+
     loadData();
   }, []);
   // Thêm vào component PDFEditorPage, sau các useState
@@ -887,36 +1284,7 @@ const PDFEditorPage = () => {
     setDebugInfo(currentDebugInfo);
   }, [type, pdfHTML]);
 
-  // Thêm visual debug trên giao diện
-  const DebugBadge = () => (
-    <div style={{
-      position: 'fixed',
-      top: '10px',
-      right: '10px',
-      background: '#333',
-      color: 'white',
-      padding: '8px 12px',
-      borderRadius: '8px',
-      fontSize: '12px',
-      fontWeight: 'bold',
-      zIndex: 9999,
-      border: '2px solid',
-      borderColor: pdfHTML ? '#28a745' : '#ffc107',
-      minWidth: '200px'
-    }}>
-      <div>🔍 DEBUG PREVIEW MODE</div>
-      <div>Type: <strong>{type}</strong></div>
-      <div>Mode: <strong style={{
-        color: pdfHTML ? '#28a745' : '#ffc107'
-      }}>
-        {pdfHTML ? 'HTML TEMPLATE' : 'REACT COMPONENT'}
-      </strong></div>
-      <div>PDF HTML: <strong>{pdfHTML ? '✅ YES' : '❌ NO'}</strong></div>
-      <div style={{ fontSize: '10px', marginTop: '4px' }}>
-        {debugInfo.timestamp}
-      </div>
-    </div>
-  );
+
   // 🔥 REAL-TIME HTML PREVIEW - KHÔNG CÓ NÚT
   const renderHTMLPreview = () => {
     if (!pdfHTML) {
@@ -946,12 +1314,886 @@ const PDFEditorPage = () => {
 
   // Render preview theo template HTML (fallback)
   const renderPreviewContent = () => {
-    const currentRows = getCurrentRows();
-    const totalAmount = getCurrentRows().reduce((sum, row) => sum + (row.totalPrice || 0), 0);
+    // 🔥 SỬA: Tạo hàm lấy rows cho payment (kết hợp cả services và prescriptions)
+    const getPaymentRows = () => {
+      if (type === 'payment') {
+        // Kết hợp cả services và prescriptions với type indicator
+        const serviceRowsWithType = serviceRows.map(row => ({
+          ...row,
+          type: 'service',
+          rowType: 'service' // Thêm indicator
+        }));
+        const prescriptionRowsWithType = prescriptionRows.map(row => ({
+          ...row,
+          type: 'prescription',
+          rowType: 'prescription' // Thêm indicator
+        }));
+        return [...serviceRowsWithType, ...prescriptionRowsWithType];
+      }
+      return getCurrentRows(); // Giữ nguyên cho các type khác
+    };
+
+
+    const previewLogoUrl = fixAssetUrl(pdfSettings.logo.url);
+    const previewWatermarkUrl = fixAssetUrl(pdfSettings.watermark.url);
+
+    console.log('🔍 PREVIEW LOGO DEBUG:', {
+      original: pdfSettings.logo.url,
+      fixed: previewLogoUrl,
+      enabled: pdfSettings.logo.enabled
+    });
+
+
+
+    // ... phần còn lại của renderPreviewContent ...
+    const currentRows = getPaymentRows();
+
+    // 🔥 SỬA: Tính tổng tiền cho payment (cả services và prescriptions)
+    const calculateTotalAmount = () => {
+      if (type === 'payment') {
+        const serviceTotal = serviceRows.reduce((sum, row) => sum + (row.totalPrice || 0), 0);
+        const prescriptionTotal = prescriptionRows.reduce((sum, row) => sum + (row.totalPrice || 0), 0);
+        return serviceTotal + prescriptionTotal;
+      }
+      return getCurrentRows().reduce((sum, row) => sum + (row.totalPrice || 0), 0);
+    };
+
+    const totalAmount = calculateTotalAmount();
     const discountAmount = (totalAmount * (formData.discount || 0)) / 100;
     const taxAmount = (totalAmount * (formData.tax || 0)) / 100;
     const finalAmount = totalAmount - discountAmount + taxAmount;
 
+    // 🔥 PHẦN RIÊNG CHO test_result
+    if (type === 'test_result') {
+      return (
+        <>
+          {/* Watermark - DÙNG CHUNG */}
+          {pdfSettings.watermark.enabled && (
+            <div className="watermark" style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: `translate(-50%, -50%) rotate(${pdfSettings.watermark.rotation}deg)`,
+              fontSize: `${pdfSettings.watermark.fontSize}px`,
+              color: pdfSettings.watermark.color,
+              opacity: pdfSettings.watermark.opacity,
+              fontWeight: '700',
+              textTransform: 'uppercase',
+              pointerEvents: 'none',
+              zIndex: -1,
+              whiteSpace: 'nowrap'
+            }}>
+              {pdfSettings.watermark.url ? (
+                <img
+                  src={pdfSettings.watermark.url}
+                  alt="Watermark"
+                  style={{
+                    width: pdfSettings.watermark.width || '200px',
+                    height: pdfSettings.watermark.height || '200px',
+                    opacity: pdfSettings.watermark.opacity
+                  }}
+                />
+              ) : (
+                pdfSettings.watermark.text
+              )}
+            </div>
+          )}
+
+          {/* Header với Logo - DÙNG CHUNG */}
+          <div className="header" style={{
+            textAlign: 'center',
+            borderBottom: `1.5px solid ${pdfSettings.borderColor || '#000'}`,
+            paddingBottom: '5px',
+            marginBottom: '10px',
+            position: 'relative',
+            backgroundColor: pdfSettings.headerBgColor || 'transparent'
+          }}>
+            {/* Logo */}
+            {pdfSettings.logo.enabled && pdfSettings.logo.url && (
+              <div style={{
+                position: 'absolute',
+                top: pdfSettings.logo.marginTop,
+                [pdfSettings.logo.position]: '20px',
+                opacity: pdfSettings.logo.opacity
+              }}>
+                <img
+                  src={previewLogoUrl}
+                  alt="Clinic Logo"
+                  style={{
+                    width: pdfSettings.logo.width,
+                    height: pdfSettings.logo.height,
+                    objectFit: 'contain'
+                  }}
+                />
+              </div>
+            )}
+
+            <h2 style={{
+              margin: 0,
+              fontSize: '16px',
+              textTransform: 'uppercase',
+              fontWeight: 'bold',
+              color: pdfSettings.primaryColor
+            }}>
+              {pdfSettings.clinicName}
+            </h2>
+            <p style={{ margin: '2px 0', fontSize: '11px', color: pdfSettings.fontColor }}>
+              Địa chỉ: {pdfSettings.clinicAddress}
+            </p>
+            <p style={{ margin: '2px 0', fontSize: '11px', color: pdfSettings.fontColor }}>
+              Điện thoại: {pdfSettings.clinicPhone}
+            </p>
+          </div>
+
+          {/* Title - DÙNG CHUNG */}
+          <div className="title" style={{
+            textAlign: 'center',
+            margin: '8px 0 12px',
+            fontSize: '15px',
+            fontWeight: 'bold',
+            textTransform: 'uppercase',
+            color: pdfSettings.primaryColor
+          }}>
+            <h3 style={{ margin: 0 }}>
+              {pdfSettings.customTitle}
+            </h3>
+          </div>
+
+          {/* Patient Info - DÙNG CHUNG NHƯNG TÙY CHỈNH NỘI DUNG */}
+          <div className="info" style={{
+            display: 'table',
+            width: '100%',
+            fontSize: pdfSettings.fontSize,
+            marginBottom: '12px',
+            color: pdfSettings.fontColor,
+            fontStyle: pdfSettings.fontStyle,
+            fontWeight: pdfSettings.fontWeight,
+            lineHeight: pdfSettings.lineHeight
+          }}>
+            <div className="info-row" style={{ display: 'table-row' }}>
+              <div className="info-cell" style={{
+                display: 'table-cell',
+                width: '50%',
+                verticalAlign: 'top',
+                padding: '2px 5px'
+              }}>
+                <p style={{ margin: '2px 0' }}><strong>Họ tên:</strong> {formData.patientName}</p>
+                <p style={{ margin: '2px 0' }}><strong>Tuổi:</strong> {formData.patientAge}</p>
+                <p style={{ margin: '2px 0' }}><strong>Giới tính:</strong> {formData.patientGender}</p>
+                <p style={{ margin: '2px 0' }}><strong>Điện thoại:</strong> {formData.patientPhone}</p>
+              </div>
+              <div className="info-cell" style={{
+                display: 'table-cell',
+                width: '50%',
+                verticalAlign: 'top',
+                padding: '2px 5px'
+              }}>
+                <p style={{ margin: '2px 0' }}>
+                  <strong>Mã phiếu:</strong> {formData.code}
+                </p>
+                <p style={{ margin: '2px 0' }}>
+                  <strong>Ngày xét nghiệm:</strong> {new Date(formData.date).toLocaleDateString('vi-VN')}
+                </p>
+                <p style={{ margin: '2px 0' }}>
+                  <strong>Giờ xét nghiệm:</strong> {new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+                <p style={{ margin: '2px 0' }}>
+                  <strong>Bác sĩ chỉ định:</strong> {formData.doctor}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 🔥 BẢNG KẾT QUẢ XÉT NGHIỆM - RIÊNG CHO test_result */}
+          {currentRows.length > 0 ? (
+            <table style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              marginBottom: '12px',
+              fontSize: '11px',
+              color: pdfSettings.fontColor
+            }}>
+              <thead>
+                <tr>
+                  <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width="5%">STT</th>
+                  <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width="30%">XÉT NGHIỆM</th>
+                  <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width="25%">KẾT QUẢ</th>
+                  <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width="10%">ĐƠN VỊ</th>
+                  <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width="20%">GIÁ TRỊ THAM CHIẾU</th>
+                  <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width="10%">PHƯƠNG PHÁP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentRows.map((row, index) => (
+                  <tr key={row.id}>
+                    <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center' }}>{index + 1}</td>
+                    <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px' }}>{row.name}</td>
+                    <td style={{
+                      border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                      padding: '4px 6px',
+                      color: row.isNormal ? '#28a745' : '#dc3545',
+                      fontWeight: 'bold'
+                    }}>
+                      {row.dosage || row.result || 'Đang xử lý...'}
+                    </td>
+                    <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center' }}>{row.unit || ''}</td>
+                    <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px' }}>{row.reference || ''}</td>
+                    <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px' }}>{row.method || 'OTSH.B-02(1)'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="diagnosis-item" style={{
+              padding: '5px',
+              background: '#f9f9f9',
+              border: `1px solid ${pdfSettings.borderColor || '#ddd'}`,
+              marginBottom: '5px'
+            }}>
+              <strong>KẾT QUẢ XÉT NGHIỆM:</strong> Chưa có kết quả xét nghiệm
+            </div>
+          )}
+
+          {/* Note Section - RIÊNG CHO test_result */}
+          <div className="note" style={{
+            fontStyle: 'italic',
+            color: '#666',
+            marginTop: '10px',
+            fontSize: '11px'
+          }}>
+            <p style={{ margin: 0 }}>
+              <strong>Ghi chú:</strong> Kết quả chỉ có giá trị khi phiếu còn nguyên vẹn và có chữ ký xác nhận.
+            </p>
+          </div>
+
+          {/* Footer - DÙNG CHUNG NHƯNG TÙY CHỈNH NỘI DUNG */}
+          <div className="footer" style={{
+            marginTop: '30px'
+          }}>
+            <div className="footer-content" style={{
+              display: 'table',
+              width: '100%'
+            }}>
+              <div className="footer-column" style={{
+                display: 'table-cell',
+                width: '50%',
+                textAlign: 'center',
+                verticalAlign: 'top'
+              }}>
+                <p style={{ margin: 0, fontSize: '11px', color: pdfSettings.fontColor }}><strong>Kỹ thuật viên</strong></p>
+                <p style={{ margin: 0, fontSize: '11px', color: pdfSettings.fontColor }}>(Ký và ghi rõ họ tên)</p>
+                <p style={{ marginTop: '10px', fontWeight: 'bold', fontSize: '11px', color: pdfSettings.fontColor }}>
+                  Nguyễn Văn Kỹ Thuật
+                </p>
+              </div>
+              <div className="footer-column" style={{
+                display: 'table-cell',
+                width: '50%',
+                textAlign: 'center',
+                verticalAlign: 'top'
+              }}>
+
+              </div>
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    // 🔥 PHẦN RIÊNG CHO PAYMENT - HIỂN THỊ GIỐNG TEMPLATE
+    if (type === 'payment') {
+      return (
+        <>
+          {/* Watermark */}
+          {pdfSettings.watermark.enabled && (
+            <div className="watermark" style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: `translate(-50%, -50%) rotate(${pdfSettings.watermark.rotation}deg)`,
+              fontSize: `${pdfSettings.watermark.fontSize}px`,
+              color: pdfSettings.watermark.color,
+              opacity: pdfSettings.watermark.opacity,
+              fontWeight: '700',
+              textTransform: 'uppercase',
+              pointerEvents: 'none',
+              zIndex: 0,
+              whiteSpace: 'nowrap'
+            }}>
+              {pdfSettings.watermark.url ? (
+                <img
+                  src={pdfSettings.watermark.url}
+                  alt="Watermark"
+                  style={{
+                    width: pdfSettings.watermark.width || '200px',
+                    height: pdfSettings.watermark.height || '200px',
+                    opacity: pdfSettings.watermark.opacity
+                  }}
+                />
+              ) : (
+                pdfSettings.watermark.text
+              )}
+            </div>
+          )}
+
+          {/* Header với Logo */}
+          <div className="header" style={{
+            borderBottom: `1.5px solid ${pdfSettings.borderColor || '#000'}`,
+            paddingBottom: '8px',
+            marginBottom: '12px',
+            backgroundColor: pdfSettings.headerBgColor || 'transparent'
+          }}>
+            <div className="header-container" style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              width: '100%',
+              minHeight: '65px'
+            }}>
+              {/* Logo Section */}
+              <div className="logo-section" style={{
+                flexShrink: 0,
+                width: '80px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'flex-start',
+                paddingTop: 0,
+                marginTop: 0
+              }}>
+                {pdfSettings.logo.enabled && pdfSettings.logo.url && (
+                  <img
+                    src={previewWatermarkUrl}
+                    alt="Clinic Logo"
+                    className="logo-img"
+                    style={{
+                      width: pdfSettings.logo.width || '60px',
+                      height: pdfSettings.logo.height || '60px',
+                      objectFit: 'contain',
+                      opacity: pdfSettings.logo.opacity || 0.8,
+                      marginTop: 0
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* Header Content */}
+              <div className="header-content" style={{
+                flex: 1,
+                textAlign: 'center',
+                minWidth: 0,
+                padding: '0 10px',
+                marginTop: 0
+              }}>
+                <h2 style={{
+                  margin: '2px 0 !important',
+                  fontSize: '18px !important',
+                  textTransform: 'uppercase',
+                  fontWeight: 'bold',
+                  lineHeight: 1.2,
+                  fontStyle: pdfSettings.fontStyle || 'normal',
+                  color: pdfSettings.primaryColor || '#2c5aa0'
+                }}>
+                  {pdfSettings.clinicName}
+                </h2>
+                <p style={{
+                  margin: '1px 0 !important',
+                  fontSize: '11px !important',
+                  lineHeight: 1.2,
+                  fontStyle: pdfSettings.fontStyle || 'normal',
+                  fontWeight: pdfSettings.fontWeight || 'normal',
+                  color: pdfSettings.fontColor || '#000000'
+                }}>
+                  Địa chỉ: {pdfSettings.clinicAddress}
+                </p>
+                <p style={{
+                  margin: '1px 0 !important',
+                  fontSize: '11px !important',
+                  lineHeight: 1.2,
+                  fontStyle: pdfSettings.fontStyle || 'normal',
+                  fontWeight: pdfSettings.fontWeight || 'normal',
+                  color: pdfSettings.fontColor || '#000000'
+                }}>
+                  Điện thoại: {pdfSettings.clinicPhone}
+                </p>
+              </div>
+
+              {/* Header Placeholder */}
+              <div className="header-placeholder" style={{
+                width: '80px',
+                flexShrink: 0,
+                visibility: 'hidden'
+              }}></div>
+            </div>
+          </div>
+
+          {/* Title */}
+          <div className="title" style={{
+            textAlign: 'center',
+            margin: '10px 0 15px',
+            fontSize: '18px !important',
+            fontWeight: 'bold',
+            textTransform: 'uppercase',
+            fontStyle: pdfSettings.fontStyle || 'normal',
+            color: pdfSettings.primaryColor || '#2c5aa0'
+          }}>
+            <h3 style={{ margin: 0, fontSize: '18px !important' }}>
+              {pdfSettings.customTitle}
+            </h3>
+          </div>
+
+          {/* Patient Info - Table layout */}
+          <div className="info" style={{
+            display: 'table',
+            width: '100%',
+            marginBottom: '15px',
+            fontSize: pdfSettings.fontSize || '12px',
+            fontStyle: pdfSettings.fontStyle || 'normal',
+            fontWeight: pdfSettings.fontWeight || 'normal',
+            lineHeight: pdfSettings.lineHeight || 1.3,
+            color: pdfSettings.fontColor || '#000000'
+          }}>
+            <div className="info-row" style={{ display: 'table-row' }}>
+              <div className="info-cell" style={{
+                display: 'table-cell',
+                width: '50%',
+                verticalAlign: 'top',
+                padding: '2px 6px'
+              }}>
+                <p style={{ margin: '2px 0', fontSize: '12px !important' }}>
+                  <strong>Họ tên bệnh nhân:</strong> {formData.patientName}
+                </p>
+                <p style={{ margin: '2px 0', fontSize: '12px !important' }}>
+                  <strong>Tuổi:</strong> {formData.patientAge}
+                </p>
+                <p style={{ margin: '2px 0', fontSize: '12px !important' }}>
+                  <strong>Giới tính:</strong> {formData.patientGender}
+                </p>
+                <p style={{ margin: '2px 0', fontSize: '12px !important' }}>
+                  <strong>Điện thoại:</strong> {formData.patientPhone}
+                </p>
+              </div>
+              <div className="info-cell" style={{
+                display: 'table-cell',
+                width: '50%',
+                verticalAlign: 'top',
+                padding: '2px 6px'
+              }}>
+                <p style={{ margin: '2px 0', fontSize: '12px !important' }}>
+                  <strong>Mã hóa đơn:</strong> {formData.invoiceCode}
+                </p>
+                <p style={{ margin: '2px 0', fontSize: '12px !important' }}>
+                  <strong>Ngày thanh toán:</strong> {new Date(formData.date).toLocaleDateString('vi-VN')}
+                </p>
+                <p style={{ margin: '2px 0', fontSize: '12px !important' }}>
+                  <strong>Giờ thanh toán:</strong> Hoàn tất
+                </p>
+                <p style={{ margin: '2px 0', fontSize: '12px !important' }}>
+                  <strong>Thu ngân:</strong> {formData.doctor}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Section Title cho Dịch vụ */}
+          {serviceRows.length > 0 && (
+            <>
+              <div className="section-title" style={{
+                background: pdfSettings.primaryColor || '#2c5aa0',
+                color: 'white',
+                padding: '6px 10px',
+                margin: '15px 0 10px 0',
+                fontWeight: 'bold',
+                fontSize: '16px !important',
+                textAlign: 'center',
+                fontStyle: pdfSettings.fontStyle || 'normal'
+              }}>
+                DỊCH VỤ
+              </div>
+
+              <table style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                marginBottom: '15px',
+                fontSize: '12px !important',
+                fontStyle: pdfSettings.fontStyle || 'normal',
+                fontWeight: pdfSettings.fontWeight || 'normal',
+                color: pdfSettings.fontColor || '#000000'
+              }}>
+                <thead>
+                  <tr>
+                    <th style={{
+                      border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                      padding: '4px 6px',
+                      textAlign: 'center',
+                      background: pdfSettings.headerBgColor || '#f0f0f0',
+                      fontWeight: 'bold'
+                    }} width="5%">STT</th>
+                    <th style={{
+                      border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                      padding: '4px 6px',
+                      textAlign: 'center',
+                      background: pdfSettings.headerBgColor || '#f0f0f0',
+                      fontWeight: 'bold'
+                    }} width="45%">Tên dịch vụ</th>
+                    <th style={{
+                      border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                      padding: '4px 6px',
+                      textAlign: 'center',
+                      background: pdfSettings.headerBgColor || '#f0f0f0',
+                      fontWeight: 'bold'
+                    }} width="10%">SL</th>
+                    <th style={{
+                      border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                      padding: '4px 6px',
+                      textAlign: 'center',
+                      background: pdfSettings.headerBgColor || '#f0f0f0',
+                      fontWeight: 'bold'
+                    }} width="20%">Đơn giá</th>
+                    <th style={{
+                      border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                      padding: '4px 6px',
+                      textAlign: 'center',
+                      background: pdfSettings.headerBgColor || '#f0f0f0',
+                      fontWeight: 'bold'
+                    }} width="20%">Thành tiền</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {serviceRows.map((row, index) => (
+                    <tr key={row.id}>
+                      <td style={{
+                        border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                        padding: '4px 6px',
+                        textAlign: 'center',
+                        fontSize: '12px !important'
+                      }}>{index + 1}</td>
+                      <td style={{
+                        border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                        padding: '4px 6px',
+                        fontSize: '12px !important'
+                      }}>{row.name}</td>
+                      <td style={{
+                        border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                        padding: '4px 6px',
+                        textAlign: 'center',
+                        fontSize: '12px !important'
+                      }}>{row.quantity}</td>
+                      <td style={{
+                        border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                        padding: '4px 6px',
+                        textAlign: 'right',
+                        fontSize: '12px !important'
+                      }}>{formatNumber(row.unitPrice)} VNĐ</td>
+                      <td style={{
+                        border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                        padding: '4px 6px',
+                        textAlign: 'right',
+                        fontSize: '12px !important'
+                      }}>{formatNumber(row.totalPrice)} VNĐ</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+
+          {/* Section Title cho Thuốc */}
+          {prescriptionRows.length > 0 && (
+            <>
+              <div className="section-title" style={{
+                background: pdfSettings.primaryColor || '#2c5aa0',
+                color: 'white',
+                padding: '6px 10px',
+                margin: '15px 0 10px 0',
+                fontWeight: 'bold',
+                fontSize: '16px !important',
+                textAlign: 'center',
+                fontStyle: pdfSettings.fontStyle || 'normal'
+              }}>
+                ĐƠN THUỐC
+              </div>
+
+              <table style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                marginBottom: '15px',
+                fontSize: '12px !important',
+                fontStyle: pdfSettings.fontStyle || 'normal',
+                fontWeight: pdfSettings.fontWeight || 'normal',
+                color: pdfSettings.fontColor || '#000000'
+              }}>
+                <thead>
+                  <tr>
+                    <th style={{
+                      border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                      padding: '4px 6px',
+                      textAlign: 'center',
+                      background: pdfSettings.headerBgColor || '#f0f0f0',
+                      fontWeight: 'bold'
+                    }} width="5%">STT</th>
+                    <th style={{
+                      border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                      padding: '4px 6px',
+                      textAlign: 'center',
+                      background: pdfSettings.headerBgColor || '#f0f0f0',
+                      fontWeight: 'bold'
+                    }} width="35%">Tên thuốc</th>
+                    <th style={{
+                      border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                      padding: '4px 6px',
+                      textAlign: 'center',
+                      background: pdfSettings.headerBgColor || '#f0f0f0',
+                      fontWeight: 'bold'
+                    }} width="10%">SL</th>
+                    <th style={{
+                      border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                      padding: '4px 6px',
+                      textAlign: 'center',
+                      background: pdfSettings.headerBgColor || '#f0f0f0',
+                      fontWeight: 'bold'
+                    }} width="30%">Liều dùng</th>
+                    <th style={{
+                      border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                      padding: '4px 6px',
+                      textAlign: 'center',
+                      background: pdfSettings.headerBgColor || '#f0f0f0',
+                      fontWeight: 'bold'
+                    }} width="10%">Đơn giá</th>
+                    <th style={{
+                      border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                      padding: '4px 6px',
+                      textAlign: 'center',
+                      background: pdfSettings.headerBgColor || '#f0f0f0',
+                      fontWeight: 'bold'
+                    }} width="10%">Thành tiền</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {prescriptionRows.map((row, index) => (
+                    <tr key={row.id}>
+                      <td style={{
+                        border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                        padding: '4px 6px',
+                        textAlign: 'center',
+                        fontSize: '12px !important'
+                      }}>{index + 1}</td>
+                      <td style={{
+                        border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                        padding: '4px 6px',
+                        fontSize: '12px !important'
+                      }}>{row.name}</td>
+                      <td style={{
+                        border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                        padding: '4px 6px',
+                        textAlign: 'center',
+                        fontSize: '12px !important'
+                      }}>{row.quantity}</td>
+                      <td style={{
+                        border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                        padding: '4px 6px',
+                        fontSize: '12px !important'
+                      }}>{row.dosage || 'Theo chỉ định'}</td>
+                      <td style={{
+                        border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                        padding: '4px 6px',
+                        textAlign: 'right',
+                        fontSize: '12px !important'
+                      }}>{formatNumber(row.unitPrice)} VNĐ</td>
+                      <td style={{
+                        border: `1px solid ${pdfSettings.borderColor || '#333'}`,
+                        padding: '4px 6px',
+                        textAlign: 'right',
+                        fontSize: '12px !important'
+                      }}>{formatNumber(row.totalPrice)} VNĐ</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+
+          {/* Tổng tiền và chi tiết thanh toán */}
+          {/* Tổng kết thanh toán - HIỂN THỊ NHƯ TEMPLATE */}
+          {(serviceRows.length > 0 || prescriptionRows.length > 0) && (
+            <>
+              {/* Section Title */}
+              <div className="section-title" style={{
+                background: pdfSettings.primaryColor || '#2c5aa0',
+                color: 'white',
+                padding: '6px 10px',
+                margin: '15px 0 10px 0',
+                fontWeight: 'bold',
+                fontSize: '16px !important',
+                textAlign: 'center',
+                fontStyle: pdfSettings.fontStyle || 'normal'
+              }}>
+                THÔNG TIN THANH TOÁN
+              </div>
+
+              {/* Thông tin thanh toán - HIỂN THỊ NHƯ TEMPLATE */}
+              <div style={{
+                background: '#f8f9fa',
+                padding: '15px',
+                borderRadius: '4px',
+                margin: '15px 0',
+                fontSize: '12px !important',
+                fontStyle: pdfSettings.fontStyle || 'normal',
+                fontWeight: pdfSettings.fontWeight || 'normal',
+                lineHeight: pdfSettings.lineHeight || 1.3,
+                color: pdfSettings.fontColor || '#000000'
+              }}>
+                {/* Tổng tiền thuốc */}
+                {prescriptionRows.length > 0 && (
+                  <div style={{ marginBottom: '8px' }}>
+                    <strong>Tổng tiền thuốc:</strong> {formatNumber(prescriptionRows.reduce((sum, row) => sum + (row.totalPrice || 0), 0))} VNĐ
+                  </div>
+                )}
+
+                {/* Tổng tiền dịch vụ */}
+                {serviceRows.length > 0 && (
+                  <div style={{ marginBottom: '8px' }}>
+                    <strong>Tổng tiền dịch vụ:</strong> {formatNumber(serviceRows.reduce((sum, row) => sum + (row.totalPrice || 0), 0))} VNĐ
+                  </div>
+                )}
+
+                {/* Tổng cộng */}
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>Tổng cộng:</strong> {formatNumber(totalAmount)} VNĐ
+                </div>
+
+                {/* Giảm giá */}
+                {formData.discount > 0 && (
+                  <div style={{ marginBottom: '8px', color: '#d9534f' }}>
+                    <strong>Giảm giá ({formData.discount}%):</strong> -{formatNumber(discountAmount)} VNĐ
+                  </div>
+                )}
+
+                {/* Thuế */}
+                {formData.tax > 0 && (
+                  <div style={{ marginBottom: '8px', color: '#0275d8' }}>
+                    <strong>Thuế ({formData.tax}%):</strong> +{formatNumber(taxAmount)} VNĐ
+                  </div>
+                )}
+
+                {/* Thành tiền */}
+                <div style={{
+                  marginBottom: '12px',
+                  fontWeight: 'bold',
+                  fontSize: '14px !important',
+                  color: '#155724',
+                  borderTop: '1px solid #ccc',
+                  paddingTop: '8px'
+                }}>
+                  <strong>THÀNH TIỀN:</strong> {formatNumber(finalAmount)} VNĐ
+                </div>
+
+                {/* Thông tin thanh toán bổ sung */}
+                <div style={{
+                  borderTop: '1px dashed #ccc',
+                  paddingTop: '10px',
+                  marginTop: '10px'
+                }}>
+                  <div style={{ marginBottom: '5px' }}>
+                    <strong>Phương thức thanh toán:</strong> {
+                      formData.paymentMethod === 'cash' ? 'Tiền mặt' :
+                        formData.paymentMethod === 'momo' ? 'MoMo' :
+                          formData.paymentMethod === 'napas' ? 'Thẻ Napas' :
+                            formData.paymentMethod === 'card' ? 'Thẻ tín dụng' : 'Tiền mặt'
+                    }
+                  </div>
+
+                  <div style={{ marginBottom: '5px' }}>
+                    <strong>Trạng thái:</strong> <span style={{ color: '#28a745', fontWeight: 'bold' }}>Đã thanh toán</span>
+                  </div>
+
+                  <div style={{ marginBottom: '5px' }}>
+                    <strong>Ngày thanh toán:</strong> {new Date(formData.date).toLocaleDateString('vi-VN')}
+                  </div>
+
+                  {formData.transactionId && (
+                    <div style={{ marginBottom: '5px' }}>
+                      <strong>Mã giao dịch:</strong> {formData.transactionId}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Note Section */}
+          <div className="note" style={{
+            fontStyle: 'italic',
+            color: '#666',
+            marginTop: '10px',
+            fontSize: '11px !important',
+            fontWeight: pdfSettings.fontWeight || 'normal'
+          }}>
+            <p style={{ margin: 0 }}>
+              <strong>Ghi chú:</strong> Hóa đơn này có giá trị thanh toán một lần. Vui lòng giữ lại hóa đơn để đối chiếu khi cần thiết.
+            </p>
+          </div>
+
+          {/* Footer */}
+          <div className="footer" style={{ marginTop: '25px' }}>
+            <div className="footer-content" style={{ display: 'table', width: '100%' }}>
+              <div className="footer-column" style={{
+                display: 'table-cell',
+                width: '50%',
+                textAlign: 'center',
+                verticalAlign: 'top'
+              }}>
+
+                <p style={{ margin: 0, fontSize: '12px !important' }}>
+                  <strong>Bệnh nhân/Khách hàng</strong>
+                </p>
+                <p style={{ margin: 0, fontSize: '12px !important' }}>
+                  (Ký và ghi rõ họ tên)
+                </p>
+                <div className="signature" style={{
+                  marginTop: '15px',
+                  borderTop: `1px solid ${pdfSettings.borderColor || '#000'}`,
+                  width: '150px',
+                  marginLeft: 'auto',
+                  marginRight: 'auto',
+                  height: '40px'
+                }}></div>
+                <p style={{ marginTop: '5px', fontWeight: 'bold', fontSize: '12px !important' }}>
+                  {formData.patientName}
+                </p>
+              </div>
+              <div className="footer-column" style={{
+                display: 'table-cell',
+                width: '50%',
+                textAlign: 'center',
+                verticalAlign: 'top'
+              }}>
+                <p style={{ margin: 0, fontSize: '12px !important' }}>
+                  <strong>Thu ngân</strong>
+                </p>
+                <p style={{ margin: 0, fontSize: '12px !important' }}>
+                  (Ký và ghi rõ họ tên)
+                </p>
+                <div className="signature" style={{
+                  marginTop: '15px',
+                  borderTop: `1px solid ${pdfSettings.borderColor || '#000'}`,
+                  width: '150px',
+                  marginLeft: 'auto',
+                  marginRight: 'auto',
+                  height: '40px'
+                }}>
+                  {pdfSettings.showDoctorSignature && formData.doctor}
+                </div>
+                <p style={{ marginTop: '5px', fontWeight: 'bold', fontSize: '12px !important' }}>
+                  {formData.doctor}
+                </p>
+              </div>
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    // 🔥 PHẦN CÒN LẠI CHO CÁC TYPE KHÁC (PRESCRIPTION, SERVICE, PAYMENT)
     return (
       <>
         {/* Watermark */}
@@ -967,7 +2209,7 @@ const PDFEditorPage = () => {
             fontWeight: '700',
             textTransform: 'uppercase',
             pointerEvents: 'none',
-            zIndex: 0,
+            zIndex: -1,
             whiteSpace: 'nowrap'
           }}>
             {pdfSettings.watermark.url ? (
@@ -1125,7 +2367,7 @@ const PDFEditorPage = () => {
           </div>
         )}
 
-        {/* Table */}
+        {/* 🔥 SỬA: Table - HIỂN THỊ CẢ SERVICES VÀ PRESCRIPTIONS CHO PAYMENT */}
         {currentRows.length > 0 ? (
           <table style={{
             width: '100%',
@@ -1137,31 +2379,42 @@ const PDFEditorPage = () => {
             <thead>
               <tr>
                 <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width="5%">STT</th>
-                <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width={type === 'prescription' ? '25%' : '45%'}>
-                  {type === 'prescription' ? 'Tên thuốc' : 'Tên dịch vụ'}
+                <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width={type === 'payment' ? '35%' : type === 'prescription' ? '25%' : '45%'}>
+                  {type === 'payment' ? 'Tên dịch vụ / thuốc' :
+                    type === 'prescription' ? 'Tên thuốc' : 'Tên dịch vụ'}
                 </th>
-                <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width="10%">SL</th>
-                {type === 'prescription' && (
-                  <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width="25%">Liều dùng</th>
+                {type === 'payment' && (
+                  <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width="10%">Loại</th>
                 )}
-                <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width={type === 'prescription' ? '15%' : '20%'}>Đơn giá</th>
-                <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width={type === 'prescription' ? '20%' : '15%'}>Thành tiền</th>
+                <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width="8%">SL</th>
+                {(type === 'prescription' || (type === 'payment' && currentRows.some(row => row.rowType === 'prescription'))) && (
+                  <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width={type === 'payment' ? '15%' : '25%'}>Liều dùng</th>
+                )}
+                <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width="15%">Đơn giá</th>
+                <th style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', background: pdfSettings.headerBgColor || '#f0f0f0', fontWeight: 'bold' }} width="12%">Thành tiền</th>
               </tr>
             </thead>
             <tbody>
               {currentRows.map((row, index) => (
-                <tr key={row.id}>
+                <tr key={`${row.id}-${index}-${row.rowType || type}`}> {/* ✅ SỬA KEY */}
                   <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center' }}>{index + 1}</td>
                   <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px' }}>{row.name}</td>
+                  {type === 'payment' && (
+                    <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center', fontSize: '10px' }}>
+                      {row.rowType === 'service' ? 'Dịch vụ' : 'Thuốc'}
+                    </td>
+                  )}
                   <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'center' }}>{row.quantity}</td>
-                  {type === 'prescription' && (
-                    <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px' }}>{row.dosage}</td>
+                  {(type === 'prescription' || row.rowType === 'prescription') && (
+                    <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', fontSize: '10px' }}>
+                      {row.dosage || 'Theo chỉ định'}
+                    </td>
                   )}
                   <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'right' }}>
-                    {formatNumber(row.unitPrice)} {type !== 'prescription' && 'VNĐ'}
+                    {formatNumber(row.unitPrice)} VNĐ
                   </td>
                   <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'right' }}>
-                    {formatNumber(row.totalPrice)} {type !== 'prescription' && 'VNĐ'}
+                    {formatNumber(row.totalPrice)} VNĐ
                   </td>
                 </tr>
               ))}
@@ -1170,53 +2423,51 @@ const PDFEditorPage = () => {
               {type === 'payment' ? (
                 <>
                   <tr style={{ fontWeight: '600' }}>
-                    <td colSpan={type === 'prescription' ? 4 : 3} style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '6px', textAlign: 'right', fontWeight: 'bold', background: '#fafafa' }}>
+                    <td colSpan={currentRows.some(row => row.rowType === 'prescription') ? 6 : 5} style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '6px', textAlign: 'right', fontWeight: 'bold', background: '#fafafa' }}>
                       Tổng tiền:
                     </td>
-                    <td colSpan={2} style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '6px', textAlign: 'right', fontWeight: 'bold', background: '#fafafa' }}>
+                    <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '6px', textAlign: 'right', fontWeight: 'bold', background: '#fafafa' }}>
                       {formatNumber(totalAmount)} VNĐ
                     </td>
                   </tr>
                   {formData.discount > 0 && (
                     <tr style={{ background: '#fff3cd' }}>
-                      <td colSpan={type === 'prescription' ? 4 : 3} style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'right' }}>
+                      <td colSpan={currentRows.some(row => row.rowType === 'prescription') ? 6 : 5} style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'right' }}>
                         Giảm giá ({formData.discount}%):
                       </td>
-                      <td colSpan={2} style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'right' }}>
+                      <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'right' }}>
                         -{formatNumber(discountAmount)} VNĐ
                       </td>
                     </tr>
                   )}
                   {formData.tax > 0 && (
                     <tr style={{ background: '#e7f3ff' }}>
-                      <td colSpan={type === 'prescription' ? 4 : 3} style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'right' }}>
+                      <td colSpan={currentRows.some(row => row.rowType === 'prescription') ? 6 : 5} style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'right' }}>
                         Thuế ({formData.tax}%):
                       </td>
-                      <td colSpan={2} style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'right' }}>
+                      <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '4px 6px', textAlign: 'right' }}>
                         +{formatNumber(taxAmount)} VNĐ
                       </td>
                     </tr>
                   )}
                   <tr style={{ fontWeight: '600', background: '#d4edda' }}>
-                    <td colSpan={type === 'prescription' ? 4 : 3} style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
+                    <td colSpan={currentRows.some(row => row.rowType === 'prescription') ? 6 : 5} style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
                       TỔNG CỘNG:
                     </td>
-                    <td colSpan={2} style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '6px', textAlign: 'right', fontWeight: 'bold', color: '#155724' }}>
+                    <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '6px', textAlign: 'right', fontWeight: 'bold', color: '#155724' }}>
                       {formatNumber(finalAmount)} VNĐ
                     </td>
                   </tr>
                 </>
               ) : (
                 <tr style={{ fontWeight: '600', background: '#fafafa' }}>
-                  <td colSpan={type === 'prescription' ? 4 : 3} style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
+                  <td colSpan={type === 'prescription' ? 5 : 4} style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
                     Tổng cộng:
                   </td>
                   <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
                     {formatNumber(totalAmount)} {type !== 'prescription' && 'VNĐ'}
                   </td>
-                  <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
-                    {formatNumber(totalAmount)} {type !== 'prescription' && 'VNĐ'}
-                  </td>
+                 
                 </tr>
               )}
             </tfoot>
@@ -1315,7 +2566,7 @@ const PDFEditorPage = () => {
               <span className="payment-value" style={{ fontWeight: 'bold' }}>
                 {formData.paymentMethod === 'cash' ? 'Tiền mặt' :
                   formData.paymentMethod === 'momo' ? 'MoMo' :
-                    formData.paymentMethod === 'bank' ? 'Chuyển khoản' : 'Tiền mặt'}
+                    formData.paymentMethod === 'napas' ? 'Thẻ Napas' : 'Tiền mặt'}
               </span>
             </div>
 
@@ -1339,6 +2590,46 @@ const PDFEditorPage = () => {
                 {new Date().toLocaleDateString('vi-VN')} {new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
+          </div>
+        )}
+
+        {/* Kết quả xét nghiệm chi tiết - CHO TECHNICIAN */}
+        {(type === 'service' && serviceRows.some(row => row.dosage)) && (
+          <div className="test-results-section" style={{
+            marginBottom: '15px',
+            padding: '10px',
+            background: '#f8f9fa',
+            border: `1px solid ${pdfSettings.borderColor || '#dee2e6'}`,
+            borderRadius: '5px'
+          }}>
+            <h6 style={{
+              margin: '0 0 10px 0',
+              color: pdfSettings.primaryColor,
+              borderBottom: `2px solid ${pdfSettings.primaryColor}`,
+              paddingBottom: '5px'
+            }}>
+              <i className="fas fa-vial me-2"></i>
+              KẾT QUẢ XÉT NGHIỆM CHI TIẾT
+            </h6>
+
+            {serviceRows.map((row, index) => (
+              row.dosage && (
+                <div key={index} style={{
+                  marginBottom: '8px',
+                  padding: '8px',
+                  background: 'white',
+                  borderRadius: '3px',
+                  border: `1px solid ${pdfSettings.borderColor || '#e9ecef'}`
+                }}>
+                  <div style={{ fontWeight: 'bold', color: pdfSettings.primaryColor }}>
+                    {row.name}
+                  </div>
+                  <div style={{ marginTop: '5px', whiteSpace: 'pre-wrap' }}>
+                    {row.dosage}
+                  </div>
+                </div>
+              )
+            ))}
           </div>
         )}
 
@@ -1527,32 +2818,31 @@ const PDFEditorPage = () => {
 
     setIsSavingLogo(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/print/logo/save`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          image: pdfSettings.logo.url,
-          type: 'logo',
-          clinic_id: 1
-        }),
+      const result = await printPdfService.saveLogo({
+        image: pdfSettings.logo.url,
+        type: 'logo',
+        clinic_id: 1
       });
 
-      const result = await response.json();
+      console.log('🔄 Logo save result:', result);
 
-      if (result.success) {
+      // 🔥 XỬ LÝ KẾT QUẢ - CHỈ CẦN RESULT TỒN TẠI LÀ THÀNH CÔNG
+      if (result) {
         alert('✅ Logo đã được lưu thành công!');
-        // Cập nhật URL logo thành URL từ server
+
+        // Cập nhật URL logo - sử dụng URL từ result hoặc URL mặc định
+        const logoUrl = result.url || `/storage/logos/clinic_1.png`;
         setPdfSettings(prev => ({
           ...prev,
           logo: {
             ...prev.logo,
-            url: result.url
+            url: logoUrl
           }
         }));
+
+        console.log('✅ Logo URL updated to:', logoUrl);
       } else {
-        throw new Error(result.message);
+        throw new Error('Lưu logo thất bại - không có response');
       }
     } catch (err) {
       console.error('Error saving logo:', err);
@@ -1565,10 +2855,12 @@ const PDFEditorPage = () => {
   // Hàm tải logo đã lưu
   const handleLoadSavedLogo = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/print/logo/1`);
-      const result = await response.json();
+      const result = await printPdfService.getLogo(1);
 
-      if (result.success) {
+      console.log('🔄 Logo load result:', result);
+
+      // 🔥 XỬ LÝ KẾT QUẢ - CHỈ CẦN CÓ URL LÀ THÀNH CÔNG
+      if (result && result.url) {
         setPdfSettings(prev => ({
           ...prev,
           logo: {
@@ -1579,7 +2871,7 @@ const PDFEditorPage = () => {
         }));
         alert('✅ Đã tải logo từ server!');
       } else {
-        alert('ℹ️ ' + result.message);
+        alert('ℹ️ ' + (result?.message || 'Không tìm thấy logo trên server'));
       }
     } catch (err) {
       console.error('Error loading logo:', err);
@@ -1588,27 +2880,20 @@ const PDFEditorPage = () => {
   };
 
   // Hàm xóa logo khỏi server
+  // 🔥 CẬP NHẬT HÀM XÓA LOGO
   const handleDeleteLogoFromServer = async () => {
     if (!window.confirm('Bạn có chắc muốn xóa logo khỏi server?')) {
       return;
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/print/logo/delete`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          clinic_id: 1
-        }),
-      });
+      const result = await printPdfService.deleteLogo(1);
 
-      const result = await response.json();
+      console.log('🔄 Logo delete result:', result);
 
-      if (result.success) {
+      // 🔥 XỬ LÝ KẾT QUẢ - CHỈ CẦN RESULT TỒN TẠI LÀ THÀNH CÔNG
+      if (result) {
         alert('✅ Đã xóa logo khỏi server!');
-        // Vô hiệu hóa logo trong settings
         setPdfSettings(prev => ({
           ...prev,
           logo: {
@@ -1618,7 +2903,7 @@ const PDFEditorPage = () => {
           }
         }));
       } else {
-        throw new Error(result.message);
+        throw new Error('Xóa logo thất bại - không có response');
       }
     } catch (err) {
       console.error('Error deleting logo:', err);
@@ -1634,7 +2919,7 @@ const PDFEditorPage = () => {
     }));
   };
 
-  // Xử lý thay đổi type
+  // Cập nhật hàm handleTypeChange
   const handleTypeChange = (newType) => {
     setType(newType);
 
@@ -1648,6 +2933,9 @@ const PDFEditorPage = () => {
         break;
       case 'payment':
         newTitle = 'HÓA ĐƠN THANH TOÁN';
+        break;
+      case 'test_result':
+        newTitle = 'PHIẾU KẾT QUẢ XÉT NGHIỆM';
         break;
       default:
         newTitle = 'TOA THUỐC';
@@ -1803,7 +3091,8 @@ const PDFEditorPage = () => {
         // ĐẢM BẢO LOGO CÓ ĐỦ CÁC FIELD BE CẦN
         logo: {
           enabled: pdfSettings.logo.enabled,
-          url: pdfSettings.logo.url,
+          url: fixAssetUrl(pdfSettings.logo.url),  // 🔥 DÙNG HÀM FIX
+          enabled: pdfSettings.logo.enabled && !!pdfSettings.logo.url,
           width: pdfSettings.logo.width,
           height: pdfSettings.logo.height,
           position: pdfSettings.logo.position,
@@ -1815,7 +3104,8 @@ const PDFEditorPage = () => {
         watermark: {
           enabled: pdfSettings.watermark.enabled,
           text: pdfSettings.watermark.text,
-          url: pdfSettings.watermark.url,
+          url: fixAssetUrl(pdfSettings.watermark.url),  // 🔥 DÙNG HÀM FIX
+          enabled: pdfSettings.watermark.enabled && !!pdfSettings.watermark.url,
           width: pdfSettings.watermark.width,
           height: pdfSettings.watermark.height,
           opacity: pdfSettings.watermark.opacity,
@@ -1830,6 +3120,10 @@ const PDFEditorPage = () => {
       const taxAmount = (totalAmount * (formData.tax || 0)) / 100;
       const finalAmount = totalAmount - discountAmount + taxAmount;
 
+      // 🔥 THÊM CÁC TRƯỜNG BẮT BUỘC CHO TẤT CẢ TYPE
+      const currentDate = new Date().toLocaleDateString('vi-VN');
+      const currentTime = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+
       if (type === 'prescription') {
         printData = {
           type: 'prescription',
@@ -1838,8 +3132,9 @@ const PDFEditorPage = () => {
           gender: formData.patientGender,
           phone: formData.patientPhone,
           address: formData.patientAddress,
-          appointment_date: new Date().toLocaleDateString('vi-VN'),
-          appointment_time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+          // 🔥 THÊM CÁC TRƯỜNG BẮT BUỘC
+          appointment_date: formData.date || currentDate,
+          appointment_time: currentTime,
           doctor_name: formData.doctor || pdfSettings.doctorName,
           symptoms: formData.symptoms || '',
           instructions: formData.instructions || '',
@@ -1863,7 +3158,8 @@ const PDFEditorPage = () => {
           gender: formData.patientGender,
           phone: formData.patientPhone,
           address: formData.patientAddress,
-          appointment_date: formData.date || new Date().toLocaleDateString('vi-VN'),
+          // 🔥 THÊM CÁC TRƯỜNG BẮT BUỘC
+          appointment_date: formData.date || currentDate,
           appointment_time: 'Hoàn tất',
           doctor_name: formData.doctor || 'Hệ thống',
           services: serviceRows.map(row => ({
@@ -1871,15 +3167,41 @@ const PDFEditorPage = () => {
             Quantity: parseInt(row.quantity) || 1,
             Price: parseFloat(row.unitPrice) || 0
           })),
-          payment_method: formData.paymentMethod === 'cash' ? 'Tiền mặt' :
-            formData.paymentMethod === 'momo' ? 'MoMo' :
-              formData.paymentMethod === 'napas' ? 'Thẻ napas' : 'Tiền mặt',
+          prescriptions: prescriptionRows.map(row => ({
+            MedicineName: row.name || 'Thuốc',
+            Quantity: parseInt(row.quantity) || 1,
+            Price: parseFloat(row.unitPrice) || 0,
+            Usage: row.dosage || 'Theo chỉ định'
+          })),
+          payment_method: formData.paymentMethod || 'cash',
           payment_status: 'Đã thanh toán',
           discount: parseFloat(formData.discount) || 0,
           tax: parseFloat(formData.tax) || 0,
           invoice_code: formData.invoiceCode || `INV_${Date.now()}`,
           total_amount: parseFloat(finalAmount) || 0,
           diagnoses: formData.diagnosis ? [{ Diagnosis: formData.diagnosis }] : [],
+          pdf_settings: preparedPdfSettings
+        };
+      } else if (type === 'test_result') {
+        printData = {
+          type: 'test_result',
+          patient_name: formData.patientName,
+          age: String(formData.patientAge),
+          gender: formData.patientGender,
+          phone: formData.patientPhone,
+          address: formData.patientAddress,
+          // 🔥 THÊM CÁC TRƯỜNG BẮT BUỘC
+          appointment_date: formData.date || currentDate,
+          appointment_time: currentTime,
+          doctor_name: formData.doctor || 'Kỹ thuật viên Xét nghiệm',
+          test_results: serviceRows.map(row => ({
+            test_name: row.name,
+            result: row.dosage || '',
+            unit: row.unit || '',
+            reference_range: row.reference || '',
+            method: row.method || 'OTSH.B-02(1)',
+            is_normal: row.isNormal || true
+          })),
           pdf_settings: preparedPdfSettings
         };
       } else {
@@ -1891,8 +3213,9 @@ const PDFEditorPage = () => {
           gender: formData.patientGender,
           phone: formData.patientPhone,
           address: formData.patientAddress,
-          appointment_date: new Date().toLocaleDateString('vi-VN'),
-          appointment_time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+          // 🔥 THÊM CÁC TRƯỜNG BẮT BUỘC
+          appointment_date: formData.date || currentDate,
+          appointment_time: currentTime,
           doctor_name: formData.doctor || pdfSettings.doctorName,
           services: serviceRows.map(row => ({
             ServiceName: row.name || 'Dịch vụ',
@@ -1906,46 +3229,9 @@ const PDFEditorPage = () => {
 
       console.log('📤 Sending data to BE:', printData);
 
-      const response = await fetch(`${API_BASE_URL}/api/print/prescription/preview`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(printData),
-      });
+      const result = await printPdfService.printPDF(printData);
 
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-
-        let fileName = '';
-        switch (type) {
-          case 'prescription':
-            fileName = `TOA_THUOC_${formData.patientName || 'benh_nhan'}_${new Date().getTime()}.pdf`;
-            break;
-          case 'service':
-            fileName = `PHIEU_DICH_VU_${formData.patientName || 'benh_nhan'}_${new Date().getTime()}.pdf`;
-            break;
-          case 'payment':
-            fileName = `HOA_DON_${formData.invoiceCode || 'HD'}_${new Date().getTime()}.pdf`;
-            break;
-        }
-
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        alert(`✅ Xuất ${type === 'prescription' ? 'toa thuốc' : type === 'service' ? 'phiếu dịch vụ' : 'hóa đơn'} thành công!`);
-      } else {
-        const errorText = await response.text();
-        console.error('❌ BE Error Response:', errorText);
-        throw new Error(errorText || `Lỗi server: ${response.status}`);
-      }
+      alert(`✅ Xuất ${type === 'prescription' ? 'toa thuốc' : type === 'service' ? 'phiếu dịch vụ' : type === 'payment' ? 'hóa đơn' : type === 'test_result' ? 'phiếu kết quả xét nghiệm' : ''} thành công! File: ${result.fileName}`);
     } catch (err) {
       console.error('Error downloading PDF:', err);
       setError('❌ Lỗi khi xuất PDF: ' + err.message);
@@ -2025,7 +3311,7 @@ const PDFEditorPage = () => {
       maxWidth: '1400px',
       margin: '0 auto',
       padding: '20px'
-    }}><DebugBadge />
+    }}>
       {/* Left Column - Controls */}
       <div className="controls" style={{
         width: '440px',
@@ -2043,7 +3329,7 @@ const PDFEditorPage = () => {
             size="sm"
             onClick={() => setShowSettings(true)}
           >
-            ⚙️ Cài đặt PDF
+            <i class="fa-solid fa-gear"></i> Cài đặt PDF
           </Button>
         </div>
 
@@ -2056,6 +3342,7 @@ const PDFEditorPage = () => {
             <option value="prescription">Toa thuốc</option>
             <option value="service">Phiếu chỉ định dịch vụ</option>
             <option value="payment">Hóa đơn thanh toán</option>
+            <option value="test_result">KẾT QUẢ XÉT NGHIỆM</option>
           </Form.Select>
         </Form.Group>
 
@@ -2148,7 +3435,7 @@ const PDFEditorPage = () => {
                 >
                   <option value="cash">Tiền mặt</option>
                   <option value="momo">MoMo</option>
-                  <option value="bank">Chuyển khoản</option>
+                  <option value="napas">Thẻ Napas</option>
                   <option value="card">Thẻ tín dụng</option>
                 </Form.Select>
               </div>
@@ -2340,20 +3627,19 @@ const PDFEditorPage = () => {
 
         <div className="d-flex gap-2 mt-3 flex-wrap">
           <Button variant="outline-primary" onClick={addRow}>
-            + Thêm hàng
+            <i class="fas fa-plus"></i>
           </Button>
           <Button
             variant="success"
             onClick={handleDownloadPDF}
             disabled={isLoading}
           >
-            {isLoading ? <Spinner animation="border" size="sm" /> : '📥 Tải PDF'}
+            <i class="fas fa-download"></i>
+            {isLoading ? <Spinner animation="border" size="sm" /> : ' Tải PDF'}
           </Button>
-          <Button variant="outline-secondary" onClick={handlePrint}>
-            🖨️ In
-          </Button>
+
           <Button variant="outline-dark" onClick={handleBack}>
-            ↩️ Quay lại
+            <i class="fas fa-reply"></i> Quay lại
           </Button>
         </div>
       </div>
@@ -2393,11 +3679,11 @@ const PDFEditorPage = () => {
       {/* Settings Modal - HOÀN CHỈNH VỚI TẤT CẢ TÍNH NĂNG */}
       <Modal show={showSettings} onHide={() => setShowSettings(false)} size="xl" scrollable>
         <Modal.Header closeButton>
-          <Modal.Title>⚙️ Cài đặt PDF Nâng cao</Modal.Title>
+          <Modal.Title><i class="fas fa-cogs"></i> Cài đặt PDF Nâng cao</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Tabs defaultActiveKey="general" className="mb-3">
-            <Tab eventKey="general" title="📄 Chung">
+            <Tab eventKey="general" title={<><i class="fa-solid fa-circle-info"></i> Chung</>} >
               <div className="row g-3">
                 <div className="col-12">
                   <h6 className="fw-bold">Thông tin phòng khám</h6>
@@ -2471,7 +3757,7 @@ const PDFEditorPage = () => {
               </div>
             </Tab>
 
-            <Tab eventKey="logo" title="🖼️ Logo">
+            <Tab eventKey="logo" title={<><i class="fas fa-image me-2"></i>Logo</>} >
               <div className="row g-3">
                 <div className="col-12">
                   <Form.Check
@@ -2512,7 +3798,8 @@ const PDFEditorPage = () => {
                         onClick={handleSaveLogoToServer}
                         disabled={isSavingLogo || !pdfSettings.logo.enabled}
                       >
-                        {isSavingLogo ? <Spinner size="sm" /> : '💾 Lưu Logo lên Server'}
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        {isSavingLogo ? <Spinner size="sm" /> : ' Lưu Logo lên Server'}
                       </Button>
                     )}
                     <Button
@@ -2521,14 +3808,14 @@ const PDFEditorPage = () => {
                       onClick={handleLoadSavedLogo}
                       disabled={!pdfSettings.logo.enabled}
                     >
-                      📥 Tải Logo từ Server
+                      <i class="fas fa-download"></i> Tải Logo từ Server
                     </Button>
                     <Button
                       variant="warning"
                       size="sm"
                       onClick={handleDeleteLogoFromServer}
                     >
-                      🗑️ Xóa Logo khỏi Server
+                      <i class="fas fa-trash"></i> Xóa Logo khỏi Server
                     </Button>
                   </div>
 
@@ -2609,7 +3896,8 @@ const PDFEditorPage = () => {
               </div>
             </Tab>
 
-            <Tab eventKey="watermark" title="💧 Watermark">
+            <Tab eventKey="watermark" title={<><i class="fas fa-tint"></i> Watermark
+            </>}>
               <div className="row g-3">
                 <div className="col-12">
                   <Form.Check
@@ -2749,7 +4037,7 @@ const PDFEditorPage = () => {
               </div>
             </Tab>
 
-            <Tab eventKey="font" title="🎨 Font & Màu sắc">
+            <Tab eventKey="font" title={<><i class="fas fa-palette"></i> Font & Màu sắc</>}>
               <div className="row g-3">
                 <div className="col-6">
                   <Form.Label>Font family</Form.Label>
@@ -2878,7 +4166,7 @@ const PDFEditorPage = () => {
               </div>
             </Tab>
 
-            <Tab eventKey="layout" title="📐 Layout">
+            <Tab eventKey="layout" title={<><i class="fas fa-drafting-compass"></i> Layout</>}>
               <div className="row g-3">
                 <div className="col-6">
                   <Form.Label>Hướng trang</Form.Label>
@@ -2924,10 +4212,10 @@ const PDFEditorPage = () => {
           <div className="d-flex justify-content-between w-100">
             <div>
               <Button variant="outline-secondary" onClick={handleResetSettings}>
-                Reset
+                <i class="fas fa-undo"></i> Reset
               </Button>
               <Button variant="outline-info" onClick={handleExportSettings} className="ms-2">
-                Export
+                <i class="fas fa-file-export"></i> Export
               </Button>
               <Form.Control
                 type="file"
@@ -2941,21 +4229,21 @@ const PDFEditorPage = () => {
                 onClick={() => document.getElementById('import-settings').click()}
                 className="ms-2"
               >
-                Import
+                <i class="fas fa-file-import"></i> Import
               </Button>
             </div>
             <div>
               <Button variant="secondary" onClick={() => setShowSettings(false)}>
-                Hủy
+                <i class="fas fa-window-close"></i> Hủy
               </Button>
               <Button variant="primary" onClick={handleSaveSettings} className="ms-2">
-                Lưu cài đặt
+                <i class="fas fa-save"></i> Lưu cài đặt
               </Button>
             </div>
           </div>
         </Modal.Footer>
       </Modal>
-    </div>
+    </div >
   );
 };
 

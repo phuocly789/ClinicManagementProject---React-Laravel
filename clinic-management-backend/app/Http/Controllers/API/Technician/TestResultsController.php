@@ -559,6 +559,8 @@ class TestResultsController extends Controller
             'patient_age' => !empty($user->DateOfBirth)
                 ? \Carbon\Carbon::parse($user->DateOfBirth)->age
                 : 'N/A',
+            'patient_phone' => $user->Phone ?? 'N/A',
+            'patient_address' => $user->Address ?? 'N/A',
             'patient_gender' => $user->Gender ?? 'N/A',
             'service_name' => $order->service->ServiceName ?? 'N/A',
             'service_type' => $order->service->ServiceType ?? 'N/A',
