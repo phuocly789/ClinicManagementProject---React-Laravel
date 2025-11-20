@@ -139,7 +139,6 @@ Route::prefix('doctor')->group(function () {
     // Chỉ định dịch vụ
     Route::post('/appointments/{appointmentId}/assign-services', [ServiceController::class, 'assignServices']);
     Route::get('/doctor/check-roles', [ServiceController::class, 'checkRolesAndTechnicians']);
-
 });
 
 //Nhóm route cho User
@@ -296,3 +295,4 @@ Route::prefix('payments')->group(function () {
     Route::get('/invoices/{id}', [InvoiceController::class, 'show']);
     Route::post('/invoices', [InvoiceController::class, 'store']);
 });
+Route::middleware(['auth:api'])->get('/doctor/room-info', [DoctorExaminationsController::class, 'getRoomInfo']);

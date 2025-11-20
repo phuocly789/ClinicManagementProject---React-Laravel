@@ -54,7 +54,8 @@ function App() {
           path={path.ADMIN.SCHEDULE.MANAGEMENT}
           element={<AdminScheduleManagement />}
         />
-        <Route path={path.ADMIN.SERVICE.MANAGEMENT}
+        <Route
+          path={path.ADMIN.SERVICE.MANAGEMENT}
           element={<AdminServiceManagement />}
         />
         <Route
@@ -115,16 +116,12 @@ function App() {
           path={path.PATIENT.PROFILE.MANAGEMENT}
           element={<PatientProfile />}
         />
-
-        {/* <Route path={path.PATIENT.BOOKING} element={<PatientBooking />} />
-          <Route path={path.PATIENT.HISTORY} element={<PatientHistory />} /> */}
-
+        {/* {/* <Route path={path.PATIENT.BOOKING} element={<PatientBooking />} /> */}
         <Route
           path={path.PATIENT.APPOINTMENT.MANAGEMENT}
           element={<PatientManagement />}
         />
         {/* <Route path={path.PATIENT.HISTORY} element={<PatientHistory />} /> */}
-
       </Route>
       <Route path={path.LOGIN} element={<LoginPage />} />{" "}
       <Route path={path.REGISTER} element={<Register />} />{" "}
@@ -138,12 +135,11 @@ function App() {
           element={<TechnicianDashboard />}
         />
       </Route>
-      <Route path={"/test"} element={<WebSocketDemo />} />
       {/* Payment */}
       <Route path={path.PayMent.ROOT} element={<ReceptionSidebar />}>
         <Route index element={<PaymentSection />} />
         <Route path={path.PayMent.PAY_RESULT} element={<PaymentResult />} />
-        <Route path={path.PayMent.Pay_PDF_EDITOR} element={<PDFEditorPage/>} />
+        <Route path={path.PayMent.Pay_PDF_EDITOR} element={<PDFEditorPage />} />
       </Route>
     </Routes>
   );

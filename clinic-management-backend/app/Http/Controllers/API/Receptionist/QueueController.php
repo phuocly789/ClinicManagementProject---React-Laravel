@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\API\Receptionist;
 
+use App\Events\QueueStatusUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\MedicalRecord;
 use App\Models\Queue;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -267,6 +269,45 @@ class QueueController extends Controller
 
         $appointment->Status = $request->input('Status');
         $appointment->save();
+
+        if ($request->input('Status') === "Đang khám") {
+            // Full data bác sĩ cần
+            $patient = \App\Models\Patient::with('user')->find($queue->PatientId);
+
+            $doctorData = [
+                'id' => $queue->AppointmentId,
+                'date' => $queue->QueueDate,
+                'time' => $queue->QueueTime,
+                'name' => $patient->user->FullName,
+                'status' => $queue->Status,
+                'patient_id' => $queue->PatientId,
+                'gender' => $patient->user->Gender,
+                'age' => Carbon::parse($patient->user->DateOfBirth)->age,
+                'phone' => $patient->user->Phone,
+                'address' => $patient->user->Address,
+                // 'notes' => $patient->Note,
+            ];
+
+            // Payload lễ tân
+            $receptionistData = [
+                'QueueId'       => $queue->QueueId,
+                'PatientId'     => $queue->PatientId,
+                'PatientName'   => $patient->name,
+                'AppointmentId' => $queue->AppointmentId,
+                'QueueDate'     => $queue->QueueDate,
+                'QueueTime'     => $queue->QueueTime,
+                'QueuePosition' => $queue->QueuePosition,
+                'RoomId'        => $queue->RoomId,
+                'Status'        => $queue->Status
+            ];
+
+            broadcast(new QueueStatusUpdated(
+                doctor: $doctorData,
+                receptionist: $receptionistData,
+                roomId: $queue->RoomId,
+                action: 'updated'
+            ))->toOthers();
+        }
 
         return response()->json([
             'success' => true,

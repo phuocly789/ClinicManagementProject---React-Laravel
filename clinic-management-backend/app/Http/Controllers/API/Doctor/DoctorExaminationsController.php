@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\API\Doctor;
 
+use App\Events\QueueStatusUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\Diagnosis;
@@ -15,9 +16,11 @@ use App\Models\Patient;
 use App\Models\Invoice;
 use App\Models\InvoiceDetail;
 use App\Models\MedicalStaff;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Laravel\Reverb\Loggers\Log;
 
 class DoctorExaminationsController extends Controller
 {
@@ -71,6 +74,58 @@ class DoctorExaminationsController extends Controller
         try {
             $appointment->update(['Status' => 'Đã khám']);
 
+            if ($request['status'] === 'done') {
+
+                // ✅ Cập nhật Status trong Queue
+                DB::table('Queues')
+                    ->where('AppointmentId', $appointmentId)
+                    ->update(['Status' => 'Đã khám']);
+
+                // ✅ SỬA: Lấy đúng queue vừa update (không dùng whereNull)
+                $queueData = DB::table('Queues')
+                    ->join('Rooms', 'Queues.RoomId', '=', 'Rooms.RoomId')
+                    ->join('Patients', 'Queues.PatientId', '=', 'Patients.PatientId')
+                    ->join('Users as PatientUser', 'Patients.PatientId', '=', 'PatientUser.UserId')
+                    ->leftJoin('StaffSchedules', function ($join) {
+                        $join->on('Queues.RoomId', '=', 'StaffSchedules.RoomId')
+                            ->whereDate('StaffSchedules.WorkDate', now()->toDateString());
+                    })
+                    ->leftJoin('MedicalStaff', 'StaffSchedules.StaffId', '=', 'MedicalStaff.StaffId')
+                    ->leftJoin('Users as DoctorUser', 'MedicalStaff.StaffId', '=', 'DoctorUser.UserId')
+                    ->where('Queues.AppointmentId', $appointmentId)
+                    ->select(
+                        'Queues.QueueId',
+                        'Queues.PatientId',
+                        'PatientUser.FullName as PatientName',
+                        'Queues.AppointmentId',
+                        'Queues.RecordId',
+                        'Queues.QueueDate',
+                        'Queues.QueueTime',
+                        'Queues.QueuePosition',
+                        'Queues.RoomId',
+                        'Rooms.RoomName',
+                        'Queues.Status',
+                        'Queues.TicketNumber',
+                        'DoctorUser.FullName as DoctorName'
+                    )
+                    ->first();
+
+                // ✅ Broadcast nếu có data
+                if ($queueData) {
+                    // Log::info('Broadcasting completed examination', [
+                    //     'queueData' => $queueData,
+                    //     'appointmentId' => $appointmentId
+                    // ]);
+
+                    broadcast(new QueueStatusUpdated(
+                        doctor: null,
+                        receptionist: (array) $queueData,
+                        roomId: $queueData->RoomId,
+                        action: 'completed'
+                    ))->toOthers();
+                }
+            }
+
             $recordId = $appointment->RecordId;
             if (!$recordId) {
                 $medicalRecord = MedicalRecord::create([
@@ -109,7 +164,7 @@ class DoctorExaminationsController extends Controller
 
                     $service = Service::find($serviceId);
                     if (!$service) {
-                        \Log::warning("Service not found ID: " . $serviceId);
+                        Log::warning("Service not found ID: " . $serviceId);
                         continue;
                     }
 
@@ -163,6 +218,16 @@ class DoctorExaminationsController extends Controller
                     ]);
                 }
             }
+
+
+
+            // if ($queueData) {
+            //     broadcast(new QueueStatusUpdated(
+            //         (array) $queueData,
+            //         $queueData->RoomId,
+            //         'completed'
+            //     ))->toOthers();
+            // }
 
             DB::commit();
 
@@ -303,5 +368,59 @@ class DoctorExaminationsController extends Controller
             'success' => true,
             'message' => 'Đã ghi nhận tạm lưu'
         ]);
+    }
+
+    public function getRoomInfo(Request $request)
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 401);
+            }
+
+            // Lấy StaffId từ MedicalStaff
+            $staff = \App\Models\MedicalStaff::where('StaffId', $user->UserId)->first();
+
+            if (!$staff) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không tìm thấy thông tin nhân viên y tế.'
+                ], 404);
+            }
+
+            // Lấy phòng từ StaffSchedules liên quan hôm nay
+            $today = Carbon::today()->toDateString(); // 'YYYY-MM-DD'
+
+            $schedule = \App\Models\StaffSchedule::where('StaffId', $staff->StaffId)
+                ->whereDate('WorkDate', $today)
+                ->with('room')
+                ->first();
+
+            if (!$schedule || !$schedule->room) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không tìm thấy phòng của bác sĩ hôm nay.'
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Lấy thông tin phòng khám thành công.',
+                'data' => [
+                    'room_id' => $schedule->room->RoomId,
+                    'room_name' => $schedule->room->RoomName,
+                ]
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi server khi lấy thông tin phòng.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }

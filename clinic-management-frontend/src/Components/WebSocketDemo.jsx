@@ -11,37 +11,66 @@ const WebSocketDemo = () => {
   const [events, setEvents] = useState([]);
   const [echo, setEcho] = useState(null);
 
+  // Config
+  const config = {
+    apiUrl: import.meta.env.VITE_API_URL || "http://localhost:8000",
+    reverbKey: import.meta.env.VITE_REVERB_APP_KEY,
+    reverbHost: import.meta.env.VITE_REVERB_HOST || "localhost",
+    reverbPort: import.meta.env.VITE_REVERB_PORT || "8080",
+    channel: import.meta.env.VITE_REVERB_CHANNEL || "appointments",
+    eventName: import.meta.env.VITE_REVERB_EVENT || ".appointment.updated",
+  };
+
   // ===== Kết nối Reverb WebSocket =====
   const connectWebSocket = () => {
     try {
       console.log("🔌 Connecting to WebSocket...");
+      addEvent(
+        `🔌 Connecting to ${config.reverbHost}:${config.reverbPort}...`,
+        "secondary"
+      );
 
       const echoInstance = new Echo({
         broadcaster: "reverb",
-        key: import.meta.env.VITE_REVERB_APP_KEY,
-        wsHost: import.meta.env.VITE_REVERB_HOST,
-        wsPort: Number(import.meta.env.VITE_REVERB_PORT),
-        wssPort: Number(import.meta.env.VITE_REVERB_PORT),
+        key: config.reverbKey,
+        wsHost: config.reverbHost,
+        wsPort: Number(config.reverbPort),
+        wssPort: Number(config.reverbPort),
         forceTLS: false,
         enabledTransports: ["ws", "wss"],
+        disableStats: true,
       });
 
       echoInstance.connector.pusher.connection.bind("connected", () => {
         setIsConnected(true);
-        addEvent("✅ Connected to WebSocket", "success");
+        addEvent("✅ Connected to WebSocket successfully!", "success");
         console.log("✅ Connected to WebSocket");
       });
 
       echoInstance.connector.pusher.connection.bind("disconnected", () => {
         setIsConnected(false);
+        setIsSubscribed(false);
         addEvent("❌ Disconnected from WebSocket", "danger");
         console.log("❌ Disconnected from WebSocket");
       });
 
       echoInstance.connector.pusher.connection.bind("error", (error) => {
         console.error("WebSocket error:", error);
-        addEvent(`❌ Error: ${error.message || "Unknown error"}`, "danger");
+        addEvent(
+          `❌ Connection Error: ${
+            error.error?.data?.message || "Unknown error"
+          }`,
+          "danger"
+        );
       });
+
+      echoInstance.connector.pusher.connection.bind(
+        "state_change",
+        (states) => {
+          console.log("State changed:", states);
+          addEvent(`🔄 State: ${states.previous} → ${states.current}`, "info");
+        }
+      );
 
       setEcho(echoInstance);
     } catch (error) {
@@ -54,34 +83,43 @@ const WebSocketDemo = () => {
   const subscribeToChannel = () => {
     if (!echo) {
       console.log("❌ Not connected yet!");
-      addEvent("❌ Not connected yet!", "danger");
+      addEvent("❌ Not connected yet!", "warning");
       return;
     }
 
     try {
-      echo
-        .channel(import.meta.env.VITE_REVERB_CHANNEL || "appointments")
-        .listen(
-          import.meta.env.VITE_REVERB_EVENT || "AppointmentUpdated",
-          (data) => {
-            console.log("📅 Event received:", data);
-            addEvent(
-              `📅 ${data.patient_name || data.message || "Appointment"} - ${
-                data.status || ""
-              } (Action: ${data.action || ""})`,
-              "info"
-            );
-          }
+      addEvent(`📡 Subscribing to channel: ${config.channel}...`, "secondary");
+
+      const channel = echo.channel(config.channel);
+
+      // Listen cho event với dấu chấm ở đầu
+      channel.listen(config.eventName, (data) => {
+        console.log("📅 Event received:", data);
+        addEvent(
+          `📅 ${data.patient_name || "Patient"} - Status: ${
+            data.status || "N/A"
+          } (${data.action || "updated"})`,
+          "info"
         );
 
-      setIsSubscribed(true);
-      addEvent(
-        `✅ Subscribed to channel ${
-          import.meta.env.VITE_REVERB_CHANNEL || "appointments"
-        }`,
-        "success"
-      );
+        // Log chi tiết
+        console.table(data);
+      });
+
+      // Subscribe success callback
+      channel.subscribed(() => {
+        setIsSubscribed(true);
+        addEvent(`✅ Subscribed to channel: ${config.channel}`, "success");
+        console.log(`✅ Subscribed to ${config.channel}`);
+      });
+
+      // Subscribe error callback
+      channel.error((error) => {
+        console.error("Subscribe error:", error);
+        addEvent(`❌ Subscribe failed: ${error.message}`, "danger");
+      });
     } catch (error) {
+      console.error("Subscribe error:", error);
       addEvent(`❌ Failed to subscribe: ${error.message}`, "danger");
     }
   };
@@ -90,32 +128,59 @@ const WebSocketDemo = () => {
   const triggerTestEvent = async () => {
     try {
       addEvent("🧪 Triggering test event...", "secondary");
+      console.log(`🧪 Calling API: ${config.apiUrl}/api/test-broadcast`);
 
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/test-broadcast`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      const response = await fetch(`${config.apiUrl}/api/test-broadcast`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+      });
+
+      const result = await response.json();
 
       if (response.ok) {
         addEvent(
-          "✅ Test event triggered! Wait for incoming event...",
+          "✅ Test event triggered! Waiting for WebSocket event...",
           "success"
         );
+        console.log("API Response:", result);
+
+        // Log data sẽ được broadcast
+        if (result.data) {
+          addEvent(
+            `📤 Broadcasting: ${result.data.patient_name} (ID: ${result.data.id})`,
+            "info"
+          );
+        }
       } else {
-        addEvent("❌ Failed to trigger event", "danger");
+        addEvent(
+          `❌ API Error: ${result.message || "Failed to trigger event"}`,
+          "danger"
+        );
       }
     } catch (error) {
-      addEvent(`❌ Error: ${error.message}`, "danger");
+      console.error("Trigger error:", error);
+      addEvent(`❌ Network Error: ${error.message}`, "danger");
+    }
+  };
+
+  // ===== Disconnect =====
+  const disconnect = () => {
+    if (echo) {
+      echo.disconnect();
+      setEcho(null);
+      setIsConnected(false);
+      setIsSubscribed(false);
+      addEvent("🔌 Manually disconnected", "warning");
     }
   };
 
   // ===== Thêm event vào log =====
   const addEvent = (message, type = "info") => {
-    const timestamp = new Date().toLocaleTimeString();
-    setEvents((prev) => [{ message, type, timestamp }, ...prev.slice(0, 19)]);
+    const timestamp = new Date().toLocaleTimeString("vi-VN");
+    setEvents((prev) => [{ message, type, timestamp }, ...prev.slice(0, 49)]);
   };
 
   useEffect(() => {
@@ -131,33 +196,39 @@ const WebSocketDemo = () => {
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h3 className="fw-bold mb-0">🚀 WebSocket Test Dashboard</h3>
             <span
-              className={`badge rounded-pill ${
+              className={`badge rounded-pill fs-6 ${
                 isConnected ? "bg-success" : "bg-danger"
               }`}
             >
-              {isConnected ? "Connected" : "Disconnected"}
+              {isConnected ? "● Connected" : "○ Disconnected"}
             </span>
           </div>
 
+          {/* Config Info */}
           <div className="row text-center mb-4">
-            <div className="col-md-4">
+            <div className="col-md-3">
               <div className="border rounded p-3 bg-light">
                 <small className="text-muted d-block">WebSocket Host</small>
-                <strong>
-                  {import.meta.env.VITE_REVERB_HOST}:
-                  {import.meta.env.VITE_REVERB_PORT}
+                <strong className="text-break small">
+                  {config.reverbHost}:{config.reverbPort}
                 </strong>
               </div>
             </div>
-            <div className="col-md-4">
+            <div className="col-md-3">
               <div className="border rounded p-3 bg-light">
                 <small className="text-muted d-block">App Key</small>
-                <strong className="text-break">
-                  {import.meta.env.VITE_REVERB_APP_KEY}
+                <strong className="text-break small">
+                  {config.reverbKey.substring(0, 12)}...
                 </strong>
               </div>
             </div>
-            <div className="col-md-4">
+            <div className="col-md-3">
+              <div className="border rounded p-3 bg-light">
+                <small className="text-muted d-block">Channel</small>
+                <strong className="text-break small">{config.channel}</strong>
+              </div>
+            </div>
+            <div className="col-md-3">
               <div className="border rounded p-3 bg-light">
                 <small className="text-muted d-block">Status</small>
                 <strong
@@ -169,7 +240,8 @@ const WebSocketDemo = () => {
             </div>
           </div>
 
-          <div className="d-flex gap-3 mb-4">
+          {/* Action Buttons */}
+          <div className="d-flex gap-2 mb-4">
             <button
               onClick={connectWebSocket}
               disabled={isConnected}
@@ -199,41 +271,70 @@ const WebSocketDemo = () => {
             >
               🧪 Test Event
             </button>
+
+            <button
+              onClick={disconnect}
+              disabled={!isConnected}
+              className="btn btn-outline-danger"
+            >
+              🔌 Disconnect
+            </button>
           </div>
         </div>
       </div>
 
-      {/* ===== Event Logs ===== */}
-      <div className="card shadow-lg mb-4">
+      {/* Event Logs */}
+      <div className="card shadow-lg">
         <div className="card-body">
           <div className="d-flex justify-content-between align-items-center mb-3">
-            <h5 className="fw-bold mb-0">📋 Events Log</h5>
+            <h5 className="fw-bold mb-0">📋 Events Log ({events.length})</h5>
             <button
               onClick={() => setEvents([])}
               className="btn btn-sm btn-outline-secondary"
             >
-              Clear
+              🗑️ Clear
             </button>
           </div>
 
-          <div className="overflow-auto" style={{ maxHeight: "400px" }}>
+          <div className="overflow-auto" style={{ maxHeight: "500px" }}>
             {events.length === 0 ? (
               <div className="text-center text-muted py-5">
-                <p className="mb-1">No events yet...</p>
-                <small>Click "Connect" to start listening</small>
+                <div className="display-1 mb-3">📭</div>
+                <p className="mb-1 fw-bold">No events yet</p>
+                <small>Click "Connect" → "Subscribe" → "Test Event"</small>
               </div>
             ) : (
               events.map((event, index) => (
-                <div key={index} className={`alert alert-${event.type} mb-2`}>
+                <div
+                  key={index}
+                  className={`alert alert-${event.type} mb-2 py-2 fade show`}
+                  style={{ fontSize: "0.9rem" }}
+                >
                   <div className="d-flex justify-content-between align-items-start">
-                    <span>{event.message}</span>
-                    <small className="text-muted">{event.timestamp}</small>
+                    <span className="flex-grow-1">{event.message}</span>
+                    <small className="text-muted ms-2 text-nowrap">
+                      {event.timestamp}
+                    </small>
                   </div>
                 </div>
               ))
             )}
           </div>
         </div>
+      </div>
+
+      {/* Debug Info */}
+      <div className="mt-3">
+        <details className="small text-muted">
+          <summary className="cursor-pointer">🔧 Debug Info</summary>
+          <pre className="mt-2 p-3 bg-light rounded">
+            {`Event Name: ${config.eventName}
+API URL: ${config.apiUrl}/api/test-broadcast
+WebSocket: ws://${config.reverbHost}:${config.reverbPort}
+Connection: ${isConnected ? "Active" : "Inactive"}
+Subscription: ${isSubscribed ? "Active" : "Inactive"}`}
+          </pre>
+        </details>
       </div>
     </div>
   );

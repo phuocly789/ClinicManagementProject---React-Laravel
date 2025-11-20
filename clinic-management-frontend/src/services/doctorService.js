@@ -17,6 +17,9 @@ const doctorService = {
             params: { diagnosis, type: "service" },
         });
     },
+    getRoom: () => {
+        return axios.get("/api/doctor/room-info");
+    },
 }
 
 export default doctorService;
