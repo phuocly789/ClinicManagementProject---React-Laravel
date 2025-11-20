@@ -119,6 +119,9 @@ Route::prefix('doctor')->group(function () {
 
     // Lấy lịch làm việc của bác sĩ
     Route::get('/schedules/{doctorId}', [AppointmentsController::class, 'getStaffScheduleById']);
+    Route::get('/schedules/{doctorId}/month/{year}/{month}', [AppointmentsController::class, 'getWorkScheduleByMonth']);
+    Route::get('/schedules/{doctorId}/today', [AppointmentsController::class, 'getTodaySchedule']);
+    Route::get('/schedules/{doctorId}/week', [AppointmentsController::class, 'getWeekSchedule']);
 
     // Lấy danh sách tất cả bệnh nhân
     Route::get('/patients', [PatientsController::class, 'index']);
@@ -290,7 +293,7 @@ Route::prefix('payments')->group(function () {
 Route::prefix('search')->group(function () {
     // Tìm kiếm tổng quát - tìm tất cả mọi thứ
     Route::get('/', [SearchController::class, 'search']);
-    
+
     // Tìm kiếm chuyên biệt theo từng loại dữ liệu
     Route::get('/patients', [SearchController::class, 'searchPatients']);
     Route::get('/medicines', [SearchController::class, 'searchMedicines']);
@@ -301,7 +304,7 @@ Route::prefix('search')->group(function () {
     Route::get('/suppliers', [SearchController::class, 'searchSuppliers']);
     Route::get('/invoices', [SearchController::class, 'searchInvoices']);
     Route::get('/test-results', [SearchController::class, 'searchTestResults']);
-    
+
     // Health check và quản lý index
     Route::get('/health', [SearchController::class, 'health']);
     Route::post('/index', [SearchController::class, 'indexDocument']);
@@ -337,11 +340,11 @@ Route::prefix('doctor')->group(function () {
 Route::get('/solr-test', function () {
     try {
         $client = app(\Solarium\Client::class);
-        
+
         // Test ping
         $ping = $client->createPing();
         $result = $client->ping($ping);
-        
+
         return response()->json([
             'status' => 'success',
             'message' => 'Solr connection successful',
@@ -362,8 +365,8 @@ Route::get('/solr-test', function () {
             'ping_response' => $result->getData()
         ]);
     } catch (\Exception $e) {
-            // \Log::error('Solr connection error: ' . $e->getMessage());
-        
+        // \Log::error('Solr connection error: ' . $e->getMessage());
+
         return response()->json([
             'status' => 'error',
             'message' => $e->getMessage(),
@@ -388,24 +391,24 @@ Route::get('/solr-test', function () {
 Route::get('/solr-debug', function () {
     try {
         $client = app(\Solarium\Client::class);
-        
+
         // Test ping
         $ping = $client->createPing();
         $pingResult = $client->ping($ping);
-        
+
         // Test core status
         $coreAdmin = $client->createCoreAdmin();
         $status = $coreAdmin->createStatus();
         $coreAdmin->setAction($status);
         $result = $client->coreAdmin($coreAdmin);
-        
+
         return response()->json([
             'status' => 'success',
             'ping' => $pingResult->getStatus(),
             'core_status' => $result->getStatus(),
             'endpoints' => $client->getEndpoints(),
         ]);
-        
+
     } catch (\Exception $e) {
         return response()->json([
             'status' => 'error',

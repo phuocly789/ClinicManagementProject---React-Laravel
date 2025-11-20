@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Col, Card, Form, Button, Spinner } from "react-bootstrap";
-
-const API_BASE_URL = 'http://localhost:8000';
+import doctorService from "../../../services/doctorService";
 
 const DiagnosisSection = ({
   symptoms: initialSymptoms,
@@ -14,16 +13,14 @@ const DiagnosisSection = ({
   setToast,
   onDiagnosisUpdate,
 }) => {
-  // FIX: SỬ DỤNG DIRECTLY TỪ PROPS, KHÔNG DÙNG STATE LOCAL
   const symptoms = initialSymptoms || '';
   const diagnosis = initialDiagnosis || '';
-  
+
   const [diagnosisSuggestions, setDiagnosisSuggestions] = useState([]);
   const [diagnosisLoading, setDiagnosisLoading] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
 
-  // FIX: XÓA CÁC USE EFFECT GÂY RE-RENDER, XỬ LÝ TRỰC TIẾP
   const handleSymptomsChange = useCallback((e) => {
     setInitialSymptoms(e.target.value);
   }, [setInitialSymptoms]);
@@ -32,7 +29,7 @@ const DiagnosisSection = ({
     setInitialDiagnosis(e.target.value);
   }, [setInitialDiagnosis]);
 
-  // FIX: GỢI Ý CHẨN ĐOÁN - CODE ĐẦY ĐỦ
+  // FIX: XỬ LÝ API GỢI Ý CHẨN ĐOÁN - ĐÃ SỬA
   useEffect(() => {
     const trimmedSymptoms = symptoms?.trim();
     if (!trimmedSymptoms || trimmedSymptoms.length < 3) {
@@ -42,20 +39,46 @@ const DiagnosisSection = ({
 
     setDiagnosisLoading(true);
     const timeout = setTimeout(async () => {
-      const fetchUrl = `${API_BASE_URL}/api/doctor/ai/suggestion?symptoms=${encodeURIComponent(trimmedSymptoms)}&type=diagnosis`;
-
       try {
-        const res = await fetch(fetchUrl);
-        if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
-        const data = await res.json();
-
-        if (Array.isArray(data)) {
-          setDiagnosisSuggestions(data);
-        } else {
-          throw new Error("Dữ liệu gợi ý chẩn đoán không phải mảng JSON");
+        console.log('🔍 Gọi API suggestDiagnosis với symptoms:', trimmedSymptoms);
+        const response = await doctorService.suggestDiagnosis(trimmedSymptoms);
+        console.log('🔍 API Response:', response);
+        
+        let suggestions = [];
+        
+        // FIX: API TRẢ VỀ ARRAY TRỰC TIẾP, KHÔNG PHẢI response.data
+        if (Array.isArray(response)) {
+          suggestions = response;
+          console.log('✅ Case 1: response là array trực tiếp');
         }
+        // DỰ PHÒNG: nếu có response.data
+        else if (response && Array.isArray(response.data)) {
+          suggestions = response.data;
+          console.log('✅ Case 2: response.data là array');
+        }
+        else {
+          console.warn('⚠️ Cấu trúc response không xác định:', response);
+        }
+
+        console.log('📊 Suggestions cuối cùng:', suggestions);
+
+        if (suggestions.length > 0) {
+          // CHUẨN HÓA DỮ LIỆU
+          const normalizedSuggestions = suggestions.map(item => ({
+            DiagnosisName: item.DiagnosisName || item.name || item.diagnosis || 'Không có tên',
+            Reason: item.Reason || item.reason || item.description || item.explanation || 'Không có mô tả'
+          }));
+          
+          setDiagnosisSuggestions(normalizedSuggestions);
+          console.log('✅ Đã set diagnosis suggestions:', normalizedSuggestions);
+        } else {
+          setDiagnosisSuggestions([]);
+          console.log('ℹ️ Không có gợi ý chẩn đoán nào');
+        }
+
       } catch (err) {
-        console.error("AI diagnosis error:", err);
+        console.error("❌ AI diagnosis error:", err);
+        console.error("❌ Error details:", err.response?.data || err.message);
         setToast({
           show: true,
           message: `Lỗi gợi ý chẩn đoán: ${err.message}`,
@@ -70,7 +93,7 @@ const DiagnosisSection = ({
     return () => clearTimeout(timeout);
   }, [symptoms, setToast]);
 
-  // FIX: GỢI Ý THUỐC - CODE ĐẦY ĐỦ
+  // FIX: XỬ LÝ API GỢI Ý THUỐC - ĐÃ SỬA
   useEffect(() => {
     const trimmedDiagnosis = diagnosis?.trim();
     if (!trimmedDiagnosis || trimmedDiagnosis.length < 3) {
@@ -80,20 +103,46 @@ const DiagnosisSection = ({
 
     setAiLoading(true);
     const timeout = setTimeout(async () => {
-      const fetchUrl = `${API_BASE_URL}/api/doctor/ai/suggestion?diagnosis=${encodeURIComponent(trimmedDiagnosis)}&type=medicine`;
-
       try {
-        const res = await fetch(fetchUrl);
-        if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
-        const data = await res.json();
-
-        if (Array.isArray(data)) {
-          setAiSuggestions(data);
-        } else {
-          throw new Error("Dữ liệu gợi ý thuốc không phải mảng JSON");
+        console.log('🔍 Gọi API suggestMedicine với diagnosis:', trimmedDiagnosis);
+        const response = await doctorService.suggestMedicine(trimmedDiagnosis);
+        console.log('🔍 API Response:', response);
+        
+        let suggestions = [];
+        
+        // FIX: API TRẢ VỀ ARRAY TRỰC TIẾP, KHÔNG PHẢI response.data
+        if (Array.isArray(response)) {
+          suggestions = response;
+          console.log('✅ Case 1: response là array trực tiếp');
         }
+        // DỰ PHÒNG: nếu có response.data
+        else if (response && Array.isArray(response.data)) {
+          suggestions = response.data;
+          console.log('✅ Case 2: response.data là array');
+        }
+        else {
+          console.warn('⚠️ Cấu trúc response không xác định:', response);
+        }
+
+        console.log('📊 Medicine suggestions cuối cùng:', suggestions);
+
+        if (suggestions.length > 0) {
+          // CHUẨN HÓA DỮ LIỆU
+          const normalizedSuggestions = suggestions.map(item => ({
+            MedicineName: item.MedicineName || item.name || item.medicine || item.medication || 'Không có tên',
+            Reason: item.Reason || item.reason || item.description || item.explanation || 'Không có mô tả'
+          }));
+          
+          setAiSuggestions(normalizedSuggestions);
+          console.log('✅ Đã set medicine suggestions:', normalizedSuggestions);
+        } else {
+          setAiSuggestions([]);
+          console.log('ℹ️ Không có gợi ý thuốc nào');
+        }
+
       } catch (err) {
-        console.error("AI medicine error:", err);
+        console.error("❌ AI medicine error:", err);
+        console.error("❌ Error details:", err.response?.data || err.message);
         setToast({
           show: true,
           message: `Lỗi gợi ý thuốc: ${err.message}`,
@@ -108,7 +157,7 @@ const DiagnosisSection = ({
     return () => clearTimeout(timeout);
   }, [diagnosis, setToast]);
 
-  // FIX: XỬ LÝ CHỌN GỢI Ý CHẨN ĐOÁN
+  // CÁC FUNCTION KHÁC GIỮ NGUYÊN
   const handleSelectDiagnosis = useCallback((suggestedDiagnosis) => {
     const newDiagnosis = suggestedDiagnosis.DiagnosisName;
     setInitialDiagnosis(newDiagnosis);
@@ -120,7 +169,6 @@ const DiagnosisSection = ({
     setDiagnosisSuggestions([]);
   }, [setInitialDiagnosis, setToast]);
 
-  // FIX: XỬ LÝ THÊM THUỐC TỪ GỢI Ý
   const handleAddMedicine = useCallback((item) => {
     const existingItem = prescriptionRows.find(row => row.medicine === item.MedicineName);
     if (existingItem) {
@@ -131,20 +179,19 @@ const DiagnosisSection = ({
       );
       setPrescriptionRows(updatedRows);
     } else {
-      setPrescriptionRows(prev => [...prev, { 
-        medicine: item.MedicineName, 
-        quantity: 1, 
-        dosage: '' 
+      setPrescriptionRows(prev => [...prev, {
+        medicine: item.MedicineName,
+        quantity: 1,
+        dosage: ''
       }]);
     }
-    setToast({ 
-      show: true, 
-      message: `✅ Đã thêm "${item.MedicineName}" vào toa thuốc.`, 
-      variant: "success" 
+    setToast({
+      show: true,
+      message: `✅ Đã thêm "${item.MedicineName}" vào toa thuốc.`,
+      variant: "success"
     });
   }, [prescriptionRows, setPrescriptionRows, setToast]);
 
-  // FIX: CẬP NHẬT DIAGNOSES KHI CÓ THAY ĐỔI
   useEffect(() => {
     if (onDiagnosisUpdate && (symptoms || diagnosis)) {
       onDiagnosisUpdate({
