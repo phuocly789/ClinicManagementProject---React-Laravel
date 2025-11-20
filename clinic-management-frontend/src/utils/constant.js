@@ -83,8 +83,9 @@ export const path = {
 
     TECHNICIAN: {
         ROOT: "/technician",
-        SCHEDULE: "schedule",
+        SCHEDULE: "/technician/schedule",
         TEST_RESULTS: "test-results",
+        TECHNICIAN_PRINT_PDF: "technician-print-pdf-editor",
     },
 
     PayMent: {
@@ -98,8 +99,9 @@ export const USER_ROLE = {
     ADMIN: "Admin",
     PATIENT: "Bệnh nhân",
     DOCTOR: "Bác sĩ",
-    TECHNICIAN: "Kỹ thuật viên",
+    TECHNICIAN: "Kĩ thuật viên",
     RECEPTIONIST: "Lễ tân",
+    
 };
 
 
@@ -107,7 +109,7 @@ export const ROLE_ROUTE = {
     [USER_ROLE.ADMIN]: path.ADMIN.DASHBOARD,
     [USER_ROLE.PATIENT]: path.PATIENT.ROOT,
     [USER_ROLE.DOCTOR]: path.DOCTOR.ROOT,
-    [USER_ROLE.TECHNICIAN]: path.TECHNICIAN.ROOT,
+    [USER_ROLE.TECHNICIAN]: path.TECHNICIAN.SCHEDULE,
     [USER_ROLE.RECEPTIONIST]: path.RECEPTIONIST.DASHBOARD,
 };
 

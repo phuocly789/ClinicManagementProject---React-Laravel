@@ -29,7 +29,8 @@ const TechnicianSidebar = () => {
             </li>
             <li>
               <NavLink to="/technician/test-results" className="nav-item">
-                <i class="fas fa-vials"></i>                Quản Lý Xét Nghiệm
+                <i class="fas fa-vials"></i>                
+                Quản Lý Xét Nghiệm
               </NavLink>
             </li>
 
