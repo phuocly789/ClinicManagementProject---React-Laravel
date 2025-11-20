@@ -409,6 +409,9 @@ ol,
 ul {
   margin-top: 0;
   margin-bottom: 0 !important;
+dl, ol, ul {
+  margin-top: 0;
+  margin-bottom: 0 !important;
 
   /* src/components/PaymentSection.css */
   .stats-card {
