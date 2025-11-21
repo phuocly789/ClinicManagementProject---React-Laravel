@@ -4,6 +4,9 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Http\Services\ScheduleService;
+use App\Models\MedicalStaff;
+use App\Models\Patient;
+use GrahamCampbell\ResultType\Success;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
@@ -33,7 +36,15 @@ class ScheduleController extends Controller
             'message' => $result['message']
         ], $statusCode);
     }
-
+    public function getStaff()
+    {
+        $staff = MedicalStaff::with('user:UserId,FullName')->get();
+        return response()->json([
+            'data' => $staff,
+            'status' => 'Success',
+            'message' => 'Lấy danh sách bác sĩ thành công'
+        ], 200);
+    }
     public function createSchedule(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -42,6 +53,7 @@ class ScheduleController extends Controller
             'StartTime' => ['required', 'date_format:H:i:s'],
             'EndTime' => ['required', 'date_format:H:i:s', 'after:StartTime'],
             'IsAvailable' => ['required', 'boolean'],
+            'RoomId' => ['required', 'integer'],
         ], [
             'StaffId.required' => 'Vui lòng cung cấp StaffId.',
             'StaffId.integer' => 'StaffId phải là số nguyên.',
@@ -87,6 +99,7 @@ class ScheduleController extends Controller
             'StartTime' => ['required', 'date_format:H:i:s'],
             'EndTime' => ['required', 'date_format:H:i:s', 'after:StartTime'],
             'IsAvailable' => ['required', 'boolean'],
+            'RoomId' => ['required', 'integer'],
         ], [
             'WorkDate.required' => 'Vui lòng cung cấp ngày làm việc.',
             'WorkDate.date_format' => 'Ngày làm việc phải có định dạng YYYY-MM-DD.',

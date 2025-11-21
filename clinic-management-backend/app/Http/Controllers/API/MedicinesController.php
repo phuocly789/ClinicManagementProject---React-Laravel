@@ -213,45 +213,86 @@ class MedicinesController extends Controller
     // Export nâng cao (ĐÃ OK, chỉ thêm parse filters nếu cần)
     public function export(Request $request)
     {
-        $filtersStr = $request->input('filters', '{}');
-        $filters = json_decode($filtersStr, true) ?? []; // Parse JSON string to array
+        try {
+            $filters = $request->input('filters', '{}');
+            $filters = is_string($filters) ? json_decode($filters, true) : $filters;
+            $filters = is_array($filters) ? $filters : [];
 
-        $columnsStr = $request->input('columns', '');
-        $columns = array_filter(array_map('trim', explode(',', $columnsStr))); // Parse comma-separated string to array, trim, remove empty
+            $columns = $request->input('columns', '');
+            $columns = $columns ? array_filter(explode(',', $columns)) : [];
 
-        if (empty($columns)) {
-            $columns = ['MedicineId', 'MedicineName', 'MedicineType', 'Unit', 'Price', 'StockQuantity', 'Description', 'ExpiryDate', 'LowStockThreshold']; // Default
-        }
-
-        if (count($columns) > 20) {
-            return response()->json(['message' => 'Bạn đã chọn quá nhiều cột. Tối đa 20 cột/lần xuất.'], 422);
-        }
-
-        if ($filters['expiry_status'] ?? null) {
-            $today = Carbon::today();
-            if ($filters['expiry_status'] === 'expired') {
-                $query->where('ExpiryDate', '<', $today);
-            } elseif ($filters['expiry_status'] === 'soon') {
-                $query->whereBetween('ExpiryDate', [$today, $today->copy()->addDays(30)]);
+            if (empty($columns)) {
+                $columns = [
+                    'MedicineId',
+                    'MedicineName',
+                    'MedicineType',
+                    'Unit',
+                    'Price',
+                    'StockQuantity',
+                    'ExpiryDate',
+                    'LowStockThreshold',
+                    'Description'
+                ];
             }
-        }
 
-        $query = Medicine::query();
-        foreach ($filters as $key => $value) {
-            if ($value !== null && $value !== '') {
-                $query->where($key, $value);
+            // Xây dựng query
+            $query = Medicine::query();
+
+            // Áp dụng bộ lọc
+            if (!empty($filters['search'])) {
+                $query->where('MedicineName', 'like', '%' . $filters['search'] . '%');
             }
+            if (!empty($filters['type'])) {
+                $query->where('MedicineType', $filters['type']);
+            }
+            if (!empty($filters['unit'])) {
+                $query->where('Unit', $filters['unit']);
+            }
+            if (!empty($filters['min_price'])) {
+                $query->where('Price', '>=', $filters['min_price']);
+            }
+            if (!empty($filters['max_price'])) {
+                $query->where('Price', '<=', $filters['max_price']);
+            }
+            if (isset($filters['low_stock']) && $filters['low_stock'] !== '') {
+                if ($filters['low_stock'] == '1') {
+                    $query->whereColumn('StockQuantity', '<', 'LowStockThreshold');
+                } else {
+                    $query->whereColumn('StockQuantity', '>=', 'LowStockThreshold');
+                }
+            }
+
+            // Lọc hạn sử dụng
+            if (!empty($filters['expiry_status'])) {
+                $today = Carbon::today();
+                if ($filters['expiry_status'] === 'expired') {
+                    $query->where('ExpiryDate', '<', $today);
+                } elseif ($filters['expiry_status'] === 'soon') {
+                    $query->whereBetween('ExpiryDate', [$today, $today->copy()->addDays(30)]);
+                } elseif ($filters['expiry_status'] === 'valid') {
+                    $query->where('ExpiryDate', '>=', $today->copy()->addDays(31));
+                }
+            }
+
+            $data = $query->select($columns)->get();
+
+            if ($data->isEmpty()) {
+                // TRẢ VỀ FILE RỖNG + HEADER ĐÚNG, KHÔNG ĐƯỢC TRẢ JSON!
+                return Excel::download(new MedicinesExport(collect([]), $columns), 'danh_sach_thuoc_trong.xlsx');
+            }
+
+            $filename = 'danh_sach_thuoc_' . now()->format('Y-m-d') . '.xlsx';
+
+            return Excel::download(new MedicinesExport($data, $columns), $filename);
+        } catch (\Exception $e) {
+            \Log::error('Export Excel Error: ' . $e->getMessage());
+
+            // Nếu có lỗi → vẫn trả file Excel lỗi để frontend không bị blob JSON
+            return response('Lỗi xuất file Excel: ' . $e->getMessage(), 500)
+                ->header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                ->header('Content-Disposition', 'attachment; filename="error.xlsx"');
         }
-
-        $data = $query->select($columns)->get();
-
-        if ($data->isEmpty()) {
-            return response()->json(['message' => 'Không có dữ liệu phù hợp với bộ lọc.'], 404);
-        }
-
-        return Excel::download(new MedicinesExport($filters, $columns), 'medicines.xlsx');
     }
-
     // Import thật (ĐÃ OK)
     public function import(Request $request)
     {

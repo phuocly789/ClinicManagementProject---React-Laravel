@@ -9,6 +9,7 @@ use App\Models\StaffSchedule;
 use App\Models\MedicalStaff;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Carbon\Carbon;
 
 class AppointmentsController extends Controller
 {
@@ -81,29 +82,126 @@ class AppointmentsController extends Controller
     }
 
     /**
-     * 🩺 Lấy lịch làm việc của bác sĩ theo ID (không cần đăng nhập)
+     * 🩺 Lấy lịch làm việc của bác sĩ theo ID (đầy đủ thông tin)
      */
     public function getStaffScheduleById($doctorId)
     {
-        // Lấy toàn bộ lịch làm việc của bác sĩ
-        $schedules = StaffSchedule::where('StaffId', $doctorId)
-            ->orderBy('WorkDate')
-            ->orderBy('StartTime')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'id' => $item->ScheduleId,
-                    'date' => $item->WorkDate->format('Y-m-d'),
-                    'time' => $item->StartTime . ' - ' . $item->EndTime,
-                    'title' => 'Lịch làm việc của bác sĩ',
-                    'description' => $item->IsAvailable ? 'Có mặt làm việc' : 'Nghỉ',
-                    'type' => $item->IsAvailable ? 'work' : 'off',
-                ];
-            });
+        try {
 
-        return response()->json([
-            'data' => $schedules,
-        ]);
+            // Lấy toàn bộ lịch làm việc của bác sĩ
+            $schedules = StaffSchedule::where('StaffId', $doctorId)
+                ->orderBy('WorkDate')
+                ->orderBy('StartTime')
+                ->get()
+                ->map(function ($item) {
+                    $workDate = Carbon::parse($item->WorkDate);
+                    $now = Carbon::now();
+
+                    // Xác định trạng thái
+                    $status = 'upcoming';
+                    if ($workDate->isToday()) {
+                        $status = 'active';
+                    } elseif ($workDate->isPast()) {
+                        $status = 'completed';
+                    }
+
+                    return [
+                        'schedule_id' => $item->ScheduleId,
+                        'date' => $item->WorkDate->format('Y-m-d'),
+                        'start_time' => $item->StartTime,
+                        'end_time' => $item->EndTime,
+                        'time' => $item->StartTime . ' - ' . $item->EndTime,
+                        'location' => $item->Location ?? 'Phòng Khám Đa Khoa',
+                        'type' => $item->IsAvailable ? 'Làm việc toàn thời gian' : 'Làm việc bán thời gian',
+                        'status' => $status,
+                        'is_available' => (bool) $item->IsAvailable,
+                        'notes' => $item->Notes,
+                        'work_date_formatted' => $item->WorkDate->format('d/m/Y'),
+                        'day_of_week' => $this->getVietnameseDayOfWeek($item->WorkDate->dayOfWeek)
+                    ];
+                });
+
+            // Lấy thông tin bác sĩ
+            $doctor = MedicalStaff::with('user')
+                ->where('StaffId', $doctorId)
+                ->first();
+
+            $doctorInfo = null;
+            if ($doctor) {
+                $doctorInfo = [
+                    'staff_id' => $doctor->StaffId,
+                    'full_name' => $doctor->user->FullName ?? 'N/A',
+                    'specialization' => $doctor->Specialization ?? 'Bác sĩ đa khoa',
+                    'clinic' => $doctor->Department ?? 'Phòng Khám Đa Khoa',
+                    'hire_date' => $doctor->HireDate ? $doctor->HireDate->format('d/m/Y') : 'N/A',
+                    'phone' => $doctor->user->Phone ?? 'N/A',
+                    'email' => $doctor->user->Email ?? 'N/A',
+                    'position' => $doctor->Position ?? 'Bác sĩ'
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'doctor_info' => $doctorInfo,
+                    'schedules' => $schedules,
+                    'statistics' => [
+                        'total_schedules' => $schedules->count(),
+                        'active_schedules' => $schedules->where('status', 'active')->count(),
+                        'upcoming_schedules' => $schedules->where('status', 'upcoming')->count(),
+                        'completed_schedules' => $schedules->where('status', 'completed')->count(),
+                    ]
+                ],
+                'message' => 'Lấy lịch làm việc thành công'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi lấy lịch làm việc: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * ✅ Hàm lấy tên thứ tiếng Việt
+     */
+    private function getVietnameseDayOfWeek($dayOfWeek)
+    {
+        $days = [
+            0 => 'Chủ Nhật',
+            1 => 'Thứ Hai',
+            2 => 'Thứ Ba',
+            3 => 'Thứ Tư',
+            4 => 'Thứ Năm',
+            5 => 'Thứ Sáu',
+            6 => 'Thứ Bảy'
+        ];
+
+        return $days[$dayOfWeek] ?? 'N/A';
+    }
+
+    /**
+     * ✅ Hàm lấy tên tháng tiếng Việt
+     */
+    private function getVietnameseMonthName($month)
+    {
+        $months = [
+            1 => 'Tháng Một',
+            2 => 'Tháng Hai',
+            3 => 'Tháng Ba',
+            4 => 'Tháng Tư',
+            5 => 'Tháng Năm',
+            6 => 'Tháng Sáu',
+            7 => 'Tháng Bảy',
+            8 => 'Tháng Tám',
+            9 => 'Tháng Chín',
+            10 => 'Tháng Mười',
+            11 => 'Tháng Mười Một',
+            12 => 'Tháng Mười Hai'
+        ];
+
+        return $months[$month] ?? 'N/A';
     }
 
 

@@ -6,7 +6,8 @@ import InvoiceDetailModal from './InvoiceDetailModal';
 import { paymentService } from '../../services/paymentService';
 import Pagination from '../../Components/Pagination/Pagination';
 import Loading from '../../Components/Loading/Loading';
-import { AlertTriangle, CreditCard, RotateCcw, History, Eye, CheckCircle, XCircle } from "lucide-react";
+import { printPdfService } from '../../services/printPdfService';
+import { AlertTriangle, CreditCard, RotateCcw, History, Eye, CheckCircle, XCircle, Printer } from "lucide-react";
 
 // Constants
 const INVOICE_STATUS = {
@@ -81,7 +82,8 @@ const PaymentSection = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  
+  const [printing, setPrinting] = useState(false);
+
   // State cho Custom Confirm
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
@@ -92,7 +94,7 @@ const PaymentSection = () => {
   const getTabName = (tabKey) => {
     const tabNames = {
       [TAB_KEYS.ALL]: 'Tất cả hóa đơn',
-      [TAB_KEYS.PENDING]: 'Chờ thanh toán', 
+      [TAB_KEYS.PENDING]: 'Chờ thanh toán',
       [TAB_KEYS.PAID]: 'Đã thanh toán',
       [TAB_KEYS.CANCELLED]: 'Đã hủy',
       [TAB_KEYS.PAYMENT_HISTORY]: 'Lịch sử thanh toán'
@@ -103,18 +105,18 @@ const PaymentSection = () => {
   // QUAN TRỌNG: Hàm xác định trạng thái hiển thị - FIXED
   const getDisplayStatus = (invoice) => {
     if (!invoice) return { status: INVOICE_STATUS.PENDING, paymentMethod: null };
-    
+
     const normalizedStatus = normalizeStatus(invoice.status);
     const hasOrderId = invoice.order_id && invoice.order_id !== 'null' && invoice.order_id !== '';
     const hasPaymentMethod = invoice.payment_method && invoice.payment_method !== 'null' && invoice.payment_method !== '';
-    
+
     // QUAN TRỌNG: Chỉ hiển thị "Đang xử lý" nếu có OrderId VÀ status là PENDING
     // VÀ thời gian cập nhật chưa quá 30 phút (tránh hiển thị sai cho các hóa đơn cũ)
     if (hasOrderId && normalizedStatus === INVOICE_STATUS.PENDING) {
       const updatedTime = new Date(invoice.updated_at || invoice.created_at);
       const now = new Date();
       const diffMinutes = (now - updatedTime) / (1000 * 60);
-      
+
       // Nếu quá 30 phút vẫn còn OrderId -> coi như bị kẹt, hiển thị "Chờ thanh toán"
       if (diffMinutes > 30) {
         return {
@@ -123,13 +125,13 @@ const PaymentSection = () => {
           isStuck: true
         };
       }
-      
+
       return {
         status: INVOICE_STATUS.PROCESSING,
         paymentMethod: invoice.payment_method
       };
     }
-    
+
     // Nếu không có OrderId và status là PENDING -> chờ thanh toán
     if (!hasOrderId && normalizedStatus === INVOICE_STATUS.PENDING) {
       return {
@@ -137,7 +139,7 @@ const PaymentSection = () => {
         paymentMethod: null
       };
     }
-    
+
     // Các trường hợp khác
     return {
       status: normalizedStatus,
@@ -148,7 +150,7 @@ const PaymentSection = () => {
   // Hàm lấy badge trạng thái
   const getStatusBadge = (invoice) => {
     const displayStatus = getDisplayStatus(invoice);
-    
+
     switch (displayStatus.status) {
       case INVOICE_STATUS.PENDING:
         return <Badge bg="warning"> Chờ thanh toán</Badge>;
@@ -167,15 +169,15 @@ const PaymentSection = () => {
   const getPaymentMethodBadge = (invoice) => {
     const displayStatus = getDisplayStatus(invoice);
     const paymentMethod = displayStatus.paymentMethod;
-    
+
     if (displayStatus.status === INVOICE_STATUS.PROCESSING) {
       return <Badge bg="info">🔄 Đang xử lý</Badge>;
     }
-    
+
     if (!paymentMethod) {
       return <Badge bg="secondary">Chưa thanh toán</Badge>;
     }
-    
+
     switch (paymentMethod) {
       case PAYMENT_METHODS.MOMO:
         return <Badge bg="primary">💜 MoMo</Badge>;
@@ -215,7 +217,7 @@ const PaymentSection = () => {
         }
       }
 
-      const response = activeTab === TAB_KEYS.PAYMENT_HISTORY 
+      const response = activeTab === TAB_KEYS.PAYMENT_HISTORY
         ? await paymentService.getPaymentHistory(filters)
         : await paymentService.getInvoices(filters);
 
@@ -237,7 +239,7 @@ const PaymentSection = () => {
 
         setInvoices(invoicesData);
         setTotalItems(paginationData.total || invoicesData.length || 0);
-        
+
         if (invoicesData.length === 0 && !response.data.message) {
           setError('Không có dữ liệu hóa đơn');
         }
@@ -261,7 +263,7 @@ const PaymentSection = () => {
     try {
       setResetting(true);
       const response = await paymentService.resetStuckInvoices();
-      
+
       if (response.data.success) {
         setSuccess(`✅ ${response.data.message}`);
         // Refresh danh sách
@@ -282,7 +284,7 @@ const PaymentSection = () => {
     try {
       setResetting(true);
       const response = await paymentService.resetPayment(invoice.id);
-      
+
       if (response.data.success) {
         setSuccess(`✅ Đã reset hóa đơn ${invoice.code}`);
         // Refresh danh sách
@@ -295,6 +297,208 @@ const PaymentSection = () => {
       setError('❌ Lỗi khi reset hóa đơn');
     } finally {
       setResetting(false);
+    }
+  };
+
+  // Hàm in hóa đơn cho từng bệnh nhân đã thanh toán - GIỐNG InvoiceDetailModal
+  // ✅ Hàm in hóa đơn - THÊM ĐẦY ĐỦ PDF SETTINGS
+  const handlePrintInvoice = async (invoice) => {
+    try {
+      setPrinting(true);
+      setError('');
+      setSuccess('');
+
+      console.log('🖨️ Calling Laravel PDF API...', invoice);
+
+      if (!invoice) {
+        throw new Error('Không có dữ liệu hóa đơn');
+      }
+
+      // ✅ Lấy dữ liệu services và prescriptions ĐÚNG CẤU TRÚC
+      const { services, prescriptions } = getServicesAndMedicinesFromInvoice(invoice);
+
+      console.log('📋 Processed data for PDF:', {
+        services,
+        prescriptions,
+        hasServices: services.length > 0,
+        hasPrescriptions: prescriptions.length > 0
+      });
+
+      // ✅ THÊM ĐẦY ĐỦ PDF SETTINGS THEO VALIDATION CỦA BE
+      const printData = {
+        type: 'payment',
+        patient_name: invoice.patient_name || 'THÔNG TIN BỆNH NHÂN',
+        age: String(invoice.patient_age || 'N/A'),
+        gender: invoice.patient_gender || 'N/A',
+        phone: invoice.patient_phone || 'N/A',
+        appointment_date: invoice.date || new Date().toLocaleDateString('vi-VN'),
+        appointment_time: 'Hoàn tất',
+        doctor_name: 'Hệ thống',
+        paid_at: invoice.paid_at || new Date().toLocaleString('vi-VN'),
+
+        // ✅ QUAN TRỌNG: Gửi đúng cấu trúc prescriptions và services
+        prescriptions: prescriptions,
+        services: services,
+
+        // Payment data
+        payment_method: invoice.payment_method || 'cash',
+        payment_status: 'Đã thanh toán',
+        discount: 0,
+        invoice_code: invoice.code || `INV_${invoice.id}`,
+        total_amount: invoice.total || 0,
+
+        // ✅ QUAN TRỌNG: THÊM ĐẦY ĐỦ PDF SETTINGS THEO VALIDATION
+        pdf_settings: {
+          // 🔥 CÁC TRƯỜNG BẮT BUỘC THEO VALIDATION
+          fontFamily: 'Times New Roman',
+          fontSize: '14px',
+          fontColor: '#000000',
+          primaryColor: '#2c5aa0',
+          backgroundColor: '#ffffff',
+          borderColor: '#333333',
+          headerBgColor: '#f0f0f0',
+          lineHeight: 1.5,
+          fontStyle: 'normal',
+          fontWeight: 'normal',
+
+          // Clinic info
+          clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
+          clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
+          clinicPhone: '028 1234 5678',
+          doctorName: 'Hệ thống',
+          customTitle: 'HÓA ĐƠN THANH TOÁN',
+
+          // Page settings
+          pageOrientation: 'portrait',
+          pageSize: 'A4',
+          marginTop: '15mm',
+          marginBottom: '15mm',
+          marginLeft: '10mm',
+          marginRight: '10mm',
+
+          // Logo settings (disabled)
+          logo: {
+            enabled: false,
+            url: '',
+            width: '80px',
+            height: '80px',
+            position: 'left',
+            opacity: 0.8
+          },
+
+          // Watermark settings (disabled)
+          watermark: {
+            enabled: false,
+            text: 'MẪU BẢN QUYỀN',
+            url: '',
+            opacity: 0.1,
+            fontSize: 48,
+            color: '#cccccc',
+            rotation: -45
+          }
+        }
+      };
+
+      console.log('📤 Sending to Laravel PDF API:', {
+        ...printData,
+        pdf_settings: '...' // Ẩn pdf_settings trong log để dễ đọc
+      });
+
+      // Gọi API
+      const result = await printPdfService.printPDF(printData);
+      console.log('✅ PDF Service Result:', result);
+      setSuccess(`✅ Đã tải xuống PDF hóa đơn ${invoice.code} thành công! File: ${result.fileName}`)
+       console.log('✅ PDF downloaded successfully via service');
+
+    } catch (error) {
+      console.error('❌ Print invoice error:', error);
+      setError('❌ Lỗi khi in hóa đơn: ' + error.message);
+    } finally {
+      setPrinting(false);
+    }
+
+  };
+
+  // ✅ Hàm lấy services và prescriptions từ invoice - SỬA ĐÚNG CẤU TRÚC
+  const getServicesAndMedicinesFromInvoice = (invoice) => {
+    const services = [];
+    const prescriptions = []; // ĐỔI TÊN: medicines -> prescriptions
+
+    console.log('🔍 Raw invoice details:', invoice.invoice_details);
+
+    // Phân loại services và prescriptions từ invoice_details
+    if (invoice.invoice_details && invoice.invoice_details.length > 0) {
+      invoice.invoice_details.forEach((detail, index) => {
+        const unitPrice = detail.UnitPrice || detail.unit_price || 0;
+        const quantity = detail.Quantity || detail.quantity || 1;
+
+        console.log(`📋 Processing detail ${index}:`, {
+          hasService: !!detail.service,
+          hasMedicine: !!detail.medicine,
+          serviceId: detail.ServiceId,
+          medicineId: detail.MedicineId
+        });
+
+        // ✅ SERVICE: Có ServiceId HOẶC có service object
+        if (detail.ServiceId || detail.service) {
+          const serviceName = detail.service?.ServiceName || 'Dịch vụ khám';
+
+          services.push({
+            ServiceName: serviceName,
+            Price: unitPrice,
+            Quantity: quantity,
+            // KHÔNG gửi Amount, BE sẽ tự tính
+          });
+
+          console.log(`🩺 Added service: ${serviceName}`);
+
+        }
+        // ✅ PRESCRIPTION: Có MedicineId HOẶC có medicine object
+        else if (detail.MedicineId || detail.medicine) {
+          const medicineName = detail.medicine?.MedicineName || 'Thuốc';
+
+          // ✅ SỬA: Tạo prescription object ĐÚNG CẤU TRÚC BE CẦN
+          prescriptions.push({
+            MedicineName: medicineName,
+            Price: unitPrice,
+            Quantity: quantity,
+            Usage: 'Theo chỉ định'
+            // KHÔNG gửi Amount, BE sẽ tự tính
+          });
+
+          console.log(`💊 Added prescription: ${medicineName}`);
+        }
+      });
+    }
+
+    // ✅ Nếu không có dịch vụ chi tiết, tạo một dịch vụ tổng
+    if (services.length === 0 && invoice.total) {
+      services.push({
+        ServiceName: "Phí khám và điều trị",
+        Price: invoice.total,
+        Quantity: 1,
+      });
+    }
+
+    console.log('🛠️ Final processed data for PDF:', {
+      services,
+      prescriptions, // ĐỔI TÊN: medicines -> prescriptions
+      servicesCount: services.length,
+      prescriptionsCount: prescriptions.length
+    });
+
+    return { services, prescriptions }; // ĐỔI TÊN: medicines -> prescriptions
+  };
+
+  // ✅ Hàm chuyển đổi payment method - GIỐNG InvoiceDetailModal
+  const getPaymentMethodText = (method) => {
+    switch (method) {
+      case 'momo': return 'MoMo';
+      case 'cash': return 'Tiền mặt';
+      case 'bank_transfer': return 'Chuyển khoản';
+      case 'insurance': return 'Bảo hiểm';
+      case 'napas': return 'Thẻ ATM';
+      default: return method || 'Tiền mặt';
     }
   };
 
@@ -319,14 +523,14 @@ const PaymentSection = () => {
   useEffect(() => {
     if (autoRefresh) {
       const interval = setInterval(() => {
-        const hasProcessingInvoices = invoices.some(inv => 
+        const hasProcessingInvoices = invoices.some(inv =>
           getDisplayStatus(inv).status === INVOICE_STATUS.PROCESSING
         );
         if (hasProcessingInvoices) {
           fetchInvoices();
         }
       }, 30000); // 30 giây
-      
+
       return () => clearInterval(interval);
     }
   }, [autoRefresh, invoices]);
@@ -349,13 +553,13 @@ const PaymentSection = () => {
 
   const handleInitiatePayment = (invoice) => {
     const displayStatus = getDisplayStatus(invoice);
-    
+
     // KHÔNG cho phép thanh toán nếu đang xử lý (trừ khi bị kẹt)
     if (displayStatus.status === INVOICE_STATUS.PROCESSING && !displayStatus.isStuck) {
       setError('Hóa đơn đang trong quá trình thanh toán. Vui lòng chờ hoặc reset nếu bị kẹt.');
       return;
     }
-    
+
     setSelectedInvoice(invoice);
     setShowPaymentModal(true);
   };
@@ -402,7 +606,7 @@ const PaymentSection = () => {
 
   const handleConfirm = async () => {
     setShowConfirm(false);
-    
+
     switch (confirmAction) {
       case 'reset_single':
         await handleResetSingleInvoice(confirmData);
@@ -423,10 +627,13 @@ const PaymentSection = () => {
         setCurrentPage(1);
         setPendingTab(null);
         break;
+      case 'print_invoice':
+        await handlePrintInvoice(confirmData); // ✅ GỌI HÀM IN MỚI
+        break;
       default:
         break;
     }
-    
+
     setConfirmAction(null);
     setConfirmData(null);
   };
@@ -442,15 +649,21 @@ const PaymentSection = () => {
   const canPay = (invoice) => {
     const displayStatus = getDisplayStatus(invoice);
     const hasNoOrderId = !invoice.order_id || invoice.order_id === 'null' || invoice.order_id === '';
-    
+
     // Có thể thanh toán nếu:
     // 1. Trạng thái là PENDING (bao gồm cả bị kẹt)
     // 2. Không có OrderId HOẶC bị kẹt (có OrderId nhưng quá 30 phút)
     // 3. Không phải tab CANCELLED hoặc PAYMENT_HISTORY
-    return (displayStatus.status === INVOICE_STATUS.PENDING || displayStatus.isStuck) && 
-           (hasNoOrderId || displayStatus.isStuck) &&
-           activeTab !== TAB_KEYS.CANCELLED && 
-           activeTab !== TAB_KEYS.PAYMENT_HISTORY;
+    return (displayStatus.status === INVOICE_STATUS.PENDING || displayStatus.isStuck) &&
+      (hasNoOrderId || displayStatus.isStuck) &&
+      activeTab !== TAB_KEYS.CANCELLED &&
+      activeTab !== TAB_KEYS.PAYMENT_HISTORY;
+  };
+
+  // Kiểm tra có thể in - CHỈ cho in khi đã thanh toán
+  const canPrint = (invoice) => {
+    const displayStatus = getDisplayStatus(invoice);
+    return displayStatus.status === INVOICE_STATUS.PAID;
   };
 
   // Kiểm tra có bị kẹt không
@@ -462,10 +675,10 @@ const PaymentSection = () => {
   // Memoized values
   const invoiceCounts = useMemo(() => {
     const stuckCount = invoices.filter(inv => isStuckInvoice(inv)).length;
-    const processingCount = invoices.filter(inv => 
+    const processingCount = invoices.filter(inv =>
       getDisplayStatus(inv).status === INVOICE_STATUS.PROCESSING && !isStuckInvoice(inv)
     ).length;
-    
+
     return {
       [INVOICE_STATUS.PENDING]: invoices.filter(inv => getDisplayStatus(inv).status === INVOICE_STATUS.PENDING).length,
       [INVOICE_STATUS.PAID]: invoices.filter(inv => getDisplayStatus(inv).status === INVOICE_STATUS.PAID).length,
@@ -538,9 +751,17 @@ const PaymentSection = () => {
         description: "Tất cả hóa đơn bị kẹt sẽ được đặt lại trạng thái 'Chờ thanh toán'.",
         confirmText: `Reset ${invoiceCounts.stuck} Hóa Đơn`,
         variant: "danger"
+      },
+      print_invoice: {
+        icon: <Printer size={40} />,
+        title: "In Hóa Đơn",
+        message: `Bạn có chắc muốn in hóa đơn ${confirmData?.code}?`,
+        description: `Bệnh nhân: ${confirmData?.patient_name}\nSố tiền: ${confirmData?.total?.toLocaleString('vi-VN')} VNĐ`,
+        confirmText: "In PDF",
+        variant: "primary"
       }
     };
-    
+
     return configs[confirmAction] || {
       icon: <AlertTriangle size={40} />,
       title: "Xác Nhận",
@@ -554,7 +775,7 @@ const PaymentSection = () => {
   const confirmConfig = getConfirmConfig();
   const variantStyles = {
     primary: "bg-primary-subtle text-primary-emphasis border border-primary",
-    warning: "bg-warning-subtle text-warning-emphasis border border-warning", 
+    warning: "bg-warning-subtle text-warning-emphasis border border-warning",
     info: "bg-info-subtle text-info-emphasis border border-info",
     danger: "bg-danger-subtle text-danger-emphasis border border-danger"
   };
@@ -571,9 +792,9 @@ const PaymentSection = () => {
             </div>
           </div>
           <div className="d-flex gap-2">
-            <Button 
-              variant="warning" 
-              size="sm" 
+            <Button
+              variant="warning"
+              size="sm"
               onClick={() => showConfirmDialog('reset_all')}
               disabled={resetting || invoiceCounts.stuck === 0}
             >
@@ -737,7 +958,7 @@ const PaymentSection = () => {
                         {invoices.map((invoice) => {
                           const displayStatus = getDisplayStatus(invoice);
                           const isStuck = isStuckInvoice(invoice);
-                          
+
                           return (
                             <tr key={invoice.id} className={`border-bottom ${isStuck ? 'table-warning' : ''}`}>
                               <td className="border-end">
@@ -776,6 +997,21 @@ const PaymentSection = () => {
                                     <i className="fas fa-eye me-1"></i>
                                     Chi tiết
                                   </Button>
+
+                                  {/* Nút in - CHỈ hiện khi đã thanh toán */}
+                                  {canPrint(invoice) && (
+                                    <Button
+                                      variant="outline-info"
+                                      onClick={() => showConfirmDialog('print_invoice', invoice)}
+                                      size="sm"
+                                      className="me-1"
+                                      disabled={printing}
+                                    >
+                                      <i className={`fas fa-print me-1 ${printing ? 'fa-spin' : ''}`}></i>
+                                      {printing ? 'Đang in...' : 'In PDF'}
+                                    </Button>
+                                  )}
+
                                   {canPay(invoice) && (
                                     <Button
                                       variant="success"
@@ -881,7 +1117,7 @@ const PaymentSection = () => {
               onClick={handleCancelConfirm}
               className="position-absolute top-0 end-0 btn btn-link text-secondary p-2"
               style={{ textDecoration: "none" }}
-              disabled={resetting}
+              disabled={resetting || printing}
             >
               <XCircle size={20} />
             </button>
@@ -908,21 +1144,21 @@ const PaymentSection = () => {
 
             {/* Action Buttons */}
             <div className="d-flex gap-2 justify-content-center mt-4">
-              <Button 
-                variant="secondary" 
+              <Button
+                variant="secondary"
                 onClick={handleCancelConfirm}
-                disabled={resetting}
+                disabled={resetting || printing}
               >
                 <i className="fas fa-times me-1"></i>
                 Hủy
               </Button>
-              <Button 
-                variant={confirmConfig.variant} 
+              <Button
+                variant={confirmConfig.variant}
                 onClick={handleConfirm}
-                disabled={resetting}
+                disabled={resetting || printing}
               >
-                <i className={`fas fa-check me-1 ${resetting ? 'fa-spin' : ''}`}></i>
-                {resetting ? 'Đang xử lý...' : confirmConfig.confirmText}
+                <i className={`fas fa-check me-1 ${resetting || printing ? 'fa-spin' : ''}`}></i>
+                {resetting ? 'Đang xử lý...' : printing ? 'Đang in...' : confirmConfig.confirmText}
               </Button>
             </div>
           </div>

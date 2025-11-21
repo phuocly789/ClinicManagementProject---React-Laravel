@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>{{ $pdf_settings['customTitle'] ?? $title ?? 'PHIẾU KẾT QUẢ XÉT NGHIỆM' }}</title>
+    <style>
+        /* 🔥 QUAN TRỌNG: ĐẢM BẢO UTF-8 VÀ FONT TIẾNG VIỆT */
+        @charset "UTF-8";
+
+        @page {
+            size:
+                {{ $pdf_settings['pageSize'] ?? 'A4' }}
+            ;
+            margin-top:
+                {{ $pdf_settings['marginTop'] ?? '20px' }}
+            ;
+            margin-bottom:
+                {{ $pdf_settings['marginBottom'] ?? '20px' }}
+            ;
+            margin-left:
+                {{ $pdf_settings['marginLeft'] ?? '20px' }}
+            ;
+            margin-right:
+                {{ $pdf_settings['marginRight'] ?? '20px' }}
+            ;
+        }
+
+        /* 🔥 SỬ DỤNG DEJAVU SANS - FONT HỖ TRỢ TIẾNG VIỆT */
+        body {
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+            font-size:
+                {{ $pdf_settings['fontSize'] ?? '14px' }}
+                !important;
+            color:
+                {{ $pdf_settings['fontColor'] ?? '#000000' }}
+                !important;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+                !important;
+            font-weight:
+                {{ $pdf_settings['fontWeight'] ?? 'normal' }}
+                !important;
+            line-height:
+                {{ $pdf_settings['lineHeight'] ?? 1.5 }}
+                !important;
+            background-color:
+                {{ $pdf_settings['backgroundColor'] ?? '#ffffff' }}
+                !important;
+            margin: 0;
+            padding: 0;
+        }
+
+        .page {
+            border: 1.5px solid
+                {{ $pdf_settings['borderColor'] ?? '#333' }}
+                !important;
+            border-radius: 4px;
+            padding: 15px 20px;
+            position: relative;
+            page-break-inside: avoid;
+            background-color:
+                {{ $pdf_settings['backgroundColor'] ?? '#ffffff' }}
+                !important;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        /* 🔥 HEADER VỚI REAL-TIME COLORS */
+        .header {
+            border-bottom: 1.5px solid
+                {{ $pdf_settings['borderColor'] ?? '#000' }}
+                !important;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }
+
+        .header-container {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            width: 100%;
+            min-height: 65px;
+        }
+
+        .logo-section {
+            flex-shrink: 0;
+            width: 80px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+            padding-top: 0;
+            margin-top: 0;
+        }
+
+        .logo-img {
+            width:
+                {{ $pdf_settings['logo']['width'] ?? ($logo_data['width'] ?? '60px') }}
+                !important;
+            height:
+                {{ $pdf_settings['logo']['height'] ?? ($logo_data['height'] ?? '60px') }}
+                !important;
+            object-fit: contain;
+            opacity:
+                {{ $pdf_settings['logo']['opacity'] ?? ($logo_data['opacity'] ?? 0.8) }}
+                !important;
+            margin-top: 0;
+        }
+
+        .header-content {
+            flex: 1;
+            text-align: center;
+            min-width: 0;
+            padding: 0 10px;
+            margin-top: 0;
+        }
+
+        .header-placeholder {
+            width: 80px;
+            flex-shrink: 0;
+            visibility: hidden;
+        }
+
+        .header h2 {
+            margin: 2px 0 !important;
+            font-size: 13px !important;
+            text-transform: uppercase;
+            font-weight: bold;
+            line-height: 1.2;
+            color:
+                {{ $pdf_settings['primaryColor'] ?? '#2c5aa0' }}
+                !important;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        .header p {
+            margin: 1px 0 !important;
+            font-size: 10px !important;
+            line-height: 1.2;
+            color:
+                {{ $pdf_settings['fontColor'] ?? '#000000' }}
+                !important;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        /* 🔥 SECTION TITLE VỚI REAL-TIME COLORS */
+        .section-title {
+            background:
+                {{ $pdf_settings['primaryColor'] ?? '#2c5aa0' }}
+                !important;
+            color: white !important;
+            padding: 5px 10px;
+            margin: 12px 0 8px 0;
+            font-weight: bold;
+            font-size: 13px !important;
+            text-align: center;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        .title {
+            text-align: center;
+            margin: 8px 0 12px;
+            font-size: 12px !important;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .title h3 {
+            margin: 0;
+            font-size: 12px !important;
+            color:
+                {{ $pdf_settings['primaryColor'] ?? '#2c5aa0' }}
+                !important;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        /* 🔥 INFO SECTION VỚI REAL-TIME FONTS */
+        .info {
+            display: table;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .info-row {
+            display: table-row;
+        }
+
+        .info-cell {
+            display: table-cell;
+            width: 50%;
+            vertical-align: top;
+            padding: 1px 4px;
+        }
+
+        .info p {
+            margin: 1px 0;
+            font-size: 10px !important;
+            color:
+                {{ $pdf_settings['fontColor'] ?? '#000000' }}
+                !important;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+            font-style:
+                {{ $pdf_settings['fontStyle'] ?? 'normal' }}
+                !important;
+            font-weight:
+                {{ $pdf_settings['fontWeight'] ?? 'normal' }}
+                !important;
+            line-height:
+                {{ $pdf_settings['lineHeight'] ?? 1.5 }}
+                !important;
+        }
+
+        /* 🔥 TABLE VỚI REAL-TIME COLORS */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        table th,
+        table td {
+            border: 1px solid
+                {{ $pdf_settings['borderColor'] ?? '#333' }}
+                !important;
+            padding: 3px 5px;
+            text-align: left;
+            font-size: 10px !important;
+            color:
+                {{ $pdf_settings['fontColor'] ?? '#000000' }}
+                !important;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        table th {
+            background:
+                {{ $pdf_settings['headerBgColor'] ?? '#f0f0f0' }}
+                !important;
+            font-weight: bold;
+            text-align: center;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        .text-center {
+            text-align: center;
+            font-size: 10px !important;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        .text-right {
+            text-align: right;
+            font-size: 10px !important;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        .text-left {
+            text-align: left;
+            font-size: 10px !important;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        /* 🔥 LAB INFO SECTION VỚI REAL-TIME FONTS */
+        .lab-info {
+            background: #f8f9fa;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 12px 0;
+            font-size: 10px !important;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        .lab-row {
+            margin-bottom: 3px;
+        }
+
+        .lab-label {
+            font-weight: bold;
+            color:
+                {{ $pdf_settings['fontColor'] ?? '#000000' }}
+                !important;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        /* 🔥 TEST RESULTS STYLES */
+        .test-results-table th {
+            background:
+                {{ $pdf_settings['headerBgColor'] ?? '#e9ecef' }}
+                !important;
+        }
+
+        .normal-result {
+            color: #28a745 !important;
+            font-weight: bold;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        .abnormal-result {
+            color: #dc3545 !important;
+            font-weight: bold;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        /* 🔥 FOOTER VỚI REAL-TIME FONTS */
+        .footer-content {
+            display: table;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .footer-column {
+            display: table-cell;
+            width: 50%;
+            text-align: center;
+            vertical-align: top;
+        }
+
+        .footer p {
+            margin: 0;
+            font-size: 10px !important;
+            color:
+                {{ $pdf_settings['fontColor'] ?? '#000000' }}
+                !important;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        .signature {
+            margin-top: 12px;
+            border-top: 1px solid
+                {{ $pdf_settings['borderColor'] ?? '#000' }}
+                !important;
+            width: 120px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 30px;
+        }
+
+        .no-break {
+            page-break-inside: avoid;
+        }
+
+        .note {
+            font-style: italic;
+            color: #666;
+            margin-top: 8px;
+            font-size: 10px !important;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        /* 🔥 WATERMARK STYLES - REAL-TIME SETTINGS */
+        .watermark-text {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate({{ isset($watermark_data['rotation']) ? $watermark_data['rotation'] : ($pdf_settings['watermark']['rotation'] ?? -45) }}deg);
+            font-size:
+                {{ isset($watermark_data['fontSize']) ? $watermark_data['fontSize'] : ($pdf_settings['watermark']['fontSize'] ?? 50) }}
+                px;
+            color:
+                {{ isset($watermark_data['color']) ? $watermark_data['color'] : ($pdf_settings['watermark']['color'] ?? 'rgba(0, 0, 0, 0.08)') }}
+                !important;
+            font-weight: bold;
+            text-transform: uppercase;
+            pointer-events: none;
+            z-index: 100;
+            white-space: nowrap;
+            opacity:
+                {{ isset($watermark_data['opacity']) ? $watermark_data['opacity'] : ($pdf_settings['watermark']['opacity'] ?? 0.8) }}
+                !important;
+            font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+        }
+
+        .watermark-image {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate({{ isset($watermark_data['rotation']) ? $watermark_data['rotation'] : ($pdf_settings['watermark']['rotation'] ?? -45) }}deg);
+            opacity:
+                {{ isset($watermark_data['opacity']) ? $watermark_data['opacity'] : ($pdf_settings['watermark']['opacity'] ?? 0.8) }}
+                !important;
+            z-index: 100;
+            pointer-events: none;
+            max-width: 80%;
+            max-height: 80%;
+        }
+
+        /* 🔥 PRINT STYLES VỚI FONT TIẾNG VIỆT */
+        @media print {
+            body {
+                font-size:
+                    {{ $pdf_settings['fontSize'] ?? '14px' }}
+                    !important;
+                font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+                color:
+                    {{ $pdf_settings['fontColor'] ?? '#000000' }}
+                    !important;
+                background-color:
+                    {{ $pdf_settings['backgroundColor'] ?? '#ffffff' }}
+                    !important;
+            }
+
+            .header h2 {
+                font-size: 13px !important;
+                color:
+                    {{ $pdf_settings['primaryColor'] ?? '#2c5aa0' }}
+                    !important;
+                font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+            }
+
+            .section-title {
+                font-size: 13px !important;
+                background:
+                    {{ $pdf_settings['primaryColor'] ?? '#2c5aa0' }}
+                    !important;
+                font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+            }
+
+            .title h3 {
+                font-size: 12px !important;
+                color:
+                    {{ $pdf_settings['primaryColor'] ?? '#2c5aa0' }}
+                    !important;
+                font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+            }
+
+            .header p,
+            .info p,
+            table,
+            table th,
+            table td,
+            .footer p {
+                font-size: 10px !important;
+                color:
+                    {{ $pdf_settings['fontColor'] ?? '#000000' }}
+                    !important;
+                font-family: DejaVu Sans, "Times New Roman", Arial, sans-serif !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page no-break">
+        <!-- 🔥 WATERMARK - REAL-TIME SETTINGS -->
+        @if(isset($watermark_data) && !empty($watermark_data) && isset($watermark_data['type']))
+            @if($watermark_data['type'] === 'text')
+                <div class="watermark-text">{{ $watermark_data['text'] ?? 'MẪU BẢN QUYỀN' }}</div>
+            @elseif($watermark_data['type'] === 'image' && isset($watermark_data['url']))
+                <img src="{{ $watermark_data['url'] }}" class="watermark-image"
+                    style="width: {{ $watermark_data['width'] ?? '200px' }}; height: {{ $watermark_data['height'] ?? '200px' }};"
+                    alt="Watermark">
+            @endif
+        @elseif(isset($pdf_settings['watermark']['enabled']) && $pdf_settings['watermark']['enabled'])
+            @if(!empty($pdf_settings['watermark']['url']))
+                <img src="{{ $pdf_settings['watermark']['url'] }}" class="watermark-image"
+                    style="width: {{ $pdf_settings['watermark']['width'] ?? '200px' }}; height: {{ $pdf_settings['watermark']['height'] ?? '200px' }};"
+                    alt="Watermark">
+            @else
+                <div class="watermark-text">{{ $pdf_settings['watermark']['text'] ?? 'MẪU BẢN QUYỀN' }}</div>
+            @endif
+        @endif
+
+        <!-- 🔥 HEADER VỚI REAL-TIME LOGO -->
+        <div class="header">
+            <div class="header-container">
+                <div class="logo-section">
+                    @if(isset($logo_data) && !empty($logo_data) && !empty($logo_data['url']))
+                        <img src="{{ $logo_data['url'] }}" class="logo-img" alt="Clinic Logo"
+                            style="width: {{ $logo_data['width'] ?? '60px' }}; height: {{ $logo_data['height'] ?? '60px' }}; opacity: {{ $logo_data['opacity'] ?? 0.8 }};">
+                    @elseif(isset($pdf_settings['logo']['enabled']) && $pdf_settings['logo']['enabled'] && !empty($pdf_settings['logo']['url']))
+                        <img src="{{ $pdf_settings['logo']['url'] }}" class="logo-img" alt="Clinic Logo"
+                            style="width: {{ $pdf_settings['logo']['width'] ?? '60px' }}; height: {{ $pdf_settings['logo']['height'] ?? '60px' }}; opacity: {{ $pdf_settings['logo']['opacity'] ?? 0.8 }};">
+                    @endif
+                </div>
+
+                <div class="header-content">
+                    <h2>{{ $pdf_settings['clinicName'] ?? $clinic_name ?? 'Phòng Khám Đa Khoa VitaCare' }}</h2>
+                    <p>Địa chỉ:
+                        {{ $pdf_settings['clinicAddress'] ?? $clinic_address ?? '123 Đường Sức Khỏe, Phường An Lành, Quận Bình Yên, TP. Hồ Chí Minh' }}
+                    </p>
+                    <p>Điện thoại: {{ $pdf_settings['clinicPhone'] ?? $clinic_phone ?? '(028) 3812 3456' }}</p>
+                </div>
+
+                <div class="header-placeholder"></div>
+            </div>
+        </div>
+
+        <!-- 🔥 TITLE VỚI REAL-TIME SETTINGS -->
+        <div class="title">
+            <h3>{{ $pdf_settings['customTitle'] ?? $title ?? 'PHIẾU KẾT QUẢ XÉT NGHIỆM' }}</h3>
+        </div>
+
+        <!-- 🔥 PATIENT INFO VỚI REAL-TIME FONTS -->
+        <div class="info">
+            <div class="info-row">
+                <div class="info-cell">
+                    <p><strong>Mã BN:</strong> {{ $patient_code ?? 'N/A' }}</p>
+                    <p><strong>Họ tên BN:</strong> {{ $patient_name ?? 'Nguyễn Văn A' }}</p>
+                    <p><strong>Tuổi:</strong> {{ $age ?? 'N/A' }}</p>
+                    <p><strong>Giới tính:</strong> {{ $gender ?? 'N/A' }}</p>
+                </div>
+                <div class="info-cell">
+                    <p><strong>Số Xử:</strong> {{ $medical_record_code ?? ($code ?? 'XN') }}</p>
+                    <p><strong>Khoa chỉ định:</strong> {{ $department ?? 'KHOA XÉT NGHIỆM' }}</p>
+                    <p><strong>Ngày chỉ định:</strong> {{ $appointment_date ?? 'N/A' }}</p>
+                    <p><strong>Bác sĩ chỉ định:</strong>
+                        {{ $doctor_name ?? ($pdf_settings['doctorName'] ?? 'Bác sĩ chưa rõ') }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🔥 LAB TECHNICIAN INFO VỚI REAL-TIME FONTS -->
+        <div class="info">
+            <div class="info-row">
+                <div class="info-cell">
+                    <p><strong>Điện vực Xét nghiệm màu</strong></p>
+                    <p><strong>Kỹ thuật viên:</strong> {{ $technician_name ?? 'Trần Văn Hùng' }}</p>
+                </div>
+                <div class="info-cell">
+                    <p><strong>Ngày xét nghiệm:</strong> {{ $test_date ?? date('d/m/Y') }}</p>
+                    <p><strong>Ngày in:</strong> {{ $print_date ?? ($date ?? now()->format('d/m/Y')) }}</p>
+                    <p><strong>Giờ in:</strong> {{ $print_time ?? now()->format('H:i') }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🔥 TEST RESULTS TABLE VỚI REAL-TIME SETTINGS -->
+        <table class="test-results-table no-break">
+            <thead>
+                <tr>
+                    <th width="30%">XÉT NGHIỆM</th>
+                    <th width="25%">KẾT QUẢ</th>
+                    <th width="10%">ĐƠN VỊ</th>
+                    <th width="20%">GIÁ TRỊ THAM CHIẾU</th>
+                    <th width="15%">PHƯƠNG PHÁP</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if(!empty($test_results) && is_array($test_results))
+                    @foreach($test_results as $test)
+                        <tr>
+                            <td>{{ $test['test_name'] ?? ($test['name'] ?? 'Xét nghiệm màu') }}</td>
+                            <td class="{{ $test['is_normal'] ?? true ? 'normal-result' : 'abnormal-result' }}">
+                                {{ $test['result'] ?? 'Bình thường' }}
+                            </td>
+                            <td>{{ $test['unit'] ?? '' }}</td>
+                            <td>{{ $test['reference_range'] ?? ($test['reference'] ?? '') }}</td>
+                            <td>{{ $test['method'] ?? 'OTSH.B-02(1)' }}</td>
+                        </tr>
+                    @endforeach
+                @else
+                    <!-- Default test result row -->
+                    <tr>
+                        <td>Xét nghiệm màu</td>
+                        <td class="normal-result">Bình thường</td>
+                        <td></td>
+                        <td></td>
+                        <td>OTSH.B-02(1)</td>
+                    </tr>
+                @endif
+            </tbody>
+        </table>
+
+        <!-- 🔥 NOTE VỚI REAL-TIME FONTS -->
+        <div class="note">
+            <p><strong>Ghi chú:</strong>
+                @if(!empty($pdf_settings['customNote']))
+                    {{ $pdf_settings['customNote'] }}
+                @else
+                    Kết quả chỉ có giá trị khi phiếu còn nguyên vẹn và có chữ ký xác nhận.
+                @endif
+            </p>
+        </div>
+
+        <!-- 🔥 FOOTER VỚI REAL-TIME FONTS -->
+        <div class="footer no-break">
+            <div class="footer-content">
+                <div class="footer-column">
+                    <p><strong>Kỹ thuật viên</strong></p>
+                    <p>(Ký, ghi rõ họ tên)</p>
+                    <div class="signature"></div>
+                    <p
+                        style="margin-top: 8px; font-weight: bold; font-family: DejaVu Sans, 'Times New Roman', Arial, sans-serif !important;">
+                        {{ $technician_name ?? 'Trần Văn Hùng' }}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
