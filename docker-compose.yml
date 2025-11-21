@@ -29,7 +29,15 @@ services:
       - APP_ENV=local
       - APP_DEBUG=true
 
-      # Solr Configuration - SỬA TÊN HOST
+      # Reverb Configuration
+      - BROADCAST_DRIVER=reverb
+      - REVERB_APP_ID=clinic_app
+      - REVERB_APP_KEY=local_key
+      - REVERB_APP_SECRET=local_secret
+      - REVERB_HOST=0.0.0.0
+      - REVERB_PORT=8080
+
+      # Solr Configuration
       - SOLR_HOST=solr
       - SOLR_PORT=8983
       - SOLR_PATH=/solr/
@@ -65,18 +73,15 @@ services:
     env_file:
       - ./clinic-management-backend/.env
     environment:
-      - REVERB_SERVER_HOST=0.0.0.0
       - REVERB_SERVER_PORT=8080
-      - REVERB_HOST=reverb  # ← Service name
-      - REVERB_PORT=8080
-      - REVERB_SCHEME=http
+      - REVERB_HOST=0.0.0.0
     ports:
       - "8080:8080"  # Reverb WebSocket
     networks:
       - app-network
     depends_on:
       - backend
-    command: bash -c "sleep 10 && php artisan reverb:start --host=0.0.0.0 --port=8080 --debug"
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
 
   # ========================================
   # SCHEDULER: Laravel Cron Jobs
@@ -92,16 +97,11 @@ services:
       - ./clinic-management-backend:/var/www/html
     env_file:
       - ./clinic-management-backend/.env
-    environment:
-      - SOLR_HOST=solr
-      - SOLR_PORT=8983
-      - SOLR_PATH=/solr/
-      - SOLR_CORE=clinic_management
     networks:
       - app-network
     depends_on:
       - backend
-    command: bash -c "sleep 5 && php artisan schedule:work"
+    command: php artisan schedule:work
 
   # ========================================
   # QUEUE WORKER: Xử lý Background Jobs
@@ -117,19 +117,11 @@ services:
       - ./clinic-management-backend:/var/www/html
     env_file:
       - ./clinic-management-backend/.env
-    environment:
-      - REVERB_HOST=reverb 
-      - REVERB_PORT=8080
-      - REVERB_SCHEME=http
-      - SOLR_HOST=solr
-      - SOLR_PORT=8983
-      - SOLR_PATH=/solr/
-      - SOLR_CORE=clinic_management
     networks:
       - app-network
     depends_on:
       - backend
-    command: bash -c "sleep 5 && php artisan queue:work --sleep=3 --tries=3 --verbose"
+    command: php artisan queue:work --sleep=3 --tries=3
 
   # ========================================
   # FRONTEND: React App (Vite)
@@ -148,11 +140,18 @@ services:
       - "3000:5173"
     environment:
       - CHOKIDAR_USEPOLLING=true
+      - VITE_REVERB_HOST=localhost
+      - VITE_REVERB_PORT=8080
+      - VITE_REVERB_SCHEME=http
     command: npm run dev -- --host 0.0.0.0 --port 5173
     networks:
       - app-network
     stdin_open: true
     tty: true
+
+  # ========================================
+  # SOLR: Search Engine
+  # ========================================
   solr:
     image: solr:8.11
     container_name: solr-app
@@ -175,9 +174,6 @@ services:
       - solr-precreate
       - clinic_management
 
-volumes:
-  solr_data:
-
   # ========================================
   # MAILHOG: Email Testing Tool
   # ========================================
@@ -189,6 +185,9 @@ volumes:
       - "1025:1025"  # SMTP
     networks:
       - app-network
+
+volumes:
+  solr_data:
 
 networks:
   app-network:

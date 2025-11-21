@@ -13,11 +13,14 @@ import {
     BiSolidUserCheck,
     BiSolidTimeFive,
     BiTrendingUp,
-    BiPackage
+    BiPackage,
+    BiCalendar,
+    BiStats
 } from 'react-icons/bi';
+import echo from '../../config/echo';
 import '../../App.css';
 
-// Component con cho thẻ thống kê - CẢI THIỆN UI
+// Component con cho thẻ thống kê - GIỮ NGUYÊN
 const StatCard = ({ icon, label, value, color, trend }) => (
     <div className={`stat-card card border-0 h-100 stat-card--${color}`}>
         <div className="card-body p-4">
@@ -39,6 +42,227 @@ const StatCard = ({ icon, label, value, color, trend }) => (
         </div>
     </div>
 );
+
+// Component Realtime Stats - COMPACT
+const RealtimeStats = ({ realtimeData }) => {
+    if (!realtimeData) return null;
+
+    return (
+        <div className="realtime-dashboard compact mb-3">
+            <div className="dashboard-header compact-header">
+                <h3 className="dashboard-title compact-title">
+                    <BiTrendingUp className="me-2 text-primary" />
+                    Hôm Nay - Realtime
+                </h3>
+                <div className="last-updated compact-updated">
+                    <small className="text-muted">
+                        Cập nhật: {new Date(realtimeData.updated_at).toLocaleTimeString('vi-VN')}
+                    </small>
+                </div>
+            </div>
+
+            <div className="stats-grid compact-grid">
+                {/* Waiting Patients */}
+                <div className="stat-card compact-card waiting-patients">
+                    <div className="stat-icon compact-icon">
+                        <BiSolidUserCheck className="icon" />
+                    </div>
+                    <div className="stat-content compact-content">
+                        <div className="stat-value compact-value" id="waiting-patients">
+                            {realtimeData.waitingPatients || 0}
+                        </div>
+                        <div className="stat-label compact-label">Đang chờ</div>
+                    </div>
+                </div>
+
+                {/* Today Appointments */}
+                <div className="stat-card compact-card today-appointments">
+                    <div className="stat-icon compact-icon">
+                        <BiSolidCalendar className="icon" />
+                    </div>
+                    <div className="stat-content compact-content">
+                        <div className="stat-value compact-value" id="today-appointments">
+                            {realtimeData.todayAppointments || 0}
+                        </div>
+                        <div className="stat-label compact-label">Lượt khám</div>
+                    </div>
+                </div>
+
+                {/* Completed Appointments */}
+                <div className="stat-card compact-card completed-appointments">
+                    <div className="stat-icon compact-icon">
+                        <BiSolidUserCheck className="icon" />
+                    </div>
+                    <div className="stat-content compact-content">
+                        <div className="stat-value compact-value" id="completed-appointments">
+                            {realtimeData.completedAppointments || 0}
+                        </div>
+                        <div className="stat-label compact-label">Đã khám</div>
+                    </div>
+                </div>
+
+                {/* Processing Services */}
+                <div className="stat-card compact-card processing-services">
+                    <div className="stat-icon compact-icon">
+                        <BiSolidTimeFive className="icon" />
+                    </div>
+                    <div className="stat-content compact-content">
+                        <div className="stat-value compact-value" id="processing-services">
+                            {realtimeData.processingServices || 0}
+                        </div>
+                        <div className="stat-label compact-label">Dịch vụ</div>
+                    </div>
+                </div>
+
+                {/* Pending Invoices */}
+                <div className="stat-card compact-card pending-invoices">
+                    <div className="stat-icon compact-icon">
+                        <BiSolidTimeFive className="icon" />
+                    </div>
+                    <div className="stat-content compact-content">
+                        <div className="stat-value compact-value" id="pending-invoices">
+                            {realtimeData.pendingInvoices || 0}
+                        </div>
+                        <div className="stat-label compact-label">Hóa đơn chờ</div>
+                    </div>
+                </div>
+
+                {/* Today Revenue */}
+                <div className="stat-card compact-card today-revenue">
+                    <div className="stat-icon compact-icon">
+                        <BiSolidDollarCircle className="icon" />
+                    </div>
+                    <div className="stat-content compact-content">
+                        <div className="stat-value compact-value" id="today-revenue">
+                            {new Intl.NumberFormat('vi-VN', {
+                                style: 'currency',
+                                currency: 'VND',
+                                notation: 'compact',
+                                maximumFractionDigits: 0
+                            }).format(realtimeData.todayRevenue || 0)}
+                        </div>
+                        <div className="stat-label compact-label">Doanh thu</div>
+                    </div>
+                    <div className="stat-badge compact-badge">LIVE</div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Component Historical Stats - TƯƠNG TỰ REALTIME NHƯNG CHO NHIỀU NGÀY
+const HistoricalStats = ({ stats, totalRevenue, dateRange }) => {
+    if (!stats || !totalRevenue) return null;
+
+    return (
+        <div className="historical-dashboard compact mb-3">
+            <div className="dashboard-header compact-header">
+                <h3 className="dashboard-title compact-title">
+                    <BiCalendar className="me-2 text-info" />
+                    Thống Kê Theo Ngày
+                </h3>
+                <div className="last-updated compact-updated">
+                    <small className="text-muted">
+                        Khoảng thời gian: {dateRange.startDate} → {dateRange.endDate}
+                    </small>
+                </div>
+            </div>
+
+            <div className="stats-grid compact-grid">
+                {/* Total Revenue */}
+                <div className="stat-card compact-card total-revenue-historical">
+                    <div className="stat-icon compact-icon">
+                        <BiSolidDollarCircle className="icon" />
+                    </div>
+                    <div className="stat-content compact-content">
+                        <div className="stat-value compact-value" id="total-revenue-historical">
+                            {new Intl.NumberFormat('vi-VN', {
+                                style: 'currency',
+                                currency: 'VND',
+                                notation: 'compact',
+                                maximumFractionDigits: 0
+                            }).format(totalRevenue?.totalRevenue || 0)}
+                        </div>
+                        <div className="stat-label compact-label">Tổng doanh thu</div>
+                    </div>
+                </div>
+
+                {/* Total Appointments */}
+                <div className="stat-card compact-card total-appointments">
+                    <div className="stat-icon compact-icon">
+                        <BiSolidCalendar className="icon" />
+                    </div>
+                    <div className="stat-content compact-content">
+                        <div className="stat-value compact-value" id="total-appointments">
+                            {stats?.totalAppointmentsToday || 0}
+                        </div>
+                        <div className="stat-label compact-label">Tổng lịch hẹn</div>
+                    </div>
+                </div>
+
+                {/* Completed Appointments */}
+                <div className="stat-card compact-card completed-appointments-historical">
+                    <div className="stat-icon compact-icon">
+                        <BiSolidUserCheck className="icon" />
+                    </div>
+                    <div className="stat-content compact-content">
+                        <div className="stat-value compact-value" id="completed-appointments-historical">
+                            {stats?.completedAppointmentsToday || 0}
+                        </div>
+                        <div className="stat-label compact-label">Đã khám</div>
+                    </div>
+                </div>
+
+                {/* Pending Invoices */}
+                <div className="stat-card compact-card pending-invoices-historical">
+                    <div className="stat-icon compact-icon">
+                        <BiSolidTimeFive className="icon" />
+                    </div>
+                    <div className="stat-content compact-content">
+                        <div className="stat-value compact-value" id="pending-invoices-historical">
+                            {stats?.pendingInvoicesCount || 0}
+                        </div>
+                        <div className="stat-label compact-label">Hóa đơn chờ</div>
+                    </div>
+                </div>
+
+                {/* Average Daily Revenue */}
+                <div className="stat-card compact-card average-revenue">
+                    <div className="stat-icon compact-icon">
+                        <BiStats className="icon" />
+                    </div>
+                    <div className="stat-content compact-content">
+                        <div className="stat-value compact-value" id="average-revenue">
+                            {totalRevenue?.byDate?.length > 0 ?
+                                new Intl.NumberFormat('vi-VN', {
+                                    style: 'currency',
+                                    currency: 'VND',
+                                    notation: 'compact',
+                                    maximumFractionDigits: 0
+                                }).format(totalRevenue.totalRevenue / totalRevenue.byDate.length)
+                                : '0'
+                            }
+                        </div>
+                        <div className="stat-label compact-label">Doanh thu TB/ngày</div>
+                    </div>
+                </div>
+
+                {/* Days Count */}
+                <div className="stat-card compact-card days-count">
+                    <div className="stat-icon compact-icon">
+                        <BiCalendar className="icon" />
+                    </div>
+                    <div className="stat-content compact-content">
+                        <div className="stat-value compact-value" id="days-count">
+                            {totalRevenue?.byDate?.length || 0}
+                        </div>
+                        <div className="stat-label compact-label">Số ngày</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // Custom Tooltip cho biểu đồ
 const CustomTooltip = ({ active, payload, label }) => {
@@ -66,15 +290,20 @@ const AdminDashboard = () => {
     );
     const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
+    // State mới cho realtime data
+    const [realtimeData, setRealtimeData] = useState(null);
+
     const fetchData = useCallback(async (start, end) => {
         setLoading(true);
         try {
-            const [lowStockRes, revenueRes] = await Promise.all([
+            const [lowStockRes, revenueRes, realtimeRes] = await Promise.all([
                 instance.get('api/medicines/low-stock?threshold=200'),
                 instance.get(`api/report-revenue/combined?startDate=${start}&endDate=${end}`),
+                instance.get('/api/dashboard/stats') // API realtime - HÔM NAY
             ]);
 
-            if (revenueRes.success) {
+            // XỬ LÝ HISTORICAL DATA (nhiều ngày)
+            if (revenueRes.data) {
                 setStats({
                     totalAppointmentsToday: revenueRes.data.totalAppointmentsToday,
                     completedAppointmentsToday: revenueRes.data.completedAppointmentsToday,
@@ -84,10 +313,12 @@ const AdminDashboard = () => {
                     totalRevenue: revenueRes.data.totalRevenue,
                     byDate: revenueRes.data.revenueByDate,
                 });
-            } else {
-                throw new Error(revenueRes.message || 'Lỗi khi lấy dữ liệu doanh thu');
             }
+
+            // XỬ LÝ REALTIME DATA (hôm nay)
+            setRealtimeData(realtimeRes);
             setLowStockMedicines(lowStockRes.data || []);
+
         } catch (error) {
             setToast({ type: 'error', message: error.message || 'Không thể tải dữ liệu dashboard!' });
         } finally {
@@ -95,11 +326,51 @@ const AdminDashboard = () => {
         }
     }, []);
 
+    // Realtime effect - tự động update mỗi 10 giây
+    useEffect(() => {
+        const fetchRealtimeData = async () => {
+            try {
+                const realtimeRes = await instance.get('/api/dashboard/stats');
+                setRealtimeData(realtimeRes);
+            } catch (error) {
+                console.error('Error fetching realtime data:', error);
+            }
+        };
+
+        // Fetch ngay lập tức
+        fetchRealtimeData();
+
+        // Setup interval mỗi 10 giây
+        const interval = setInterval(fetchRealtimeData, 10000);
+
+        // Listen for realtime events (nếu có broadcast)
+        echo.channel('dashboard-stats')
+            .listen('.DashboardStatsUpdated', (e) => {
+                setRealtimeData(e.stats);
+                animateNumbers(e.stats);
+            });
+
+        return () => {
+            clearInterval(interval);
+            echo.leaveChannel('dashboard-stats');
+        };
+    }, []);
+
+    const animateNumbers = (newStats) => {
+        const cards = document.querySelectorAll('.stat-card');
+        cards.forEach(card => {
+            card.classList.add('stat-updating');
+            setTimeout(() => {
+                card.classList.remove('stat-updating');
+            }, 1000);
+        });
+    };
+
     useEffect(() => {
         fetchData(startDate, endDate);
     }, [fetchData, startDate, endDate]);
 
-    // Format data cho Recharts
+    // Format data cho Recharts (từ historical data)
     const chartData = useMemo(() => {
         return totalRevenue?.byDate?.map((item) => ({
             date: new Date(item.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }),
@@ -117,7 +388,8 @@ const AdminDashboard = () => {
     };
 
     return (
-        <main className="main-content flex-grow-1 p-4 d-flex flex-column" style={{ height: 'calc(100vh - 60px)' }}>
+        // THAY ĐỔI: Không cố định chiều cao, cho phép scroll
+        <main className="main-content flex-grow-1 p-4 d-flex flex-column min-vh-100 ">
             {toast && (
                 <CustomToast
                     type={toast.type}
@@ -126,13 +398,13 @@ const AdminDashboard = () => {
                 />
             )}
 
-            {/* Header - CẢI THIỆN UI */}
-            <header className="d-flex justify-content-between align-items-center flex-shrink-0 pb-3 border-bottom">
+            {/* Header */}
+            <header className="d-flex justify-content-between align-items-start flex-shrink-0 pb-3 border-bottom flex-wrap gap-3">
                 <div>
                     <h1 className="h3 mb-1 fw-bold text-dark">Dashboard Tổng Quan</h1>
                     <p className="text-muted mb-0">Theo dõi hiệu suất và thống kê hệ thống</p>
                 </div>
-                <div className="d-flex align-items-center gap-3">
+                <div className="d-flex align-items-center flex-wrap gap-2" style={{ maxWidth: '100%' }}>
                     <div className="d-flex align-items-center gap-2 bg-light rounded p-2">
                         <label className="form-label mb-0 text-muted small">Từ:</label>
                         <input
@@ -171,62 +443,32 @@ const AdminDashboard = () => {
                     <Loading isLoading={loading} />
                 </div>
             ) : (
-                <>
-                    {/* Stat cards - CẢI THIỆN UI */}
-                    <div className="row g-3 mb-4">
-                        <div className="col-xl-3 col-md-6">
-                            <StatCard
-                                icon={<BiSolidDollarCircle size={24} />}
-                                label="Tổng Doanh Thu"
-                                value={totalRevenue?.totalRevenue ? `${totalRevenue.totalRevenue.toLocaleString('vi-VN')} đ` : '0 đ'}
-                                color="primary"
-                                trend={12.5}
-                            />
-                        </div>
-                        <div className="col-xl-3 col-md-6">
-                            <StatCard
-                                icon={<BiSolidCalendar size={24} />}
-                                label="Lịch Hẹn Hôm Nay"
-                                value={stats?.totalAppointmentsToday || 0}
-                                color="info"
-                                trend={8.3}
-                            />
-                        </div>
-                        <div className="col-xl-3 col-md-6">
-                            <StatCard
-                                icon={<BiSolidUserCheck size={24} />}
-                                label="Lịch Hẹn Đã Khám"
-                                value={stats?.completedAppointmentsToday || 0}
-                                color="success"
-                                trend={15.2}
-                            />
-                        </div>
-                        <div className="col-xl-3 col-md-6">
-                            <StatCard
-                                icon={<BiSolidTimeFive size={24} />}
-                                label="Hóa Đơn Chờ"
-                                value={stats?.pendingInvoicesCount || 0}
-                                color="warning"
-                                trend={-5.7}
-                            />
-                        </div>
-                    </div>
+                    <div className="flex-grow-1 d-flex flex-column" style={{ gap: '1.5rem', overflowX: 'hidden' }}>
+                    {/* Realtime Stats Section - HÔM NAY */}
+                    <RealtimeStats realtimeData={realtimeData} />
 
-                    {/* Dashboard Grid - CẢI THIỆN UI */}
+                    {/* Historical Stats Section - THEO NGÀY */}
+                    <HistoricalStats
+                        stats={stats}
+                        totalRevenue={totalRevenue}
+                        dateRange={{ startDate, endDate }}
+                    />
+
+                    {/* Dashboard Grid */}
                     <div className="row g-4">
-                        {/* Biểu đồ doanh thu */}
+                        {/* Biểu đồ doanh thu - HISTORICAL */}
                         <div className="col-xl-8">
                             <div className="card shadow-sm border-0 h-100">
                                 <div className="card-header bg-transparent border-0 d-flex justify-content-between align-items-center py-3">
                                     <h5 className="mb-0 fw-bold text-dark">
                                         <BiTrendingUp className="me-2 text-primary" />
-                                        Biểu Đồ Doanh Thu
+                                        Biểu Đồ Doanh Thu (Theo Ngày)
                                     </h5>
                                     <span className="badge bg-primary bg-opacity-10 text-primary">
                                         {startDate} → {endDate}
                                     </span>
                                 </div>
-                                <div className="card-body p-4">
+                                <div className="card-body p-3">
                                     <ResponsiveContainer width="100%" height={300}>
                                         <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                                             <defs>
@@ -274,9 +516,9 @@ const AdminDashboard = () => {
                                     </span>
                                 </div>
                                 <div className="card-body p-0">
-                                    <div className="table-responsive" style={{ maxHeight: '300px' }}>
+                                    <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                                         <table className="table table-hover mb-0">
-                                            <thead className="table-light">
+                                            <thead className="table-light sticky-top">
                                                 <tr>
                                                     <th className="px-4 py-3 border-0 fw-medium text-muted">Tên Thuốc</th>
                                                     <th className="text-end px-4 py-3 border-0 fw-medium text-muted">Hiện có</th>
@@ -319,52 +561,8 @@ const AdminDashboard = () => {
                             </div>
                         </div>
                     </div>
-                </>
+                </div>
             )}
-
-            {/* Thêm CSS custom */}
-            <style jsx>{`
-        .stat-card {
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-          border-radius: 12px;
-          overflow: hidden;
-        }
-        
-        .stat-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 25px rgba(0,0,0,0.1) !important;
-        }
-        
-        .stat-card__icon {
-          width: 48px;
-          height: 48px;
-          border-radius: 12px;
-          background: linear-gradient(135deg, var(--icon-bg), var(--icon-bg-dark));
-          color: white;
-        }
-        
-        .stat-card--primary { --icon-bg: #0d6efd; --icon-bg-dark: #0b5ed7; }
-        .stat-card--info { --icon-bg: #0dcaf0; --icon-bg-dark: #0baccc; }
-        .stat-card--success { --icon-bg: #198754; --icon-bg-dark: #146c43; }
-        .stat-card--warning { --icon-bg: #ffc107; --icon-bg-dark: #e6ac00; }
-        
-        .trend-indicator {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          font-size: 12px;
-          font-weight: 600;
-        }
-        
-        .rotate-180 {
-          transform: rotate(180deg);
-        }
-        
-        .custom-tooltip {
-          backdrop-filter: blur(10px);
-          border: 1px solid rgba(255,255,255,0.1);
-        }
-      `}</style>
         </main>
     );
 };

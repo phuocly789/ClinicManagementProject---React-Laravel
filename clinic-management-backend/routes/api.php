@@ -15,6 +15,7 @@ use App\Http\Controllers\API\ImportBillController;
 use App\Http\Controllers\API\SuppliersController;
 
 use App\Http\Controllers\API\AuthController;
+use App\Http\Controllers\API\DashboardController;
 use App\Http\Controllers\API\Doctor\AISuggestionController;
 use App\Http\Controllers\API\Doctor\AppointmentsController;
 use App\Http\Controllers\API\Doctor\DiagnosisSuggestionController;
@@ -100,6 +101,9 @@ Route::middleware(['auth:api'])->get('/me', function (Request $request) {
 Route::get('/report-revenue/combined', [ReportRevenueController::class, 'getCombinedStatistics']);
 Route::get('/report-revenue/detail-revenue', [ReportRevenueController::class, 'getDetailRevenueReport']);
 Route::get('/rooms', [RoomController::class, 'getAllRooms']);
+//
+Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
+Route::post('/dashboard/broadcast-stats', [DashboardController::class, 'broadcastStats']);
 
 
 // Nhóm route cho Bác sĩ

@@ -34,14 +34,19 @@ WORKDIR /var/www/html
 # ✅ Bước 1: chỉ copy file composer trước
 COPY composer.json composer.lock ./
 
+
 # ✅ Bước 3: copy toàn bộ source còn lại
 COPY . .
 
 # ✅ Bước 2: cài đặt dependencies
 RUN composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
+RUN composer require laravel/reverb --no-update && composer update
+
 # Permissions
 RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html/storage
+    && chmod -R 755 /var/www/html/storage \
+    && chmod 600 /var/www/html/storage/oauth-*.key \
+    && chmod 600 /var/www/html/storage/*.key
 
 
 
