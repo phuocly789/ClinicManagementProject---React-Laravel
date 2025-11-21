@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\API\Service\AdminServiceController;
+use App\Events\AppointmentUpdated;
 use App\Http\Controllers\API\Receptionist\AppointmentRecepController;
 use App\Http\Controllers\API\Receptionist\RoomController;
 use App\Http\Controllers\API\ReportRevenueController;
@@ -32,6 +33,7 @@ use App\Http\Controllers\API\Receptionist\PatientByRecepController;
 use App\Http\Controllers\API\Receptionist\QueueController;
 use App\Http\Controllers\API\Receptionist\ReceptionController;
 use App\Http\Controllers\API\Technician\TestResultsController;
+use App\Http\Controllers\TestWebSocketController;
 use App\Http\Controllers\API\SearchController;
 
 Route::get('/user', [UserController::class, 'index']);
@@ -141,7 +143,6 @@ Route::prefix('doctor')->group(function () {
     // Chỉ định dịch vụ
     Route::post('/appointments/{appointmentId}/assign-services', [ServiceController::class, 'assignServices']);
     Route::get('/doctor/check-roles', [ServiceController::class, 'checkRolesAndTechnicians']);
-
 });
 
 //Nhóm route cho User
@@ -247,6 +248,27 @@ Route::middleware(['auth:api'])
     ->post('/patient/appointments/book', [PatientController::class, 'bookingAppointment']);
 Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
     ->get('/patient/appointments/histories', [PatientController::class, 'appointmentHistories']);
+Route::post('/test-broadcast', function (Request $request) {
+    // Tạo fake appointment data
+    $appointment = (object)[
+        'id' => rand(1, 1000),
+        'patient_name' => 'Bệnh nhân ' . rand(1, 100),
+        'doctor_id' => 1,
+        'user_id' => 1,
+        'appointment_date' => now()->addHours(rand(1, 48))->toISOString(),
+        'status' => collect(['pending', 'confirmed', 'cancelled', 'completed'])->random(),
+    ];
+
+    // Broadcast event
+    event(new AppointmentUpdated($appointment, 'test'));
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Event broadcasted successfully',
+        'data' => $appointment,
+    ]);
+});
+
 Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
     ->put('/patient/appointments/cancel', [PatientController::class, 'cancelAppointment']);
 Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
@@ -288,6 +310,7 @@ Route::prefix('payments')->group(function () {
     // Tìm kiếm hóa đơn với Solr
     Route::get('/invoices/search', [SearchController::class, 'searchInvoices']);
 });
+Route::middleware(['auth:api'])->get('/doctor/room-info', [DoctorExaminationsController::class, 'getRoomInfo']);
 
 // ==================== SEARCH ROUTES - TÍCH HỢP SOLR ====================
 Route::prefix('search')->group(function () {

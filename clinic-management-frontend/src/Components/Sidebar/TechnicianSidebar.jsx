@@ -5,6 +5,8 @@ import { useUser } from "../../context/userContext";
 
 const TechnicianSidebar = () => {
   const { handleLogout } = useUser();
+  const { user } = useUser();
+
   return (
     <div className="d-flex" style={{ minHeight: "100vh" }}>
       {/* Sidebar */}
@@ -14,13 +16,12 @@ const TechnicianSidebar = () => {
         </h2>
 
         <div className="user-info text-center border-bottom pb-3 mb-3">
-          <p className="mb-0 opacity-75">Xin chào,</p>
+          <p className="mb-0 opacity-75">Xin chào, {user?.full_name}</p>
           <strong>Kỹ Thuật Viên</strong>
         </div>
 
         <nav>
           <ul className="nav flex-column nav-list">
-
             <li>
               <NavLink to="/technician/schedule" className="nav-item">
                 <i class="fas fa-calendar-alt"></i>
@@ -29,17 +30,12 @@ const TechnicianSidebar = () => {
             </li>
             <li>
               <NavLink to="/technician/test-results" className="nav-item">
-                <i class="fas fa-vials"></i>                
-                Quản Lý Xét Nghiệm
+                <i class="fas fa-vials"></i> Quản Lý Xét Nghiệm
               </NavLink>
             </li>
 
-
             <li className="border-top mt-auto pt-3">
-              <button
-                onClick={handleLogout}
-                className="nav-item logout-btn"
-              >
+              <button onClick={handleLogout} className="nav-item logout-btn">
                 <i className="fa-solid fa-right-from-bracket"></i>
                 Đăng Xuất
               </button>
