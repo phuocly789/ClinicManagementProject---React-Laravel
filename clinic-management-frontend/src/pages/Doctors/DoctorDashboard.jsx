@@ -1,12 +1,19 @@
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  Container,
+  Modal,
+  Button,
+  Toast,
+  ToastContainer,
+  Spinner,
+} from "react-bootstrap";
+import TodaySection from "./TodaySection";
+import DoctorSchedule from "./DoctorSchedule";
+import HistorySection from "./HistorySection";
 import { createEchoClient } from "../../utils/echo";
 import notificationSound from "../../assets/notification.mp3";
 import doctorService from "../../services/doctorService";
 const API_BASE_URL = "http://localhost:8000";
-import React, { useState, useEffect, useCallback } from 'react';
-import { Container, Modal, Button, Toast, ToastContainer, Spinner } from 'react-bootstrap';
-import TodaySection from './TodaySection';
-import DoctorSchedule from './DoctorSchedule';
-import HistorySection from './HistorySection';
 
 const DoctorDashboard = () => {
   const [currentSection, setCurrentSection] = useState("today");
