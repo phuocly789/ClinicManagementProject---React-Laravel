@@ -188,10 +188,7 @@ services:
 # ========================================
 volumes:
   solr_data:
-
-volumes:
-  solr_data:
-
+  
 networks:
   app-network:
     driver: bridge
