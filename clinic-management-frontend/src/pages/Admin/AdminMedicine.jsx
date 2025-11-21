@@ -37,7 +37,7 @@ const medicineTypes = [
   'Điều trị ung thư'
 ];
 
-const units = ['Viên', 'Chai', 'Ống', 'Gói', 'Tuýp', 'Lọ'];
+const units = ['Viên', 'Chai', 'Ống', 'Gói', 'Tuýp', 'Lọ','Hộp'];
 
 const availableColumns = [
   { value: 'MedicineId', label: 'Mã Thuốc' },
@@ -1069,8 +1069,8 @@ const AdminMedicine = () => {
   }, [fetchMedicines, filterParams]);
 
   return (
-    <div className="d-flex">
-      <main className="main-content flex-grow-1 p-4 d-flex flex-column gap-4">
+    <div className="d-flex vh-100">
+      <main className="main-content flex-grow-1 p-4 d-flex flex-column gap-4 overflow-hidden">
         {toast.show && (
           <CustomToast
             type={toast.type}
@@ -1079,7 +1079,7 @@ const AdminMedicine = () => {
           />
         )}
 
-        {/* Header với thống kê */}
+        {/* Header với thống kê - fixed height */}
         <header className="d-flex justify-content-between align-items-center flex-shrink-0">
           <div>
             <h1 className="h4 mb-1 fw-bold text-dark">Quản Lý Thuốc</h1>
@@ -1124,8 +1124,8 @@ const AdminMedicine = () => {
           </div>
         </header>
 
-        {/* Bộ lọc đơn giản */}
-        <div className="card shadow-sm border-0">
+        {/* Bộ lọc đơn giản - fixed height */}
+        <div className="card shadow-sm border-0 flex-shrink-0">
           <div className="card-body">
             <div className="row g-3 align-items-end">
               <div className="col-md-4">
@@ -1266,13 +1266,15 @@ const AdminMedicine = () => {
           </div>
         </div>
 
-        {/* Bảng dữ liệu */}
-        <div className="card shadow-sm border-0">
+        {/* Bảng dữ liệu - chiếm không gian còn lại */}
+        <div className="card shadow-sm border-0 flex-grow-1 d-flex flex-column" style={{ minHeight: 0 }}>
           {isLoading ? (
-            <Loading isLoading={isLoading} />
+            <div className="d-flex align-items-center justify-content-center flex-grow-1">
+              <Loading isLoading={isLoading} />
+            </div>
           ) : (
             <>
-              <div className="card-header bg-white border-0">
+              <div className="card-header bg-white border-0 flex-shrink-0">
                 <div className="d-flex justify-content-between align-items-center">
                   <h6 className="mb-0 text-muted">
                     Danh sách thuốc ({totalItems} kết quả)
@@ -1283,8 +1285,8 @@ const AdminMedicine = () => {
                 </div>
               </div>
 
-              <div className="table-responsive">
-                <table className="table table-hover mb-0">
+              <div className="table-responsive flex-grow-1" style={{ overflow: 'auto' }}>
+                <table className="table table-hover mb-0 clinic-table">
                   <thead className="table-light">
                     <tr>
                       <th className="ps-4">Mã</th>
@@ -1308,9 +1310,10 @@ const AdminMedicine = () => {
                         <tr
                           key={medicine.MedicineId}
                           className={`
-                            ${stockStatus.isLow ? 'table-warning' : ''}
-                            ${expiryStatus.isExpired ? 'table-danger' : expiryStatus.isNearExpiry ? 'table-warning' : ''}
-                          `.trim()}
+                          ${stockStatus.isLow ? 'table-warning' : ''}
+                          ${expiryStatus.isExpired ? 'table-danger' : expiryStatus.isNearExpiry ? 'table-warning' : ''}
+                          table-row-hover
+                        `.trim()}
                         >
                           <td className="ps-4">
                             <span className="fw-bold text-primary">#{medicine.MedicineId}</span>
@@ -1396,7 +1399,7 @@ const AdminMedicine = () => {
 
               {/* PHÂN TRANG */}
               {pageCount > 1 && (
-                <div className="card-footer bg-white border-0">
+                <div className="card-footer bg-white border-0 flex-shrink-0">
                   <Pagination
                     pageCount={pageCount}
                     onPageChange={({ selected }) => fetchMedicines(selected + 1, filterParams)}
