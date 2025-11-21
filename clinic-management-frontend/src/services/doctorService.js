@@ -33,6 +33,7 @@ const doctorService = {
     },
     getRoom: () => {
         return axios.get("/api/doctor/room-info");
+    },
 
     // Lấy thông tin khám đã hoàn thành
     getExamination: (patientId) => {
