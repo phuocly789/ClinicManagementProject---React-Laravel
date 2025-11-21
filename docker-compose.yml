@@ -79,53 +79,6 @@ services:
       - app-network
     command: bash -c "php artisan queue:work --sleep=3 --tries=3"
 
-  # Scheduler: chạy Laravel Scheduler
-  scheduler:
-    build:
-      context: ./clinic-management-backend
-      dockerfile: ../Dockerfile.backend
-    container_name: laravel-scheduler
-    restart: unless-stopped
-    working_dir: /var/www/html
-    volumes:
-      - ./clinic-management-backend:/var/www/html
-    env_file:
-      - ./clinic-management-backend/.env
-    environment:
-      - SOLR_HOST=solr
-      - SOLR_PORT=8983
-      - SOLR_PATH=/solr/
-      - SOLR_CORE=clinic_management
-    networks:
-      - app-network
-    depends_on:
-      solr:
-        condition: service_healthy
-    command: bash -c "php artisan schedule:work"
-
-  # Queue Worker: xử lý job gửi mail
-  queue-worker:
-    build:
-      context: ./clinic-management-backend
-      dockerfile: ../Dockerfile.backend
-    container_name: laravel-queue
-    restart: unless-stopped
-    working_dir: /var/www/html
-    volumes:
-      - ./clinic-management-backend:/var/www/html
-    env_file:
-      - ./clinic-management-backend/.env
-    environment:
-      - SOLR_HOST=solr
-      - SOLR_PORT=8983
-      - SOLR_PATH=/solr/
-      - SOLR_CORE=clinic_management
-    networks:
-      - app-network
-    depends_on:
-      solr:
-        condition: service_healthy
-    command: bash -c "php artisan queue:work --sleep=3 --tries=3"
 
   # Frontend: React dev server
   frontend:

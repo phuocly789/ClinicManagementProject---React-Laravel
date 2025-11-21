@@ -117,7 +117,7 @@ const AdminDashboard = () => {
     };
 
     return (
-        <main className="main-content flex-grow-1 p-4 d-flex flex-column gap-4">
+        <main className="main-content flex-grow-1 p-4 d-flex flex-column" style={{ height: 'calc(100vh - 60px)' }}>
             {toast && (
                 <CustomToast
                     type={toast.type}
