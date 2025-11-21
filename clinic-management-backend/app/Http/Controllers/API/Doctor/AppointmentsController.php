@@ -8,6 +8,7 @@ use App\Models\Patient; // Import nếu cần cho relation
 use App\Models\StaffSchedule;
 use App\Models\MedicalStaff;
 use App\Models\Queue;
+use App\Models\Room;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
@@ -154,6 +155,7 @@ class AppointmentsController extends Controller
     }
 
 
+
     /**
      * 🩺 Lấy lịch làm việc của bác sĩ theo ID (đầy đủ thông tin)
      */
@@ -163,16 +165,25 @@ class AppointmentsController extends Controller
             // Lấy thông tin bác sĩ
             $doctor = MedicalStaff::with('user')
                 ->where('StaffId', $doctorId)
-                ->firstOrFail();
+                ->first();
 
-            // Lấy toàn bộ lịch làm việc của bác sĩ
-            $schedules = StaffSchedule::where('StaffId', $doctorId)
+            if (!$doctor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không tìm thấy thông tin bác sĩ.'
+                ], 404);
+            }
+
+            // Lấy toàn bộ lịch làm việc của bác sĩ với quan hệ room
+            $schedules = StaffSchedule::with(['room'])
+                ->where('StaffId', $doctorId)
                 ->orderBy('WorkDate')
                 ->orderBy('StartTime')
                 ->get()
                 ->map(function ($item) {
                     $workDate = Carbon::parse($item->WorkDate);
 
+                    // Xác định trạng thái
                     $status = 'upcoming';
                     if ($workDate->isToday()) {
                         $status = 'active';
@@ -180,31 +191,52 @@ class AppointmentsController extends Controller
                         $status = 'completed';
                     }
 
+                    // XỬ LÝ THÔNG TIN PHÒNG - PHIÊN BẢN HOÀN CHỈNH
+                    $roomInfo = $this->getRoomInfo($item);
+
+                    // Format thời gian (bỏ giây nếu có)
+                    $startTime = $item->StartTime;
+                    $endTime = $item->EndTime;
+
+                    if (strlen($startTime) > 5) {
+                        $startTime = substr($startTime, 0, 5);
+                    }
+                    if (strlen($endTime) > 5) {
+                        $endTime = substr($endTime, 0, 5);
+                    }
+
                     return [
                         'schedule_id' => $item->ScheduleId,
                         'date' => $item->WorkDate->format('Y-m-d'),
-                        'start_time' => $item->StartTime,
-                        'end_time' => $item->EndTime,
-                        'time' => $item->StartTime . ' - ' . $item->EndTime,
-                        'room' => $item->RoomId ?? 'Phòng Khám Đa Khoa', // Sửa 'rom' thành 'room'
+                        'start_time' => $startTime,
+                        'end_time' => $endTime,
+                        'time' => $startTime . ' - ' . $endTime,
+                        'room_id' => $item->RoomId,
+                        'room_name' => $roomInfo['name'],
+                        'room_description' => $roomInfo['description'],
+                        'room_is_active' => $roomInfo['is_active'],
+                        'room_status' => $roomInfo['status'],
                         'type' => $item->IsAvailable ? 'Làm việc toàn thời gian' : 'Làm việc bán thời gian',
                         'status' => $status,
                         'is_available' => (bool) $item->IsAvailable,
                         'notes' => $item->Notes,
                         'work_date_formatted' => $item->WorkDate->format('d/m/Y'),
-                        'day_of_week' => $this->getVietnameseDayOfWeek($item->WorkDate->dayOfWeek)
+                        'day_of_week' => $this->getVietnameseDayOfWeek($item->WorkDate->dayOfWeek),
+                        'is_today' => $workDate->isToday()
                     ];
                 });
 
             $doctorInfo = [
                 'staff_id' => $doctor->StaffId,
                 'full_name' => $doctor->user->FullName ?? 'N/A',
-                'specialization' => $doctor->Specialization ?? 'Bác sĩ đa khoa',
-                'clinic' => $doctor->Department ?? 'Phòng Khám Đa Khoa',
+                'specialization' => $doctor->Specialization ?? $doctor->Specialty ?? 'Bác sĩ đa khoa',
+                'department' => $doctor->Department ?? 'Phòng Khám Đa Khoa',
                 'hire_date' => $doctor->HireDate ? $doctor->HireDate->format('d/m/Y') : 'N/A',
                 'phone' => $doctor->user->Phone ?? 'N/A',
                 'email' => $doctor->user->Email ?? 'N/A',
-                'position' => $doctor->Position ?? 'Bác sĩ'
+                'position' => $doctor->Position ?? 'Bác sĩ',
+                'license_number' => $doctor->LicenseNumber ?? 'N/A',
+                'staff_type' => $doctor->StaffType ?? 'Bác sĩ'
             ];
 
             return response()->json([
@@ -217,6 +249,8 @@ class AppointmentsController extends Controller
                         'active_schedules' => $schedules->where('status', 'active')->count(),
                         'upcoming_schedules' => $schedules->where('status', 'upcoming')->count(),
                         'completed_schedules' => $schedules->where('status', 'completed')->count(),
+                        'available_schedules' => $schedules->where('is_available', true)->count(),
+                        'schedules_with_room' => $schedules->where('room_id', '!=', null)->count(),
                     ]
                 ],
                 'message' => 'Lấy lịch làm việc thành công'
@@ -231,7 +265,57 @@ class AppointmentsController extends Controller
     }
 
     /**
-     * ✅ Hàm lấy tên thứ tiếng Việt
+     * 🏥 Lấy thông tin phòng với xử lý lỗi
+     */
+    private function getRoomInfo($schedule)
+    {
+        // Trường hợp 1: Không có RoomId
+        if (empty($schedule->RoomId)) {
+            return [
+                'name' => 'Chưa phân công phòng',
+                'description' => null,
+                'is_active' => false,
+                'status' => 'not_assigned'
+            ];
+        }
+
+        // Trường hợp 2: Có quan hệ room và room tồn tại
+        if ($schedule->relationLoaded('room') && $schedule->room) {
+            return [
+                'name' => $schedule->room->RoomName ?? 'Phòng khám',
+                'description' => $schedule->room->Description,
+                'is_active' => (bool) ($schedule->room->IsActive ?? false),
+                'status' => ($schedule->room->IsActive ?? false) ? 'active' : 'inactive'
+            ];
+        }
+
+        // Trường hợp 3: Quan hệ không tồn tại, thử query trực tiếp
+        try {
+            $room = Room::find($schedule->RoomId);
+            if ($room) {
+                return [
+                    'name' => $room->RoomName,
+                    'description' => $room->Description,
+                    'is_active' => (bool) $room->IsActive,
+                    'status' => $room->IsActive ? 'active' : 'inactive'
+                ];
+            }
+        } catch (\Exception $e) {
+            // Log lỗi nhưng không làm crash app
+            \Log::warning("Không thể lấy thông tin phòng: " . $e->getMessage());
+        }
+
+        // Trường hợp 4: RoomId không hợp lệ
+        return [
+            'name' => 'Phòng không tồn tại',
+            'description' => 'RoomId: ' . $schedule->RoomId . ' không tìm thấy',
+            'is_active' => false,
+            'status' => 'not_found'
+        ];
+    }
+
+    /**
+     * 📅 Chuyển đổi thứ trong tuần sang tiếng Việt
      */
     private function getVietnameseDayOfWeek($dayOfWeek)
     {
