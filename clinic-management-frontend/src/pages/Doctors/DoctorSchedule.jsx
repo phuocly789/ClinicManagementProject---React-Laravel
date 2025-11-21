@@ -27,8 +27,7 @@ const DoctorSchedule = () => {
   const [selectedDaySchedules, setSelectedDaySchedules] = useState([]);
   const [selectedDayInfo, setSelectedDayInfo] = useState(null);
 
-  const DOCTOR_ID = 4;
-
+  const DOCTOR_ID = JSON.parse(localStorage.getItem('user'))?.StaffId || 4;
   // Fetch lịch làm việc
   const fetchWorkSchedule = async () => {
     try {
