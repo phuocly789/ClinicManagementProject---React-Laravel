@@ -101,20 +101,15 @@ Route::get('/rooms', [RoomController::class, 'getAllRooms']);
 
 
 // Nhóm route cho Bác sĩ
-Route::prefix('doctor')->group(function () {
+Route::prefix('doctor')->middleware(['auth:sanctum', 'role:Bác sĩ'])->group(function () {
     // Danh sách bệnh nhân hôm nay
     Route::get('/today-patients', [AppointmentsController::class, 'todayPatients']);
     Route::apiResource('appointments', AppointmentsController::class);
 
     // Gợi ý chẩn đoán & thuốc
-
-    //Gợi ý lấy từ lịch sử bệnh trước đó
     Route::get('/diagnoses/suggestions', [DiagnosisSuggestionController::class, 'suggestions']);
-    // Tìm kiếm thuốc theo tên, loại
     Route::get('/medicines/search', [DoctorMedicineSearchController::class, 'search']);
-    // Gợi ý thuốc & dịch vụ từ AI
     Route::get('/ai/suggestion', [AISuggestionController::class, 'suggest']);
-    // Lấy danh sách dịch vụ
     Route::get('/services', [ServiceController::class, 'index']);
 
     // Lấy lịch làm việc của bác sĩ
@@ -129,7 +124,6 @@ Route::prefix('doctor')->group(function () {
     // Lịch sử bệnh nhân
     Route::get('/patients/{patientId}/history', [PatientsController::class, 'getPatientHistory']);
 
-
     // Khám bệnh
     Route::prefix('examinations')->group(function () {
         Route::post('{appointmentId}/start', [DoctorExaminationsController::class, 'start']);
@@ -141,7 +135,6 @@ Route::prefix('doctor')->group(function () {
     // Chỉ định dịch vụ
     Route::post('/appointments/{appointmentId}/assign-services', [ServiceController::class, 'assignServices']);
     Route::get('/doctor/check-roles', [ServiceController::class, 'checkRolesAndTechnicians']);
-
 });
 
 //Nhóm route cho User
