@@ -36,7 +36,7 @@ class TestResultsController extends Controller
                 ->where('AssignedStaffId', $this->technicianId)
                 ->whereIn('Status', ['Đã chỉ định', 'Đang chờ', 'Đang thực hiện'])
                 ->orderBy('OrderDate', 'asc') // ✅ CHỈ THÊM: Sắp xếp sớm nhất lên đầu
-                ->paginate(10);
+                ->paginate(perPage: 100);
 
             // Format data
             $formattedServices = $services->map(function ($order) {
@@ -52,7 +52,7 @@ class TestResultsController extends Controller
                     'pagination' => [
                         'current_page' => 1,
                         'last_page' => 1,
-                        'per_page' => 10,
+                        'per_page' => 5,
                         'total' => 0,
                         'from' => null,
                         'to' => null,
@@ -81,6 +81,7 @@ class TestResultsController extends Controller
     /**
      * Cập nhật trạng thái dịch vụ
      */
+
     public function updateServiceStatus(Request $request, $serviceOrderId)
     {
         DB::beginTransaction();
@@ -140,22 +141,43 @@ class TestResultsController extends Controller
                 ], 400);
             }
 
-            // ✅ Cập nhật status
-            $updateData = ['Status' => $newStatus];
+            // ✅ Cập nhật status - GIỜ ĐÃ CÓ UpdatedAt trong DB
+            $updateData = [
+                'Status' => $newStatus,
+                'UpdatedAt' => now('Asia/Ho_Chi_Minh')
+            ];
 
             // ✅ THÊM THỜI GIAN HOÀN THÀNH NẾU LÀ TRẠNG THÁI HOÀN THÀNH
             if ($newStatus === 'Hoàn thành') {
-                $updateData['CompletedAt'] = now('Asia/Ho_Chi_Minh');
+                $updateData['completed_at'] = now('Asia/Ho_Chi_Minh');
+
+                Log::info('✅ Đã thêm completed_at cho dịch vụ hoàn thành', [
+                    'service_order_id' => $serviceOrderId,
+                    'completed_at' => now('Asia/Ho_Chi_Minh')->format('d/m/Y H:i')
+                ]);
             }
+
+            // ✅ DEBUG: Kiểm tra dữ liệu trước khi update
+            Log::info('🔍 [DEBUG] Update data:', $updateData);
 
             $serviceOrder->update($updateData);
 
             DB::commit();
 
+            // ✅ DEBUG: Kiểm tra giá trị sau khi update
+            $updatedService = ServiceOrder::find($serviceOrderId);
+            Log::info('🔍 [DEBUG] After update - actual values:', [
+                'Status' => $updatedService->Status,
+                'completed_at' => $updatedService->completed_at,
+                'UpdatedAt' => $updatedService->UpdatedAt
+            ]);
+
             Log::info("✅ Status updated SUCCESS", [
                 'service_order_id' => $serviceOrderId,
                 'old_status' => $oldStatus,
-                'new_status' => $newStatus
+                'new_status' => $newStatus,
+                'completed_at' => $newStatus === 'Hoàn thành' ? now('Asia/Ho_Chi_Minh')->format('d/m/Y H:i') : 'N/A',
+                'updated_at' => now('Asia/Ho_Chi_Minh')->format('d/m/Y H:i')
             ]);
 
             return response()->json([
@@ -165,7 +187,8 @@ class TestResultsController extends Controller
                     'service_order_id' => $serviceOrderId,
                     'old_status' => $oldStatus,
                     'new_status' => $newStatus,
-                    'timestamp' => now()->format('d/m/Y H:i')
+                    'completed_at' => $newStatus === 'Hoàn thành' ? now('Asia/Ho_Chi_Minh')->format('d/m/Y H:i') : null,
+                    'updated_at' => now('Asia/Ho_Chi_Minh')->format('d/m/Y H:i') // ✅ THÊM VÀO RESPONSE
                 ]
             ]);
 
@@ -179,7 +202,6 @@ class TestResultsController extends Controller
             ], 500);
         }
     }
-
     /**
      * ✅ CẬP NHẬT KẾT QUẢ XÉT NGHIỆM - CHỈ LƯU KẾT QUẢ, KHÔNG ĐỔI TRẠNG THÁI
      */
@@ -295,7 +317,7 @@ class TestResultsController extends Controller
             ])
                 ->where('AssignedStaffId', $this->technicianId)
                 ->where('Status', 'Hoàn thành')
-                ->orderBy('OrderDate', 'desc') 
+                ->orderBy('OrderDate', 'desc')
 
                 ->get();
 
@@ -361,7 +383,7 @@ class TestResultsController extends Controller
     public function getWorkSchedule(Request $request)
     {
         try {
-            Log::info('🔄 [WorkSchedule] Getting work schedule for technician:', ['technician_id' => $this->technicianId]);
+            Log::info(' [WorkSchedule] Getting work schedule for technician:', ['technician_id' => $this->technicianId]);
 
             // Lấy toàn bộ lịch làm việc của KTV
             $schedules = StaffSchedule::where('StaffId', $this->technicianId)
@@ -536,7 +558,7 @@ class TestResultsController extends Controller
             7 => 'Tháng Bảy',
             8 => 'Tháng Tám',
             9 => 'Tháng Chín',
-            10 => 'Tháng Mười',
+            5 => 'Tháng Mười',
             11 => 'Tháng Mười Một',
             12 => 'Tháng Mười Hai'
         ];
@@ -547,6 +569,7 @@ class TestResultsController extends Controller
     /**
      * Hàm format dữ liệu dịch vụ đã hoàn thành
      */
+ 
     private function formatCompletedServiceData($order)
     {
         $user = $order->appointment->patient->user ?? null;
@@ -564,11 +587,14 @@ class TestResultsController extends Controller
             'patient_gender' => $user->Gender ?? 'N/A',
             'service_name' => $order->service->ServiceName ?? 'N/A',
             'service_type' => $order->service->ServiceType ?? 'N/A',
+            'price' => $order->service->Price ?? 0, // ✅ THÊM GIÁ
             'referring_doctor_name' => $order->appointment->medical_staff->user->FullName ?? 'N/A',
+            'assigned_technician_name' => $order->medical_staff->user->FullName ?? 'N/A', // ✅ THÊM KTV
             'order_date' => $order->OrderDate?->format('d/m/Y H:i'),
-            'completed_at' => $order->CompletedAt?->format('d/m/Y H:i'),
+            'completed_at' => $order->completed_at?->format('d/m/Y H:i'), // ✅ SỬA LỖI: order->completed_at
             'result' => $order->Result,
-            'status' => $order->Status
+            'status' => $order->Status,
+            'updated_at' => $order->UpdatedAt?->format('d/m/Y H:i') // ✅ THÊM
         ];
     }
 }
