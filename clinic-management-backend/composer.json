@@ -17,7 +17,7 @@
         "laravel/tinker": "^2.9",
         "maatwebsite/excel": "^3.1",
         "predis/predis": "^3.2",
-        "pusher/pusher-php-server": "*",
+        "pusher/pusher-php-server": "^7.2",
         "solarium/solarium": "^6.4",
         "spatie/laravel-responsecache": "^7.7",
         "zircote/swagger-php": "^5.3"
