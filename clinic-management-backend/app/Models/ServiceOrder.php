@@ -19,6 +19,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property Carbon|null $OrderDate
  * @property string|null $Result
  * @property string $Status
+ * @property Carbon|null $completed_at  
+ * @property Carbon|null $UpdatedAt     
  * 
  * @property Appointment|null $appointment
  * @property Service|null $service
@@ -38,7 +40,9 @@ class ServiceOrder extends Model
 		'AppointmentId' => 'int',
 		'ServiceId' => 'int',
 		'AssignedStaffId' => 'int',
-		'OrderDate' => 'datetime'
+		'OrderDate' => 'datetime',
+		'completed_at' => 'datetime', 
+		'UpdatedAt' => 'datetime'
 	];
 
 	protected $fillable = [
@@ -47,7 +51,9 @@ class ServiceOrder extends Model
 		'AssignedStaffId',
 		'OrderDate',
 		'Result',
-		'Status'
+		'Status',
+		'completed_at',  
+		'UpdatedAt'      
 	];
 
 	public function appointment()
