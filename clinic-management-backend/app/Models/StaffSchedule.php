@@ -54,7 +54,7 @@ class StaffSchedule extends Model
     // Quan hệ với MedicalStaff
     public function medical_staff()
     {
-        return $this->belongsTo(MedicalStaff::class, 'StaffId');
+        return $this->belongsTo(MedicalStaff::class, 'StaffId', 'StaffId');
     }
 
     // Quan hệ với Appointment

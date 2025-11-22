@@ -11,15 +11,17 @@ const DoctorSidebar = () => {
   // Hàm tạo avatar từ tên
   const getAvatarFromName = (name) => {
     if (!name) return "BS";
-    
-    const nameParts = name.split(' ');
+
+    const nameParts = name.split(" ");
     if (nameParts.length === 1) return nameParts[0].charAt(0).toUpperCase();
-    
-    return (nameParts[0].charAt(0) + nameParts[nameParts.length - 1].charAt(0)).toUpperCase();
+
+    return (
+      nameParts[0].charAt(0) + nameParts[nameParts.length - 1].charAt(0)
+    ).toUpperCase();
   };
 
   // Lấy tên hiển thị
-  const displayName = user?.full_name || user?.name || user?.username || 'Bác Sĩ';
+  const displayName = user?.full_name || "Bác Sĩ";
 
   return (
     <div className="d-flex" style={{ minHeight: "100vh" }}>
@@ -32,16 +34,16 @@ const DoctorSidebar = () => {
         {/* User Info với Avatar */}
         <div className="user-info text-center border-bottom pb-3 mb-3">
           <div className="avatar-container mb-2">
-            <div 
+            <div
               className="avatar-circle d-inline-flex align-items-center justify-content-center"
               style={{
-                width: '60px',
-                height: '60px',
-                borderRadius: '50%',
-                backgroundColor: '#28a745',
-                color: 'white',
-                fontSize: '1.2rem',
-                fontWeight: 'bold'
+                width: "60px",
+                height: "60px",
+                borderRadius: "50%",
+                backgroundColor: "#28a745",
+                color: "white",
+                fontSize: "1.2rem",
+                fontWeight: "bold",
               }}
             >
               {getAvatarFromName(displayName)}
@@ -49,13 +51,15 @@ const DoctorSidebar = () => {
           </div>
           <p className="mb-1 opacity-75">Bác Sĩ</p>
           <strong className="d-block">{displayName}</strong>
-          <small className="text-muted">{user?.specialty || 'Chuyên khoa'}</small>
+          <small className="text-muted">
+            {user?.specialty || "Chuyên khoa"}
+          </small>
         </div>
 
         <nav>
           <ul className="nav flex-column nav-list">
             <li>
-              <NavLink 
+              <NavLink
                 to={`${path.DOCTOR.ROOT}/${path.DOCTOR.TODAY_APPOINTMENTS}`}
                 className="nav-item"
               >
@@ -63,23 +67,23 @@ const DoctorSidebar = () => {
                 Lịch Khám Hôm Nay
               </NavLink>
             </li>
-            
+
             <li>
-              <NavLink 
+              <NavLink
                 to={`${path.DOCTOR.ROOT}/${path.DOCTOR.SCHEDULE}`}
                 className="nav-item"
               >
                 {/* Thay icon clock bằng avatar nhỏ */}
-                <div 
+                <div
                   className="nav-avatar d-inline-flex align-items-center justify-content-center me-3"
                   style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    backgroundColor: '#28a745',
-                    color: 'white',
-                    fontSize: '0.7rem',
-                    fontWeight: 'bold'
+                    width: "24px",
+                    height: "24px",
+                    borderRadius: "50%",
+                    backgroundColor: "#28a745",
+                    color: "white",
+                    fontSize: "0.7rem",
+                    fontWeight: "bold",
                   }}
                 >
                   {getAvatarFromName(displayName)}
@@ -87,9 +91,9 @@ const DoctorSidebar = () => {
                 Lịch Làm Việc
               </NavLink>
             </li>
-            
+
             <li>
-              <NavLink 
+              <NavLink
                 to={`${path.DOCTOR.ROOT}/${path.DOCTOR.PATIENT_HISTORY}`}
                 className="nav-item"
               >
@@ -99,14 +103,12 @@ const DoctorSidebar = () => {
             </li>
 
             <li className="border-top mt-auto pt-3">
-              <button
-                onClick={handleLogout}
-                className="nav-item logout-btn"
-              >
+              <button onClick={handleLogout} className="nav-item logout-btn">
                 <i className="fa-solid fa-right-from-bracket"></i>
                 Đăng Xuất
               </button>
             </li>
+
           </ul>
         </nav>
       </div>

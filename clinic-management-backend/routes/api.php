@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\API\Service\AdminServiceController;
+use App\Events\AppointmentUpdated;
 use App\Http\Controllers\API\Receptionist\AppointmentRecepController;
 use App\Http\Controllers\API\Receptionist\RoomController;
 use App\Http\Controllers\API\ReportRevenueController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\API\ImportBillController;
 use App\Http\Controllers\API\SuppliersController;
 
 use App\Http\Controllers\API\AuthController;
+use App\Http\Controllers\API\DashboardController;
 use App\Http\Controllers\API\Doctor\AISuggestionController;
 use App\Http\Controllers\API\Doctor\AppointmentsController;
 use App\Http\Controllers\API\Doctor\DiagnosisSuggestionController;
@@ -32,6 +34,7 @@ use App\Http\Controllers\API\Receptionist\PatientByRecepController;
 use App\Http\Controllers\API\Receptionist\QueueController;
 use App\Http\Controllers\API\Receptionist\ReceptionController;
 use App\Http\Controllers\API\Technician\TestResultsController;
+use App\Http\Controllers\TestWebSocketController;
 use App\Http\Controllers\API\SearchController;
 
 Route::get('/user', [UserController::class, 'index']);
@@ -98,23 +101,21 @@ Route::middleware(['auth:api'])->get('/me', function (Request $request) {
 Route::get('/report-revenue/combined', [ReportRevenueController::class, 'getCombinedStatistics']);
 Route::get('/report-revenue/detail-revenue', [ReportRevenueController::class, 'getDetailRevenueReport']);
 Route::get('/rooms', [RoomController::class, 'getAllRooms']);
+//
+Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
+Route::post('/dashboard/broadcast-stats', [DashboardController::class, 'broadcastStats']);
 
 
 // Nhóm route cho Bác sĩ
-Route::prefix('doctor')->group(function () {
+Route::prefix('doctor')->middleware(['auth:sanctum', 'role:Bác sĩ'])->group(function () {
     // Danh sách bệnh nhân hôm nay
     Route::get('/today-patients', [AppointmentsController::class, 'todayPatients']);
     Route::apiResource('appointments', AppointmentsController::class);
 
     // Gợi ý chẩn đoán & thuốc
-
-    //Gợi ý lấy từ lịch sử bệnh trước đó
     Route::get('/diagnoses/suggestions', [DiagnosisSuggestionController::class, 'suggestions']);
-    // Tìm kiếm thuốc theo tên, loại
     Route::get('/medicines/search', [DoctorMedicineSearchController::class, 'search']);
-    // Gợi ý thuốc & dịch vụ từ AI
     Route::get('/ai/suggestion', [AISuggestionController::class, 'suggest']);
-    // Lấy danh sách dịch vụ
     Route::get('/services', [ServiceController::class, 'index']);
 
     // Lấy lịch làm việc của bác sĩ
@@ -129,7 +130,6 @@ Route::prefix('doctor')->group(function () {
     // Lịch sử bệnh nhân
     Route::get('/patients/{patientId}/history', [PatientsController::class, 'getPatientHistory']);
 
-
     // Khám bệnh
     Route::prefix('examinations')->group(function () {
         Route::post('{appointmentId}/start', [DoctorExaminationsController::class, 'start']);
@@ -141,7 +141,6 @@ Route::prefix('doctor')->group(function () {
     // Chỉ định dịch vụ
     Route::post('/appointments/{appointmentId}/assign-services', [ServiceController::class, 'assignServices']);
     Route::get('/doctor/check-roles', [ServiceController::class, 'checkRolesAndTechnicians']);
-
 });
 
 //Nhóm route cho User
@@ -247,6 +246,27 @@ Route::middleware(['auth:api'])
     ->post('/patient/appointments/book', [PatientController::class, 'bookingAppointment']);
 Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
     ->get('/patient/appointments/histories', [PatientController::class, 'appointmentHistories']);
+Route::post('/test-broadcast', function (Request $request) {
+    // Tạo fake appointment data
+    $appointment = (object)[
+        'id' => rand(1, 1000),
+        'patient_name' => 'Bệnh nhân ' . rand(1, 100),
+        'doctor_id' => 1,
+        'user_id' => 1,
+        'appointment_date' => now()->addHours(rand(1, 48))->toISOString(),
+        'status' => collect(['pending', 'confirmed', 'cancelled', 'completed'])->random(),
+    ];
+
+    // Broadcast event
+    event(new AppointmentUpdated($appointment, 'test'));
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Event broadcasted successfully',
+        'data' => $appointment,
+    ]);
+});
+
 Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
     ->put('/patient/appointments/cancel', [PatientController::class, 'cancelAppointment']);
 Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
@@ -288,6 +308,7 @@ Route::prefix('payments')->group(function () {
     // Tìm kiếm hóa đơn với Solr
     Route::get('/invoices/search', [SearchController::class, 'searchInvoices']);
 });
+Route::middleware(['auth:api'])->get('/doctor/room-info', [DoctorExaminationsController::class, 'getRoomInfo']);
 
 // ==================== SEARCH ROUTES - TÍCH HỢP SOLR ====================
 Route::prefix('search')->group(function () {
