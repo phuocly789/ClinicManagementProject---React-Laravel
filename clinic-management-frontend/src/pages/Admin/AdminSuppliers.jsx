@@ -3,7 +3,7 @@ import '../../App.css';
 import Pagination from '../../Components/Pagination/Pagination';
 import CustomToast from '../../Components/CustomToast/CustomToast';
 import Loading from '../../Components/Loading/Loading';
-import { BiPlus, BiPencil, BiTrash, BiSearch } from 'react-icons/bi';
+import { BiPlus, BiPencil, BiTrash, BiSearch, BiFilter } from 'react-icons/bi';
 import supplierService from '../../services/supplierService';
 
 const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
@@ -427,7 +427,14 @@ const AdminSuppliers = () => {
                       disabled={isLoading}
                     />
                   </div>
-                  <div className="col-md-2">
+                  <div className="col-md-2 d-flex gap-2">
+                    <button
+                      className="btn btn-primary w-100 d-flex align-items-center justify-content-center gap-2"
+                      onClick={applyFilters}
+                      disabled={isLoading}
+                    >
+                      <BiFilter size={16} /> Lọc
+                    </button>
                     <button
                       className="btn btn-outline-secondary w-100 h-100"
                       onClick={clearFilters}
