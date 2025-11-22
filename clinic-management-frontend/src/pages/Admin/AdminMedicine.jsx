@@ -1,39 +1,44 @@
-import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef, memo, useRef } from 'react';
-import { Table, Button, Spinner, Form, Row, Col, Card, Badge, ProgressBar, Alert, Modal, InputGroup } from 'react-bootstrap';
-import { useDropzone } from 'react-dropzone';
-import * as XLSX from 'xlsx';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import '../../App.css';
 import Pagination from '../../Components/Pagination/Pagination';
-import ConfirmDeleteModal from '../../Components/CustomToast/DeleteConfirmModal';
 import CustomToast from '../../Components/CustomToast/CustomToast';
-import { PencilIcon, Trash, Download, Upload, FileSpreadsheet, AlertCircle, CheckCircle, XCircle, Search, X } from 'lucide-react';
-import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
+import Loading from '../../Components/Loading/Loading';
+import {
+  BiPlus, BiPencil, BiTrash, BiSearch, BiDownload, BiUpload,
+  BiExport, BiImport, BiFilter, BiX, BiCalendar, BiDollar,
+  BiPackage, BiChevronDown, BiChevronUp, BiError
+} from 'react-icons/bi';
+import * as XLSX from 'xlsx';
+import medicineService from '../../services/medicineService';
 
-const API_BASE_URL = 'http://localhost:8000';
+const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
+const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class|import|export|\$\w+)/i;
 
-// Mảng tĩnh cho Loại Thuốc
 const medicineTypes = [
   'Thuốc viên',
-  'Thuốc nước',
-  'Thuốc tiêm',
-  'Thuốc bột',
-  'Thuốc bôi',
-  'Thuốc nhỏ mắt',
+  'Chống viêm không steroid',
+  'Kháng sinh',
+  'Ức chế bơm proton',
+  'Điều trị tiểu đường',
+  'Chẹn kênh canxi',
+  'Chẹn thụ thể angiotensin',
+  'Statin',
+  'Chống kết tập tiểu cầu',
+  'Thuốc giãn phế quản',
+  'Corticosteroid',
+  'Hormone tuyến giáp',
+  'Lợi tiểu',
+  'Chống đông máu',
+  'Ức chế men chuyển',
+  'An thần',
+  'Chống trầm cảm',
+  'Chống co giật',
+  'Kháng virus',
+  'Điều trị ung thư'
 ];
 
-// Mảng tĩnh cho Đơn Vị
-const units = [
-  'Viên',
-  'Chai',
-  'Ống',
-  'Gói',
-  'Tuýp',
-  'Lọ',
-];
+const units = ['Viên', 'Chai', 'Ống', 'Gói', 'Tuýp', 'Lọ','Hộp'];
 
-// Required columns cho mapping
-const requiredColumns = ['MedicineName', 'MedicineType', 'Unit', 'Price', 'StockQuantity'];
-
-// Available columns cho export và mapping
 const availableColumns = [
   { value: 'MedicineId', label: 'Mã Thuốc' },
   { value: 'MedicineName', label: 'Tên Thuốc' },
@@ -46,758 +51,16 @@ const availableColumns = [
   { value: 'Description', label: 'Mô Tả' },
 ];
 
-// Regex kiểm tra ký tự đặc biệt và ngôn ngữ code
-const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
-const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class|import|export|\$\w+)/i;
-
-const MedicineList = memo(({
-  medicines, isLoading, formatVND, handleShowDeleteModal, handleShowEditForm,
-  pageCount, currentPage, handlePageChange,
-  onDownloadTemplate, onShowExportModal, onShowImport,
-  applyFilters, clearFilters, filters, setFilters, debounceRef
-}) => {
-  return (
-    <div>
-      {/* HEADER */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h3 style={{ fontSize: '1.5rem', fontWeight: '600' }}>
-          Danh Sách Thuốc
-        </h3>
-        <div className="d-flex gap-2">
-          <Button variant="outline-primary" onClick={onDownloadTemplate}>
-            <Download size={16} className="me-1" /> Tải Template
-          </Button>
-          <Button variant="success" onClick={onShowExportModal}>
-            <FileSpreadsheet size={16} className="me-1" /> Export
-          </Button>
-          <Button variant="info" onClick={onShowImport}>
-            <Upload size={16} className="me-1" /> Import
-          </Button>
-          <Button variant="primary" onClick={() => handleShowEditForm(null)}>
-            + Thêm Thuốc
-          </Button>
-        </div>
-      </div>
-
-      {/* FILTER BAR */}
-      <Card className="mb-4 p-3 bg-light border">
-        <Form onSubmit={(e) => { e.preventDefault(); applyFilters(); }}>
-          <Row className="g-3 align-items-end">
-            {/* TÌM KIẾM TÊN - DEBOUNCE */}
-            <Col md={4}>
-              <InputGroup>
-                <InputGroup.Text><Search size={16} /></InputGroup.Text>
-                <Form.Control
-                  placeholder="Tìm tên thuốc..."
-                  value={filters.search || ''}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setFilters(prev => ({ ...prev, search: value }));
-                  }}
-                />
-              </InputGroup>
-            </Col>
-
-            {/* LỌC LOẠI */}
-            <Col md={2}>
-              <Form.Select
-                value={filters.type || ''}
-                onChange={(e) => applyFilters({ type: e.target.value })}
-              >
-                <option value="">Loại</option>
-                {medicineTypes.map(t => <option key={t} value={t}>{t}</option>)}
-              </Form.Select>
-            </Col>
-
-            {/* LỌC ĐƠN VỊ */}
-            <Col md={2}>
-              <Form.Select
-                value={filters.unit || ''}
-                onChange={(e) => applyFilters({ unit: e.target.value })}
-              >
-                <option value="">Đơn vị</option>
-                {units.map(u => <option key={u} value={u}>{u}</option>)}
-              </Form.Select>
-            </Col>
-
-            {/* KHOẢNG GIÁ */}
-            <Col md={3}>
-              <InputGroup size="sm">
-                <Form.Control
-                  type="number"
-                  placeholder="Giá từ"
-                  value={filters.min_price || ''}
-                  onChange={(e) => setFilters(prev => ({ ...prev, min_price: e.target.value }))}
-                />
-                <InputGroup.Text>→</InputGroup.Text>
-                <Form.Control
-                  type="number"
-                  placeholder="Giá đến"
-                  value={filters.max_price || ''}
-                  onChange={(e) => setFilters(prev => ({ ...prev, max_price: e.target.value }))}
-                />
-              </InputGroup>
-            </Col>
-
-            {/* TỒN KHO THẤP */}
-            <Col md={2}>
-              <Form.Check
-                type="switch"
-                label="Tồn thấp"
-                checked={filters.low_stock === '1'}
-                onChange={(e) => setFilters(prev => ({ ...prev, low_stock: e.target.checked ? '1' : '' }))}
-              />
-            </Col>
-
-            {/* LỌC SẮP HẾT HẠN */}
-            <Col md={2}>
-              <Form.Select
-                value={filters.expiry_status || ''}
-                onChange={(e) => applyFilters({ expiry_status: e.target.value })}
-              >
-                <option value="">Hết hạn</option>
-                <option value="expired">Đã hết</option>
-                <option value="soon">Sắp hết (≤30 ngày)</option>
-              </Form.Select>
-            </Col>
-
-            {/* NÚT TÌM KIẾM & XÓA */}
-            <Col md={12} className="d-flex gap-2 mt-2">
-              <Button type="submit" variant="primary">
-                <Search size={16} className="me-1" /> Tìm kiếm
-              </Button>
-              <Button variant="outline-danger" onClick={clearFilters}>
-                <X size={16} className="me-1" /> Xóa bộ lọc
-              </Button>
-            </Col>
-          </Row>
-        </Form>
-      </Card>
-
-      {/* TABLE */}
-      <div className="table-responsive">
-        <Table striped bordered hover responsive className={isLoading ? 'opacity-50' : ''}>
-          <thead className="table-light">
-            <tr>
-              <th>Mã</th>
-              <th>Tên Thuốc</th>
-              <th>Loại</th>
-              <th>ĐV</th>
-              <th>Giá</th>
-              <th>Tồn</th>
-              <th>Hết Hạn</th>
-              <th>Ngưỡng Thấp</th>
-              <th>Mô Tả</th>
-              <th>Hành Động</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr><td colSpan="8" className="text-center py-4"><Spinner animation="border" /></td></tr>
-            ) : medicines.length === 0 ? (
-              <tr><td colSpan="8" className="text-center py-4 text-muted">Không có dữ liệu</td></tr>
-            ) : (
-              medicines.map((m) => (
-                <tr
-                  key={m.MedicineId}
-                  className={`
-                    ${m.StockQuantity < m.LowStockThreshold ? 'table-warning' : ''}
-                    ${(() => {
-                      if (!m.ExpiryDate) return '';
-                      const expiry = new Date(m.ExpiryDate);
-                      const today = new Date();
-                      const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
-                      if (diffDays < 0) return 'table-danger'; // Đã hết hạn
-                      if (diffDays <= 30) return 'table-warning'; // Sắp hết
-                      return '';
-                    })()}
-                  `.trim()}
-                >
-                  <td><strong>{m.MedicineId}</strong></td>
-                  <td>{m.MedicineName}</td>
-                  <td>{m.MedicineType}</td>
-                  <td>{m.Unit}</td>
-                  <td>{formatVND(m.Price)}</td>
-                  <td>
-                    <Badge bg={m.StockQuantity < 100 ? 'danger' : m.StockQuantity < 500 ? 'warning' : 'success'}>
-                      {m.StockQuantity}
-                    </Badge>
-                  </td>
-                  <td>
-                    {m.ExpiryDate
-                      ? new Date(m.ExpiryDate).toLocaleDateString('vi-VN', {
-                        day: '2-digit', month: '2-digit', year: 'numeric'
-                      })
-                      : '—'
-                    }
-                  </td>
-                  <td>
-                    <Badge bg="info">{m.LowStockThreshold}</Badge>
-                  </td>
-                  <td title={m.Description}>
-                    {m.Description?.length > 30 ? m.Description.substring(0, 30) + '...' : m.Description || '—'}
-                  </td>
-                  <td>
-                    <Button variant="link" size="sm" className="text-success p-0 me-2" onClick={() => handleShowEditForm(m)}>
-                      <PencilIcon size={18} />
-                    </Button>
-                    <Button variant="link" size="sm" className="text-danger p-0" onClick={() => handleShowDeleteModal(m.MedicineId)}>
-                      <Trash size={18} />
-                    </Button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </Table>
-      </div>
-
-      {pageCount > 1 && (
-        <Pagination
-          pageCount={pageCount}
-          onPageChange={handlePageChange}
-          currentPage={currentPage}
-          isLoading={isLoading}
-        />
-      )}
-    </div>
-  );
-});
-
-const ImportModal = ({ show, onHide, onDrop, uploadErrors, previewData, headers, mapping, onMappingChange, onDryRun, dryRunResult, onConfirmImport, isProcessing, getRootProps, getInputProps, importFile }) => {
-  return (
-    <Modal show={show} onHide={onHide} size="lg">
-      <Modal.Header closeButton>
-        <Modal.Title>Import Excel</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        {/* Drag & Drop + Preview */}
-        <Card className="mb-3">
-          <Card.Body {...getRootProps({ className: 'dropzone p-4 border-dashed border-2 text-center cursor-pointer' })}>
-            <input {...getInputProps()} />
-            <Upload size={48} className="mb-2" />
-            <p>Kéo thả file hoặc click để chọn (.xlsx, .xls, .csv)</p>
-            {uploadErrors.map(err => <Alert variant="danger" key={err}>{err}</Alert>)}
-          </Card.Body>
-        </Card>
-
-        {/* Preview Table */}
-        {previewData.length > 0 && (
-          <Card className="mb-3">
-            <Card.Header>Preview 50 Dòng Đầu</Card.Header>
-            <div className="table-responsive">
-              <Table striped bordered hover>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    {headers.map(h => <th key={h}>{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {previewData.map((row, idx) => (
-                    <tr key={idx} className={dryRunResult?.errors?.some(e => e.row === idx + 2) ? 'table-danger' : ''}>
-                      <td>{idx + 1}</td>
-                      {row.map((cell, cIdx) => (
-                        <td key={cIdx}>
-                          {cell}
-                          {dryRunResult?.errors?.filter(e => e.row === idx + 2 && e.attribute === headers[cIdx]).map(e => (
-                            <Badge bg="danger" className="ms-1" key={e.errors[0]} title={e.errors.join(', ')}><XCircle size={12} /></Badge>
-                          ))}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </div>
-          </Card>
-        )}
-
-        {/* Mapping */}
-        {headers.length > 0 && (
-          <Card className="mb-3">
-            <Card.Header>Mapping Cột</Card.Header>
-            <Table>
-              <thead>
-                <tr>
-                  <th>Cột Từ File</th>
-                  <th>Cột Hệ Thống</th>
-                </tr>
-              </thead>
-              <tbody>
-                {headers.map(h => (
-                  <tr key={h}>
-                    <td>{h}</td>
-                    <td>
-                      <Form.Select value={mapping[h] || ''} onChange={(e) => onMappingChange(h, e.target.value)}>
-                        <option value="">Chọn cột</option>
-                        {availableColumns.map(col => <option key={col.value} value={col.value}>{col.label}</option>)}
-                      </Form.Select>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </Card>
-        )}
-
-        {/* Dry-run Button */}
-        <Button variant="info" onClick={onDryRun} disabled={!importFile || isProcessing} className="me-3">
-          Dry-run Kiểm Tra
-        </Button>
-
-        {/* Dry-run Result */}
-        {dryRunResult && (
-          <Card className="mb-3">
-            <Card.Header>Kết Quả Dry-run</Card.Header>
-            <Card.Body>
-              <div className="d-flex gap-3 mb-2">
-                <Badge bg="success" className="d-flex align-items-center"><CheckCircle size={16} className="me-1" /> Thành công: {dryRunResult.success_count}</Badge>
-                <Badge bg="danger" className="d-flex align-items-center"><XCircle size={16} className="me-1" /> Lỗi: {dryRunResult.error_count}</Badge>
-              </div>
-              <ProgressBar
-                now={(dryRunResult.success_count / (dryRunResult.success_count + dryRunResult.error_count)) * 100}
-                variant="success"
-                label={`${Math.round((dryRunResult.success_count / (dryRunResult.success_count + dryRunResult.error_count)) * 100)}%`}
-              />
-              {dryRunResult.errors.length > 0 && (
-                <div className="mt-3">
-                  <h6>Lỗi Mẫu (5 đầu):</h6>
-                  {dryRunResult.errors.slice(0, 5).map((err, idx) => (
-                    <Alert variant="danger" key={idx} className="small mb-1">
-                      Hàng {err.row}: {err.errors.join(', ')} (Cột: {err.attribute})
-                    </Alert>
-                  ))}
-                </div>
-              )}
-            </Card.Body>
-          </Card>
-        )}
-
-        <Button variant="primary" onClick={onConfirmImport} disabled={!dryRunResult || dryRunResult.success_count === 0 || isProcessing}>
-          Import
-        </Button>
-      </Modal.Body>
-    </Modal>
-  );
-};
-
-const ExportModal = ({ show, onHide, onExport, filters, onFilterChange, selectedColumns, onColumnChange }) => {
-  return (
-    <Modal show={show} onHide={onHide} size="lg">
-      <Modal.Header closeButton>
-        <Modal.Title>Tùy Chọn Export</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        <Row>
-          <Col md={6}>
-            <Form.Group className="mb-3">
-              <Form.Label>Bộ Lọc Loại Thuốc</Form.Label>
-              <Form.Select
-                value={filters.MedicineType || ''}
-                onChange={(e) => onFilterChange('MedicineType', e.target.value)}
-              >
-                <option value="">Tất cả</option>
-                {medicineTypes.map((type) => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </Form.Select>
-            </Form.Group>
-          </Col>
-          <Col md={6}>
-            <Form.Label>Chọn Cột</Form.Label>
-            <div className="d-flex flex-wrap gap-2">
-              {availableColumns.map((col) => (
-                <Form.Check
-                  type="checkbox"
-                  label={col.label}
-                  key={col.value}
-                  checked={selectedColumns.includes(col.value)}
-                  onChange={(e) => onColumnChange(col.value, e.target.checked)}
-                  disabled={selectedColumns.length >= 20 && !selectedColumns.includes(col.value)}
-                />
-              ))}
-            </div>
-          </Col>
-        </Row>
-      </Modal.Body>
-      <Modal.Footer>
-        <Button variant="secondary" onClick={onHide}>Hủy</Button>
-        <Button variant="success" onClick={onExport}>
-          <FileSpreadsheet size={16} className="me-1" /> Export Excel
-        </Button>
-      </Modal.Footer>
-    </Modal>
-  );
-};
-
-const MedicineForm = forwardRef(({
-  isEditMode, medicine, onSubmit, onCancel, isLoading, aiEnabled, setAiEnabled, handleSuggest
-}, ref) => {
-  const [errors, setErrors] = useState({
-    MedicineName: '',
-    MedicineType: '',
-    Unit: '',
-    Price: '',
-    StockQuantity: '',
-    ExpiryDate: '',
-    LowStockThreshold: '',
-    Description: '',
-  });
-  const [showSuggestModal, setShowSuggestModal] = useState(false);
-  const [suggestedData, setSuggestedData] = useState(null);
-  const [suggestError, setSuggestError] = useState('');
-
-  useImperativeHandle(ref, () => ({
-    openSuggestModal: (data, error = '') => {
-      setSuggestedData(data);
-      setSuggestError(error);
-      setShowSuggestModal(true);
-    }
-  }));
-
-  useEffect(() => {
-    localStorage.setItem('aiEnabled', aiEnabled);
-  }, [aiEnabled]);
-
-  useEffect(() => {
-    if (window.__AI_SUGGESTION__) {
-      const { data, error } = window.__AI_SUGGESTION__;
-      setSuggestedData(data);
-      setSuggestError(error);
-      setShowSuggestModal(true);
-      delete window.__AI_SUGGESTION__;
-    }
-  }, []);
-
-  useEffect(() => {
-    const firstInput = document.querySelector('input[name="MedicineName"]');
-    firstInput?.focus();
-  }, []);
-
-  const validateForm = useCallback((formData) => {
-    const newErrors = {};
-    let isValid = true;
-
-    // Validate MedicineName
-    const medicineName = formData.get('MedicineName')?.trim();
-    if (!medicineName) {
-      newErrors.MedicineName = 'Vui lòng nhập tên thuốc';
-      isValid = false;
-    } else if (medicineName.length > 100) {
-      newErrors.MedicineName = 'Tên thuốc không được vượt quá 100 ký tự';
-      isValid = false;
-    } else if (specialCharRegex.test(medicineName) || codePatternRegex.test(medicineName)) {
-      newErrors.MedicineName = 'Vui lòng không nhập ký tự đặc biệt hoặc ngôn ngữ code';
-      isValid = false;
-    }
-
-    // Validate MedicineType
-    const medicineType = formData.get('MedicineType');
-    if (!medicineType) {
-      newErrors.MedicineType = 'Vui lòng chọn loại thuốc';
-      isValid = false;
-    } else if (!medicineTypes.includes(medicineType)) {
-      newErrors.MedicineType = 'Loại thuốc không hợp lệ';
-      isValid = false;
-    }
-
-    // Validate Unit
-    const unit = formData.get('Unit');
-    if (!unit) {
-      newErrors.Unit = 'Vui lòng chọn đơn vị thuốc';
-      isValid = false;
-    } else if (!units.includes(unit)) {
-      newErrors.Unit = 'Đơn vị thuốc không hợp lệ';
-      isValid = false;
-    }
-
-    // Validate Price
-    const price = formData.get('Price') ? parseFloat(formData.get('Price')) : null;
-    if (price === null || isNaN(price)) {
-      newErrors.Price = 'Vui lòng nhập giá bán';
-      isValid = false;
-    } else if (price < 0) {
-      newErrors.Price = 'Giá bán không thể âm';
-      isValid = false;
-    } else if (price.toString().replace('.', '').length > 18) {
-      newErrors.Price = 'Giá thuốc không được vượt quá 18 chữ số';
-      isValid = false;
-    } else if (price.toString().split('.')[1]?.length > 2) {
-      newErrors.Price = 'Giá thuốc không được vượt quá 2 chữ số sau dấu phẩy';
-      isValid = false;
-    }
-
-    // Validate StockQuantity
-    const stockQuantity = formData.get('StockQuantity') ? parseInt(formData.get('StockQuantity')) : null;
-    if (stockQuantity === null || isNaN(stockQuantity)) {
-      newErrors.StockQuantity = 'Vui lòng nhập số lượng tồn kho';
-      isValid = false;
-    } else if (stockQuantity < 0) {
-      newErrors.StockQuantity = 'Tồn kho không thể âm';
-      isValid = false;
-    }
-
-    // Trong validateForm
-    const expiryDate = formData.get('ExpiryDate');
-    if (expiryDate) {
-      const date = new Date(expiryDate);
-      if (isNaN(date.getTime())) {
-        newErrors.ExpiryDate = 'Ngày hết hạn không hợp lệ';
-        isValid = false;
-      } else if (date < new Date()) {
-        newErrors.ExpiryDate = 'Ngày hết hạn không được trong quá khứ';
-        isValid = false;
-      }
-    }
-
-    const lowStockThreshold = parseInt(formData.get('LowStockThreshold'));
-    if (isNaN(lowStockThreshold) || lowStockThreshold < 1) {
-      newErrors.LowStockThreshold = 'Ngưỡng thấp phải ≥ 1';
-      isValid = false;
-    }
-
-    // Validate Description
-    const description = formData.get('Description')?.trim();
-    if (description && description.length > 500) {
-      newErrors.Description = 'Mô tả không được vượt quá 500 ký tự';
-      isValid = false;
-    } else if (description && (specialCharRegex.test(description) || codePatternRegex.test(description))) {
-      newErrors.Description = 'Vui lòng không nhập ký tự đặc biệt hoặc ngôn ngữ code';
-      isValid = false;
-    }
-
-    setErrors(newErrors);
-    return isValid;
-  }, []);
-
-  const handleSubmit = useCallback((e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    if (validateForm(formData)) {
-      onSubmit(e);
-    }
-  }, [onSubmit, validateForm]);
-
-  const handleApprove = useCallback(() => {
-    if (suggestedData) {
-      const typeSelect = document.querySelector('select[name="MedicineType"]');
-      const unitSelect = document.querySelector('select[name="Unit"]');
-      const descTextarea = document.querySelector('textarea[name="Description"]');
-
-      if (typeSelect) typeSelect.value = suggestedData.type;
-      if (unitSelect) unitSelect.value = suggestedData.unit;
-      if (descTextarea) descTextarea.value = suggestedData.description;
-    }
-    setShowSuggestModal(false);
-  }, [suggestedData]);
-
-  return (
-    <div>
-      <h3>{isEditMode ? 'Sửa Thuốc' : 'Thêm Thuốc Mới'}</h3>
-      <Form onSubmit={handleSubmit}>
-        <Row>
-          <Col md={6}>
-            <Form.Group className="mb-3">
-              <Form.Label>Tên Thuốc</Form.Label>
-              <InputGroup>
-                <Form.Control
-                  type="text"
-                  name="MedicineName"
-                  defaultValue={isEditMode ? medicine?.MedicineName : ''}
-                  placeholder="Nhập tên thuốc"
-                  isInvalid={!!errors.MedicineName}
-                />
-                {aiEnabled && (
-                  <Button variant="info" onClick={handleSuggest} className="ms-2">
-                    Gợi ý bằng AI
-                  </Button>
-                )}
-              </InputGroup>
-              <Form.Text className="text-danger">{errors.MedicineName}</Form.Text>
-              {/* Toggle */}
-              <Form.Check
-                type="switch"
-                label="Bật gợi ý AI"
-                checked={aiEnabled}
-                onChange={(e) => setAiEnabled(e.target.checked)}
-                className="mt-2"
-              />
-            </Form.Group>
-          </Col>
-          <Col md={6}>
-            <Form.Group className="mb-3">
-              <Form.Label>Loại Thuốc</Form.Label>
-              <Form.Select
-                name="MedicineType"
-                defaultValue={isEditMode ? medicine?.MedicineType : ''}
-                isInvalid={!!errors.MedicineType}
-              >
-                <option value="" disabled>Chọn loại thuốc</option>
-                {medicineTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </Form.Select>
-              <Form.Text className="text-danger">{errors.MedicineType}</Form.Text>
-            </Form.Group>
-          </Col>
-        </Row>
-        <Row>
-          <Col md={6}>
-            <Form.Group className="mb-3">
-              <Form.Label>Đơn Vị</Form.Label>
-              <Form.Select
-                name="Unit"
-                defaultValue={isEditMode ? medicine?.Unit : ''}
-                isInvalid={!!errors.Unit}
-              >
-                <option value="" disabled>Chọn đơn vị</option>
-                {units.map((unit) => (
-                  <option key={unit} value={unit}>
-                    {unit}
-                  </option>
-                ))}
-              </Form.Select>
-              <Form.Text className="text-danger">{errors.Unit}</Form.Text>
-            </Form.Group>
-          </Col>
-          <Col md={6}>
-            <Form.Group className="mb-3">
-              <Form.Label>Giá Bán</Form.Label>
-              <Form.Control
-                type="number"
-                name="Price"
-                defaultValue={isEditMode ? medicine?.Price : ''}
-                placeholder="Nhập giá bán"
-                step="0.01"
-                isInvalid={!!errors.Price}
-              />
-              <Form.Text className="text-danger">{errors.Price}</Form.Text>
-            </Form.Group>
-          </Col>
-        </Row>
-        <Row>
-          <Col md={6}>
-            <Form.Group className="mb-3">
-              <Form.Label>Ngày Hết Hạn</Form.Label>
-              <Form.Control
-                type="date"
-                name="ExpiryDate"
-                defaultValue={isEditMode && medicine?.ExpiryDate ? medicine.ExpiryDate.split('T')[0] : ''}
-                isInvalid={!!errors.ExpiryDate}
-              />
-              <Form.Text className="text-danger">{errors.ExpiryDate}</Form.Text>
-            </Form.Group>
-          </Col>
-          <Col md={6}>
-            <Form.Group className="mb-3">
-              <Form.Label>Ngưỡng Tồn Kho Thấp</Form.Label>
-              <Form.Control
-                type="number"
-                name="LowStockThreshold"
-                defaultValue={isEditMode ? medicine?.LowStockThreshold : 10}
-                min="1"
-                placeholder="Ví dụ: 10"
-                isInvalid={!!errors.LowStockThreshold}
-              />
-              <Form.Text className="text-danger">{errors.LowStockThreshold}</Form.Text>
-            </Form.Group>
-          </Col>
-        </Row>
-        <Row>
-          <Col md={6}>
-            <Form.Group className="mb-3">
-              <Form.Label>Tồn Kho</Form.Label>
-              <Form.Control
-                type="number"
-                name="StockQuantity"
-                defaultValue={isEditMode ? medicine?.StockQuantity : ''}
-                placeholder="Nhập số lượng tồn kho"
-                isInvalid={!!errors.StockQuantity}
-              />
-              <Form.Text className="text-danger">{errors.StockQuantity}</Form.Text>
-            </Form.Group>
-          </Col>
-          <Col md={6}>
-            <Form.Group className="mb-3">
-              <Form.Label>Mô Tả</Form.Label>
-              <Form.Control
-                as="textarea"
-                name="Description"
-                defaultValue={isEditMode ? medicine?.Description : ''}
-                placeholder="Nhập mô tả"
-                isInvalid={!!errors.Description}
-              />
-              <Form.Text className="text-danger">{errors.Description}</Form.Text>
-            </Form.Group>
-          </Col>
-        </Row>
-        <Button variant="primary" type="submit" disabled={isLoading}>
-          {isLoading ? 'Đang lưu...' : isEditMode ? 'Sửa' : 'Thêm'}
-        </Button>
-        <Button variant="secondary" onClick={onCancel} className="ms-2">Hủy</Button>
-      </Form>
-      <Modal show={showSuggestModal} onHide={() => setShowSuggestModal(false)}>
-        <Modal.Header closeButton>
-          <Modal.Title>
-            Gợi Ý AI: {medicine?.MedicineName || 'Thuốc'}
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {suggestError && <Alert variant="warning">{suggestError}</Alert>}
-          {suggestedData && (
-            <div>
-              <p><strong>Loại:</strong> {suggestedData.type}</p>
-              <p><strong>Đơn vị:</strong> {suggestedData.unit}</p>
-              <p><strong>Mô tả:</strong> {suggestedData.description}</p>
-              <p><strong>Cảnh báo:</strong> {suggestedData.warnings}</p>
-            </div>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowSuggestModal(false)}>
-            Reject
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleApprove}
-            disabled={!!suggestError}
-          >
-            Approve
-          </Button>
-        </Modal.Footer>
-      </Modal>
-    </div >
-  );
-});
+const requiredColumns = ['MedicineName', 'MedicineType', 'Unit', 'Price', 'StockQuantity'];
 
 const AdminMedicine = () => {
   const [medicines, setMedicines] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [pageCount, setPageCount] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [medicineToDelete, setMedicineToDelete] = useState(null);
   const [toast, setToast] = useState({ show: false, type: 'info', message: '' });
-  const [currentView, setCurrentView] = useState('list'); // list, add, edit
-  const [editMedicine, setEditMedicine] = useState(null);
-  const [showExportModal, setShowExportModal] = useState(false);
-  const cache = useRef(new Map());
-  const debounceRef = useRef(null);
-  const [importFile, setImportFile] = useState(null);
-  const [previewData, setPreviewData] = useState([]); // 50 dòng đầu
-  const [headers, setHeaders] = useState([]); // Auto detect header
-  const [dryRunResult, setDryRunResult] = useState(null);
-  const [selectedColumns, setSelectedColumns] = useState(availableColumns.map(col => col.value)); // Default all
-  const [mapping, setMapping] = useState({});
-  const [uploadErrors, setUploadErrors] = useState([]);
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [showConfirmImportModal, setShowConfirmImportModal] = useState(false);
-  const [aiEnabled, setAiEnabled] = useState(localStorage.getItem('aiEnabled') !== 'false');
-  const formRef = useRef(null);
-
+  const [modal, setModal] = useState({ type: null, medicine: null });
   const [filters, setFilters] = useState({
     search: '',
     type: '',
@@ -805,660 +68,1009 @@ const AdminMedicine = () => {
     min_price: '',
     max_price: '',
     low_stock: '',
-    expiry_status: '',
-    threshold: 100
+    expiry_status: ''
   });
   const [filterParams, setFilterParams] = useState('');
+  const [formData, setFormData] = useState({
+    MedicineName: '',
+    MedicineType: '',
+    Unit: '',
+    Price: '',
+    StockQuantity: '',
+    ExpiryDate: '',
+    LowStockThreshold: '10',
+    Description: ''
+  });
+  const [formErrors, setFormErrors] = useState({});
+  const [importFile, setImportFile] = useState(null);
+  const [importProgress, setImportProgress] = useState(0);
+  const [isImporting, setIsImporting] = useState(false);
+  const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
+  const [lowStockCount, setLowStockCount] = useState(0);
+  const [nearExpiryCount, setNearExpiryCount] = useState(0);
 
+  // New state for enhanced import/export
+  const [previewData, setPreviewData] = useState([]);
+  const [headers, setHeaders] = useState([]);
+  const [mapping, setMapping] = useState({});
+  const [uploadErrors, setUploadErrors] = useState([]);
+  const [dryRunResult, setDryRunResult] = useState(null);
+  const [selectedColumns, setSelectedColumns] = useState(availableColumns.map((c) => c.value));
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showConfirmImportModal, setShowConfirmImportModal] = useState(false);
+
+  const cache = useRef(new Map());
+  const fileInputRef = useRef(null);
+
+  // Toast
   const showToast = useCallback((type, message) => {
     setToast({ show: true, type, message });
   }, []);
 
+  const hideToast = () => setToast({ show: false, type: 'info', message: '' });
 
-  const fetchMedicines = useCallback(async (page = 1, queryString = '') => {
-    const cacheKey = `${page}_${queryString || 'none'}`;
-    if (cache.current.has(cacheKey)) {
-      const { data, last_page } = cache.current.get(cacheKey);
-      setMedicines(data);
-      setPageCount(last_page);
+  // Lấy danh sách thuốc
+  const fetchMedicines = useCallback(async (page = 1, query = '') => {
+    const key = `${page}_${query || 'none'}`;
+    if (cache.current.has(key)) {
+      const cached = cache.current.get(key);
+      setMedicines(cached.data);
+      setPageCount(cached.last_page);
+      setTotalItems(cached.total || 0);
       setCurrentPage(page - 1);
       return;
     }
 
     try {
       setIsLoading(true);
-      const url = `${API_BASE_URL}/api/medicines?page=${page}${queryString ? '&' + queryString : ''}`;
-      const response = await fetch(url, {
-        headers: { 'Accept': 'application/json' },
-        credentials: 'include',
+      const res = await medicineService.getAll(page, query);
+      cache.current.set(key, {
+        data: res.data,
+        last_page: res.last_page,
+        total: res.total || 0
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const res = await response.json();
-      cache.current.set(cacheKey, { data: res.data, last_page: res.last_page });
       setMedicines(res.data);
       setPageCount(res.last_page);
+      setTotalItems(res.total || 0);
       setCurrentPage(page - 1);
-    } catch (error) {
-      showToast('error', `Lỗi tải dữ liệu: ${error.message}`);
+
+      // Tính toán số lượng cảnh báo
+      calculateAlerts(res.data);
+    } catch (err) {
+      showToast('error', err.message || 'Lỗi tải dữ liệu thuốc');
     } finally {
       setIsLoading(false);
     }
   }, [showToast]);
 
-  // ÁP DỤNG LỌC
-  const applyFilters = useCallback((updates = {}) => {
-    const newFilters = { ...filters, ...updates };
-    setFilters(newFilters);
+  // Tính toán cảnh báo
+  const calculateAlerts = (medicinesList) => {
+    const lowStock = medicinesList.filter(medicine =>
+      medicine.StockQuantity < medicine.LowStockThreshold
+    ).length;
 
+    const today = new Date();
+    const nearExpiry = medicinesList.filter(medicine => {
+      if (!medicine.ExpiryDate) return false;
+      const expiry = new Date(medicine.ExpiryDate);
+      const diffTime = expiry - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays <= 30 && diffDays >= 0;
+    }).length;
+
+    setLowStockCount(lowStock);
+    setNearExpiryCount(nearExpiry);
+  };
+
+  // Áp dụng bộ lọc
+  const applyFilters = useCallback(() => {
     const params = new URLSearchParams();
-    Object.entries(newFilters).forEach(([key, value]) => {
-      if (value !== '' && value !== null && value !== undefined) {
-        params.append(key, value);
-      }
-    });
+    if (filters.search.trim()) params.append('search', filters.search.trim());
+    if (filters.type.trim()) params.append('type', filters.type.trim());
+    if (filters.unit.trim()) params.append('unit', filters.unit.trim());
+    if (filters.min_price.trim()) params.append('min_price', filters.min_price.trim());
+    if (filters.max_price.trim()) params.append('max_price', filters.max_price.trim());
+    if (filters.low_stock.trim()) params.append('low_stock', filters.low_stock.trim());
+    if (filters.expiry_status.trim()) params.append('expiry_status', filters.expiry_status.trim());
 
-    if (newFilters.expiry_status) {
-      params.append('expiry_status', newFilters.expiry_status);
-    }
-
-    const query = params.toString();
-    setFilterParams(query);
-    fetchMedicines(1, query); // Gọi ngay khi nhấn nút hoặc debounce kết thúc
+    const q = params.toString();
+    setFilterParams(q);
+    fetchMedicines(1, q);
   }, [filters, fetchMedicines]);
 
-  // XÓA LỌC
   const clearFilters = useCallback(() => {
-    const reset = { search: '', type: '', unit: '', min_price: '', max_price: '', low_stock: '', expiry_status: '', threshold: 100 };
-    setFilters(reset);
+    setFilters({
+      search: '',
+      type: '',
+      unit: '',
+      min_price: '',
+      max_price: '',
+      low_stock: '',
+      expiry_status: ''
+    });
     setFilterParams('');
+    setShowAdvancedFilter(false);
     fetchMedicines(1);
-  }, []);
+  }, [fetchMedicines]);
 
-  const hideToast = useCallback(() => {
-    setToast({ show: false, type: 'info', message: '' });
-  }, []);
+  const handleFilterChange = (e) => {
+    const { name, value } = e.target;
+    setFilters(prev => ({ ...prev, [name]: value }));
+  };
 
-  const handleShowExportModal = useCallback(() => {
-    setShowExportModal(true);
-  }, []);
-
-  const handleCloseExportModal = useCallback(() => {
-    setShowExportModal(false);
-  }, []);
-
-  const getCsrfToken = useCallback(async (retries = 3) => {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-      try {
-        const response = await fetch(`${API_BASE_URL}/sanctum/csrf-cookie`, {
-          method: 'GET',
-          credentials: 'include',
-        });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch CSRF token: ${response.status}`);
-        }
-        const token = document.cookie
-          .split('; ')
-          .find(row => row.startsWith('XSRF-TOKEN='))
-          ?.split('=')[1];
-        if (!token) {
-          throw new Error('CSRF token not found in cookies');
-        }
-        return decodeURIComponent(token);
-      } catch (error) {
-        console.error(`Attempt ${attempt} to fetch CSRF token failed:`, error);
-        if (attempt === retries) {
-          throw new Error(`Không thể lấy CSRF token sau ${retries} lần thử: ${error.message}`);
-        }
-        await new Promise(resolve => setTimeout(resolve, 500)); // Wait before retry
-      }
-    }
-  }, []);
-
-  const handleDelete = useCallback(async (medicineId) => {
-    try {
-      setIsLoading(true);
-      const token = await getCsrfToken();
-      const response = await fetch(`${API_BASE_URL}/api/medicines/${medicineId}`, {
-        method: 'DELETE',
-        headers: {
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-XSRF-TOKEN': token,
-        },
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
-      }
-      const result = await response.json();
-      showToast('success', result.message || 'Xóa thuốc thành công');
-
-      // XÓA TOÀN BỘ CACHE ĐỂ ĐẢM BẢO DỮ LIỆU MỚI
-      cache.current.clear();
-
-      // GỌI LẠI TRANG HIỆN TẠI
-      const currentApiPage = currentPage + 1;
-      const res = await fetch(`${API_BASE_URL}/api/medicines?page=${currentApiPage}${filterParams ? '&' + filterParams : ''}`, {
-        headers: { 'Accept': 'application/json' },
-        credentials: 'include',
-      });
-
-      if (!res.ok) throw new Error('Không thể tải lại dữ liệu');
-
-      const data = await res.json();
-
-      // Nếu trang hiện tại trống → chuyển về trang trước (nếu có)
-      if (data.data.length === 0 && data.last_page > 0 && currentApiPage > 1) {
-        setCurrentPage(data.last_page - 1); // 0-based
-        setPageCount(data.last_page);
-        await fetchMedicines(data.last_page, filterParams);
-      } else {
-        setMedicines(data.data);
-        setPageCount(data.last_page);
-        // Không cần fetch lại vì đã có data
-      }
-
-
-    } catch (error) {
-      console.error('Error deleting medicine:', error);
-      showToast('error', `Lỗi khi xóa thuốc: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-      setShowDeleteModal(false);
-      setMedicineToDelete(null);
-    }
-  }, [currentPage, filterParams, fetchMedicines, getCsrfToken, showToast]);
-
-  const handleShowDeleteModal = useCallback((medicineId) => {
-    setMedicineToDelete(medicineId);
-    setShowDeleteModal(true);
-  }, []);
-
-  const handleCancelDelete = useCallback(() => {
-    setShowDeleteModal(false);
-    setMedicineToDelete(null);
-  }, []);
-
-  const handleShowEditForm = useCallback((medicine) => {
-    setEditMedicine(medicine);
-    setCurrentView(medicine ? 'edit' : 'add');
-  }, []);
-
-  const handleCancelForm = useCallback(() => {
-    setCurrentView('list');
-    setEditMedicine(null);
-  }, []);
-
-  const handleAddMedicine = useCallback(async (e) => {
-    try {
-      setIsLoading(true);
-      const token = await getCsrfToken();
-      const formData = new FormData(e.target);
-      const data = {
-        MedicineName: formData.get('MedicineName'),
-        MedicineType: formData.get('MedicineType'),
-        Unit: formData.get('Unit'),
-        Price: parseFloat(formData.get('Price')),
-        StockQuantity: parseInt(formData.get('StockQuantity')),
-        ExpiryDate: formData.get('ExpiryDate'),
-        LowStockThreshold: parseInt(formData.get('LowStockThreshold')),
-        Description: formData.get('Description') || '',
-      };
-
-      const response = await fetch(`${API_BASE_URL}/api/medicines`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-XSRF-TOKEN': token,
-        },
-        credentials: 'include',
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
-      }
-      const result = await response.json();
-      showToast('success', result.message || 'Thêm thuốc thành công');
-      cache.current.clear();
-      await fetchMedicines(1);
-      setCurrentView('list');
-    } catch (error) {
-      console.error('Error adding medicine:', error);
-      showToast('error', error.message.includes('CSRF token')
-        ? 'Thêm thất bại: Không thể lấy CSRF token. Vui lòng kiểm tra backend.'
-        : `Thêm thất bại: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [fetchMedicines, getCsrfToken, showToast]);
-
-  const handleEditMedicine = useCallback(async (e) => {
-    try {
-      setIsLoading(true);
-      const token = await getCsrfToken();
-      const formData = new FormData(e.target);
-      const data = {
-        MedicineName: formData.get('MedicineName'),
-        MedicineType: formData.get('MedicineType'),
-        Unit: formData.get('Unit'),
-        Price: parseFloat(formData.get('Price')),
-        StockQuantity: parseInt(formData.get('StockQuantity')),
-        ExpiryDate: formData.get('ExpiryDate'),
-        LowStockThreshold: parseInt(formData.get('LowStockThreshold')),
-        Description: formData.get('Description') || '',
-      };
-
-      const response = await fetch(`${API_BASE_URL}/api/medicines/${editMedicine.MedicineId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-XSRF-TOKEN': token,
-        },
-        credentials: 'include',
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
-      }
-      const result = await response.json();
-      showToast('success', result.message || 'Sửa thuốc thành công');
-      cache.current.clear();
-      await fetchMedicines(currentPage + 1);
-      setCurrentView('list');
-      setEditMedicine(null);
-    } catch (error) {
-      console.error('Error editing medicine:', error);
-      showToast('error', error.message.includes('CSRF token')
-        ? 'Sửa thất bại: Không thể lấy CSRF token. Vui lòng kiểm tra backend.'
-        : `Sửa thất bại: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentPage, editMedicine, fetchMedicines, getCsrfToken, showToast]);
-
-  useEffect(() => {
-    if (currentView === 'list') {
-      fetchMedicines(1, filterParams);
-    }
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [currentView, fetchMedicines, filterParams]);
-
-  const handlePageChange = useCallback(({ selected }) => {
-    fetchMedicines(selected + 1, filterParams);
-  }, [fetchMedicines, filterParams]);
-
-  const formatVND = useCallback((price) => {
-    return Number(price).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
-  }, []);
-
-  // Download Template
-  const handleDownloadTemplate = useCallback(async () => {
-    try {
-      const token = await getCsrfToken();
-      const response = await fetch(`${API_BASE_URL}/api/medicines/template`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'X-XSRF-TOKEN': token,
-        },
-        credentials: 'include',
-      });
-      if (response.status === 404) {
-        showToast('error', 'Không tìm thấy file template. Vui lòng liên hệ quản trị viên.');
-        return;
-      }
-      if (response.status === 403) {
-        showToast('error', 'Bạn không có quyền tải mẫu này.');
-        return;
-      }
-      if (!response.ok) {
-        throw new Error('Tải template thất bại');
-      }
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'medicines_template.xlsx';
-      a.click();
-      window.URL.revokeObjectURL(url);
-      showToast('success', 'Tải template thành công');
-    } catch (error) {
-      showToast('error', 'Tải file thất bại. Kiểm tra kết nối Internet của bạn.');
-    }
-  }, [getCsrfToken, showToast]);
-
-  // Export
-  const handleExport = useCallback(async () => {
-    try {
-      const token = await getCsrfToken();
-      const response = await fetch(`${API_BASE_URL}/api/medicines/export?filters=${JSON.stringify(filters)}&columns=${selectedColumns.join(',')}`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'X-XSRF-TOKEN': token,
-        },
-        credentials: 'include',
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        showToast('error', errorData.message || 'Export thất bại');
-        return;
-      }
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'medicines.xlsx';
-      a.click();
-      window.URL.revokeObjectURL(url);
-      showToast('success', 'Export thành công');
-      setShowExportModal(false); // Ẩn modal sau khi export
-    } catch (error) {
-      showToast('error', 'Lỗi export: ' + error.message);
-    }
-  }, [filters, selectedColumns, getCsrfToken, showToast]);
-
-  // Drop File
-  const onDrop = useCallback((acceptedFiles, fileRejections) => {
-    setUploadErrors([]);
-    if (fileRejections.length > 0) {
-      fileRejections.forEach(rej => {
-        rej.errors.forEach(err => {
-          if (err.code === 'file-too-large') setUploadErrors(prev => [...prev, 'File vượt quá dung lượng tối đa (10MB).']);
-          if (err.code === 'file-invalid-type') setUploadErrors(prev => [...prev, 'Định dạng file không hợp lệ. Chỉ chấp nhận Excel (.xlsx, .xls, .csv).']);
-        });
-      });
-      return;
-    }
-    const file = acceptedFiles[0];
-    setImportFile(file);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = e.target.result;
-        const workbook = XLSX.read(data, { type: 'binary' });
-        if (workbook.SheetNames.length === 0) {
-          setUploadErrors(['File không chứa dữ liệu nào để xem trước.']);
-          return;
-        }
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-        if (rows.length < 1) {
-          setUploadErrors(['File không chứa dữ liệu nào để xem trước.']);
-          return;
-        }
-        const headerRow = rows[0];
-        if (headerRow.length === 0) {
-          setUploadErrors(['Không tìm thấy dòng tiêu đề (header). Vui lòng thêm dòng tiêu đề ở hàng đầu tiên.']);
-          return;
-        }
-        setHeaders(headerRow);
-        setPreviewData(rows.slice(1, 51)); // 50 dòng data
-        // Auto map nếu match
-        const autoMapping = {};
-        headerRow.forEach((h) => {
-          const lowerH = h.toLowerCase();
-          availableColumns.forEach(col => {
-            if (lowerH.includes(col.value.toLowerCase())) autoMapping[h] = col.value;
-          });
-        });
-        setMapping(autoMapping);
-      } catch (err) {
-        setUploadErrors(['Không thể đọc nội dung file. Vui lòng kiểm tra lại file Excel của bạn.']);
-      }
-    };
-    reader.readAsBinaryString(file);
-  }, []);
-
-  // Dry-run
-  const handleDryRun = useCallback(async () => {
-    if (!importFile) {
-      showToast('error', 'Vui lòng chọn file trước khi thực hiện kiểm tra.');
-      return;
-    }
-    // Kiểm tra mapping required
-    const mappedRequired = requiredColumns.every(req => Object.values(mapping).includes(req));
-    if (!mappedRequired) {
-      showToast('error', 'Vui lòng map đầy đủ các cột bắt buộc trước khi kiểm tra.');
-      return;
-    }
-
-    try {
-      const token = await getCsrfToken();
-      const formData = new FormData();
-      formData.append('file', importFile);
-      formData.append('mapping', JSON.stringify(mapping));
-      const response = await fetch(`${API_BASE_URL}/api/medicines/dry-run`, {
-        method: 'POST',
-        headers: {
-          'X-XSRF-TOKEN': token,
-        },
-        credentials: 'include',
-        body: formData,
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        if (response.status === 429) showToast('error', 'Bạn đã vượt giới hạn thao tác. Vui lòng thử lại sau 5 phút.');
-        else if (response.status === 403) showToast('error', 'Bạn không có quyền thực hiện hành động này.');
-        else if (response.status === 500) showToast('error', 'Không thể xử lý file do lỗi hệ thống. Vui lòng thử lại sau.');
-        else throw new Error(errorData.message || 'Dry-run thất bại');
-      }
-      const data = await response.json();
-      setDryRunResult(data);
-      showToast('success', 'Dry-run hoàn tất');
-    } catch (error) {
-      showToast('error', 'Hệ thống đang xử lý lâu hơn dự kiến. Vui lòng thử lại sau ít phút.');
-    }
-  }, [importFile, mapping, getCsrfToken, showToast]);
-
-  // Confirm Import
-  const handleConfirmImport = useCallback(async () => {
-    setShowConfirmImportModal(true);
-  }, []);
-
-  // Import
-  const handleImport = useCallback(async () => {
-    setShowConfirmImportModal(false);
-    try {
-      const token = await getCsrfToken();
-      const formData = new FormData();
-      formData.append('file', importFile);
-      formData.append('mapping', JSON.stringify(mapping));
-      const response = await fetch(`${API_BASE_URL}/api/medicines/import`, {
-        method: 'POST',
-        headers: {
-          'X-XSRF-TOKEN': token,
-        },
-        credentials: 'include',
-        body: formData,
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        showToast('error', errorData.message || 'Import thất bại');
-        return;
-      }
-      showToast('success', 'Import thành công');
-      cache.current.clear();
-      fetchMedicines(1);
-      setShowImportModal(false);
-      setImportFile(null);
-      setPreviewData([]);
-      setHeaders([]);
-      setDryRunResult(null);
-      setMapping({});
-      setUploadErrors([]);
-    } catch (error) {
-      showToast('error', 'Lỗi import: ' + error.message);
-    }
-  }, [importFile, mapping, getCsrfToken, showToast, fetchMedicines]);
-
-  const handleColumnChange = useCallback((value, checked) => {
-    setSelectedColumns(prev => checked ? [...prev, value] : prev.filter(v => v !== value));
-  }, []);
-
-  const handleFilterChange = useCallback((key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-  }, []);
-
-  const handleMappingChange = useCallback((userHeader, systemCol) => {
-    setMapping(prev => ({ ...prev, [userHeader]: systemCol }));
-  }, []);
-
-  const handleShowImport = useCallback(() => {
-    setShowImportModal(true);
-  }, []);
-
-  const handleCloseImport = useCallback(() => {
-    setShowImportModal(false);
+  const handleCloseModal = () => {
+    setModal({ type: null, medicine: null });
+    setFormData({
+      MedicineName: '',
+      MedicineType: '',
+      Unit: '',
+      Price: '',
+      StockQuantity: '',
+      ExpiryDate: '',
+      LowStockThreshold: '10',
+      Description: ''
+    });
+    setFormErrors({});
     setImportFile(null);
+    setImportProgress(0);
+    // Reset import state
     setPreviewData([]);
     setHeaders([]);
-    setDryRunResult(null);
     setMapping({});
+    setDryRunResult(null);
     setUploadErrors([]);
-  }, []);
+    setShowExportModal(false);
+    setShowConfirmImportModal(false);
+  };
 
-  const handleSuggest = useCallback(async () => {
-    const nameInput = document.querySelector('input[name="MedicineName"]');
-    const name = nameInput?.value.trim();
-    if (!name) {
-      showToast('warning', 'Vui lòng nhập tên thuốc trước');
+  const handleOpenModal = (type, medicine = null) => {
+    setModal({ type, medicine });
+    setFormErrors({});
+
+    if (type === 'add') {
+      setFormData({
+        MedicineName: '',
+        MedicineType: '',
+        Unit: '',
+        Price: '',
+        StockQuantity: '',
+        ExpiryDate: '',
+        LowStockThreshold: '10',
+        Description: ''
+      });
+    } else if (type === 'edit' && medicine) {
+      setFormData({
+        MedicineName: medicine.MedicineName || '',
+        MedicineType: medicine.MedicineType || '',
+        Unit: medicine.Unit || '',
+        Price: medicine.Price?.toString() || '',
+        StockQuantity: medicine.StockQuantity?.toString() || '',
+        ExpiryDate: medicine.ExpiryDate ? medicine.ExpiryDate.split('T')[0] : '',
+        LowStockThreshold: medicine.LowStockThreshold?.toString() || '10',
+        Description: medicine.Description || ''
+      });
+    }
+  };
+
+  // Validate form
+  const validateForm = () => {
+    const errors = {};
+
+    if (!formData.MedicineName?.trim()) {
+      errors.MedicineName = 'Tên thuốc là bắt buộc';
+    } else if (formData.MedicineName.length > 100) {
+      errors.MedicineName = 'Tên thuốc không quá 100 ký tự';
+    } else if (specialCharRegex.test(formData.MedicineName) || codePatternRegex.test(formData.MedicineName)) {
+      errors.MedicineName = 'Không được chứa ký tự đặc biệt hoặc mã code';
+    }
+
+    if (!formData.MedicineType?.trim()) {
+      errors.MedicineType = 'Loại thuốc là bắt buộc';
+    } else if (!medicineTypes.includes(formData.MedicineType)) {
+      errors.MedicineType = 'Loại thuốc không hợp lệ';
+    }
+
+    if (!formData.Unit?.trim()) {
+      errors.Unit = 'Đơn vị là bắt buộc';
+    } else if (!units.includes(formData.Unit)) {
+      errors.Unit = 'Đơn vị không hợp lệ';
+    }
+
+    if (!formData.Price) {
+      errors.Price = 'Giá bán là bắt buộc';
+    } else if (parseFloat(formData.Price) < 0) {
+      errors.Price = 'Giá bán không hợp lệ';
+    }
+
+    if (!formData.StockQuantity) {
+      errors.StockQuantity = 'Tồn kho là bắt buộc';
+    } else if (parseInt(formData.StockQuantity) < 0) {
+      errors.StockQuantity = 'Tồn kho không hợp lệ';
+    }
+
+    if (!formData.LowStockThreshold) {
+      errors.LowStockThreshold = 'Ngưỡng tồn kho thấp là bắt buộc';
+    } else if (parseInt(formData.LowStockThreshold) < 1) {
+      errors.LowStockThreshold = 'Ngưỡng tồn kho thấp phải ≥ 1';
+    }
+
+    if (formData.ExpiryDate) {
+      const expiryDate = new Date(formData.ExpiryDate);
+      const today = new Date();
+      if (expiryDate < today) {
+        errors.ExpiryDate = 'Ngày hết hạn không được trong quá khứ';
+      }
+    }
+
+    if (formData.Description && formData.Description.length > 500) {
+      errors.Description = 'Mô tả không quá 500 ký tự';
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleFormSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!validateForm()) {
+      showToast('error', 'Vui lòng kiểm tra lại thông tin nhập vào.');
+      return;
+    }
+
+    setIsLoading(true);
+    const { type, medicine } = modal;
+    const isEditing = type === 'edit';
+
+    try {
+      const medicineData = {
+        MedicineName: formData.MedicineName.trim(),
+        MedicineType: formData.MedicineType,
+        Unit: formData.Unit,
+        Price: parseFloat(formData.Price),
+        StockQuantity: parseInt(formData.StockQuantity),
+        ExpiryDate: formData.ExpiryDate || null,
+        LowStockThreshold: parseInt(formData.LowStockThreshold),
+        Description: formData.Description?.trim() || null,
+      };
+
+      if (isEditing) {
+        await medicineService.update(medicine.MedicineId, medicineData);
+      } else {
+        await medicineService.create(medicineData);
+      }
+
+      showToast('success', `Thuốc đã được ${isEditing ? 'cập nhật' : 'thêm mới'} thành công!`);
+      handleCloseModal();
+
+      cache.current.clear();
+      fetchMedicines(1, filterParams);
+    } catch (error) {
+      console.error(`Lỗi khi ${isEditing ? 'cập nhật' : 'thêm'} thuốc:`, error);
+      const errorMessage = error.response?.data?.message || `Lỗi khi ${isEditing ? 'cập nhật' : 'thêm'} thuốc`;
+      showToast('error', errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteMedicine = async () => {
+    if (!modal.medicine) return;
+
+    setIsLoading(true);
+    try {
+      await medicineService.delete(modal.medicine.MedicineId);
+      showToast('success', 'Xóa thuốc thành công!');
+      handleCloseModal();
+
+      cache.current.clear();
+      fetchMedicines(1, filterParams);
+    } catch (error) {
+      console.error('Lỗi khi xóa thuốc:', error);
+      const errorMessage = error.response?.data?.message || 'Lỗi khi xóa thuốc';
+      showToast('error', errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Sửa hàm handleExportExcel
+  const handleExportExcel = async () => {
+    try {
+      setIsLoading(true);
+      const response = await medicineService.exportExcel(filters, selectedColumns);
+
+      // Kiểm tra nếu blob là text (lỗi) thì báo
+      const text = await response.text();
+      if (text.includes('<html') || text.includes('{"message"') || text.includes('error')) {
+        showToast('error', 'Lỗi xuất file: ' + text.substring(0, 200));
+        return;
+      }
+
+      const url = window.URL.createObjectURL(new Blob([response]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `danh_sach_thuoc_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      showToast('success', 'Xuất Excel thành công!');
+    } catch (err) {
+      showToast('error', 'Xuất Excel thất bại: ' + (err.message || 'Lỗi không xác định'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Download Template
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await medicineService.downloadTemplate();
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'template_import_thuoc.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      showToast('success', 'Tải template thành công!');
+    } catch (error) {
+      console.error('Lỗi khi tải template:', error);
+      showToast('error', 'Lỗi khi tải template');
+    }
+  };
+
+  // Enhanced Import Excel with mapping
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const validTypes = ['.xlsx', '.xls', '.csv'];
+      const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+
+      if (!validTypes.includes(fileExtension)) {
+        showToast('error', 'Chỉ chấp nhận file Excel (.xlsx, .xls) hoặc CSV');
+        e.target.value = '';
+        return;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        showToast('error', 'File không được vượt quá 10MB');
+        e.target.value = '';
+        return;
+      }
+
+      setImportFile(file);
+      setUploadErrors([]);
+
+      // Read and preview file
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const wb = XLSX.read(e.target.result, { type: 'binary' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+          if (rows.length < 1) throw new Error('File rỗng');
+
+          const header = rows[0];
+          setHeaders(header);
+          setPreviewData(rows.slice(1, 51));
+
+          // Auto mapping
+          const autoMap = {};
+          header.forEach((h) => {
+            const lower = h.toString().toLowerCase();
+            availableColumns.forEach((col) => {
+              if (lower.includes(col.value.toLowerCase())) autoMap[h] = col.value;
+            });
+          });
+          setMapping(autoMap);
+        } catch (err) {
+          setUploadErrors(['Không thể đọc file Excel']);
+        }
+      };
+      reader.readAsBinaryString(file);
+    }
+  };
+
+  // Dry-run import
+  const handleDryRun = async () => {
+    if (!importFile) {
+      showToast('warning', 'Chọn file trước');
+      return;
+    }
+
+    const requiredMapped = requiredColumns.every((c) => Object.values(mapping).includes(c));
+    if (!requiredMapped) {
+      showToast('warning', 'Cần map đủ các cột bắt buộc: Tên thuốc, Loại thuốc, Đơn vị, Giá bán, Tồn kho');
       return;
     }
 
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/medicines/suggest`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      });
-
-      if (!response.ok) throw new Error('Lỗi gợi ý AI');
-
-      const data = await response.json();
-
-      // Kiểm tra validation
-      let error = '';
-      if (!medicineTypes.includes(data.type)) error += 'Loại thuốc không hợp lệ. ';
-      if (!units.includes(data.unit)) error += 'Đơn vị không hợp lệ. ';
-
-      // GỌI MODAL TỪ PARENT
-      formRef.current?.openSuggestModal(data, error);
-
-    } catch (error) {
-      showToast('error', error.message);
+      const data = await medicineService.dryRunImport(importFile, mapping);
+      setDryRunResult(data);
+      showToast('success', 'Dry-run hoàn tất');
+    } catch (err) {
+      showToast('error', err.message || 'Dry-run thất bại');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  };
 
-  const { getRootProps, getInputProps } = useDropzone({ onDrop, noClick: !showImportModal }); // Chỉ active drop khi modal open
+  // Enhanced Import Excel
+  const handleImportExcel = async () => {
+    if (!importFile) {
+      showToast('error', 'Chọn file đi bạn ơi');
+      return;
+    }
+
+    const requiredMapped = requiredColumns.every((c) => Object.values(mapping).includes(c));
+    if (!requiredMapped) {
+      showToast('warning', 'Cần map đủ các cột bắt buộc: Tên thuốc, Loại thuốc, Đơn vị, Giá bán, Tồn kho');
+      return;
+    }
+
+    setIsImporting(true);
+    setImportProgress(0);
+
+    try {
+      await medicineService.importExcel(importFile, mapping, (percent) => {
+        setImportProgress(percent);
+      });
+
+      showToast('success', 'Import thành công! Đã thêm mới thuốc.');
+      handleCloseModal();
+      cache.current.clear();
+      fetchMedicines(1, filterParams);
+    } catch (error) {
+      const msg = error.response?.data?.message ||
+        error.response?.data?.error ||
+        'Import thất bại. Kiểm tra file và thử lại.';
+      showToast('error', msg);
+    } finally {
+      setIsImporting(false);
+      setImportProgress(0);
+    }
+  };
+
+  const handleMappingChange = (header, value) => {
+    setMapping(prev => ({ ...prev, [header]: value }));
+  };
+
+  const handleColumnChange = (value, checked) => {
+    setSelectedColumns(prev =>
+      checked ? [...prev, value] : prev.filter(v => v !== value)
+    );
+  };
+
+  const formatPrice = (price) => {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    }).format(price);
+  };
+
+  const getStockStatus = (stock, threshold) => {
+    if (stock < threshold) return { badge: 'bg-danger', text: 'Sắp hết', isLow: true };
+    if (stock < threshold * 2) return { badge: 'bg-warning', text: 'Đủ dùng', isLow: false };
+    return { badge: 'bg-success', text: 'Dồi dào', isLow: false };
+  };
+
+  const getExpiryStatus = (expiryDate) => {
+    if (!expiryDate) return { badge: 'bg-secondary', text: 'Không có', isExpired: false, isNearExpiry: false };
+
+    const expiry = new Date(expiryDate);
+    const today = new Date();
+    const diffTime = expiry - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return { badge: 'bg-danger', text: 'Đã hết hạn', isExpired: true, isNearExpiry: false };
+    if (diffDays <= 30) return { badge: 'bg-warning', text: 'Sắp hết hạn', isExpired: false, isNearExpiry: true };
+    return { badge: 'bg-success', text: 'Còn hạn', isExpired: false, isNearExpiry: false };
+  };
+
+  // Render modal function
+  const renderModal = () => {
+    if (!modal.type) return null;
+
+    const modalLayout = (title, body, footer, maxWidth = '700px') => (
+      <>
+        <div className="modal-backdrop fade show"></div>
+        <div className="modal fade show d-block" tabIndex="-1" onClick={handleCloseModal}>
+          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth }} onClick={e => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg">
+              <div className="modal-header">
+                <h5 className="modal-title fw-semibold">{title}</h5>
+                <button type="button" className="btn-close" onClick={handleCloseModal}></button>
+              </div>
+              <div className="modal-body">{body}</div>
+              {footer && <div className="modal-footer">{footer}</div>}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+
+    switch (modal.type) {
+      case 'add':
+      case 'edit':
+        const isEditing = modal.type === 'edit';
+        return modalLayout(
+          isEditing ? 'Cập Nhật Thông Tin Thuốc' : 'Thêm Thuốc Mới',
+          <form onSubmit={handleFormSubmit}>
+            <div className="row g-3">
+              <div className="col-12">
+                <div className="mb-3">
+                  <label className="form-label">
+                    Tên thuốc <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="MedicineName"
+                    value={formData.MedicineName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, MedicineName: e.target.value }))}
+                    className={`form-control ${formErrors.MedicineName ? 'is-invalid' : ''}`}
+                    placeholder="Nhập tên thuốc..."
+                    required
+                  />
+                  {formErrors.MedicineName && <div className="invalid-feedback">{formErrors.MedicineName}</div>}
+                </div>
+              </div>
+              <div className="col-md-6">
+                <div className="mb-3">
+                  <label className="form-label">
+                    Loại thuốc <span className="text-danger">*</span>
+                  </label>
+                  <select
+                    name="MedicineType"
+                    value={formData.MedicineType || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, MedicineType: e.target.value }))}
+                    className={`form-select ${formErrors.MedicineType ? 'is-invalid' : ''}`}
+                    required
+                  >
+                    <option value="">Chọn loại thuốc</option>
+                    {medicineTypes.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                  {formErrors.MedicineType && <div className="invalid-feedback">{formErrors.MedicineType}</div>}
+                </div>
+              </div>
+              <div className="col-md-6">
+                <div className="mb-3">
+                  <label className="form-label">
+                    Đơn vị <span className="text-danger">*</span>
+                  </label>
+                  <select
+                    name="Unit"
+                    value={formData.Unit || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, Unit: e.target.value }))}
+                    className={`form-select ${formErrors.Unit ? 'is-invalid' : ''}`}
+                    required
+                  >
+                    <option value="">Chọn đơn vị</option>
+                    {units.map(unit => (
+                      <option key={unit} value={unit}>{unit}</option>
+                    ))}
+                  </select>
+                  {formErrors.Unit && <div className="invalid-feedback">{formErrors.Unit}</div>}
+                </div>
+              </div>
+              <div className="col-md-6">
+                <div className="mb-3">
+                  <label className="form-label">
+                    Giá bán (VND) <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="Price"
+                    value={formData.Price}
+                    onChange={(e) => setFormData(prev => ({ ...prev, Price: e.target.value }))}
+                    className={`form-control ${formErrors.Price ? 'is-invalid' : ''}`}
+                    placeholder="Nhập giá bán..."
+                    min="0"
+                    step="1000"
+                    required
+                  />
+                  {formErrors.Price && <div className="invalid-feedback">{formErrors.Price}</div>}
+                </div>
+              </div>
+              <div className="col-md-6">
+                <div className="mb-3">
+                  <label className="form-label">
+                    Tồn kho <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="StockQuantity"
+                    value={formData.StockQuantity}
+                    onChange={(e) => setFormData(prev => ({ ...prev, StockQuantity: e.target.value }))}
+                    className={`form-control ${formErrors.StockQuantity ? 'is-invalid' : ''}`}
+                    placeholder="Nhập số lượng tồn kho..."
+                    min="0"
+                    required
+                  />
+                  {formErrors.StockQuantity && <div className="invalid-feedback">{formErrors.StockQuantity}</div>}
+                </div>
+              </div>
+              <div className="col-md-6">
+                <div className="mb-3">
+                  <label className="form-label">
+                    Ngưỡng tồn kho thấp <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="LowStockThreshold"
+                    value={formData.LowStockThreshold}
+                    onChange={(e) => setFormData(prev => ({ ...prev, LowStockThreshold: e.target.value }))}
+                    className={`form-control ${formErrors.LowStockThreshold ? 'is-invalid' : ''}`}
+                    placeholder="Nhập ngưỡng tồn kho thấp..."
+                    min="1"
+                    required
+                  />
+                  {formErrors.LowStockThreshold && <div className="invalid-feedback">{formErrors.LowStockThreshold}</div>}
+                </div>
+              </div>
+              <div className="col-md-6">
+                <div className="mb-3">
+                  <label className="form-label">Ngày hết hạn</label>
+                  <input
+                    type="date"
+                    name="ExpiryDate"
+                    value={formData.ExpiryDate}
+                    onChange={(e) => setFormData(prev => ({ ...prev, ExpiryDate: e.target.value }))}
+                    className={`form-control ${formErrors.ExpiryDate ? 'is-invalid' : ''}`}
+                  />
+                  {formErrors.ExpiryDate && <div className="invalid-feedback">{formErrors.ExpiryDate}</div>}
+                </div>
+              </div>
+              <div className="col-12">
+                <div className="mb-3">
+                  <label className="form-label">Mô tả</label>
+                  <textarea
+                    name="Description"
+                    value={formData.Description}
+                    onChange={(e) => setFormData(prev => ({ ...prev, Description: e.target.value }))}
+                    className={`form-control ${formErrors.Description ? 'is-invalid' : ''}`}
+                    rows="3"
+                    placeholder="Nhập mô tả thuốc..."
+                  />
+                  {formErrors.Description && <div className="invalid-feedback">{formErrors.Description}</div>}
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>Hủy</button>
+              <button type="submit" className="btn btn-primary" disabled={isLoading}>
+                {isLoading ? 'Đang xử lý...' : (isEditing ? 'Cập Nhật' : 'Thêm Mới')}
+              </button>
+            </div>
+          </form>,
+          null
+        );
+
+      case 'delete':
+        return modalLayout(
+          'Xác Nhận Xóa',
+          <>
+            <p>Bạn có chắc chắn muốn xóa thuốc <strong>"{modal.medicine.MedicineName}"</strong>?</p>
+            <p className="text-muted small">Hành động này không thể hoàn tác.</p>
+          </>,
+          <>
+            <button className="btn btn-secondary" onClick={handleCloseModal}>Hủy</button>
+            <button className="btn btn-danger" onClick={handleDeleteMedicine} disabled={isLoading}>
+              {isLoading ? 'Đang xóa...' : 'Xác Nhận Xóa'}
+            </button>
+          </>,
+          '450px'
+        );
+
+      case 'import':
+        return modalLayout(
+          'Import Dữ Liệu Thuốc',
+          <div>
+            <div className="alert alert-info">
+              <h6 className="alert-heading">Hướng dẫn Import</h6>
+              <ul className="mb-0 small">
+                <li>File phải có định dạng Excel (.xlsx, .xls) hoặc CSV</li>
+                <li>Dung lượng file không quá 10MB</li>
+                <li>Tải template mẫu để biết cấu trúc dữ liệu</li>
+                <li>Dữ liệu sẽ được thêm mới, không cập nhật trùng lặp</li>
+              </ul>
+            </div>
+
+            <div className="mb-3">
+              <label className="form-label">Chọn file để import</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="form-control"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleFileChange}
+                disabled={isImporting}
+              />
+              <div className="form-text">
+                Chấp nhận: .xlsx, .xls, .csv (tối đa 10MB)
+              </div>
+            </div>
+
+            {uploadErrors.length > 0 && (
+              <div className="alert alert-danger">
+                {uploadErrors.map((error, index) => (
+                  <div key={index}>{error}</div>
+                ))}
+              </div>
+            )}
+
+            {importFile && (
+              <div className="alert alert-success">
+                <strong>File đã chọn:</strong> {importFile.name} ({(importFile.size / 1024 / 1024).toFixed(2)} MB)
+              </div>
+            )}
+
+            {/* Preview Data */}
+            {previewData.length > 0 && (
+              <div className="mb-3">
+                <h6>Preview 50 Dòng Đầu</h6>
+                <div className="table-responsive" style={{ maxHeight: '300px' }}>
+                  <table className="table table-sm table-bordered">
+                    <thead className="table-light">
+                      <tr>
+                        <th>#</th>
+                        {headers.map((h) => <th key={h}>{h}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewData.map((row, idx) => (
+                        <tr key={idx} className={dryRunResult?.errors?.some((e) => e.row === idx + 2) ? 'table-danger' : ''}>
+                          <td>{idx + 1}</td>
+                          {row.map((cell, cIdx) => (
+                            <td key={cIdx}>
+                              {cell}
+                              {dryRunResult?.errors?.filter((e) => e.row === idx + 2 && e.attribute === headers[cIdx]).map((e) => (
+                                <span key={e.errors[0]} className="badge bg-danger ms-1" title={e.errors.join(', ')}>
+                                  ⚠️
+                                </span>
+                              ))}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Mapping */}
+            {headers.length > 0 && (
+              <div className="mb-3">
+                <h6>Mapping Cột</h6>
+                <div className="table-responsive">
+                  <table className="table table-sm">
+                    <thead>
+                      <tr>
+                        <th>Cột Từ File</th>
+                        <th>Cột Hệ Thống</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {headers.map((h) => (
+                        <tr key={h}>
+                          <td>{h}</td>
+                          <td>
+                            <select
+                              className="form-select form-select-sm"
+                              value={mapping[h] || ''}
+                              onChange={(e) => handleMappingChange(h, e.target.value)}
+                            >
+                              <option value="">Chọn cột</option>
+                              {availableColumns.map((col) => (
+                                <option key={col.value} value={col.value}>{col.label}</option>
+                              ))}
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Dry Run Results */}
+            {dryRunResult && (
+              <div className="mb-3">
+                <h6>Kết Quả Dry-run</h6>
+                <div className="d-flex gap-3 mb-2">
+                  <span className="badge bg-success d-flex align-items-center">
+                    ✅ Thành công: {dryRunResult.success_count}
+                  </span>
+                  <span className="badge bg-danger d-flex align-items-center">
+                    ❌ Lỗi: {dryRunResult.error_count}
+                  </span>
+                </div>
+                <div className="progress mb-2">
+                  <div
+                    className="progress-bar progress-bar-striped"
+                    role="progressbar"
+                    style={{
+                      width: `${(dryRunResult.success_count / (dryRunResult.success_count + dryRunResult.error_count)) * 100}%`
+                    }}
+                  >
+                    {Math.round((dryRunResult.success_count / (dryRunResult.success_count + dryRunResult.error_count)) * 100)}%
+                  </div>
+                </div>
+                {dryRunResult.errors.length > 0 && (
+                  <div>
+                    <h6>Lỗi Mẫu (5 đầu):</h6>
+                    {dryRunResult.errors.slice(0, 5).map((err, idx) => (
+                      <div key={idx} className="alert alert-danger small mb-1">
+                        Hàng {err.row}: {err.errors.join(', ')} (Cột: {err.attribute})
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isImporting && (
+              <div className="mb-3">
+                <label className="form-label">Tiến trình import</label>
+                <div className="progress">
+                  <div
+                    className="progress-bar progress-bar-striped progress-bar-animated"
+                    role="progressbar"
+                    style={{ width: `${importProgress}%` }}
+                  >
+                    {importProgress}%
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="d-flex gap-2">
+              <button
+                className="btn btn-outline-primary"
+                onClick={handleDownloadTemplate}
+                disabled={isImporting}
+              >
+                <BiDownload className="me-1" /> Tải Template
+              </button>
+              <button
+                className="btn btn-outline-info"
+                onClick={handleDryRun}
+                disabled={!importFile || isImporting}
+              >
+                Dry-run Kiểm Tra
+              </button>
+            </div>
+          </div>,
+          <>
+            <button className="btn btn-secondary" onClick={handleCloseModal} disabled={isImporting}>
+              Hủy
+            </button>
+            <button
+              className="btn btn-success"
+              onClick={() => setShowConfirmImportModal(true)}
+              disabled={!dryRunResult || dryRunResult.success_count === 0 || isImporting}
+            >
+              {isImporting ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                  Đang Import...
+                </>
+              ) : (
+                <>
+                  <BiUpload className="me-1" /> Import Dữ Liệu
+                </>
+              )}
+            </button>
+          </>,
+          '800px'
+        );
+
+      case 'export':
+        return modalLayout(
+          'Tùy Chọn Export',
+          <div>
+            <div className="row">
+              <div className="col-md-6">
+                <div className="mb-3">
+                  <label className="form-label">Bộ Lọc Loại Thuốc</label>
+                  <select
+                    className="form-select"
+                    value={filters.type || ''}
+                    onChange={(e) => setFilters(prev => ({ ...prev, type: e.target.value }))}
+                  >
+                    <option value="">Tất cả</option>
+                    {medicineTypes.map((type) => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="col-md-6">
+                <div className="mb-3">
+                  <label className="form-label">Chọn Cột</label>
+                  <div className="d-flex flex-wrap gap-2">
+                    {availableColumns.map((col) => (
+                      <div key={col.value} className="form-check">
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          id={`col-${col.value}`}
+                          checked={selectedColumns.includes(col.value)}
+                          onChange={(e) => handleColumnChange(col.value, e.target.checked)}
+                          disabled={selectedColumns.length >= 20 && !selectedColumns.includes(col.value)}
+                        />
+                        <label className="form-check-label small" htmlFor={`col-${col.value}`}>
+                          {col.label}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  <small className="text-muted">Tối đa 20 cột</small>
+                </div>
+              </div>
+            </div>
+          </div>,
+          <>
+            <button className="btn btn-secondary" onClick={handleCloseModal}>
+              Hủy
+            </button>
+            <button className="btn btn-success" onClick={handleExportExcel}>
+              <BiExport className="me-1" /> Export Excel
+            </button>
+          </>,
+          '700px'
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // Confirm Import Modal
+  const renderConfirmImportModal = () => {
+    if (!showConfirmImportModal) return null;
+
+    return (
+      <>
+        <div className="modal-backdrop fade show"></div>
+        <div className="modal fade show d-block" tabIndex="-1" onClick={() => setShowConfirmImportModal(false)}>
+          <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg">
+              <div className="modal-header">
+                <h5 className="modal-title fw-semibold">Xác nhận Import</h5>
+                <button type="button" className="btn-close" onClick={() => setShowConfirmImportModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                <p>Bạn chắc chắn muốn import {dryRunResult?.success_count} bản ghi?</p>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setShowConfirmImportModal(false)}>Hủy</button>
+                <button className="btn btn-primary" onClick={handleImportExcel}>Import</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  // Effect load ban đầu
+  useEffect(() => {
+    fetchMedicines(1, filterParams);
+  }, [fetchMedicines, filterParams]);
 
   return (
-    <div className="d-flex">
-      <div className="position-relative w-100 flex-grow-1 ms-5 p-4">
-        <h1 className="mb-4">Quản Lý Thuốc</h1>
-        {currentView === 'list' && (
-          <MedicineList
-            medicines={medicines}
-            isLoading={isLoading}
-            formatVND={formatVND}
-            handleShowDeleteModal={handleShowDeleteModal}
-            handleShowEditForm={handleShowEditForm}
-            pageCount={pageCount}
-            currentPage={currentPage}
-            handlePageChange={handlePageChange}
-            onDownloadTemplate={handleDownloadTemplate}
-            onShowExportModal={handleShowExportModal}
-            onShowImport={handleShowImport}
-            applyFilters={applyFilters}
-            clearFilters={clearFilters}
-            filters={filters}
-            setFilters={setFilters}
-            debounceRef={debounceRef}
-          />
-        )}
-        {currentView === 'add' && (
-          <MedicineForm
-            ref={formRef}
-            isEditMode={false}
-            onSubmit={handleAddMedicine}
-            onCancel={handleCancelForm}
-            isLoading={isLoading}
-            aiEnabled={aiEnabled}
-            setAiEnabled={setAiEnabled}
-            handleSuggest={handleSuggest}
-          />
-        )}
-        {currentView === 'edit' && (
-          <MedicineForm
-            ref={formRef}
-            isEditMode={true}
-            medicine={editMedicine}
-            onSubmit={handleEditMedicine}
-            onCancel={handleCancelForm}
-            isLoading={isLoading}
-            aiEnabled={aiEnabled}
-            setAiEnabled={setAiEnabled}
-            handleSuggest={handleSuggest}
-          />
-        )}
-        <ExportModal
-          show={showExportModal}
-          onHide={handleCloseExportModal}
-          onExport={handleExport}
-          filters={filters}
-          onFilterChange={handleFilterChange}
-          selectedColumns={selectedColumns}
-          onColumnChange={handleColumnChange}
-        />
-        <ConfirmDeleteModal
-          isOpen={showDeleteModal}
-          title="Xác nhận xóa"
-          message="Bạn có chắc chắn muốn xóa thuốc này?"
-          onConfirm={() => handleDelete(medicineToDelete)}
-          onCancel={handleCancelDelete}
-        />
-        <ImportModal
-          show={showImportModal}
-          onHide={handleCloseImport}
-          onDrop={onDrop}
-          uploadErrors={uploadErrors}
-          previewData={previewData}
-          headers={headers}
-          mapping={mapping}
-          onMappingChange={handleMappingChange}
-          onDryRun={handleDryRun}
-          dryRunResult={dryRunResult}
-          onConfirmImport={handleConfirmImport}
-          isProcessing={isLoading}
-          getRootProps={getRootProps}
-          getInputProps={getInputProps}
-          importFile={importFile}
-        />
-        <Modal show={showConfirmImportModal} onHide={() => setShowConfirmImportModal(false)}>
-          <Modal.Header closeButton>
-            <Modal.Title>Xác Nhận Import</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>Bạn chắc chắn muốn import {dryRunResult?.success_count} bản ghi?</Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowConfirmImportModal(false)}>Hủy</Button>
-            <Button variant="primary" onClick={handleImport}>Import</Button>
-          </Modal.Footer>
-        </Modal>
+    <div className="d-flex vh-100">
+      <main className="main-content flex-grow-1 p-4 d-flex flex-column gap-4 overflow-hidden">
         {toast.show && (
           <CustomToast
             type={toast.type}
@@ -1466,7 +1078,343 @@ const AdminMedicine = () => {
             onClose={hideToast}
           />
         )}
-      </div>
+
+        {/* Header với thống kê - fixed height */}
+        <header className="d-flex justify-content-between align-items-center flex-shrink-0">
+          <div>
+            <h1 className="h4 mb-1 fw-bold text-dark">Quản Lý Thuốc</h1>
+            <div className="d-flex gap-3 text-sm">
+              <span className="text-muted">
+                <BiPackage className="me-1" /> Tổng: <strong>{totalItems}</strong> thuốc
+              </span>
+              {lowStockCount > 0 && (
+                <span className="text-warning">
+                  <BiError className="me-1" /> Sắp hết: <strong>{lowStockCount}</strong>
+                </span>
+              )}
+              {nearExpiryCount > 0 && (
+                <span className="text-danger">
+                  <BiCalendar className="me-1" /> Sắp hết hạn: <strong>{nearExpiryCount}</strong>
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="d-flex gap-2">
+            <button
+              className="btn btn-success d-flex align-items-center gap-2"
+              onClick={() => setModal({ type: 'export' })}
+              disabled={isLoading}
+            >
+              <BiExport size={18} /> Export Excel
+            </button>
+            <button
+              className="btn btn-info d-flex align-items-center gap-2"
+              onClick={() => handleOpenModal('import')}
+              disabled={isLoading}
+            >
+              <BiImport size={18} /> Import
+            </button>
+            <button
+              className="btn btn-primary d-flex align-items-center gap-2"
+              onClick={() => handleOpenModal('add')}
+              disabled={isLoading}
+            >
+              <BiPlus size={18} /> Thêm Thuốc
+            </button>
+          </div>
+        </header>
+
+        {/* Bộ lọc đơn giản - fixed height */}
+        <div className="card shadow-sm border-0 flex-shrink-0">
+          <div className="card-body">
+            <div className="row g-3 align-items-end">
+              <div className="col-md-4">
+                <label className="form-label small text-muted mb-1">Tìm kiếm thuốc</label>
+                <div className="input-group">
+                  <span className="input-group-text bg-white">
+                    <BiSearch className="text-muted" />
+                  </span>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Nhập tên thuốc..."
+                    value={filters.search}
+                    onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+
+              <div className="col-md-3">
+                <label className="form-label small text-muted mb-1">Loại thuốc</label>
+                <select
+                  className="form-select"
+                  value={filters.type}
+                  onChange={(e) => setFilters(prev => ({ ...prev, type: e.target.value }))}
+                  disabled={isLoading}
+                >
+                  <option value="">Tất cả loại</option>
+                  {medicineTypes.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="col-md-3">
+                <label className="form-label small text-muted mb-1">Đơn vị</label>
+                <select
+                  className="form-select"
+                  value={filters.unit}
+                  onChange={(e) => setFilters(prev => ({ ...prev, unit: e.target.value }))}
+                  disabled={isLoading}
+                >
+                  <option value="">Tất cả đơn vị</option>
+                  {units.map(unit => (
+                    <option key={unit} value={unit}>{unit}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="col-md-2 d-flex gap-2">
+                <button
+                  className="btn btn-primary w-100 d-flex align-items-center justify-content-center gap-2"
+                  onClick={applyFilters}
+                  disabled={isLoading}
+                >
+                  <BiFilter size={16} /> Lọc
+                </button>
+                <button
+                  className="btn btn-outline-secondary"
+                  onClick={() => setShowAdvancedFilter(!showAdvancedFilter)}
+                  disabled={isLoading}
+                  title="Lọc nâng cao"
+                >
+                  {showAdvancedFilter ? <BiChevronUp size={26} /> : <BiChevronDown size={26} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Lọc nâng cao */}
+            {showAdvancedFilter && (
+              <div className="row g-3 mt-3 pt-3 border-top">
+                <div className="col-md-4">
+                  <label className="form-label small text-muted mb-1">Khoảng giá</label>
+                  <div className="input-group input-group-sm">
+                    <span className="input-group-text">
+                      <BiDollar />
+                    </span>
+                    <input
+                      type="number"
+                      className="form-control"
+                      placeholder="Từ"
+                      value={filters.min_price}
+                      onChange={(e) => setFilters(prev => ({ ...prev, min_price: e.target.value }))}
+                      disabled={isLoading}
+                    />
+                    <span className="input-group-text">-</span>
+                    <input
+                      type="number"
+                      className="form-control"
+                      placeholder="Đến"
+                      value={filters.max_price}
+                      onChange={(e) => setFilters(prev => ({ ...prev, max_price: e.target.value }))}
+                      disabled={isLoading}
+                    />
+                  </div>
+                </div>
+
+                <div className="col-md-3">
+                  <label className="form-label small text-muted mb-1">Tình trạng tồn kho</label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={filters.low_stock}
+                    onChange={(e) => setFilters(prev => ({ ...prev, low_stock: e.target.value }))}
+                    disabled={isLoading}
+                  >
+                    <option value="">Tất cả</option>
+                    <option value="1">Sắp hết hàng</option>
+                    <option value="0">Đủ hàng</option>
+                  </select>
+                </div>
+
+                <div className="col-md-3">
+                  <label className="form-label small text-muted mb-1">Hạn sử dụng</label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={filters.expiry_status}
+                    onChange={(e) => setFilters(prev => ({ ...prev, expiry_status: e.target.value }))}
+                    disabled={isLoading}
+                  >
+                    <option value="">Tất cả</option>
+                    <option value="expired">Đã hết hạn</option>
+                    <option value="soon">Sắp hết hạn</option>
+                    <option value="valid">Còn hạn</option>
+                  </select>
+                </div>
+
+                <div className="col-md-2 d-flex align-items-end">
+                  <button
+                    className="btn btn-outline-danger btn-sm w-100 d-flex align-items-center justify-content-center gap-1"
+                    onClick={clearFilters}
+                    disabled={isLoading}
+                  >
+                    <BiX size={16} /> Xóa lọc
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Bảng dữ liệu - chiếm không gian còn lại */}
+        <div className="card shadow-sm border-0 flex-grow-1 d-flex flex-column" style={{ minHeight: 0 }}>
+          {isLoading ? (
+            <div className="d-flex align-items-center justify-content-center flex-grow-1">
+              <Loading isLoading={isLoading} />
+            </div>
+          ) : (
+            <>
+              <div className="card-header bg-white border-0 flex-shrink-0">
+                <div className="d-flex justify-content-between align-items-center">
+                  <h6 className="mb-0 text-muted">
+                    Danh sách thuốc ({totalItems} kết quả)
+                  </h6>
+                  <small className="text-muted">
+                    Trang {currentPage + 1} / {pageCount}
+                  </small>
+                </div>
+              </div>
+
+              <div className="table-responsive flex-grow-1" style={{ overflow: 'auto' }}>
+                <table className="table table-hover mb-0 clinic-table">
+                  <thead className="table-light">
+                    <tr>
+                      <th className="ps-4">Mã</th>
+                      <th>Tên Thuốc</th>
+                      <th>Loại</th>
+                      <th>Đơn Vị</th>
+                      <th className="text-end">Giá Bán</th>
+                      <th className="text-center">Tồn Kho</th>
+                      <th className="text-center">Hết Hạn</th>
+                      <th className="text-center">Ngưỡng</th>
+                      <th>Mô Tả</th>
+                      <th className="text-center pe-4">Thao Tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {medicines.length > 0 ? medicines.map(medicine => {
+                      const stockStatus = getStockStatus(medicine.StockQuantity, medicine.LowStockThreshold);
+                      const expiryStatus = getExpiryStatus(medicine.ExpiryDate);
+
+                      return (
+                        <tr
+                          key={medicine.MedicineId}
+                          className={`
+                          ${stockStatus.isLow ? 'table-warning' : ''}
+                          ${expiryStatus.isExpired ? 'table-danger' : expiryStatus.isNearExpiry ? 'table-warning' : ''}
+                          table-row-hover
+                        `.trim()}
+                        >
+                          <td className="ps-4">
+                            <span className="fw-bold text-primary">#{medicine.MedicineId}</span>
+                          </td>
+                          <td className="fw-semibold">{medicine.MedicineName}</td>
+                          <td>
+                            <span className="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25">
+                              {medicine.MedicineType}
+                            </span>
+                          </td>
+                          <td>
+                            <span className="badge bg-secondary bg-opacity-10 text-secondary">
+                              {medicine.Unit}
+                            </span>
+                          </td>
+                          <td className="text-end fw-bold text-success">
+                            {formatPrice(medicine.Price)}
+                          </td>
+                          <td className="text-center">
+                            <span className={`badge ${stockStatus.badge}`}>
+                              {medicine.StockQuantity}
+                              {stockStatus.isLow && ' ⚠️'}
+                            </span>
+                          </td>
+                          <td className="text-center">
+                            <span className={`badge ${expiryStatus.badge}`}>
+                              {medicine.ExpiryDate
+                                ? new Date(medicine.ExpiryDate).toLocaleDateString('vi-VN')
+                                : '—'
+                              }
+                              {expiryStatus.isExpired && ' ⚠️'}
+                              {expiryStatus.isNearExpiry && ' ⏳'}
+                            </span>
+                          </td>
+                          <td className="text-center">
+                            <span className="badge bg-warning bg-opacity-10 text-warning">
+                              {medicine.LowStockThreshold}
+                            </span>
+                          </td>
+                          <td>
+                            <div
+                              className="text-truncate"
+                              style={{ maxWidth: '200px' }}
+                              title={medicine.Description}
+                            >
+                              {medicine.Description || '—'}
+                            </div>
+                          </td>
+                          <td className="text-center pe-4">
+                            <div className="d-flex gap-1 justify-content-center">
+                              <button
+                                className="btn btn-sm btn-outline-primary"
+                                title="Sửa"
+                                onClick={() => handleOpenModal('edit', medicine)}
+                                disabled={isLoading}
+                              >
+                                <BiPencil size={14} />
+                              </button>
+                              <button
+                                className="btn btn-sm btn-outline-danger"
+                                title="Xóa"
+                                onClick={() => handleOpenModal('delete', medicine)}
+                                disabled={isLoading}
+                              >
+                                <BiTrash size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }) : (
+                      <tr>
+                        <td colSpan="10" className="text-center p-5 text-muted">
+                          <BiSearch size={48} className="mb-3 opacity-50" />
+                          <p className="mb-0 fs-5">Không tìm thấy thuốc</p>
+                          <small>Thử thay đổi bộ lọc hoặc thêm thuốc mới</small>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* PHÂN TRANG */}
+              {pageCount > 1 && (
+                <div className="card-footer bg-white border-0 flex-shrink-0">
+                  <Pagination
+                    pageCount={pageCount}
+                    onPageChange={({ selected }) => fetchMedicines(selected + 1, filterParams)}
+                    currentPage={currentPage}
+                    isLoading={isLoading}
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {renderModal()}
+        {renderConfirmImportModal()}
+      </main>
     </div>
   );
 };

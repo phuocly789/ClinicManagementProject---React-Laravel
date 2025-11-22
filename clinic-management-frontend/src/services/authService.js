@@ -23,6 +23,7 @@ const authService = {
 
         return response;
     },
+   
 }
 
 export default authService;

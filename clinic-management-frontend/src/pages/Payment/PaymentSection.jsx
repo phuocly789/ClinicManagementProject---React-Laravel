@@ -4,9 +4,10 @@ import { Card, Table, Form, Badge, Button, Container, Alert, Nav, Row, Col } fro
 import PaymentMethod from '../Payment/PaymentMethod';
 import InvoiceDetailModal from './InvoiceDetailModal';
 import { paymentService } from '../../services/paymentService';
-import PaymentHistory from './PaymentHistory';
 import Pagination from '../../Components/Pagination/Pagination';
 import Loading from '../../Components/Loading/Loading';
+import { printPdfService } from '../../services/printPdfService';
+import { AlertTriangle, CreditCard, RotateCcw, History, Eye, CheckCircle, XCircle, Printer } from "lucide-react";
 
 // Constants
 const INVOICE_STATUS = {
@@ -26,7 +27,7 @@ const INVOICE_STATUS_LABELS = {
 const PAYMENT_METHODS = {
   MOMO: 'momo',
   CASH: 'cash',
-  BANK_TRANSFER: 'bank_transfer',
+  BANK_TRANSFER: 'napas',
   INSURANCE: 'insurance'
 };
 
@@ -38,7 +39,6 @@ const PAYMENT_METHOD_LABELS = {
 };
 
 const TAB_KEYS = {
-  DASHBOARD: 'dashboard',
   ALL: 'all',
   PENDING: 'pending',
   PAID: 'paid',
@@ -48,72 +48,24 @@ const TAB_KEYS = {
 
 const ITEMS_PER_PAGE = 10;
 
-// Component Stats Card cho Dashboard
-const StatsCard = ({ title, value, subtitle, icon, color, trend }) => {
-  return (
-    <Card className="h-100 border-0 shadow-sm stats-card">
-      <Card.Body className="p-3">
-        <div className="d-flex justify-content-between align-items-start">
-          <div className="flex-grow-1">
-            <h6 className="text-muted mb-2 small fw-bold text-uppercase">{title}</h6>
-            <h3 className="mb-1 fw-bold" style={{ color }}>
-              {typeof value === 'number' ? value.toLocaleString('vi-VN') : value}
-            </h3>
-            {subtitle && <p className="text-muted mb-0 small">{subtitle}</p>}
-            {trend && (
-              <span className={`badge ${trend > 0 ? 'bg-success' : 'bg-danger'} mt-2`}>
-                <i className={`fas fa-${trend > 0 ? 'arrow-up' : 'arrow-down'} me-1`}></i>
-                {Math.abs(trend)}%
-              </span>
-            )}
-          </div>
-          <div className={`text-${color} fs-2 opacity-75`}>
-            <i className={icon}></i>
-          </div>
-        </div>
-      </Card.Body>
-    </Card>
-  );
+// Helper functions
+const normalizeStatus = (status) => {
+  if (!status) return INVOICE_STATUS.PENDING;
+  const statusString = String(status).toLowerCase().trim();
+  const statusMap = {
+    'chờ thanh toán': INVOICE_STATUS.PENDING,
+    'pending': INVOICE_STATUS.PENDING,
+    'đã thanh toán': INVOICE_STATUS.PAID,
+    'paid': INVOICE_STATUS.PAID,
+    'đã hủy': INVOICE_STATUS.CANCELLED,
+    'cancelled': INVOICE_STATUS.CANCELLED,
+    'đang xử lý': INVOICE_STATUS.PROCESSING,
+    'processing': INVOICE_STATUS.PROCESSING
+  };
+  return statusMap[statusString] || INVOICE_STATUS.PENDING;
 };
 
-// Component Chart đơn giản
-const SimpleBarChart = ({ data, height = 200 }) => {
-  if (!data || data.length === 0) {
-    return (
-      <div className="text-center py-4 text-muted">
-        <i className="fas fa-chart-bar fs-1 mb-2"></i>
-        <p className="mb-0">Không có dữ liệu</p>
-      </div>
-    );
-  }
-
-  const maxValue = Math.max(...data.map(item => item.value));
-  
-  return (
-    <div className="d-flex align-items-end justify-content-between h-100 gap-3 px-2">
-      {data.map((item, index) => (
-        <div key={index} className="d-flex flex-column align-items-center flex-grow-1">
-          <small className="text-muted mb-2 fw-bold text-center">{item.label}</small>
-          <div className="d-flex flex-column align-items-center w-100" style={{ height: `${height}px` }}>
-            <div className="mb-1">
-              <small className="text-muted fw-bold">{item.value.toLocaleString('vi-VN')}</small>
-            </div>
-            <div 
-              className="rounded-top w-75"
-              style={{ 
-                height: `${maxValue > 0 ? (item.value / maxValue) * 150 : 0}px`,
-                backgroundColor: item.color || '#2c80ff',
-                minHeight: '10px',
-                transition: 'all 0.5s ease'
-              }}
-            ></div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-};
-
+// Component chính
 const PaymentSection = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -123,97 +75,121 @@ const PaymentSection = () => {
   const [selectedInvoiceDetail, setSelectedInvoiceDetail] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState(TAB_KEYS.DASHBOARD);
+  const [success, setSuccess] = useState('');
+  const [activeTab, setActiveTab] = useState(TAB_KEYS.ALL);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-  const [stats, setStats] = useState({
-    totalRevenue: 0,
-    pendingCount: 0,
-    paidCount: 0,
-    cancelledCount: 0,
-    averageAmount: 0
-  });
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [printing, setPrinting] = useState(false);
 
-  // Helper functions
-  const normalizeStatus = (status) => {
-    if (!status) return INVOICE_STATUS.PENDING;
-    const statusString = String(status).toLowerCase().trim();
-    const statusMap = {
-      'chờ thanh toán': INVOICE_STATUS.PENDING,
-      'pending': INVOICE_STATUS.PENDING,
-      'đã thanh toán': INVOICE_STATUS.PAID,
-      'paid': INVOICE_STATUS.PAID,
-      'đã hủy': INVOICE_STATUS.CANCELLED,
-      'cancelled': INVOICE_STATUS.CANCELLED,
-      'đang xử lý': INVOICE_STATUS.PROCESSING,
-      'processing': INVOICE_STATUS.PROCESSING
+  // State cho Custom Confirm
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [confirmData, setConfirmData] = useState(null);
+  const [pendingTab, setPendingTab] = useState(null);
+
+  // Hàm lấy tên tab
+  const getTabName = (tabKey) => {
+    const tabNames = {
+      [TAB_KEYS.ALL]: 'Tất cả hóa đơn',
+      [TAB_KEYS.PENDING]: 'Chờ thanh toán',
+      [TAB_KEYS.PAID]: 'Đã thanh toán',
+      [TAB_KEYS.CANCELLED]: 'Đã hủy',
+      [TAB_KEYS.PAYMENT_HISTORY]: 'Lịch sử thanh toán'
     };
-    return statusMap[statusString] || INVOICE_STATUS.PENDING;
+    return tabNames[tabKey] || tabKey;
   };
 
-  const isInvoicePaid = (invoice) => {
-    if (!invoice) return false;
+  // QUAN TRỌNG: Hàm xác định trạng thái hiển thị - FIXED
+  const getDisplayStatus = (invoice) => {
+    if (!invoice) return { status: INVOICE_STATUS.PENDING, paymentMethod: null };
+
     const normalizedStatus = normalizeStatus(invoice.status);
-    const hasPaymentMethod = invoice.payment_method && invoice.payment_method !== 'null';
-    const hasPaidAt = invoice.paid_at;
-    return normalizedStatus === INVOICE_STATUS.PAID || hasPaymentMethod || hasPaidAt;
+    const hasOrderId = invoice.order_id && invoice.order_id !== 'null' && invoice.order_id !== '';
+    const hasPaymentMethod = invoice.payment_method && invoice.payment_method !== 'null' && invoice.payment_method !== '';
+
+    // QUAN TRỌNG: Chỉ hiển thị "Đang xử lý" nếu có OrderId VÀ status là PENDING
+    // VÀ thời gian cập nhật chưa quá 30 phút (tránh hiển thị sai cho các hóa đơn cũ)
+    if (hasOrderId && normalizedStatus === INVOICE_STATUS.PENDING) {
+      const updatedTime = new Date(invoice.updated_at || invoice.created_at);
+      const now = new Date();
+      const diffMinutes = (now - updatedTime) / (1000 * 60);
+
+      // Nếu quá 30 phút vẫn còn OrderId -> coi như bị kẹt, hiển thị "Chờ thanh toán"
+      if (diffMinutes > 30) {
+        return {
+          status: INVOICE_STATUS.PENDING,
+          paymentMethod: null,
+          isStuck: true
+        };
+      }
+
+      return {
+        status: INVOICE_STATUS.PROCESSING,
+        paymentMethod: invoice.payment_method
+      };
+    }
+
+    // Nếu không có OrderId và status là PENDING -> chờ thanh toán
+    if (!hasOrderId && normalizedStatus === INVOICE_STATUS.PENDING) {
+      return {
+        status: INVOICE_STATUS.PENDING,
+        paymentMethod: null
+      };
+    }
+
+    // Các trường hợp khác
+    return {
+      status: normalizedStatus,
+      paymentMethod: hasPaymentMethod ? invoice.payment_method : null
+    };
   };
 
-  const canPayInvoice = (invoice) => {
-    if (!invoice) return false;
-    const normalizedStatus = normalizeStatus(invoice.status);
-    const isPaid = isInvoicePaid(invoice);
-    return !isPaid &&
-           normalizedStatus === INVOICE_STATUS.PENDING &&
-           activeTab !== TAB_KEYS.CANCELLED &&
-           activeTab !== TAB_KEYS.PAYMENT_HISTORY &&
-           invoice.can_pay !== false;
-  };
+  // Hàm lấy badge trạng thái
+  const getStatusBadge = (invoice) => {
+    const displayStatus = getDisplayStatus(invoice);
 
-  const getStatusLabel = (status) => {
-    return INVOICE_STATUS_LABELS[normalizeStatus(status)] || status;
-  };
-
-  const getPaymentMethodLabel = (paymentMethod) => {
-    return PAYMENT_METHOD_LABELS[paymentMethod] || paymentMethod || 'Chưa thanh toán';
-  };
-
-  const getStatusBadge = (status) => {
-    const normalizedStatus = normalizeStatus(status);
-    switch (normalizedStatus) {
-      case INVOICE_STATUS.PENDING: return <Badge bg="warning">Chờ thanh toán</Badge>;
-      case INVOICE_STATUS.PAID: return <Badge bg="success">Đã thanh toán</Badge>;
-      case INVOICE_STATUS.CANCELLED: return <Badge bg="danger">Đã hủy</Badge>;
-      case INVOICE_STATUS.PROCESSING: return <Badge bg="info">Đang xử lý</Badge>;
-      default: return <Badge bg="secondary">{getStatusLabel(status)}</Badge>;
+    switch (displayStatus.status) {
+      case INVOICE_STATUS.PENDING:
+        return <Badge bg="warning"> Chờ thanh toán</Badge>;
+      case INVOICE_STATUS.PAID:
+        return <Badge bg="success"> Đã thanh toán</Badge>;
+      case INVOICE_STATUS.CANCELLED:
+        return <Badge bg="danger">Đã hủy</Badge>;
+      case INVOICE_STATUS.PROCESSING:
+        return <Badge bg="info"> Đang xử lý</Badge>;
+      default:
+        return <Badge bg="secondary">{invoice.status}</Badge>;
     }
   };
 
-  const getPaymentMethodBadge = (paymentMethod, status) => {
-    const normalizedStatus = normalizeStatus(status);
-    const isPaid = normalizedStatus === INVOICE_STATUS.PAID;
-    const hasPaymentMethod = paymentMethod && paymentMethod !== 'null';
+  // Hàm lấy badge phương thức thanh toán
+  const getPaymentMethodBadge = (invoice) => {
+    const displayStatus = getDisplayStatus(invoice);
+    const paymentMethod = displayStatus.paymentMethod;
 
-    if (!isPaid && !hasPaymentMethod) {
+    if (displayStatus.status === INVOICE_STATUS.PROCESSING) {
+      return <Badge bg="info">🔄 Đang xử lý</Badge>;
+    }
+
+    if (!paymentMethod) {
       return <Badge bg="secondary">Chưa thanh toán</Badge>;
     }
 
-    if (isPaid && hasPaymentMethod) {
-      switch (paymentMethod) {
-        case PAYMENT_METHODS.MOMO: return <Badge bg="primary">MoMo</Badge>;
-        case PAYMENT_METHODS.CASH: return <Badge bg="success">Tiền mặt</Badge>;
-        case PAYMENT_METHODS.BANK_TRANSFER: return <Badge bg="info">Chuyển khoản</Badge>;
-        case PAYMENT_METHODS.INSURANCE: return <Badge bg="warning">Bảo hiểm</Badge>;
-        default: return <Badge bg="secondary">{getPaymentMethodLabel(paymentMethod)}</Badge>;
-      }
+    switch (paymentMethod) {
+      case PAYMENT_METHODS.MOMO:
+        return <Badge bg="primary">💜 MoMo</Badge>;
+      case PAYMENT_METHODS.CASH:
+        return <Badge bg="success">💵 Tiền mặt</Badge>;
+      case PAYMENT_METHODS.BANK_TRANSFER:
+        return <Badge bg="info">🏦 Thẻ napas</Badge>;
+      case PAYMENT_METHODS.INSURANCE:
+        return <Badge bg="warning">🛡️ Bảo hiểm</Badge>;
+      default:
+        return <Badge bg="light" text="dark">{paymentMethod}</Badge>;
     }
-
-    if (hasPaymentMethod) {
-      return <Badge bg="success">Đã thanh toán</Badge>;
-    }
-
-    return <Badge bg="light" text="dark">{getStatusLabel(status)}</Badge>;
   };
 
   // Fetch invoices
@@ -241,7 +217,7 @@ const PaymentSection = () => {
         }
       }
 
-      const response = activeTab === TAB_KEYS.PAYMENT_HISTORY 
+      const response = activeTab === TAB_KEYS.PAYMENT_HISTORY
         ? await paymentService.getPaymentHistory(filters)
         : await paymentService.getInvoices(filters);
 
@@ -263,7 +239,7 @@ const PaymentSection = () => {
 
         setInvoices(invoicesData);
         setTotalItems(paginationData.total || invoicesData.length || 0);
-        
+
         if (invoicesData.length === 0 && !response.data.message) {
           setError('Không có dữ liệu hóa đơn');
         }
@@ -282,32 +258,247 @@ const PaymentSection = () => {
     }
   };
 
-  // Fetch stats for dashboard
-  const fetchStats = async () => {
+  // Reset hóa đơn bị kẹt
+  const handleResetStuckInvoices = async () => {
     try {
-      const response = await paymentService.getStats();
-      if (response?.data) {
-        setStats({
-          totalRevenue: response.data.totalRevenue || 0,
-          pendingCount: response.data.pendingCount || 0,
-          paidCount: response.data.paidCount || 0,
-          cancelledCount: response.data.cancelledCount || 0,
-          averageAmount: response.data.averageAmount || 0
-        });
+      setResetting(true);
+      const response = await paymentService.resetStuckInvoices();
+
+      if (response.data.success) {
+        setSuccess(`✅ ${response.data.message}`);
+        // Refresh danh sách
+        fetchInvoices();
+      } else {
+        setError('❌ Reset thất bại: ' + (response.data.message || 'Unknown error'));
       }
-    } catch (err) {
-      console.error('Fetch stats error:', err);
-      // Fallback: tính toán từ invoices hiện tại
-      const paidInvoices = invoices.filter(inv => normalizeStatus(inv.status) === INVOICE_STATUS.PAID);
-      const totalRevenue = paidInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
-      
-      setStats({
-        totalRevenue,
-        pendingCount: invoices.filter(inv => normalizeStatus(inv.status) === INVOICE_STATUS.PENDING).length,
-        paidCount: paidInvoices.length,
-        cancelledCount: invoices.filter(inv => normalizeStatus(inv.status) === INVOICE_STATUS.CANCELLED).length,
-        averageAmount: paidInvoices.length > 0 ? Math.round(totalRevenue / paidInvoices.length) : 0
+    } catch (error) {
+      console.error('Reset stuck invoices error:', error);
+      setError('❌ Lỗi khi reset hóa đơn: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  // Reset manual một hóa đơn cụ thể
+  const handleResetSingleInvoice = async (invoice) => {
+    try {
+      setResetting(true);
+      const response = await paymentService.resetPayment(invoice.id);
+
+      if (response.data.success) {
+        setSuccess(`✅ Đã reset hóa đơn ${invoice.code}`);
+        // Refresh danh sách
+        fetchInvoices();
+      } else {
+        setError('❌ Reset thất bại');
+      }
+    } catch (error) {
+      console.error('Reset single invoice error:', error);
+      setError('❌ Lỗi khi reset hóa đơn');
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  // Hàm in hóa đơn cho từng bệnh nhân đã thanh toán - GIỐNG InvoiceDetailModal
+  // ✅ Hàm in hóa đơn - THÊM ĐẦY ĐỦ PDF SETTINGS
+  const handlePrintInvoice = async (invoice) => {
+    try {
+      setPrinting(true);
+      setError('');
+      setSuccess('');
+
+      console.log('🖨️ Calling Laravel PDF API...', invoice);
+
+      if (!invoice) {
+        throw new Error('Không có dữ liệu hóa đơn');
+      }
+
+      // ✅ Lấy dữ liệu services và prescriptions ĐÚNG CẤU TRÚC
+      const { services, prescriptions } = getServicesAndMedicinesFromInvoice(invoice);
+
+      console.log('📋 Processed data for PDF:', {
+        services,
+        prescriptions,
+        hasServices: services.length > 0,
+        hasPrescriptions: prescriptions.length > 0
       });
+
+      // ✅ THÊM ĐẦY ĐỦ PDF SETTINGS THEO VALIDATION CỦA BE
+      const printData = {
+        type: 'payment',
+        patient_name: invoice.patient_name || 'THÔNG TIN BỆNH NHÂN',
+        age: String(invoice.patient_age || 'N/A'),
+        gender: invoice.patient_gender || 'N/A',
+        phone: invoice.patient_phone || 'N/A',
+        appointment_date: invoice.date || new Date().toLocaleDateString('vi-VN'),
+        appointment_time: 'Hoàn tất',
+        doctor_name: 'Hệ thống',
+        paid_at: invoice.paid_at || new Date().toLocaleString('vi-VN'),
+
+        // ✅ QUAN TRỌNG: Gửi đúng cấu trúc prescriptions và services
+        prescriptions: prescriptions,
+        services: services,
+
+        // Payment data
+        payment_method: invoice.payment_method || 'cash',
+        payment_status: 'Đã thanh toán',
+        discount: 0,
+        invoice_code: invoice.code || `INV_${invoice.id}`,
+        total_amount: invoice.total || 0,
+
+        // ✅ QUAN TRỌNG: THÊM ĐẦY ĐỦ PDF SETTINGS THEO VALIDATION
+        pdf_settings: {
+          // 🔥 CÁC TRƯỜNG BẮT BUỘC THEO VALIDATION
+          fontFamily: 'Times New Roman',
+          fontSize: '14px',
+          fontColor: '#000000',
+          primaryColor: '#2c5aa0',
+          backgroundColor: '#ffffff',
+          borderColor: '#333333',
+          headerBgColor: '#f0f0f0',
+          lineHeight: 1.5,
+          fontStyle: 'normal',
+          fontWeight: 'normal',
+
+          // Clinic info
+          clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
+          clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
+          clinicPhone: '028 1234 5678',
+          doctorName: 'Hệ thống',
+          customTitle: 'HÓA ĐƠN THANH TOÁN',
+
+          // Page settings
+          pageOrientation: 'portrait',
+          pageSize: 'A4',
+          marginTop: '15mm',
+          marginBottom: '15mm',
+          marginLeft: '10mm',
+          marginRight: '10mm',
+
+          // Logo settings (disabled)
+          logo: {
+            enabled: false,
+            url: '',
+            width: '80px',
+            height: '80px',
+            position: 'left',
+            opacity: 0.8
+          },
+
+          // Watermark settings (disabled)
+          watermark: {
+            enabled: false,
+            text: 'MẪU BẢN QUYỀN',
+            url: '',
+            opacity: 0.1,
+            fontSize: 48,
+            color: '#cccccc',
+            rotation: -45
+          }
+        }
+      };
+
+      console.log('📤 Sending to Laravel PDF API:', {
+        ...printData,
+        pdf_settings: '...' // Ẩn pdf_settings trong log để dễ đọc
+      });
+
+      // Gọi API
+      const result = await printPdfService.printPDF(printData);
+      console.log('✅ PDF Service Result:', result);
+      setSuccess(`✅ Đã tải xuống PDF hóa đơn ${invoice.code} thành công! File: ${result.fileName}`)
+       console.log('✅ PDF downloaded successfully via service');
+
+    } catch (error) {
+      console.error('❌ Print invoice error:', error);
+      setError('❌ Lỗi khi in hóa đơn: ' + error.message);
+    } finally {
+      setPrinting(false);
+    }
+
+  };
+
+  // ✅ Hàm lấy services và prescriptions từ invoice - SỬA ĐÚNG CẤU TRÚC
+  const getServicesAndMedicinesFromInvoice = (invoice) => {
+    const services = [];
+    const prescriptions = []; // ĐỔI TÊN: medicines -> prescriptions
+
+    console.log('🔍 Raw invoice details:', invoice.invoice_details);
+
+    // Phân loại services và prescriptions từ invoice_details
+    if (invoice.invoice_details && invoice.invoice_details.length > 0) {
+      invoice.invoice_details.forEach((detail, index) => {
+        const unitPrice = detail.UnitPrice || detail.unit_price || 0;
+        const quantity = detail.Quantity || detail.quantity || 1;
+
+        console.log(`📋 Processing detail ${index}:`, {
+          hasService: !!detail.service,
+          hasMedicine: !!detail.medicine,
+          serviceId: detail.ServiceId,
+          medicineId: detail.MedicineId
+        });
+
+        // ✅ SERVICE: Có ServiceId HOẶC có service object
+        if (detail.ServiceId || detail.service) {
+          const serviceName = detail.service?.ServiceName || 'Dịch vụ khám';
+
+          services.push({
+            ServiceName: serviceName,
+            Price: unitPrice,
+            Quantity: quantity,
+            // KHÔNG gửi Amount, BE sẽ tự tính
+          });
+
+          console.log(`🩺 Added service: ${serviceName}`);
+
+        }
+        // ✅ PRESCRIPTION: Có MedicineId HOẶC có medicine object
+        else if (detail.MedicineId || detail.medicine) {
+          const medicineName = detail.medicine?.MedicineName || 'Thuốc';
+
+          // ✅ SỬA: Tạo prescription object ĐÚNG CẤU TRÚC BE CẦN
+          prescriptions.push({
+            MedicineName: medicineName,
+            Price: unitPrice,
+            Quantity: quantity,
+            Usage: 'Theo chỉ định'
+            // KHÔNG gửi Amount, BE sẽ tự tính
+          });
+
+          console.log(`💊 Added prescription: ${medicineName}`);
+        }
+      });
+    }
+
+    // ✅ Nếu không có dịch vụ chi tiết, tạo một dịch vụ tổng
+    if (services.length === 0 && invoice.total) {
+      services.push({
+        ServiceName: "Phí khám và điều trị",
+        Price: invoice.total,
+        Quantity: 1,
+      });
+    }
+
+    console.log('🛠️ Final processed data for PDF:', {
+      services,
+      prescriptions, // ĐỔI TÊN: medicines -> prescriptions
+      servicesCount: services.length,
+      prescriptionsCount: prescriptions.length
+    });
+
+    return { services, prescriptions }; // ĐỔI TÊN: medicines -> prescriptions
+  };
+
+  // ✅ Hàm chuyển đổi payment method - GIỐNG InvoiceDetailModal
+  const getPaymentMethodText = (method) => {
+    switch (method) {
+      case 'momo': return 'MoMo';
+      case 'cash': return 'Tiền mặt';
+      case 'bank_transfer': return 'Chuyển khoản';
+      case 'insurance': return 'Bảo hiểm';
+      case 'napas': return 'Thẻ ATM';
+      default: return method || 'Tiền mặt';
     }
   };
 
@@ -319,6 +510,7 @@ const PaymentSection = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setCurrentPage(1);
+      fetchInvoices();
     }, 500);
     return () => clearTimeout(timer);
   }, [searchTerm]);
@@ -327,11 +519,21 @@ const PaymentSection = () => {
     setCurrentPage(1);
   }, [statusFilter]);
 
+  // Auto refresh mỗi 30 giây cho các hóa đơn đang xử lý
   useEffect(() => {
-    if (activeTab === TAB_KEYS.DASHBOARD && invoices.length > 0) {
-      fetchStats();
+    if (autoRefresh) {
+      const interval = setInterval(() => {
+        const hasProcessingInvoices = invoices.some(inv =>
+          getDisplayStatus(inv).status === INVOICE_STATUS.PROCESSING
+        );
+        if (hasProcessingInvoices) {
+          fetchInvoices();
+        }
+      }, 30000); // 30 giây
+
+      return () => clearInterval(interval);
     }
-  }, [activeTab, invoices]);
+  }, [autoRefresh, invoices]);
 
   // Handlers
   const handleViewDetail = async (invoice) => {
@@ -350,6 +552,14 @@ const PaymentSection = () => {
   };
 
   const handleInitiatePayment = (invoice) => {
+    const displayStatus = getDisplayStatus(invoice);
+
+    // KHÔNG cho phép thanh toán nếu đang xử lý (trừ khi bị kẹt)
+    if (displayStatus.status === INVOICE_STATUS.PROCESSING && !displayStatus.isStuck) {
+      setError('Hóa đơn đang trong quá trình thanh toán. Vui lòng chờ hoặc reset nếu bị kẹt.');
+      return;
+    }
+
     setSelectedInvoice(invoice);
     setShowPaymentModal(true);
   };
@@ -357,10 +567,10 @@ const PaymentSection = () => {
   const handleClosePaymentModal = () => {
     setShowPaymentModal(false);
     setSelectedInvoice(null);
-    fetchInvoices();
-    if (activeTab === TAB_KEYS.DASHBOARD) {
-      fetchStats();
-    }
+    // Refresh data sau khi đóng modal
+    setTimeout(() => {
+      fetchInvoices();
+    }, 1000);
   };
 
   const handleCloseDetailModal = () => {
@@ -370,64 +580,115 @@ const PaymentSection = () => {
 
   const handleRetry = () => {
     fetchInvoices();
-    if (activeTab === TAB_KEYS.DASHBOARD) {
-      fetchStats();
-    }
   };
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
   };
 
+  // Cập nhật handleTabChange để confirm cho tất cả tab chuyển đổi
   const handleTabChange = (tabKey) => {
-    setActiveTab(tabKey);
-    setStatusFilter('');
+    // Hiển thị confirm cho tất cả các lần chuyển tab
+    if (activeTab !== tabKey) {
+      setPendingTab(tabKey);
+      setConfirmAction('switch_tab');
+      setConfirmData(getTabName(tabKey));
+      setShowConfirm(true);
+    }
+  };
+
+  // Confirm action handlers
+  const showConfirmDialog = (action, data = null) => {
+    setConfirmAction(action);
+    setConfirmData(data);
+    setShowConfirm(true);
+  };
+
+  const handleConfirm = async () => {
+    setShowConfirm(false);
+
+    switch (confirmAction) {
+      case 'reset_single':
+        await handleResetSingleInvoice(confirmData);
+        break;
+      case 'reset_all':
+        await handleResetStuckInvoices();
+        break;
+      case 'payment':
+        handleInitiatePayment(confirmData);
+        break;
+      case 'view_detail':
+        await handleViewDetail(confirmData);
+        break;
+      case 'switch_tab':
+        // Thực hiện chuyển tab sau khi confirm
+        setActiveTab(pendingTab);
+        setStatusFilter('');
+        setCurrentPage(1);
+        setPendingTab(null);
+        break;
+      case 'print_invoice':
+        await handlePrintInvoice(confirmData); // ✅ GỌI HÀM IN MỚI
+        break;
+      default:
+        break;
+    }
+
+    setConfirmAction(null);
+    setConfirmData(null);
+  };
+
+  const handleCancelConfirm = () => {
+    setShowConfirm(false);
+    setConfirmAction(null);
+    setConfirmData(null);
+    setPendingTab(null);
+  };
+
+  // Kiểm tra có thể thanh toán - FIXED
+  const canPay = (invoice) => {
+    const displayStatus = getDisplayStatus(invoice);
+    const hasNoOrderId = !invoice.order_id || invoice.order_id === 'null' || invoice.order_id === '';
+
+    // Có thể thanh toán nếu:
+    // 1. Trạng thái là PENDING (bao gồm cả bị kẹt)
+    // 2. Không có OrderId HOẶC bị kẹt (có OrderId nhưng quá 30 phút)
+    // 3. Không phải tab CANCELLED hoặc PAYMENT_HISTORY
+    return (displayStatus.status === INVOICE_STATUS.PENDING || displayStatus.isStuck) &&
+      (hasNoOrderId || displayStatus.isStuck) &&
+      activeTab !== TAB_KEYS.CANCELLED &&
+      activeTab !== TAB_KEYS.PAYMENT_HISTORY;
+  };
+
+  // Kiểm tra có thể in - CHỈ cho in khi đã thanh toán
+  const canPrint = (invoice) => {
+    const displayStatus = getDisplayStatus(invoice);
+    return displayStatus.status === INVOICE_STATUS.PAID;
+  };
+
+  // Kiểm tra có bị kẹt không
+  const isStuckInvoice = (invoice) => {
+    const displayStatus = getDisplayStatus(invoice);
+    return displayStatus.isStuck;
   };
 
   // Memoized values
   const invoiceCounts = useMemo(() => {
+    const stuckCount = invoices.filter(inv => isStuckInvoice(inv)).length;
+    const processingCount = invoices.filter(inv =>
+      getDisplayStatus(inv).status === INVOICE_STATUS.PROCESSING && !isStuckInvoice(inv)
+    ).length;
+
     return {
-      [INVOICE_STATUS.PENDING]: invoices.filter(inv => normalizeStatus(inv.status) === INVOICE_STATUS.PENDING).length,
-      [INVOICE_STATUS.PAID]: invoices.filter(inv => normalizeStatus(inv.status) === INVOICE_STATUS.PAID).length,
-      [INVOICE_STATUS.CANCELLED]: invoices.filter(inv => normalizeStatus(inv.status) === INVOICE_STATUS.CANCELLED).length,
+      [INVOICE_STATUS.PENDING]: invoices.filter(inv => getDisplayStatus(inv).status === INVOICE_STATUS.PENDING).length,
+      [INVOICE_STATUS.PAID]: invoices.filter(inv => getDisplayStatus(inv).status === INVOICE_STATUS.PAID).length,
+      [INVOICE_STATUS.CANCELLED]: invoices.filter(inv => getDisplayStatus(inv).status === INVOICE_STATUS.CANCELLED).length,
+      [INVOICE_STATUS.PROCESSING]: processingCount,
+      stuck: stuckCount,
       payment_history: invoices.length,
       total: totalItems
     };
   }, [invoices, totalItems]);
-
-  // Chart data từ real data
-  const revenueData = useMemo(() => {
-    // Dữ liệu mẫu - bạn có thể thay thế bằng API thực tế
-    return [
-      { label: 'T1', value: 15000000, color: '#2c80ff' },
-      { label: 'T2', value: 18000000, color: '#2c80ff' },
-      { label: 'T3', value: 22000000, color: '#2c80ff' },
-      { label: 'T4', value: 19000000, color: '#2c80ff' },
-      { label: 'T5', value: 25000000, color: '#2c80ff' },
-      { label: 'T6', value: stats.totalRevenue || 28000000, color: '#28a745' }
-    ];
-  }, [stats.totalRevenue]);
-
-  const paymentMethodData = useMemo(() => {
-    // Thống kê từ invoices hiện tại
-    const methodCounts = invoices.reduce((acc, invoice) => {
-      if (invoice.payment_method && invoice.payment_method !== 'null' && normalizeStatus(invoice.status) === INVOICE_STATUS.PAID) {
-        acc[invoice.payment_method] = (acc[invoice.payment_method] || 0) + 1;
-      }
-      return acc;
-    }, {});
-
-    return Object.entries(methodCounts).map(([method, count]) => ({
-      label: method === 'momo' ? 'MoMo' : 
-             method === 'cash' ? 'Tiền mặt' : 
-             method === 'bank_transfer' ? 'Chuyển khoản' : 
-             method === 'insurance' ? 'Bảo hiểm' : method,
-      value: count,
-      color: method === 'momo' ? '#c2185b' : 
-             method === 'cash' ? '#2e7d32' : 
-             method === 'bank_transfer' ? '#1565c0' : '#f57c00'
-    }));
-  }, [invoices]);
 
   const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
 
@@ -437,196 +698,87 @@ const PaymentSection = () => {
     return `Hiển thị ${startItem}-${endItem} của ${totalItems} hóa đơn`;
   };
 
-  const emptyStateConfig = useMemo(() => {
-    const config = {
-      [TAB_KEYS.DASHBOARD]: {
-        icon: 'fas fa-chart-bar',
-        title: 'Không có dữ liệu thống kê',
-        description: 'Dữ liệu thống kê sẽ hiển thị khi có hóa đơn'
+  // Clear messages after 5 seconds
+  useEffect(() => {
+    if (error || success) {
+      const timer = setTimeout(() => {
+        setError('');
+        setSuccess('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, success]);
+
+  // Config cho confirm dialog
+  const getConfirmConfig = () => {
+    const configs = {
+      payment: {
+        icon: <CreditCard size={40} />,
+        title: "Xác Nhận Thanh Toán",
+        message: `Bạn có chắc muốn thanh toán hóa đơn ${confirmData?.code}?`,
+        description: `Số tiền: ${confirmData?.total?.toLocaleString('vi-VN')} VNĐ\nBệnh nhân: ${confirmData?.patient_name}`,
+        confirmText: "Tiếp Tục Thanh Toán",
+        variant: "primary"
       },
-      [TAB_KEYS.ALL]: {
-        icon: 'fas fa-receipt',
-        title: 'Không có hóa đơn nào',
-        description: 'Hãy tạo hóa đơn mới hoặc kiểm tra lại bộ lọc'
+      view_detail: {
+        icon: <Eye size={40} />,
+        title: "Xem Chi Tiết Hóa Đơn",
+        message: `Bạn có chắc muốn xem chi tiết hóa đơn ${confirmData?.code}?`,
+        description: `Bệnh nhân: ${confirmData?.patient_name}`,
+        confirmText: "Xem Chi Tiết",
+        variant: "info"
       },
-      [TAB_KEYS.PENDING]: {
-        icon: 'fas fa-clock',
-        title: 'Không có hóa đơn chờ thanh toán',
-        description: 'Tất cả hóa đơn đã được xử lý'
+      switch_tab: {
+        icon: <History size={40} />,
+        title: "Chuyển Tab",
+        message: `Bạn có chắc muốn chuyển từ tab "${getTabName(activeTab)}" sang "${confirmData}"?`,
+        description: "Dữ liệu chưa lưu có thể bị mất nếu bạn chuyển tab.",
+        confirmText: "Chuyển Tab",
+        variant: "warning"
       },
-      [TAB_KEYS.PAID]: {
-        icon: 'fas fa-check-circle',
-        title: 'Không có hóa đơn đã thanh toán',
-        description: 'Chưa có hóa đơn nào được thanh toán'
+      reset_single: {
+        icon: <RotateCcw size={40} />,
+        title: "Reset Hóa Đơn",
+        message: `Bạn có chắc muốn reset hóa đơn ${confirmData?.code}?`,
+        description: "Hóa đơn sẽ được đặt lại trạng thái 'Chờ thanh toán' và bạn có thể thực hiện thanh toán lại.",
+        confirmText: "Reset Hóa Đơn",
+        variant: "warning"
       },
-      [TAB_KEYS.PAYMENT_HISTORY]: {
-        icon: 'fas fa-history',
-        title: 'Không có lịch sử thanh toán',
-        description: 'Chưa có giao dịch thanh toán nào được thực hiện qua hệ thống'
+      reset_all: {
+        icon: <AlertTriangle size={40} />,
+        title: "Reset Tất Cả Hóa Đơn Bị Kẹt",
+        message: `Bạn có chắc muốn reset ${invoiceCounts.stuck} hóa đơn bị kẹt?`,
+        description: "Tất cả hóa đơn bị kẹt sẽ được đặt lại trạng thái 'Chờ thanh toán'.",
+        confirmText: `Reset ${invoiceCounts.stuck} Hóa Đơn`,
+        variant: "danger"
       },
-      [TAB_KEYS.CANCELLED]: {
-        icon: 'fas fa-times-circle',
-        title: 'Không có hóa đơn đã hủy',
-        description: 'Không có hóa đơn nào bị hủy'
+      print_invoice: {
+        icon: <Printer size={40} />,
+        title: "In Hóa Đơn",
+        message: `Bạn có chắc muốn in hóa đơn ${confirmData?.code}?`,
+        description: `Bệnh nhân: ${confirmData?.patient_name}\nSố tiền: ${confirmData?.total?.toLocaleString('vi-VN')} VNĐ`,
+        confirmText: "In PDF",
+        variant: "primary"
       }
     };
-    return config[activeTab] || config[TAB_KEYS.ALL];
-  }, [activeTab]);
 
-  // Render Dashboard Tab
-  const renderDashboard = () => (
-    <div className="dashboard-tab">
-      {/* Stats Cards */}
-      <Row className="g-3 mb-4">
-        <Col md={3}>
-          <StatsCard
-            title="Tổng doanh thu"
-            value={stats.totalRevenue}
-            subtitle="VNĐ"
-            icon="fas fa-money-bill-wave"
-            color="success"
-            trend={12.5}
-          />
-        </Col>
-        <Col md={3}>
-          <StatsCard
-            title="Hóa đơn chờ"
-            value={stats.pendingCount}
-            subtitle="hóa đơn"
-            icon="fas fa-clock"
-            color="warning"
-            trend={-5.2}
-          />
-        </Col>
-        <Col md={3}>
-          <StatsCard
-            title="Đã thanh toán"
-            value={stats.paidCount}
-            subtitle="hóa đơn"
-            icon="fas fa-check-circle"
-            color="info"
-            trend={8.7}
-          />
-        </Col>
-        <Col md={3}>
-          <StatsCard
-            title="Trung bình / HĐ"
-            value={stats.averageAmount}
-            subtitle="VNĐ"
-            icon="fas fa-chart-line"
-            color="primary"
-            trend={3.4}
-          />
-        </Col>
-      </Row>
+    return configs[confirmAction] || {
+      icon: <AlertTriangle size={40} />,
+      title: "Xác Nhận",
+      message: "Bạn có chắc muốn thực hiện hành động này?",
+      description: "",
+      confirmText: "Xác Nhận",
+      variant: "primary"
+    };
+  };
 
-      {/* Charts */}
-      <Row className="g-4">
-        <Col lg={8}>
-          <Card className="h-100 shadow-sm">
-            <Card.Header className="bg-white border-bottom-0">
-              <h6 className="mb-0 fw-bold text-primary">
-                <i className="fas fa-chart-bar me-2"></i>
-                Doanh thu theo tháng
-              </h6>
-            </Card.Header>
-            <Card.Body>
-              <SimpleBarChart data={revenueData} height={200} />
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col lg={4}>
-          <Card className="h-100 shadow-sm">
-            <Card.Header className="bg-white border-bottom-0">
-              <h6 className="mb-0 fw-bold text-success">
-                <i className="fas fa-credit-card me-2"></i>
-                Phương thức thanh toán
-              </h6>
-            </Card.Header>
-            <Card.Body>
-              {paymentMethodData.length > 0 ? (
-                <>
-                  <div className="mb-3">
-                    {paymentMethodData.map((item, index) => (
-                      <div key={index} className="d-flex justify-content-between align-items-center mb-2 p-2 rounded hover-effect">
-                        <div className="d-flex align-items-center">
-                          <span 
-                            className="badge me-3"
-                            style={{ 
-                              backgroundColor: item.color, 
-                              width: '16px', 
-                              height: '16px',
-                              borderRadius: '4px'
-                            }}
-                          ></span>
-                          <span className="fw-semibold">{item.label}</span>
-                        </div>
-                        <Badge bg="light" text="dark" className="fs-6">{item.value}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="text-center mt-3">
-                    <small className="text-muted">
-                      Tổng cộng: {paymentMethodData.reduce((sum, item) => sum + item.value, 0)} giao dịch
-                    </small>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center py-4 text-muted">
-                  <i className="fas fa-credit-card fs-1 mb-2"></i>
-                  <p className="mb-0">Chưa có giao dịch nào</p>
-                </div>
-              )}
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Recent Activities */}
-      <Row className="mt-4">
-        <Col>
-          <Card className="shadow-sm">
-            <Card.Header className="bg-white border-bottom-0">
-              <h6 className="mb-0 fw-bold text-warning">
-                <i className="fas fa-history me-2"></i>
-                Hóa đơn gần đây
-              </h6>
-            </Card.Header>
-            <Card.Body className="p-0">
-              <Table hover className="mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>Mã HĐ</th>
-                    <th>Bệnh nhân</th>
-                    <th>Số tiền</th>
-                    <th>Trạng thái</th>
-                    <th>Ngày</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoices.slice(0, 5).map((invoice) => (
-                    <tr key={invoice.id}>
-                      <td>
-                        <strong className="text-primary">{invoice.code}</strong>
-                      </td>
-                      <td>{invoice.patient_name}</td>
-                      <td className="fw-bold text-success">
-                        {invoice.total?.toLocaleString('vi-VN')} VNĐ
-                      </td>
-                      <td>{getStatusBadge(invoice.status)}</td>
-                      <td>
-                        <small className="text-muted">{invoice.date}</small>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-    </div>
-  );
+  const confirmConfig = getConfirmConfig();
+  const variantStyles = {
+    primary: "bg-primary-subtle text-primary-emphasis border border-primary",
+    warning: "bg-warning-subtle text-warning-emphasis border border-warning",
+    info: "bg-info-subtle text-info-emphasis border border-info",
+    danger: "bg-danger-subtle text-danger-emphasis border border-danger"
+  };
 
   return (
     <Container fluid className="py-4">
@@ -639,21 +791,54 @@ const PaymentSection = () => {
               <small className="opacity-75">Quản lý và theo dõi tất cả giao dịch thanh toán</small>
             </div>
           </div>
-          <Button variant="light" size="sm" onClick={handleRetry} disabled={loading}>
-            <i className={`fas fa-sync-alt me-1 ${loading ? 'fa-spin' : ''}`}></i>
-            {loading ? 'Đang tải...' : 'Làm mới'}
-          </Button>
+          <div className="d-flex gap-2">
+            <Button
+              variant="warning"
+              size="sm"
+              onClick={() => showConfirmDialog('reset_all')}
+              disabled={resetting || invoiceCounts.stuck === 0}
+            >
+              <i className={`fas fa-redo-alt me-1 ${resetting ? 'fa-spin' : ''}`}></i>
+              {resetting ? 'Đang reset...' : 'Reset HĐ kẹt'}
+            </Button>
+            <Button variant="light" size="sm" onClick={handleRetry} disabled={loading}>
+              <i className={`fas fa-sync-alt me-1 ${loading ? 'fa-spin' : ''}`}></i>
+              {loading ? 'Đang tải...' : 'Làm mới'}
+            </Button>
+          </div>
         </Card.Header>
 
         <Card.Body className="p-4">
+          {/* Success Alert */}
+          {success && (
+            <Alert variant="success" className="d-flex justify-content-between align-items-center mb-4">
+              <div className="d-flex align-items-center">
+                <i className="fas fa-check-circle me-2"></i>
+                <span>{success}</span>
+              </div>
+              <Button variant="outline-success" size="sm" onClick={() => setSuccess('')}>
+                <i className="fas fa-times me-1"></i>
+                Đóng
+              </Button>
+            </Alert>
+          )}
+
+          {/* Error Alert */}
+          {error && (
+            <Alert variant="danger" className="d-flex justify-content-between align-items-center mb-4">
+              <div className="d-flex align-items-center">
+                <i className="fas fa-exclamation-triangle me-2"></i>
+                <span>{error}</span>
+              </div>
+              <Button variant="outline-danger" size="sm" onClick={() => setError('')}>
+                <i className="fas fa-times me-1"></i>
+                Đóng
+              </Button>
+            </Alert>
+          )}
+
           {/* TAB BAR */}
           <Nav variant="tabs" className="mb-4 border-bottom-0" activeKey={activeTab} onSelect={handleTabChange}>
-            <Nav.Item>
-              <Nav.Link eventKey={TAB_KEYS.DASHBOARD} className="fw-semibold">
-                <i className="fas fa-chart-line me-2"></i>
-                Tổng quan
-              </Nav.Link>
-            </Nav.Item>
             <Nav.Item>
               <Nav.Link eventKey={TAB_KEYS.ALL} className="fw-semibold">
                 <i className="fas fa-list me-2"></i>
@@ -682,190 +867,215 @@ const PaymentSection = () => {
                 <Badge bg="info" className="ms-2">{invoiceCounts.payment_history}</Badge>
               </Nav.Link>
             </Nav.Item>
-            <Nav.Item>
-              <Nav.Link eventKey={TAB_KEYS.CANCELLED} className="fw-semibold">
-                <i className="fas fa-times-circle me-2"></i>
-                Đã hủy
-                <Badge bg="danger" className="ms-2">{invoiceCounts[INVOICE_STATUS.CANCELLED]}</Badge>
-              </Nav.Link>
-            </Nav.Item>
           </Nav>
 
-          {/* Dashboard Content */}
-          {activeTab === TAB_KEYS.DASHBOARD ? (
-            renderDashboard()
+          {/* Filter bar */}
+          <Row className="mb-4 g-3">
+            <Col md={6}>
+              <Form.Control
+                type="text"
+                placeholder="  Tìm kiếm theo mã HD, tên bệnh nhân, số điện thoại..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </Col>
+            <Col md={4}>
+              <Form.Select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="">Tất cả trạng thái</option>
+                <option value={INVOICE_STATUS.PENDING}> Chờ thanh toán</option>
+                <option value={INVOICE_STATUS.PAID}> Đã thanh toán</option>
+                <option value={INVOICE_STATUS.PROCESSING}> Đang xử lý</option>
+                <option value={INVOICE_STATUS.CANCELLED}> Đã hủy</option>
+              </Form.Select>
+            </Col>
+            <Col md={2}>
+              <Button
+                variant="primary"
+                onClick={() => setCurrentPage(1)}
+                disabled={loading}
+                className="w-100"
+              >
+                <i className="fas fa-search me-1"></i>
+                Tìm kiếm
+              </Button>
+            </Col>
+          </Row>
+
+          {/* Auto refresh toggle */}
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <div className="d-flex align-items-center">
+              <Form.Check
+                type="switch"
+                id="auto-refresh-switch"
+                label="Tự động làm mới"
+                checked={autoRefresh}
+                onChange={(e) => setAutoRefresh(e.target.checked)}
+                className="me-3"
+              />
+              <small className="text-muted fw-semibold">
+                {getPaginationInfo()}
+              </small>
+            </div>
+            <div className="d-flex gap-2">
+              {invoiceCounts.stuck > 0 && (
+                <small className="text-danger">
+                  <i className="fas fa-exclamation-triangle me-1"></i>
+                  Bị kẹt: <Badge bg="danger">{invoiceCounts.stuck}</Badge>
+                </small>
+              )}
+              {invoiceCounts[INVOICE_STATUS.PROCESSING] > 0 && (
+                <small className="text-info">
+                  Đang xử lý: <Badge bg="info">{invoiceCounts[INVOICE_STATUS.PROCESSING]}</Badge>
+                </small>
+              )}
+            </div>
+          </div>
+
+          {/* Loading và Data */}
+          {loading ? (
+            <Loading isLoading={true} text="Đang tải dữ liệu hóa đơn..." />
           ) : (
             <>
-              {/* Filter bar cho các tab khác */}
-              <Row className="mb-4 g-3">
-                <Col md={6}>
-                  <Form.Control
-                    type="text"
-                    placeholder="🔍 Tìm kiếm theo mã HD, tên bệnh nhân, số điện thoại..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </Col>
-                <Col md={4}>
-                  <Form.Select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                  >
-                    <option value="">📊 Tất cả trạng thái</option>
-                    <option value={INVOICE_STATUS.PENDING}>⏳ Chờ thanh toán</option>
-                    <option value={INVOICE_STATUS.PAID}>✅ Đã thanh toán</option>
-                    <option value={INVOICE_STATUS.PROCESSING}>🔄 Đang xử lý</option>
-                    <option value={INVOICE_STATUS.CANCELLED}>❌ Đã hủy</option>
-                  </Form.Select>
-                </Col>
-                <Col md={2}>
-                  <Button
-                    variant="primary"
-                    onClick={() => setCurrentPage(1)}
-                    disabled={loading}
-                    className="w-100"
-                  >
-                    <i className="fas fa-search me-1"></i>
-                    Tìm kiếm
-                  </Button>
-                </Col>
-              </Row>
-
-              {/* Error Alert */}
-              {error && (
-                <Alert variant="danger" className="d-flex justify-content-between align-items-center mb-4">
-                  <div className="d-flex align-items-center">
-                    <i className="fas fa-exclamation-triangle me-2"></i>
-                    <span>{error}</span>
-                  </div>
-                  <Button variant="outline-danger" size="sm" onClick={handleRetry}>
-                    <i className="fas fa-redo me-1"></i>
-                    Thử lại
-                  </Button>
-                </Alert>
-              )}
-
-              {/* Loading và Data */}
-              {loading ? (
-                <Loading isLoading={true} text="Đang tải dữ liệu hóa đơn..." />
-              ) : (
+              {invoices.length > 0 ? (
                 <>
-                  {invoices.length > 0 ? (
-                    <>
-                      <div className="d-flex justify-content-between align-items-center mb-3">
-                        <small className="text-muted fw-semibold">
-                          {getPaginationInfo()}
-                        </small>
-                      </div>
+                  <div className="table-responsive border rounded">
+                    <Table hover className="mb-0">
+                      <thead className="table-primary">
+                        <tr>
+                          <th width="12%" className="py-3 border-end">MÃ HÓA ĐƠN</th>
+                          <th width="18%" className="py-3 border-end">BỆNH NHÂN</th>
+                          <th width="12%" className="py-3 border-end">NGÀY LẬP</th>
+                          <th width="13%" className="py-3 border-end">TỔNG TIỀN</th>
+                          <th width="13%" className="py-3 border-end">TRẠNG THÁI</th>
+                          <th width="12%" className="py-3 border-end">HÌNH THỨC</th>
+                          <th width="20%" className="py-3 text-center">THAO TÁC</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {invoices.map((invoice) => {
+                          const displayStatus = getDisplayStatus(invoice);
+                          const isStuck = isStuckInvoice(invoice);
 
-                      <div className="table-responsive border rounded">
-                        <Table hover className="mb-0">
-                          <thead className="table-primary">
-                            <tr>
-                              {activeTab === TAB_KEYS.PAYMENT_HISTORY ? (
-                                <>
-                                  <th width="12%" className="py-3 border-end">MÃ GIAO DỊCH</th>
-                                  <th width="15%" className="py-3 border-end">BỆNH NHÂN</th>
-                                  <th width="12%" className="py-3 border-end">MÃ HĐ</th>
-                                  <th width="15%" className="py-3 border-end">PHƯƠNG THỨC</th>
-                                  <th width="12%" className="py-3 border-end">SỐ TIỀN</th>
-                                  <th width="14%" className="py-3 border-end">THỜI GIAN</th>
-                                  <th width="10%" className="py-3 border-end">TRẠNG THÁI</th>
-                                  <th width="10%" className="py-3 text-center">XEM</th>
-                                </>
-                              ) : (
-                                <>
-                                  <th width="12%" className="py-3 border-end">MÃ HÓA ĐƠN</th>
-                                  <th width="18%" className="py-3 border-end">BỆNH NHÂN</th>
-                                  <th width="12%" className="py-3 border-end">NGÀY LẬP</th>
-                                  <th width="13%" className="py-3 border-end">TỔNG TIỀN</th>
-                                  <th width="13%" className="py-3 border-end">TRẠNG THÁI</th>
-                                  <th width="12%" className="py-3 border-end">HÌNH THỨC</th>
-                                  <th width="20%" className="py-3 text-center">THAO TÁC</th>
-                                </>
-                              )}
+                          return (
+                            <tr key={invoice.id} className={`border-bottom ${isStuck ? 'table-warning' : ''}`}>
+                              <td className="border-end">
+                                <strong className="text-primary">{invoice.code}</strong>
+                                {isStuck && (
+                                  <i className="fas fa-exclamation-triangle text-danger ms-1" title="Hóa đơn bị kẹt"></i>
+                                )}
+                              </td>
+                              <td className="border-end">
+                                <div className="fw-semibold">{invoice.patient_name}</div>
+                                <small className="text-muted">{invoice.patient_phone}</small>
+                              </td>
+                              <td className="border-end">{invoice.date}</td>
+                              <td className="border-end fw-bold text-success">
+                                {invoice.total?.toLocaleString('vi-VN')} VNĐ
+                              </td>
+                              <td className="border-end">
+                                {getStatusBadge(invoice)}
+                                {isStuck && (
+                                  <div className="mt-1">
+                                    <Badge bg="danger" className="small">Bị kẹt</Badge>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="border-end">
+                                {getPaymentMethodBadge(invoice)}
+                              </td>
+                              <td className="text-center">
+                                <div className="btn-group btn-group-sm" role="group">
+                                  <Button
+                                    variant="outline-primary"
+                                    onClick={() => showConfirmDialog('view_detail', invoice)}
+                                    size="sm"
+                                    className="me-1"
+                                  >
+                                    <i className="fas fa-eye me-1"></i>
+                                    Chi tiết
+                                  </Button>
+
+                                  {/* Nút in - CHỈ hiện khi đã thanh toán */}
+                                  {canPrint(invoice) && (
+                                    <Button
+                                      variant="outline-info"
+                                      onClick={() => showConfirmDialog('print_invoice', invoice)}
+                                      size="sm"
+                                      className="me-1"
+                                      disabled={printing}
+                                    >
+                                      <i className={`fas fa-print me-1 ${printing ? 'fa-spin' : ''}`}></i>
+                                      {printing ? 'Đang in...' : 'In PDF'}
+                                    </Button>
+                                  )}
+
+                                  {canPay(invoice) && (
+                                    <Button
+                                      variant="success"
+                                      onClick={() => showConfirmDialog('payment', invoice)}
+                                      size="sm"
+                                      className="me-1"
+                                    >
+                                      <i className="fas fa-credit-card me-1"></i>
+                                      Thanh toán
+                                    </Button>
+                                  )}
+                                  {displayStatus.status === INVOICE_STATUS.PROCESSING && !isStuck && (
+                                    <Button
+                                      variant="outline-info"
+                                      size="sm"
+                                      disabled
+                                      className="me-1"
+                                    >
+                                      <i className="fas fa-spinner fa-spin me-1"></i>
+                                      Đang xử lý
+                                    </Button>
+                                  )}
+                                  {(displayStatus.status === INVOICE_STATUS.PROCESSING || isStuck) && (
+                                    <Button
+                                      variant="outline-warning"
+                                      size="sm"
+                                      onClick={() => showConfirmDialog('reset_single', invoice)}
+                                      disabled={resetting}
+                                      title="Reset hóa đơn này"
+                                    >
+                                      <i className={`fas fa-redo-alt me-1 ${resetting ? 'fa-spin' : ''}`}></i>
+                                      Reset
+                                    </Button>
+                                  )}
+                                </div>
+                              </td>
                             </tr>
-                          </thead>
-                          <tbody>
-                            {activeTab === TAB_KEYS.PAYMENT_HISTORY ? (
-                              invoices.map((invoice) => (
-                                <PaymentHistory 
-                                  key={invoice.id} 
-                                  invoice={invoice}
-                                  onViewDetail={handleViewDetail}
-                                />
-                              ))
-                            ) : (
-                              invoices.map((invoice) => (
-                                <tr key={invoice.id} className="border-bottom">
-                                  <td className="border-end">
-                                    <strong className="text-primary">{invoice.code}</strong>
-                                  </td>
-                                  <td className="border-end">
-                                    <div className="fw-semibold">{invoice.patient_name}</div>
-                                    <small className="text-muted">{invoice.patient_phone}</small>
-                                  </td>
-                                  <td className="border-end">{invoice.date}</td>
-                                  <td className="border-end fw-bold text-success">
-                                    {invoice.total?.toLocaleString('vi-VN')} VNĐ
-                                  </td>
-                                  <td className="border-end">{getStatusBadge(invoice.status)}</td>
-                                  <td className="border-end">
-                                    {getPaymentMethodBadge(invoice.payment_method, invoice.status)}
-                                  </td>
-                                  <td className="text-center">
-                                    <div className="btn-group btn-group-sm" role="group">
-                                      <Button
-                                        variant="outline-primary"
-                                        onClick={() => handleViewDetail(invoice)}
-                                        size="sm"
-                                        className="me-2"
-                                      >
-                                        <i className="fas fa-eye me-1"></i>
-                                        Chi tiết
-                                      </Button>
-                                      {canPayInvoice(invoice) && (
-                                        <Button
-                                          variant="success"
-                                          onClick={() => handleInitiatePayment(invoice)}
-                                          size="sm"
-                                        >
-                                          <i className="fas fa-credit-card me-1"></i>
-                                          Thanh toán
-                                        </Button>
-                                      )}
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </Table>
-                      </div>
+                          );
+                        })}
+                      </tbody>
+                    </Table>
+                  </div>
 
-                      {totalPages > 1 && (
-                        <div className="d-flex justify-content-center mt-4">
-                          <Pagination
-                            pageCount={totalPages}
-                            onPageChange={(selected) => handlePageChange(selected.selected + 1)}
-                            currentPage={currentPage - 1}
-                            isLoading={loading}
-                          />
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="text-center py-5">
-                      <i className={`${emptyStateConfig.icon} fa-4x text-muted mb-3`}></i>
-                      <h5 className="text-muted mb-2">{emptyStateConfig.title}</h5>
-                      <p className="text-muted mb-3">{emptyStateConfig.description}</p>
-                      <Button variant="primary" onClick={handleRetry}>
-                        <i className="fas fa-sync-alt me-1"></i>
-                        Tải lại
-                      </Button>
+                  {totalPages > 1 && (
+                    <div className="d-flex justify-content-center mt-4">
+                      <Pagination
+                        pageCount={totalPages}
+                        onPageChange={(selected) => handlePageChange(selected.selected + 1)}
+                        currentPage={currentPage - 1}
+                        isLoading={loading}
+                      />
                     </div>
                   )}
                 </>
+              ) : (
+                <div className="text-center py-5">
+                  <i className="fas fa-receipt fa-4x text-muted mb-3"></i>
+                  <h5 className="text-muted mb-2">Không có hóa đơn nào</h5>
+                  <p className="text-muted mb-3">Hãy tạo hóa đơn mới hoặc kiểm tra lại bộ lọc</p>
+                  <Button variant="primary" onClick={handleRetry}>
+                    <i className="fas fa-sync-alt me-1"></i>
+                    Tải lại
+                  </Button>
+                </div>
               )}
             </>
           )}
@@ -885,6 +1095,75 @@ const PaymentSection = () => {
         onHide={handleCloseDetailModal}
         invoice={selectedInvoiceDetail}
       />
+
+      {/* Custom Confirm Dialog */}
+      {showConfirm && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+          style={{
+            zIndex: 9999,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            backdropFilter: "blur(4px)",
+          }}
+          onClick={handleCancelConfirm}
+        >
+          <div
+            className={`mx-auto px-4 py-4 rounded-3 shadow-lg ${variantStyles[confirmConfig.variant]}`}
+            style={{ maxWidth: "32rem", width: "90%" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              onClick={handleCancelConfirm}
+              className="position-absolute top-0 end-0 btn btn-link text-secondary p-2"
+              style={{ textDecoration: "none" }}
+              disabled={resetting || printing}
+            >
+              <XCircle size={20} />
+            </button>
+
+            {/* Icon & Title */}
+            <div className="text-center mb-3">
+              <div className={`text-${confirmConfig.variant} mb-3`}>
+                {confirmConfig.icon}
+              </div>
+              <h4 className="fw-bold mb-2">{confirmConfig.title}</h4>
+            </div>
+
+            {/* Message */}
+            <div className="text-center mb-3">
+              <p className="fw-medium mb-2">{confirmConfig.message}</p>
+              {confirmConfig.description && (
+                <div className="text-muted small">
+                  {confirmConfig.description.split('\n').map((line, index) => (
+                    <p key={index} className="mb-1">{line}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="d-flex gap-2 justify-content-center mt-4">
+              <Button
+                variant="secondary"
+                onClick={handleCancelConfirm}
+                disabled={resetting || printing}
+              >
+                <i className="fas fa-times me-1"></i>
+                Hủy
+              </Button>
+              <Button
+                variant={confirmConfig.variant}
+                onClick={handleConfirm}
+                disabled={resetting || printing}
+              >
+                <i className={`fas fa-check me-1 ${resetting || printing ? 'fa-spin' : ''}`}></i>
+                {resetting ? 'Đang xử lý...' : printing ? 'Đang in...' : confirmConfig.confirmText}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Container>
   );
 };

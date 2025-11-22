@@ -7,7 +7,7 @@ import TechSchedule from './TechSchedule';
 const TechnicianDashboard = () => {
   const [currentSection, setCurrentSection] = useState('test-results');
   const [testResultsData, setTestResultsData] = useState([]);
-  const [completedServicesData, setCompletedServicesData] = useState([]); // ✅ THÊM STATE MỚI
+  const [completedServicesData, setCompletedServicesData] = useState([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [currentAction, setCurrentAction] = useState(null);
   const [actionParams, setActionParams] = useState([]);
@@ -15,13 +15,37 @@ const TechnicianDashboard = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [dataVersion, setDataVersion] = useState(0);
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    lastPage: 1,
+    total: 0
+  });
 
-  // Fetch initial data - SỬA LẠI
+  // TRONG TechnicianDashboard - render
+  console.log('🎯 [DASHBOARD RENDER] Current state:', {
+    testResultsData: testResultsData,
+    completedServicesData: completedServicesData,
+    testResultsLength: testResultsData.length,
+    completedLength: completedServicesData.length,
+    loading,
+    dataVersion
+  });
+
+  // TRONG TechnicianSection - render
+  console.log('🎯 [SECTION RENDER] Props received:', {
+    testResultsData: testResultsData,
+    completedServicesData: completedServicesData,
+    testResultsLength: testResultsData?.length,
+    completedLength: completedServicesData?.length,
+    loading
+  });
+
+  // Fetch initial data
   useEffect(() => {
     fetchInitialData();
   }, []);
 
-  // THÊM DEBUG ĐỂ XEM CẤU TRÚC THỰC TẾ
+
   const fetchInitialData = async () => {
     try {
       setLoading(true);
@@ -34,40 +58,72 @@ const TechnicianDashboard = () => {
         technicianService.getCompletedServices()
       ]);
 
-      console.log('🔍 [DEBUG] RAW Assigned Response:', servicesResponse);
-      console.log('🔍 [DEBUG] RAW Completed Response:', completedResponse);
-
-      // ✅ SỬA LẠI: API TRẢ VỀ TRỰC TIẾP ARRAY, KHÔNG CÓ SUCCESS FIELD
-      // 1. Xử lý assigned services - response.data đã là array
-      const assignedData = servicesResponse?.data || [];
-      console.log('✅ Assigned data after fix:', {
-        data: assignedData,
-        isArray: Array.isArray(assignedData),
-        length: assignedData.length
+      console.log('🔍 [DEBUG] Full API Responses:', {
+        assignedFullResponse: servicesResponse,
+        completedFullResponse: completedResponse,
+        assignedDataStructure: servicesResponse.data,
+        completedDataStructure: completedResponse.data
       });
-      setTestResultsData(Array.isArray(assignedData) ? assignedData : []);
 
-      // 2. Xử lý completed services - response.data đã là array  
-      const completedData = completedResponse?.data || [];
-      console.log('✅ Completed data after fix:', {
-        data: completedData,
-        isArray: Array.isArray(completedData),
-        length: completedData.length
+      // ✅ SỬA LẠI: XỬ LÝ ĐÚNG CẤU TRÚC API RESPONSE
+      let assignedData = [];
+      let completedData = [];
+
+      // Xử lý assigned services (dịch vụ được chỉ định)
+      if (servicesResponse.data && servicesResponse.data.success) {
+        // API trả về: { success: true, data: [...], pagination: {...} }
+        assignedData = servicesResponse.data.data || [];
+        console.log('✅ Assigned data from API:', assignedData);
+      } else {
+        console.warn('⚠️ Assigned services API structure unexpected:', servicesResponse.data);
+        assignedData = servicesResponse.data || []; // Fallback
+      }
+
+      // Xử lý completed services (dịch vụ đã hoàn thành)
+      if (completedResponse.data && completedResponse.data.success) {
+        // API trả về: { success: true, data: [...] }
+        completedData = completedResponse.data.data || [];
+        console.log('✅ Completed data from API:', completedData);
+      } else if (Array.isArray(completedResponse.data)) {
+        // Fallback: nếu response.data là array trực tiếp
+        completedData = completedResponse.data;
+        console.log('✅ Completed data (array fallback):', completedData);
+      } else {
+        console.warn('⚠️ Completed services API structure unexpected:', completedResponse.data);
+        completedData = [];
+      }
+
+      console.log('✅ FINAL Data after processing:', {
+        assignedData: assignedData.length,
+        completedData: completedData.length,
+        assignedFirstItem: assignedData[0],
+        completedFirstItem: completedData[0]
       });
-      setCompletedServicesData(Array.isArray(completedData) ? completedData : []);
+
+      setTestResultsData(assignedData);
+      setCompletedServicesData(completedData);
+
+      // Cập nhật pagination nếu có
+      if (servicesResponse.data?.pagination) {
+        setPagination({
+          currentPage: servicesResponse.data.pagination.current_page,
+          lastPage: servicesResponse.data.pagination.last_page,
+          total: servicesResponse.data.pagination.total
+        });
+      }
 
       setDataVersion(prev => prev + 1);
 
     } catch (err) {
       console.error('💥 [TechnicianDashboard] Error:', err);
-      setError('Không thể tải dữ liệu.');
+      setError('Không thể tải dữ liệu: ' + (err.response?.data?.message || err.message));
       setTestResultsData([]);
       setCompletedServicesData([]);
     } finally {
       setLoading(false);
     }
   };
-  
+
   const switchSection = (sectionId) => {
     console.log('🔄 [TechnicianDashboard] Switching to section:', sectionId);
     setCurrentSection(sectionId);
@@ -130,25 +186,64 @@ const TechnicianDashboard = () => {
 
   // ✅ CẬP NHẬT updateStats
   const updateStats = useCallback(() => {
-    console.log('📊 [TechnicianDashboard] updateStats called');
+    console.log('📊 [TechnicianDashboard] updateStats called - RELOADING DATA');
 
     // Debounce logic
     const now = Date.now();
-    if (window.lastUpdateCall && (now - window.lastUpdateCall < 2000)) {
+    if (window.lastUpdateCall && (now - window.lastUpdateCall < 1000)) {
       console.log('⏰ [TechnicianDashboard] Debounced updateStats');
       return;
     }
     window.lastUpdateCall = now;
 
-    // Reload data sau 1 giây
-    setTimeout(() => {
-      fetchInitialData(); // ✅ RELOAD CẢ 2 DATA
-    }, 1000);
+    // Reload data
+    console.log('🔄 [TechnicianDashboard] Force reloading data...');
+    fetchInitialData();
   }, []);
+
+  // ✅ Manual refresh function
+  const manualRefresh = () => {
+    console.log('🔄 [TechnicianDashboard] Manual refresh triggered');
+    fetchInitialData();
+  };
 
   const clearMessages = () => {
     setError('');
     setSuccess('');
+  };
+
+  // ✅ XỬ LÝ PHÂN TRANG
+  // ✅ Sửa lại handlePageChange để đồng bộ với API pagination
+  const handlePageChange = (selectedPage) => {
+    console.log('📄 [TechnicianDashboard] Page change to:', selectedPage + 1);
+
+    technicianService.getAssignedServices(selectedPage + 1) // API dùng page bắt đầu từ 1
+      .then(response => {
+        if (response.data?.success) {
+          setTestResultsData(response.data.data || []);
+
+          // ✅ CẬP NHẬT PAGINATION TỪ API RESPONSE
+          if (response.data.pagination) {
+            setPagination({
+              currentPage: response.data.pagination.current_page,
+              lastPage: response.data.pagination.last_page,
+              total: response.data.pagination.total,
+              perPage: response.data.pagination.per_page,
+              hasMore: response.data.pagination.has_more_pages
+            });
+          }
+
+          console.log('✅ Page changed successfully:', {
+            page: selectedPage + 1,
+            dataCount: response.data.data?.length,
+            pagination: response.data.pagination
+          });
+        }
+      })
+      .catch(err => {
+        console.error('❌ Page change error:', err);
+        setError('Không thể tải trang mới');
+      });
   };
 
   console.log('🎯 [TechnicianDashboard] Rendering with:', {
@@ -156,7 +251,8 @@ const TechnicianDashboard = () => {
     testResultsDataLength: testResultsData.length,
     completedServicesDataLength: completedServicesData.length,
     loading,
-    dataVersion
+    dataVersion,
+    pagination
   });
 
   return (
@@ -185,29 +281,46 @@ const TechnicianDashboard = () => {
             </div>
           )}
 
-          {/* Render Sections */}
-          {currentSection === 'schedule' && <TechSchedule />}
+
+          {/* ✅ NÚT REFRESH MANUAL */}
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <div></div>
+            <Button
+              variant="outline-primary"
+              size="sm"
+              onClick={manualRefresh}
+              disabled={loading}
+            >
+              <i className="fas fa-sync-alt me-2"></i>
+              {loading ? 'Đang tải...' : 'Làm mới dữ liệu'}
+            </Button>
+          </div>
+
 
           {currentSection === 'test-results' && (
             <TechnicianSection
               testResultsData={testResultsData}
-              completedServicesData={completedServicesData} // ✅ TRUYỀN DATA MỚI
+              completedServicesData={completedServicesData}
               confirmAction={confirmAction}
               updateStats={updateStats}
               loading={loading}
               dataVersion={dataVersion}
+              pagination={pagination}
+              onPageChange={handlePageChange}
             />
           )}
 
           {/* Debug Info */}
-          <div className="mt-3 text-center">
-            <small className="text-muted">
-              Section: <strong>{currentSection}</strong> |
-              Assigned: <strong>{testResultsData.length}</strong> |
-              Completed: <strong>{completedServicesData.length}</strong> |
-              Version: <strong>{dataVersion}</strong>
-            </small>
-          </div>
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-3 text-center">
+              <small className="text-muted">
+                Section: <strong>{currentSection}</strong> |
+                Assigned: <strong>{testResultsData.length}</strong> |
+                Completed: <strong>{completedServicesData.length}</strong> |
+                Version: <strong>{dataVersion}</strong>
+              </small>
+            </div>
+          )}
         </Container>
       </div>
 

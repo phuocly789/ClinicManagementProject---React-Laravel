@@ -29,65 +29,67 @@ use Illuminate\Database\Eloquent\Model;
  */
 class MedicalStaff extends Model
 {
-	protected $table = 'MedicalStaff';
-	protected $primaryKey = 'StaffId';
-	public $incrementing = true;
-	public $timestamps = false;
+    protected $table = 'MedicalStaff';
+    protected $primaryKey = 'StaffId';
+    public $incrementing = false;
+    public $timestamps = false;
 
-	protected $casts = [
-		'StaffId' => 'int',
-		'StaffType' => 'string'
-	];
+    protected $casts = [
+        'StaffId' => 'int',
+        'StaffType' => 'string'
+    ];
 
-	protected $fillable = [
-		'StaffType',
-		'Specialty',
-		'LicenseNumber',
-		'Bio'
-	];
+    protected $fillable = [
+        'StaffType',
+        'Specialty',
+        'LicenseNumber',
+        'Bio'
+    ];
 
-	public function user()
-	{
-		return $this->belongsTo(User::class, 'StaffId');
-	}
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'StaffId', 'UserId');
+    }
 
-	public function staff_schedules()
-	{
-		return $this->hasMany(StaffSchedule::class, 'StaffId');
-	}
+    public function staff_schedules()
+    {
+        return $this->hasMany(StaffSchedule::class, 'StaffId');
+    }
 
-	public function diagnoses()
-	{
-		return $this->hasMany(Diagnosis::class, 'StaffId');
-	}
+    public function diagnoses()
+    {
+        return $this->hasMany(Diagnosis::class, 'StaffId');
+    }
 
-	public function appointments()
-	{
-		return $this->hasMany(Appointment::class, 'StaffId');
-	}
+    public function appointments()
+    {
+        return $this->hasMany(Appointment::class, 'StaffId');
+    }
 
-	public function service_orders()
-	{
-		return $this->hasMany(ServiceOrder::class, 'AssignedStaffId');
-	}
+    public function service_orders()
+    {
+        return $this->hasMany(ServiceOrder::class, 'AssignedStaffId');
+    }
 
-	public function prescriptions()
-	{
-		return $this->hasMany(Prescription::class, 'StaffId');
-	}
+    public function prescriptions()
+    {
+        return $this->hasMany(Prescription::class, 'StaffId');
+    }
 
-	
-	// Dịch vụ mà bác sĩ chỉ định
-	public function assigned_service_orders()
-	{
-		return $this->hasMany(ServiceOrder::class, 'AssignedStaffId');
-	}
 
-	// Dịch vụ mà kỹ thuật viên thực hiện
-	public function technician_service_orders()
-	{
-		return $this->hasMany(ServiceOrder::class, 'TechnicianId');
-	}
+    // Dịch vụ mà bác sĩ chỉ định
+    public function assigned_service_orders()
+    {
+        return $this->hasMany(ServiceOrder::class, 'AssignedStaffId');
+    }
 
-	
+    // Dịch vụ mà kỹ thuật viên thực hiện
+    public function technician_service_orders()
+    {
+        return $this->hasMany(ServiceOrder::class, 'TechnicianId');
+    }
+    public function schedules()
+    {
+        return $this->hasMany(StaffSchedule::class, 'StaffId', 'StaffId');
+    }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API\Payment;
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use Illuminate\Http\Request;
+use Carbon\Carbon;
 
 class InvoiceController extends Controller
 {
@@ -66,18 +67,34 @@ class InvoiceController extends Controller
                 ->orderBy('InvoiceId', 'desc')
                 ->paginate($perPage, ['*'], 'page', $page);
 
-            // Format data
+            // Format data - THÊM TUỔI VÀ GIỚI TÍNH
             $formattedInvoices = $paginatedInvoices->map(function ($invoice) {
                 $patientName = 'N/A';
                 $patientPhone = 'N/A';
+                $patientAge = 'N/A';
+                $patientGender = 'N/A';
 
                 if (
                     $invoice->appointment &&
                     $invoice->appointment->patient &&
                     $invoice->appointment->patient->user
                 ) {
-                    $patientName = $invoice->appointment->patient->user->FullName ?? 'N/A';
-                    $patientPhone = $invoice->appointment->patient->user->Phone ?? 'N/A';
+                    $user = $invoice->appointment->patient->user;
+                    $patientName = $user->FullName ?? 'N/A';
+                    $patientPhone = $user->Phone ?? 'N/A';
+                    
+                    // TÍNH TUỔI TỪ DateOfBirth
+                    if (!empty($user->DateOfBirth)) {
+                        try {
+                            $birthDate = Carbon::parse($user->DateOfBirth);
+                            $patientAge = $birthDate->age;
+                        } catch (\Exception $e) {
+                            $patientAge = 'N/A';
+                        }
+                    }
+                    
+                    // LẤY GIỚI TÍNH
+                    $patientGender = $user->Gender ?? 'N/A';
                 }
 
                 return [
@@ -85,6 +102,8 @@ class InvoiceController extends Controller
                     'code' => 'HD' . str_pad($invoice->InvoiceId, 6, '0', STR_PAD_LEFT),
                     'patient_name' => $patientName,
                     'patient_phone' => $patientPhone,
+                    'patient_age' => $patientAge,
+                    'patient_gender' => $patientGender,
                     'patient_id' => $invoice->PatientId,
                     'date' => $invoice->InvoiceDate ? $invoice->InvoiceDate->format('d/m/Y') : 'N/A',
                     'total' => (float) $invoice->TotalAmount,
@@ -94,7 +113,8 @@ class InvoiceController extends Controller
                     'transaction_id' => $invoice->TransactionId,
                     'paid_at' => $invoice->Paidat ? $invoice->Paidat->format('d/m/Y H:i') : null,
                     'appointment_id' => $invoice->AppointmentId,
-                    'can_pay' => $invoice->Status === 'Chờ thanh toán'
+                    'can_pay' => $invoice->Status === 'Chờ thanh toán',
+                    'invoice_details' => $invoice->invoice_details,
                 ];
             });
 
@@ -121,12 +141,12 @@ class InvoiceController extends Controller
         }
     }
 
-    // Lấy chi tiết hóa đơn
+    // Lấy chi tiết hóa đơn - THÊM TUỔI VÀ GIỚI TÍNH
     public function show($id)
     {
         try {
             $invoice = Invoice::with([
-                'appointment.patient.user', // Sửa thành appointment.patient.user
+                'appointment.patient.user',
                 'invoice_details.service',
                 'invoice_details.medicine'
             ])->find($id);
@@ -138,16 +158,42 @@ class InvoiceController extends Controller
                 ], 404);
             }
 
-            // Format data để có patient name và phone
+            // Format data để có patient name, phone, age và gender
+            $patientName = 'N/A';
+            $patientPhone = 'N/A';
+            $patientAge = 'N/A';
+            $patientGender = 'N/A';
+
+            if (
+                $invoice->appointment &&
+                $invoice->appointment->patient &&
+                $invoice->appointment->patient->user
+            ) {
+                $user = $invoice->appointment->patient->user;
+                $patientName = $user->FullName ?? 'N/A';
+                $patientPhone = $user->Phone ?? 'N/A';
+                
+                // TÍNH TUỔI TỪ DateOfBirth
+                if (!empty($user->DateOfBirth)) {
+                    try {
+                        $birthDate = Carbon::parse($user->DateOfBirth);
+                        $patientAge = $birthDate->age;
+                    } catch (\Exception $e) {
+                        $patientAge = 'N/A';
+                    }
+                }
+                
+                // LẤY GIỚI TÍNH
+                $patientGender = $user->Gender ?? 'N/A';
+            }
+
             $formattedInvoice = [
                 'id' => $invoice->InvoiceId,
                 'code' => 'HD' . str_pad($invoice->InvoiceId, 6, '0', STR_PAD_LEFT),
-                'patient_name' => $invoice->appointment && $invoice->appointment->patient && $invoice->appointment->patient->user
-                    ? $invoice->appointment->patient->user->FullName
-                    : 'N/A',
-                'patient_phone' => $invoice->appointment && $invoice->appointment->patient && $invoice->appointment->patient->user
-                    ? $invoice->appointment->patient->user->Phone
-                    : 'N/A',
+                'patient_name' => $patientName,
+                'patient_phone' => $patientPhone,
+                'patient_age' => $patientAge,
+                'patient_gender' => $patientGender,
                 'patient_id' => $invoice->PatientId,
                 'date' => $invoice->InvoiceDate ? $invoice->InvoiceDate->format('d/m/Y') : 'N/A',
                 'total' => (float) $invoice->TotalAmount,
@@ -180,9 +226,9 @@ class InvoiceController extends Controller
     {
         try {
             $request->validate([
-                'PatientId' => 'required|integer|exists:Patients,PatientId', // Thêm exists
-                'TotalAmount' => 'required|numeric|min:1000', // Tối thiểu 1000 VND
-                'AppointmentId' => 'nullable|integer|exists:Appointments,AppointmentId' // Thêm exists
+                'PatientId' => 'required|integer|exists:Patients,PatientId',
+                'TotalAmount' => 'required|numeric|min:1000',
+                'AppointmentId' => 'nullable|integer|exists:Appointments,AppointmentId'
             ]);
 
             // Kiểm tra PatientId có tồn tại không
@@ -195,7 +241,7 @@ class InvoiceController extends Controller
             }
 
             $invoice = Invoice::create([
-                'PatientId' => (int) $request->PatientId, // Cast to int để an toàn
+                'PatientId' => (int) $request->PatientId,
                 'AppointmentId' => $request->AppointmentId ? (int) $request->AppointmentId : null,
                 'TotalAmount' => (float) $request->TotalAmount,
                 'Status' => 'Chờ thanh toán',
@@ -223,7 +269,7 @@ class InvoiceController extends Controller
         }
     }
 
-    // Lấy danh sách hóa đơn đã thanh toán (cho tab lịch sử thanh toán)
+    // Lấy danh sách hóa đơn đã thanh toán (cho tab lịch sử thanh toán) - THÊM TUỔI VÀ GIỚI TÍNH
     public function paymentHistory(Request $request)
     {
         try {
@@ -251,25 +297,41 @@ class InvoiceController extends Controller
             }
 
             // Phân trang
-            $perPage = $request->get('limit', 20); // Tăng limit cho lịch sử
+            $perPage = $request->get('limit', 20);
             $page = $request->get('page', 1);
 
             $paginatedInvoices = $query->orderBy('InvoiceDate', 'desc')
                 ->orderBy('InvoiceId', 'desc')
                 ->paginate($perPage, ['*'], 'page', $page);
 
-            // Format data (giống như method index)
+            // Format data - THÊM TUỔI VÀ GIỚI TÍNH
             $formattedInvoices = $paginatedInvoices->map(function ($invoice) {
                 $patientName = 'N/A';
                 $patientPhone = 'N/A';
+                $patientAge = 'N/A';
+                $patientGender = 'N/A';
 
                 if (
                     $invoice->appointment &&
                     $invoice->appointment->patient &&
                     $invoice->appointment->patient->user
                 ) {
-                    $patientName = $invoice->appointment->patient->user->FullName ?? 'N/A';
-                    $patientPhone = $invoice->appointment->patient->user->Phone ?? 'N/A';
+                    $user = $invoice->appointment->patient->user;
+                    $patientName = $user->FullName ?? 'N/A';
+                    $patientPhone = $user->Phone ?? 'N/A';
+                    
+                    // TÍNH TUỔI TỪ DateOfBirth
+                    if (!empty($user->DateOfBirth)) {
+                        try {
+                            $birthDate = Carbon::parse($user->DateOfBirth);
+                            $patientAge = $birthDate->age;
+                        } catch (\Exception $e) {
+                            $patientAge = 'N/A';
+                        }
+                    }
+                    
+                    // LẤY GIỚI TÍNH
+                    $patientGender = $user->Gender ?? 'N/A';
                 }
 
                 return [
@@ -277,6 +339,8 @@ class InvoiceController extends Controller
                     'code' => 'HD' . str_pad($invoice->InvoiceId, 6, '0', STR_PAD_LEFT),
                     'patient_name' => $patientName,
                     'patient_phone' => $patientPhone,
+                    'patient_age' => $patientAge,
+                    'patient_gender' => $patientGender,
                     'patient_id' => $invoice->PatientId,
                     'date' => $invoice->InvoiceDate ? $invoice->InvoiceDate->format('d/m/Y') : 'N/A',
                     'total' => (float) $invoice->TotalAmount,

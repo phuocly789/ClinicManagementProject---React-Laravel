@@ -19,6 +19,8 @@
   --danger-color: #ef4444;
   --yellow-color: #ffc107;
   --grey-color: #6c757d;
+  --info-color: #17a2b8;
+
 
   /* Màu văn bản */
   --text-primary: #1d2d3d;
@@ -49,11 +51,13 @@ body {
   background-color: var(--background-color);
   overflow-x: hidden;
 }
-li{
+
+li {
   list-style-type: none;
   justify-content: center;
 }
-ul{
+
+ul {
   justify-content: center;
   margin: 0;
   padding: 0;
@@ -115,6 +119,25 @@ ul{
   border-left-color: #fff;
 }
 
+.logout-btn {
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  padding: 10px 30px;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.logout-btn i {
+  margin-right: 8px;
+}
+
+.logout-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-left-color: #fff;
+}
 
 /* =================================================================
    4. COMPONENT TÙY CHỈNH
@@ -314,19 +337,19 @@ ul{
 
 /* Màu viền trái cho event */
 .event-doctor {
-  border-left-color: var(--green-color) !important;
+  border-left-color: var(--primary-color) !important;
 }
 
 .event-nurse {
-  border-left-color: var(--yellow-color) !important;
+  border-left-color: var(--green-color) !important;
 }
 
 .event-receptionist {
-  border-left-color: var(--danger-color) !important;
+  border-left-color: var(--yellow-color) !important;
 }
 
 .event-technician {
-  border-left-color: var(--grey-color) !important;
+  border-left-color: var(--info-color) !important;
 }
 
 /* Nội dung bên trong event */
@@ -376,52 +399,359 @@ ul{
   background-color: #f8f9fa !important;
   transition: background-color 0.2s ease;
 }
+
 .event-technician .event-icon {
   color: var(--grey-color);
 }
-/* src/components/PaymentSection.css */
-.stats-card {
-  transition: all 0.3s ease;
+
+dl,
+ol,
+ul {
+  margin-top: 0;
+  margin-bottom: 0 !important;
+
+  dl,
+  ol,
+  ul {
+    margin-top: 0;
+    margin-bottom: 0 !important;
+
+    /* src/components/PaymentSection.css */
+    .stats-card {
+      transition: all 0.3s ease;
+      border-radius: 12px;
+    }
+
+    .stats-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    .hover-effect:hover {
+      background-color: #f8f9fa;
+      transform: translateX(5px);
+      transition: all 0.3s ease;
+    }
+
+    .dashboard-tab {
+      animation: fadeIn 0.5s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .stats-card .fs-2 {
+        font-size: 1.5rem !important;
+      }
+
+      .table-responsive {
+        font-size: 0.875rem;
+      }
+    }
+  }
+}
+
+/* =================================================================
+   5. REALTIME DASHBOARD COMPONENT
+   ================================================================= */
+
+/* Compact Realtime Dashboard Styles */
+.realtime-dashboard.compact {
+  background: white;
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-color);
+}
+
+.compact-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #f1f3f4;
+}
+
+.compact-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+}
+
+.compact-updated {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.compact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.stat-card.compact-card {
+  position: relative;
+  background: white;
+  border-radius: 8px;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+  text-align: center;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.stat-card.compact-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--box-shadow);
+  border-color: var(--primary-color);
+}
+
+.compact-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 0.5rem;
+  font-size: 1rem;
+}
+
+.compact-icon .icon {
+  font-size: 1.2rem;
+}
+
+.compact-content {
+  text-align: center;
+}
+
+.compact-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+  line-height: 1.2;
+}
+
+.compact-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.compact-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.15rem 0.5rem;
   border-radius: 12px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: var(--danger-color);
+  color: white;
 }
 
-.stats-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
+/* Color variants for compact cards */
+.waiting-patients .compact-icon {
+  background: rgba(255, 193, 7, 0.15);
+  color: var(--orange-color);
 }
 
-.hover-effect:hover {
-  background-color: #f8f9fa;
-  transform: translateX(5px);
-  transition: all 0.3s ease;
+.today-appointments .compact-icon {
+  background: rgba(13, 110, 253, 0.15);
+  color: var(--primary-color);
 }
 
-.dashboard-tab {
-  animation: fadeIn 0.5s ease-in-out;
+.completed-appointments .compact-icon {
+  background: rgba(25, 135, 84, 0.15);
+  color: var(--green-color);
 }
 
-@keyframes fadeIn {
+.processing-services .compact-icon {
+  background: rgba(111, 66, 193, 0.15);
+  color: #6f42c1;
+}
+
+.pending-invoices .compact-icon {
+  background: rgba(253, 126, 20, 0.15);
+  color: var(--orange-color);
+}
+
+.today-revenue .compact-icon {
+  background: rgba(32, 201, 151, 0.15);
+  color: #20c997;
+}
+
+/* Animation for realtime updates */
+.stat-updating {
+  animation: pulse 1s ease-in-out;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.02);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.refresh-icon {
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes countUp {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
-/* Responsive */
+/* Responsive for compact dashboard */
 @media (max-width: 768px) {
-  .stats-card .fs-2 {
-    font-size: 1.5rem !important;
-  }
-  
-  .table-responsive {
-    font-size: 0.875rem;
+  .compact-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
   }
 
-dl, ol, ul {
-    margin-top: 0;
-    margin-bottom: 0 !important;
+  .compact-header {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+  }
+
+  .stat-card.compact-card {
+    padding: 0.5rem;
+    min-height: 70px;
+  }
+
+  .compact-value {
+    font-size: 1.2rem;
+  }
+
+  .compact-icon {
+    width: 32px;
+    height: 32px;
+    margin-bottom: 0.25rem;
+  }
+}
+
+/* Historical Dashboard Styles */
+.historical-dashboard.compact {
+  background: white;
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-color);
+}
+
+/* Color variants for historical compact cards */
+.total-revenue-historical .compact-icon {
+  background: rgba(13, 110, 253, 0.15);
+  color: var(--primary-color);
+}
+
+.total-appointments .compact-icon {
+  background: rgba(111, 66, 193, 0.15);
+  color: #6f42c1;
+}
+
+.completed-appointments-historical .compact-icon {
+  background: rgba(25, 135, 84, 0.15);
+  color: var(--green-color);
+}
+
+.pending-invoices-historical .compact-icon {
+  background: rgba(253, 126, 20, 0.15);
+  color: var(--orange-color);
+}
+
+.average-revenue .compact-icon {
+  background: rgba(32, 201, 151, 0.15);
+  color: #20c997;
+}
+
+.days-count .compact-icon {
+  background: rgba(108, 117, 125, 0.15);
+  color: var(--grey-color);
+}
+
+@media (max-width: 576px) {
+  .compact-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Custom Tooltip for charts */
+.custom-tooltip {
+  background: var(--card-background) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: var(--border-radius) !important;
+  padding: 0.75rem !important;
+  box-shadow: var(--box-shadow) !important;
+}
+
+.custom-tooltip p {
+  margin: 0;
+  color: var(--text-primary) !important;
+}
+
+/* Trend indicator */
+.trend-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.trend-indicator.text-success {
+  color: var(--green-color) !important;
+}
+
+.trend-indicator.text-danger {
+  color: var(--danger-color) !important;
+}
+
+.rotate-180 {
+  transform: rotate(180deg);
 }
