@@ -326,46 +326,41 @@ const AdminDashboard = () => {
         }
     }, []);
 
-    // Realtime effect - tự động update mỗi 10 giây
+
     useEffect(() => {
-        const fetchRealtimeData = async () => {
+        // Load lần đầu
+        const loadInitial = async () => {
             try {
-                const realtimeRes = await instance.get('/api/dashboard/stats');
-                setRealtimeData(realtimeRes);
-            } catch (error) {
-                console.error('Error fetching realtime data:', error);
+                const res = await instance.get('/api/dashboard/stats');
+                console.log(res);
+                
+                setRealtimeData(res);
+            } catch (err) {
+                console.error(err);
             }
         };
+        loadInitial();
 
-        // Fetch ngay lập tức
-        fetchRealtimeData();
-
-        // Setup interval mỗi 10 giây
-        const interval = setInterval(fetchRealtimeData, 10000);
-
-        // Listen for realtime events (nếu có broadcast)
-        echo.channel('dashboard-stats')
-            .listen('.DashboardStatsUpdated', (e) => {
+        // Chỉ lắng nghe broadcast - không cần interval nữa
+        const channel = echo.channel('dashboard-stats')
+            .listen('DashboardStatsUpdated', (e) => {
+                console.log('Realtime Dashboard Updated!', e.stats);
                 setRealtimeData(e.stats);
-                animateNumbers(e.stats);
+                animateNumbers();
             });
 
         return () => {
-            clearInterval(interval);
+            channel.stopListening('DashboardStatsUpdated');
             echo.leaveChannel('dashboard-stats');
         };
     }, []);
-
-    const animateNumbers = (newStats) => {
-        const cards = document.querySelectorAll('.stat-card');
+    const animateNumbers = () => { // ← bỏ tham số
+        const cards = document.querySelectorAll('.stat-card'); // hoặc '.stat-card'
         cards.forEach(card => {
             card.classList.add('stat-updating');
-            setTimeout(() => {
-                card.classList.remove('stat-updating');
-            }, 1000);
+            setTimeout(() => card.classList.remove('stat-updating'), 800);
         });
     };
-
     useEffect(() => {
         fetchData(startDate, endDate);
     }, [fetchData, startDate, endDate]);
@@ -443,7 +438,7 @@ const AdminDashboard = () => {
                     <Loading isLoading={loading} />
                 </div>
             ) : (
-                    <div className="flex-grow-1 d-flex flex-column" style={{ gap: '1.5rem', overflowX: 'hidden' }}>
+                <div className="flex-grow-1 d-flex flex-column" style={{ gap: '1.5rem', overflowX: 'hidden' }}>
                     {/* Realtime Stats Section - HÔM NAY */}
                     <RealtimeStats realtimeData={realtimeData} />
 
