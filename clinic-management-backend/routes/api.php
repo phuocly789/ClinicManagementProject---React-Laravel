@@ -26,6 +26,7 @@ use App\Http\Controllers\API\Doctor\PatientsController;
 use App\Http\Controllers\API\PatientController;
 use App\Http\Controllers\API\Payment\InvoiceController;
 use App\Http\Controllers\API\Payment\PaymentController;
+use App\Http\Controllers\API\PrescriptionAnalyticsController;
 //----------------------------------------------Hết-------------------------------
 use App\Http\Controllers\API\User\AdminUserController;
 use App\Http\Controllers\API\Print\InvoicePrintController;
@@ -33,6 +34,7 @@ use App\Http\Controllers\API\Receptionist\MedicalStaffController;
 use App\Http\Controllers\API\Receptionist\PatientByRecepController;
 use App\Http\Controllers\API\Receptionist\QueueController;
 use App\Http\Controllers\API\Receptionist\ReceptionController;
+use App\Http\Controllers\API\RevenueForecastController;
 use App\Http\Controllers\API\Technician\TestResultsController;
 use App\Http\Controllers\TestWebSocketController;
 use App\Http\Controllers\API\SearchController;
@@ -104,7 +106,10 @@ Route::get('/rooms', [RoomController::class, 'getAllRooms']);
 //
 Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
 Route::post('/dashboard/broadcast-stats', [DashboardController::class, 'broadcastStats']);
-
+//
+Route::get('/revenue-forecast', [RevenueForecastController::class, 'forecast']);
+//
+Route::get('/prescription-analytics', [PrescriptionAnalyticsController::class, 'analytics']);
 
 // Nhóm route cho Bác sĩ
 Route::prefix('doctor')->middleware(['auth:sanctum', 'role:Bác sĩ'])->group(function () {
