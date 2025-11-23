@@ -12,51 +12,55 @@ class PrescriptionAnalyticsController extends Controller
     {
         try {
 
-            // ================================
-            // 1. Top 10 thuốc kê nhiều nhất
-            // ================================
+            // ======================================================
+            // 1. Top 10 thuốc được kê nhiều nhất
+            // ======================================================
             $topMedicines = DB::table('PrescriptionDetails')
                 ->join('Medicines', 'PrescriptionDetails.MedicineId', '=', 'Medicines.MedicineId')
                 ->select(
                     'Medicines.MedicineId',
                     'Medicines.MedicineName',
-                    DB::raw('SUM("Quantity") as total_quantity')
+                    DB::raw('SUM("PrescriptionDetails"."Quantity") AS total_quantity')
                 )
                 ->groupBy('Medicines.MedicineId', 'Medicines.MedicineName')
-                ->orderBy('total_quantity', 'DESC')
+                ->orderByDesc('total_quantity')
                 ->limit(10)
                 ->get();
 
-            // ================================
+
+            // ======================================================
             // 2. Bác sĩ kê nhiều đơn nhất
-            // ================================
+            // ======================================================
             $topDoctors = DB::table('Prescriptions')
                 ->join('MedicalStaff', 'Prescriptions.StaffId', '=', 'MedicalStaff.StaffId')
+                ->join('Users', 'MedicalStaff.StaffId', '=', 'Users.UserId')
                 ->select(
                     'MedicalStaff.StaffId',
-                    'MedicalStaff.FullName',
+                    'Users.FullName AS FullName',
                     'MedicalStaff.Specialty',
-                    DB::raw('COUNT(Prescriptions.PrescriptionId) as prescription_count')
+                    DB::raw('COUNT("Prescriptions"."PrescriptionId") AS prescription_count')
                 )
-                ->groupBy('MedicalStaff.StaffId', 'MedicalStaff.FullName', 'MedicalStaff.Specialty')
-                ->orderBy('prescription_count', 'DESC')
+                ->groupBy('MedicalStaff.StaffId', 'Users.FullName', 'MedicalStaff.Specialty')
+                ->orderByDesc('prescription_count')
                 ->limit(10)
                 ->get();
 
-            // ================================
-            // 3. Thuốc bán chạy (không tính profit vì không có cột import_price)
-            // ================================
+
+            // ======================================================
+            // 3. Thuốc bán chạy nhất
+            // ======================================================
             $bestSellingMedicines = DB::table('PrescriptionDetails')
                 ->join('Medicines', 'PrescriptionDetails.MedicineId', '=', 'Medicines.MedicineId')
                 ->select(
                     'Medicines.MedicineId',
                     'Medicines.MedicineName',
-                    DB::raw('SUM("Quantity") as total_sold')
+                    DB::raw('SUM("PrescriptionDetails"."Quantity") AS total_sold')
                 )
                 ->groupBy('Medicines.MedicineId', 'Medicines.MedicineName')
-                ->orderBy('total_sold', 'DESC')
+                ->orderByDesc('total_sold')
                 ->limit(10)
                 ->get();
+
 
             return response()->json([
                 'success' => true,

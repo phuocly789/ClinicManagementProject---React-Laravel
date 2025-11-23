@@ -15,12 +15,12 @@ class RevenueForecastController extends Controller
         try {
             // Lấy doanh thu 6 tháng gần nhất (dựa trên ngày thanh toán)
             $revenues = Invoice::select(
-                DB::raw('EXTRACT(MONTH FROM COALESCE("PaidAt", "InvoiceDate")) AS month'),
-                DB::raw('EXTRACT(YEAR  FROM COALESCE("PaidAt", "InvoiceDate")) AS year'),
+                DB::raw('EXTRACT(MONTH FROM COALESCE("Paidat", "InvoiceDate")) AS month'),
+                DB::raw('EXTRACT(YEAR  FROM COALESCE("Paidat", "InvoiceDate")) AS year'),
                 DB::raw('SUM("TotalAmount") AS revenue')
             )
                 ->where('Status', 'Đã thanh toán') // đúng với DB của bạn
-                ->whereRaw('COALESCE("PaidAt", "InvoiceDate") >= ?', [now()->subMonths(6)])
+                ->whereRaw('COALESCE("Paidat", "InvoiceDate") >= ?', [now()->subMonths(6)])
                 ->groupBy('year', 'month')
                 ->orderBy('year', 'asc')
                 ->orderBy('month', 'asc')
