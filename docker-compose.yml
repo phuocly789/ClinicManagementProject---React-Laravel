@@ -40,7 +40,7 @@ services:
       # Solr Configuration
       - SOLR_HOST=solr
       - SOLR_PORT=8983
-      - SOLR_PATH=/solr/
+      - SOLR_PATH=/
       - SOLR_CORE=clinic_management
       - SOLR_SCHEME=http
       - SOLR_TIMEOUT=30
@@ -152,7 +152,7 @@ services:
   # ========================================
   solr:
     image: solr:8.11
-    container_name: solr-app
+    container_name: solr
     restart: unless-stopped
     ports:
       - "8983:8983"
@@ -163,11 +163,11 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/clinic_management/admin/ping || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+      test: ["CMD", "curl", "-f", "http://localhost:8983/solr/admin/cores?action=STATUS"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
     command:
       - solr-precreate
       - clinic_management

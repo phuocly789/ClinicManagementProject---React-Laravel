@@ -359,84 +359,89 @@ Route::prefix('doctor')->group(function () {
     // Tìm kiếm thuốc cho doctor
     Route::get('/medicines/search-solr', [SearchController::class, 'searchMedicines']);
 });
-// routes/api.php hoặc routes/web.php
-
-Route::get('/solr-test', function () {
+// Route tạm thời để index dữ liệu - XÓA SAU KHI DÙNG
+Route::get('/solr/quick-index', function() {
     try {
-        $client = app(\Solarium\Client::class);
-
-        // Test ping
-        $ping = $client->createPing();
-        $result = $client->ping($ping);
-
+        $solrService = app(\App\Services\SolrService::class);
+        
+        // Index một vài user test
+        $users = \App\Models\User::with('roles')->limit(10)->get();
+        
+        $indexed = 0;
+        foreach ($users as $user) {
+            $document = [
+                'id' => 'user_' . $user->UserId,
+                'title' => $user->FullName,
+                'content' => "User: {$user->FullName}, Email: {$user->Email}, Phone: {$user->Phone}",
+                'type' => 'user',
+                'category' => ['user'],
+                'status' => $user->IsActive ? 'active' : 'inactive',
+                'full_name' => $user->FullName,
+                'email' => $user->Email,
+                'phone' => $user->Phone,
+                'role' => $user->roles->first()->RoleName ?? 'user'
+            ];
+            
+            if ($solrService->indexDocument($document)) {
+                $indexed++;
+            }
+        }
+        
         return response()->json([
-            'status' => 'success',
-            'message' => 'Solr connection successful',
-            'endpoint' => [
-                'host' => env('SOLR_HOST'),
-                'port' => env('SOLR_PORT'),
-                'path' => env('SOLR_PATH'),
-                'core' => env('SOLR_CORE'),
-                'full_url' => sprintf(
-                    '%s://%s:%s%s/%s/',  // Thêm / giữa path và core
-                    env('SOLR_SCHEME'),
-                    env('SOLR_HOST'),
-                    env('SOLR_PORT'),
-                    env('SOLR_PATH'),
-                    env('SOLR_CORE')
-                )
-            ],
-            'ping_response' => $result->getData()
+            'success' => true,
+            'message' => "Đã index $indexed users vào Solr",
+            'test_search_url' => url('/api/search?q=Nguyễn&per_page=10')
         ]);
+        
     } catch (\Exception $e) {
-        // \Log::error('Solr connection error: ' . $e->getMessage());
-
         return response()->json([
-            'status' => 'error',
-            'message' => $e->getMessage(),
-            'endpoint' => [
-                'host' => env('SOLR_HOST'),
-                'port' => env('SOLR_PORT'),
-                'path' => env('SOLR_PATH'),
-                'core' => env('SOLR_CORE'),
-                'full_url' => sprintf(
-                    '%s://%s:%s%s/%s/',
-                    env('SOLR_SCHEME'),
-                    env('SOLR_HOST'),
-                    env('SOLR_PORT'),
-                    env('SOLR_PATH'),
-                    env('SOLR_CORE')
-                )
-            ]
+            'success' => false,
+            'error' => $e->getMessage()
         ], 500);
     }
 });
-
-Route::get('/solr-debug', function () {
+// Thêm route để xóa và index lại
+Route::get('/solr/reindex-all', function() {
     try {
+        $solrService = app(\App\Services\SolrService::class);
+        
+        // Xóa tất cả documents cũ
         $client = app(\Solarium\Client::class);
-
-        // Test ping
-        $ping = $client->createPing();
-        $pingResult = $client->ping($ping);
-
-        // Test core status
-        $coreAdmin = $client->createCoreAdmin();
-        $status = $coreAdmin->createStatus();
-        $coreAdmin->setAction($status);
-        $result = $client->coreAdmin($coreAdmin);
-
+        $update = $client->createUpdate();
+        $update->addDeleteQuery('*:*');
+        $update->addCommit();
+        $client->update($update);
+        
+        // Index lại users
+        $users = \App\Models\User::with('roles')->get();
+        $indexed = 0;
+        
+        foreach ($users as $user) {
+            $document = [
+                'id' => 'user_' . $user->UserId,
+                'title' => $user->FullName,
+                'content' => $user->FullName . ' ' . $user->Email . ' ' . $user->Phone . ' ' . ($user->roles->first()->RoleName ?? ''),
+                'type' => 'user',
+                'category' => ['user'],
+                'status' => $user->IsActive ? 'active' : 'inactive',
+                'full_name' => $user->FullName,
+                'email' => $user->Email,
+                'phone' => $user->Phone,
+                'username' => $user->Username,
+                'role' => $user->roles->first()->RoleName ?? 'user'
+            ];
+            
+            if ($solrService->indexDocument($document)) {
+                $indexed++;
+            }
+        }
+        
         return response()->json([
-            'status' => 'success',
-            'ping' => $pingResult->getStatus(),
-            'core_status' => $result->getStatus(),
-            'endpoints' => $client->getEndpoints(),
+            'success' => true,
+            'reindexed' => $indexed,
+            'test_search' => url('/api/search?q=Nguyễn')
         ]);
     } catch (\Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ], 500);
+        return response()->json(['error' => $e->getMessage()], 500);
     }
 });

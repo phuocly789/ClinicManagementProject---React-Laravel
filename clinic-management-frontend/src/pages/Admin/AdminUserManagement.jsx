@@ -4,7 +4,7 @@ import CustomToast from '../../Components/CustomToast/CustomToast';
 import Loading from '../../Components/Loading/Loading';
 import instance from '../../axios';
 import dayjs from 'dayjs';
-import { BiUserPlus, BiShow, BiPencil, BiTrash, BiLockOpen, BiLock, BiKey } from 'react-icons/bi'; // THÊM BiKey
+import { BiUserPlus, BiShow, BiPencil, BiTrash, BiLockOpen, BiLock, BiKey, BiSearch } from 'react-icons/bi';
 import { useDebounce } from 'use-debounce';
 import Pagination from '../../Components/Pagination/Pagination';
 
@@ -54,6 +54,7 @@ const AdminUserManagement = () => {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [formErrors, setFormErrors] = useState({});
+  const [solrAvailable, setSolrAvailable] = useState(false);
 
   const apiFilters = useMemo(() => ({
     search: debouncedSearchTerm,
@@ -62,8 +63,52 @@ const AdminUserManagement = () => {
     status: filters.status,
   }), [debouncedSearchTerm, filters.gender, filters.role, filters.status]);
 
-  // Lấy danh sách người dùng
-  const fetchUsers = useCallback(async (page = 1) => {
+  // Kiểm tra kết nối Solr - Xử lý lỗi 404 và các lỗi khác
+  const checkSolrHealth = useCallback(async () => {
+    try {
+      // Thử gọi endpoint search với query đơn giản
+      const response = await instance.get('/api/search?q=test&per_page=1');
+      
+      // Kiểm tra response structure để xác định Solr có hoạt động không
+      if (response.data && response.data.success !== false && !response.data.fallback) {
+        setSolrAvailable(true);
+        return true;
+      } else {
+        setSolrAvailable(false);
+        return false;
+      }
+    } catch (error) {
+      // Xử lý tất cả các lỗi (404, 500, network error, etc.)
+      console.warn('❌ Solr connection failed:', error.response?.status || error.message);
+      setSolrAvailable(false);
+      return false;
+    }
+  }, []);
+
+  // Tự động thử lại Solr sau 30 giây nếu lỗi
+  useEffect(() => {
+    let retryInterval;
+    
+    const setupRetry = () => {
+      if (!solrAvailable) {
+        retryInterval = setInterval(async () => {
+          console.log('🔄 Tự động thử lại kết nối Solr...');
+          await checkSolrHealth();
+        }, 30000); // 30 giây
+      }
+    };
+
+    setupRetry();
+    
+    return () => {
+      if (retryInterval) {
+        clearInterval(retryInterval);
+      }
+    };
+  }, [solrAvailable, checkSolrHealth]);
+
+  // Lấy danh sách người dùng từ database (fallback)
+  const fetchUsersFromDatabase = useCallback(async (page = 1) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ 
@@ -101,6 +146,120 @@ const AdminUserManagement = () => {
     }
   }, [apiFilters]);
 
+  // Tìm kiếm người dùng từ Solr 
+  const searchUsersFromSolr = useCallback(async (page = 1) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        q: debouncedSearchTerm || '*:*',
+        page: page.toString(),
+        per_page: '10',
+        type: 'user'
+      });
+
+      if (filters.gender) {
+        params.append('gender', filters.gender);
+      }
+      if (filters.role) {
+        params.append('user_role', filters.role);
+      }
+      if (filters.status) {
+        params.append('is_active', filters.status === '1' ? 'true' : 'false');
+      }
+      
+      const response = await instance.get(`/api/search?${params.toString()}`);
+      
+      if (!response.data) {
+        throw new Error('Dữ liệu trả về không hợp lệ');
+      }
+
+      const solrData = response.data;
+      
+      // Kiểm tra nếu Solr trả về lỗi (success: false) hoặc fallback
+      if (solrData.success === false || solrData.fallback) {
+        console.warn(' Solr unavailable, using database fallback');
+        setSolrAvailable(false);
+        await fetchUsersFromDatabase(page);
+        return;
+      }
+
+      // Xử lý kết quả thành công từ Solr
+      let results = [];
+      if (solrData.results && Array.isArray(solrData.results)) {
+        results = solrData.results;
+      } else if (solrData.data && Array.isArray(solrData.data)) {
+        results = solrData.data;
+      }
+
+      const formattedUsers = results.map((item, index) => {
+        const user = {
+          UserId: item.id || item.UserId || `solr-${index}`,
+          Username: item.username || item.Username || 'N/A',
+          FullName: item.title || item.full_name || item.FullName || item.name || 'Chưa có tên',
+          Email: item.email || item.Email || 'N/A',
+          Phone: item.phone || item.Phone || 'N/A',
+          Gender: item.gender || item.Gender || 'Chưa có',
+          DateOfBirth: item.date_of_birth || item.DateOfBirth,
+          BirthDate: item.date_of_birth || item.DateOfBirth ? 
+            dayjs(item.date_of_birth || item.DateOfBirth).format('DD/MM/YYYY') : 'Chưa có',
+          Address: item.address || item.Address || 'Chưa có',
+          Role: item.role || item.Role || item.user_role || 'Chưa có',
+          Specialty: item.specialty || item.Specialty || '',
+          LicenseNumber: item.license_number || item.LicenseNumber || '',
+          IsActive: true,
+        };
+
+        if (item.is_active !== undefined) {
+          user.IsActive = item.is_active;
+        } else if (item.IsActive !== undefined) {
+          user.IsActive = item.IsActive;
+        } else if (item.status === 'inactive') {
+          user.IsActive = false;
+        }
+
+        return user;
+      });
+
+      setUsers(formattedUsers);
+      
+      const totalResults = solrData.total || results.length;
+      setPagination({
+        currentPage: page,
+        totalPages: Math.max(1, Math.ceil(totalResults / 10)),
+      });
+
+    } catch (err) {
+      // Xử lý tất cả lỗi từ Solr (404, 500, network, etc.)
+      console.error('Solr search error:', err.response?.status || err.message);
+      setSolrAvailable(false);
+      // Tự động fallback về database
+      await fetchUsersFromDatabase(page);
+    } finally {
+      setLoading(false);
+    }
+  }, [debouncedSearchTerm, filters.gender, filters.role, filters.status, fetchUsersFromDatabase]);
+
+  // Hàm chung để fetch users - Tự động chọn Solr hoặc Database
+  const fetchUsers = useCallback(async (page = 1) => {
+    const shouldUseSolr = debouncedSearchTerm && debouncedSearchTerm.length >= 2 && solrAvailable;
+    
+    if (shouldUseSolr) {
+      await searchUsersFromSolr(page);
+    } else {
+      await fetchUsersFromDatabase(page);
+    }
+  }, [debouncedSearchTerm, solrAvailable, searchUsersFromSolr, fetchUsersFromDatabase]);
+
+  // Khởi tạo kết nối Solr khi component mount
+  useEffect(() => {
+    const initializeSolr = async () => {
+      await checkSolrHealth();
+    };
+    
+    initializeSolr();
+  }, [checkSolrHealth]);
+
+  // Fetch users khi filters thay đổi
   useEffect(() => {
     fetchUsers(1);
   }, [apiFilters, fetchUsers]);
@@ -279,7 +438,6 @@ const AdminUserManagement = () => {
     }
   };
 
-  // THÊM HÀM RESET MẬT KHẨU
   const handleResetPassword = async () => {
     setLoading(true);
     const { user } = modal;
@@ -531,7 +689,6 @@ const AdminUserManagement = () => {
           '450px'
         );
 
-      // THÊM MODAL RESET PASSWORD
       case 'reset-password':
         return modalLayout(
           'Xác Nhận Reset Mật Khẩu',
@@ -593,8 +750,11 @@ const AdminUserManagement = () => {
           />
         )}
 
+        {/* Header sạch sẽ, không có thông tin Solr */}
         <header className="d-flex justify-content-between align-items-center flex-shrink-0">
-          <h1 className="h4 mb-0">Quản Lý Người Dùng</h1>
+          <div>
+            <h1 className="h4 mb-0">Quản Lý Người Dùng</h1>
+          </div>
           <button 
             className="btn btn-primary d-flex align-items-center gap-2" 
             onClick={() => handleOpenModal('add')}
@@ -603,56 +763,74 @@ const AdminUserManagement = () => {
           </button>
         </header>
 
-        {/* Bộ lọc */}
+        {/* Bộ lọc sạch sẽ */}
         <div className="card shadow-sm border-0 flex-shrink-0">
           <div className="card-body p-4">
-            <div className="row g-3">
-              <div className="col-md-6">
+            <div className="row g-3 align-items-end">
+              <div className="col-md-5">
+                <label className="form-label fw-semibold">
+                  <BiSearch className="me-2" />
+                  Tìm kiếm
+                </label>
                 <input 
                   type="text" 
                   name="search" 
                   className="form-control" 
-                  placeholder="Tìm theo tên, email, SĐT..."
+                  placeholder="Tìm theo tên, email, SĐT, địa chỉ..."
                   value={filters.search} 
                   onChange={handleFilterChange} 
                 />
               </div>
               <div className="col-md-2">
+                <label className="form-label">Giới tính</label>
                 <select 
                   name="gender" 
                   className="form-select" 
                   value={filters.gender} 
                   onChange={handleFilterChange}
                 >
-                  <option value="">Giới tính</option>
+                  <option value="">Tất cả</option>
                   <option value="Nam">Nam</option>
                   <option value="Nữ">Nữ</option>
                 </select>
               </div>
               <div className="col-md-2">
+                <label className="form-label">Vai trò</label>
                 <select 
                   name="role" 
                   className="form-select" 
                   value={filters.role} 
                   onChange={handleFilterChange}
                 >
-                  <option value="">Vai trò</option>
+                  <option value="">Tất cả</option>
                   {roles.map(r => (
                     <option key={r.RoleId} value={r.RoleName}>{r.RoleName}</option>
                   ))}
                 </select>
               </div>
               <div className="col-md-2">
+                <label className="form-label">Trạng thái</label>
                 <select 
                   name="status" 
                   className="form-select" 
                   value={filters.status} 
                   onChange={handleFilterChange}
                 >
-                  <option value="">Trạng thái</option>
+                  <option value="">Tất cả</option>
                   <option value="1">Hoạt động</option>
                   <option value="0">Vô hiệu hóa</option>
                 </select>
+              </div>
+              <div className="col-md-1">
+                <button 
+                  className="btn btn-outline-secondary w-100"
+                  onClick={() => {
+                    setFilters({ search: '', gender: '', role: '', status: '' });
+                  }}
+                  title="Làm mới bộ lọc"
+                >
+                  ⟳
+                </button>
               </div>
             </div>
           </div>
@@ -710,7 +888,6 @@ const AdminUserManagement = () => {
                             >
                               <BiPencil />
                             </button>
-                            {/* THÊM NÚT RESET PASSWORD */}
                             <button 
                               className="btn btn-lg btn-light text-info" 
                               title="Reset mật khẩu" 
@@ -739,7 +916,7 @@ const AdminUserManagement = () => {
                     )) : (
                       <tr>
                         <td colSpan="8" className="text-center p-5 text-muted">
-                          Không tìm thấy người dùng.
+                          {filters.search ? 'Không tìm thấy người dùng phù hợp với từ khóa tìm kiếm.' : 'Không tìm thấy người dùng.'}
                         </td>
                       </tr>
                     )}
@@ -754,7 +931,7 @@ const AdminUserManagement = () => {
                     pageCount={pagination.totalPages} 
                     onPageChange={({ selected }) => fetchUsers(selected + 1)} 
                     currentPage={pagination.currentPage - 1} 
-                    isLoading ={loading}
+                    isLoading={loading}
                   />
                 </div>
               )}
