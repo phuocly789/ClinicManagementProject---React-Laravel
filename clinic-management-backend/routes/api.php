@@ -318,7 +318,7 @@ Route::prefix('payments')->group(function () {
     // Tìm kiếm hóa đơn với Solr
     Route::get('/invoices/search', [SearchController::class, 'searchInvoices']);
 });
-Route::middleware(['auth:api'])->get('/doctor/room-info', [DoctorExaminationsController::class, 'getRoomInfo']);
+Route::middleware(['auth:api'])->get('/doctor/room-info', [AppointmentsController::class, 'getRoomInfo']);
 
 // ==================== SEARCH ROUTES - TÍCH HỢP SOLR ====================
 Route::prefix('search')->group(function () {

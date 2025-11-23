@@ -66,7 +66,7 @@ class AppointmentsController extends Controller
                 ->whereIn('AppointmentId', $appointmentIds)
                 ->whereIn('Status', ['waiting', 'in-progress', 'done', 'Đang chờ', 'Đang khám', 'Đã khám'])
                 ->orderByRaw("
-                CASE 
+                CASE
                     WHEN \"Status\" IN ('Đang khám', 'in-progress') THEN 1
                     WHEN \"Status\" IN ('Đang chờ', 'waiting') THEN 2
                     WHEN \"Status\" IN ('Đã khám', 'done') THEN 3
@@ -74,15 +74,15 @@ class AppointmentsController extends Controller
                 END
             ")
                 ->orderByRaw("
-                CASE 
-                    WHEN \"Status\" IN ('Đang chờ', 'waiting') THEN \"QueueTime\" 
-                    ELSE NULL 
+                CASE
+                    WHEN \"Status\" IN ('Đang chờ', 'waiting') THEN \"QueueTime\"
+                    ELSE NULL
                 END ASC
             ")
                 ->orderByRaw("
-                CASE 
-                    WHEN \"Status\" IN ('Đã khám', 'done') THEN \"QueueTime\" 
-                    ELSE NULL 
+                CASE
+                    WHEN \"Status\" IN ('Đã khám', 'done') THEN \"QueueTime\"
+                    ELSE NULL
                 END DESC
             ")
                 ->get()
@@ -267,53 +267,59 @@ class AppointmentsController extends Controller
     /**
      * 🏥 Lấy thông tin phòng với xử lý lỗi
      */
-    private function getRoomInfo($schedule)
+    public function getRoomInfo(Request $request)
     {
-        // Trường hợp 1: Không có RoomId
-        if (empty($schedule->RoomId)) {
-            return [
-                'name' => 'Chưa phân công phòng',
-                'description' => null,
-                'is_active' => false,
-                'status' => 'not_assigned'
-            ];
-        }
-
-        // Trường hợp 2: Có quan hệ room và room tồn tại
-        if ($schedule->relationLoaded('room') && $schedule->room) {
-            return [
-                'name' => $schedule->room->RoomName ?? 'Phòng khám',
-                'description' => $schedule->room->Description,
-                'is_active' => (bool) ($schedule->room->IsActive ?? false),
-                'status' => ($schedule->room->IsActive ?? false) ? 'active' : 'inactive'
-            ];
-        }
-
-        // Trường hợp 3: Quan hệ không tồn tại, thử query trực tiếp
         try {
-            $room = Room::find($schedule->RoomId);
-            if ($room) {
-                return [
-                    'name' => $room->RoomName,
-                    'description' => $room->Description,
-                    'is_active' => (bool) $room->IsActive,
-                    'status' => $room->IsActive ? 'active' : 'inactive'
-                ];
+            $user = Auth::user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 401);
             }
+
+            // Lấy StaffId từ MedicalStaff
+            $staff = \App\Models\MedicalStaff::where('StaffId', $user->UserId)->first();
+
+            if (!$staff) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không tìm thấy thông tin nhân viên y tế.'
+                ], 404);
+            }
+
+            // Lấy phòng từ StaffSchedules liên quan hôm nay
+            $today = Carbon::today()->toDateString(); // 'YYYY-MM-DD'
+
+            $schedule = \App\Models\StaffSchedule::where('StaffId', $staff->StaffId)
+                ->whereDate('WorkDate', $today)
+                ->with('room')
+                ->first();
+
+            if (!$schedule || !$schedule->room) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không tìm thấy phòng của bác sĩ hôm nay.'
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Lấy thông tin phòng khám thành công.',
+                'data' => [
+                    'room_id' => $schedule->room->RoomId,
+                    'room_name' => $schedule->room->RoomName,
+                ]
+            ], 200);
         } catch (\Exception $e) {
-            // Log lỗi nhưng không làm crash app
-            \Log::warning("Không thể lấy thông tin phòng: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi server khi lấy thông tin phòng.',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        // Trường hợp 4: RoomId không hợp lệ
-        return [
-            'name' => 'Phòng không tồn tại',
-            'description' => 'RoomId: ' . $schedule->RoomId . ' không tìm thấy',
-            'is_active' => false,
-            'status' => 'not_found'
-        ];
     }
-
     /**
      * 📅 Chuyển đổi thứ trong tuần sang tiếng Việt
      */
