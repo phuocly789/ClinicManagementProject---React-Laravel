@@ -58,23 +58,42 @@ const TechnicianDashboard = () => {
         technicianService.getCompletedServices()
       ]);
 
-      console.log('🔍 [DEBUG] Full API Responses STRUCTURE:', {
-        assignedKeys: servicesResponse.data ? Object.keys(servicesResponse.data) : 'no data',
-        completedKeys: completedResponse.data ? Object.keys(completedResponse.data) : 'no data',
-        assignedData: servicesResponse.data,
-        completedData: completedResponse.data
+      console.log('🔍 [DEBUG] Full API Responses:', {
+        assignedFullResponse: servicesResponse,
+        completedFullResponse: completedResponse,
+        assignedDataStructure: servicesResponse.data,
+        completedDataStructure: completedResponse.data
       });
 
-      // ✅ SỬA LẠI: DATA NẰM TRỰC TIẾP TRONG RESPONSE.DATA
-      const assignedData = Array.isArray(servicesResponse?.data)
-        ? servicesResponse.data
-        : servicesResponse?.data?.data || [];
+      // ✅ SỬA LẠI: XỬ LÝ ĐÚNG CẤU TRÚC API RESPONSE
+      let assignedData = [];
+      let completedData = [];
 
-      const completedData = Array.isArray(completedResponse?.data)
-        ? completedResponse.data
-        : completedResponse?.data?.data || [];
+      // Xử lý assigned services (dịch vụ được chỉ định)
+      if (servicesResponse.data && servicesResponse.data.success) {
+        // API trả về: { success: true, data: [...], pagination: {...} }
+        assignedData = servicesResponse.data.data || [];
+        console.log('✅ Assigned data from API:', assignedData);
+      } else {
+        console.warn('⚠️ Assigned services API structure unexpected:', servicesResponse.data);
+        assignedData = servicesResponse.data || []; // Fallback
+      }
 
-      console.log('✅ FINAL Data after correction:', {
+      // Xử lý completed services (dịch vụ đã hoàn thành)
+      if (completedResponse.data && completedResponse.data.success) {
+        // API trả về: { success: true, data: [...] }
+        completedData = completedResponse.data.data || [];
+        console.log('✅ Completed data from API:', completedData);
+      } else if (Array.isArray(completedResponse.data)) {
+        // Fallback: nếu response.data là array trực tiếp
+        completedData = completedResponse.data;
+        console.log('✅ Completed data (array fallback):', completedData);
+      } else {
+        console.warn('⚠️ Completed services API structure unexpected:', completedResponse.data);
+        completedData = [];
+      }
+
+      console.log('✅ FINAL Data after processing:', {
         assignedData: assignedData.length,
         completedData: completedData.length,
         assignedFirstItem: assignedData[0],
@@ -85,7 +104,7 @@ const TechnicianDashboard = () => {
       setCompletedServicesData(completedData);
 
       // Cập nhật pagination nếu có
-      if (servicesResponse?.data?.pagination) {
+      if (servicesResponse.data?.pagination) {
         setPagination({
           currentPage: servicesResponse.data.pagination.current_page,
           lastPage: servicesResponse.data.pagination.last_page,
@@ -194,20 +213,31 @@ const TechnicianDashboard = () => {
   };
 
   // ✅ XỬ LÝ PHÂN TRANG
-  const handlePageChange = (page) => {
-    console.log('📄 [TechnicianDashboard] Page change:', page);
+  // ✅ Sửa lại handlePageChange để đồng bộ với API pagination
+  const handlePageChange = (selectedPage) => {
+    console.log('📄 [TechnicianDashboard] Page change to:', selectedPage + 1);
 
-    technicianService.getAssignedServices(page)
+    technicianService.getAssignedServices(selectedPage + 1) // API dùng page bắt đầu từ 1
       .then(response => {
         if (response.data?.success) {
           setTestResultsData(response.data.data || []);
+
+          // ✅ CẬP NHẬT PAGINATION TỪ API RESPONSE
           if (response.data.pagination) {
             setPagination({
               currentPage: response.data.pagination.current_page,
               lastPage: response.data.pagination.last_page,
-              total: response.data.pagination.total
+              total: response.data.pagination.total,
+              perPage: response.data.pagination.per_page,
+              hasMore: response.data.pagination.has_more_pages
             });
           }
+
+          console.log('✅ Page changed successfully:', {
+            page: selectedPage + 1,
+            dataCount: response.data.data?.length,
+            pagination: response.data.pagination
+          });
         }
       })
       .catch(err => {

@@ -150,6 +150,12 @@ return [
         Illuminate\Translation\TranslationServiceProvider::class,
         Illuminate\Validation\ValidationServiceProvider::class,
         Illuminate\View\ViewServiceProvider::class,
+        
+
+        /*
+         * Application Service Providers...
+         */
+        // App\Providers\AppServiceProvider::class,
         Illuminate\Broadcasting\BroadcastServiceProvider::class,
 
         /*
@@ -157,11 +163,13 @@ return [
         */
         App\Providers\AppServiceProvider::class,
         App\Providers\AuthServiceProvider::class,
-        // App\Providers\BroadcastServiceProvider::class,
+        App\Providers\BroadcastServiceProvider::class,
         App\Providers\EventServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
         Laravel\Sanctum\SanctumServiceProvider::class,
         Barryvdh\DomPDF\ServiceProvider::class,
+        App\Providers\SolrServiceProvider::class,
+        
     ],
 
     'aliases' => [
