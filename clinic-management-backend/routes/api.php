@@ -155,7 +155,6 @@ Route::prefix('users')->group(function () {
     // Tìm kiếm user với Solr
     Route::get('/search', [SearchController::class, 'searchUsers']);
     Route::get('/roles', [AdminUserController::class, 'roles']);
-
 });
 
 Route::get('/roles', [AdminUserController::class, 'roles']);
@@ -226,8 +225,12 @@ Route::prefix('receptionist')->group(function () {
     // Online appointments
     Route::get('/appointments/online', [AppointmentRecepController::class, 'getOnlineAppointments']);
     //notification
-    Route::middleware(['auth:api', 'role:Admin,Lễ tân'])
-        ->get('/notifications', [ReceptionController::class, 'getNotification']);
+    Route::get('/notifications', [ReceptionController::class, 'getNotifications']);
+    Route::post('/notifications', [ReceptionController::class, 'createNotification']);
+    Route::put('/notifications/{notificationId}', [ReceptionController::class, 'updateNotification']);
+    Route::delete('/notifications/{notificationId}', [ReceptionController::class, 'deleteNotification']);
+    Route::get('/notifications/{notificationId}/detail', [ReceptionController::class, 'getNotificationDetail']);
+    Route::get('/appointments/{appointmentId}/detail', [ReceptionController::class, 'getAppointmentDetail']);
 });
 
 // Patient Routes
@@ -429,7 +432,6 @@ Route::get('/solr-debug', function () {
             'core_status' => $result->getStatus(),
             'endpoints' => $client->getEndpoints(),
         ]);
-
     } catch (\Exception $e) {
         return response()->json([
             'status' => 'error',
