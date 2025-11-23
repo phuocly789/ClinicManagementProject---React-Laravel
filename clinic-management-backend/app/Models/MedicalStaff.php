@@ -31,7 +31,7 @@ class MedicalStaff extends Model
 {
     protected $table = 'MedicalStaff';
     protected $primaryKey = 'StaffId';
-    public $incrementing = true;
+    public $incrementing = false;
     public $timestamps = false;
 
     protected $casts = [

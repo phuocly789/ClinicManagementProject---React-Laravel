@@ -1,7 +1,9 @@
 version: '3.8'
 
 services:
-  # Backend: Laravel với PHP built-in server
+  # ========================================
+  # BACKEND: Laravel API Server
+  # ========================================
   backend:
     build:
       context: ./clinic-management-backend
@@ -27,27 +29,61 @@ services:
       - APP_ENV=local
       - APP_DEBUG=true
 
-      # Solr Configuration - SỬA TÊN HOST
+      # Reverb Configuration
+      - BROADCAST_DRIVER=reverb
+      - REVERB_APP_ID=clinic_app
+      - REVERB_APP_KEY=local_key
+      - REVERB_APP_SECRET=local_secret
+      - REVERB_HOST=0.0.0.0
+      - REVERB_PORT=8080
+
+      # Solr Configuration
       - SOLR_HOST=solr
       - SOLR_PORT=8983
       - SOLR_PATH=/solr/
       - SOLR_CORE=clinic_management
       - SOLR_SCHEME=http
       - SOLR_TIMEOUT=30
-
       - XDEBUG_MODE=develop,debug
       - XDEBUG_CONFIG=client_host=host.docker.internal
-
     ports:
-      - "8000:8000"  # Expose port cho php artisan serve
-      - "9003:9003" # Xdebug port
+      - "8000:8000"  # Laravel API
+      - "9003:9003"  # Xdebug
     networks:
       - app-network
     depends_on:
       solr:
         condition: service_healthy
     command: bash -c "if [ ! -d vendor ]; then composer install --no-dev --optimize-autoloader; fi && php artisan serve --host=0.0.0.0 --port=8000"
-  # Scheduler: chạy Laravel Scheduler
+
+  # ========================================
+  # REVERB: WebSocket Server (REALTIME)
+  # ========================================
+  reverb:
+    build:
+      context: ./clinic-management-backend
+      dockerfile: ../Dockerfile.backend
+    container_name: laravel-reverb
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./clinic-management-backend:/var/www/html
+    env_file:
+      - ./clinic-management-backend/.env
+    environment:
+      - REVERB_SERVER_PORT=8080
+      - REVERB_HOST=0.0.0.0
+    ports:
+      - "8080:8080"  # Reverb WebSocket
+    networks:
+      - app-network
+    depends_on:
+      - backend
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+
+  # ========================================
+  # SCHEDULER: Laravel Cron Jobs
+  # ========================================
   scheduler:
     build:
       context: ./clinic-management-backend
@@ -61,9 +97,13 @@ services:
       - ./clinic-management-backend/.env
     networks:
       - app-network
-    command: bash -c "php artisan schedule:work"
+    depends_on:
+      - backend
+    command: php artisan schedule:work
 
-  # Queue Worker: xử lý job gửi mail
+  # ========================================
+  # QUEUE WORKER: Xử lý Background Jobs
+  # ========================================
   queue-worker:
     build:
       context: ./clinic-management-backend
@@ -77,57 +117,13 @@ services:
       - ./clinic-management-backend/.env
     networks:
       - app-network
-    command: bash -c "php artisan queue:work --sleep=3 --tries=3"
-
-  # Scheduler: chạy Laravel Scheduler
-  scheduler:
-    build:
-      context: ./clinic-management-backend
-      dockerfile: ../Dockerfile.backend
-    container_name: laravel-scheduler
-    restart: unless-stopped
-    working_dir: /var/www/html
-    volumes:
-      - ./clinic-management-backend:/var/www/html
-    env_file:
-      - ./clinic-management-backend/.env
-    environment:
-      - SOLR_HOST=solr
-      - SOLR_PORT=8983
-      - SOLR_PATH=/solr/
-      - SOLR_CORE=clinic_management
-    networks:
-      - app-network
     depends_on:
-      solr:
-        condition: service_healthy
-    command: bash -c "php artisan schedule:work"
+      - backend
+    command: php artisan queue:work --sleep=3 --tries=3
 
-  # Queue Worker: xử lý job gửi mail
-  queue-worker:
-    build:
-      context: ./clinic-management-backend
-      dockerfile: ../Dockerfile.backend
-    container_name: laravel-queue
-    restart: unless-stopped
-    working_dir: /var/www/html
-    volumes:
-      - ./clinic-management-backend:/var/www/html
-    env_file:
-      - ./clinic-management-backend/.env
-    environment:
-      - SOLR_HOST=solr
-      - SOLR_PORT=8983
-      - SOLR_PATH=/solr/
-      - SOLR_CORE=clinic_management
-    networks:
-      - app-network
-    depends_on:
-      solr:
-        condition: service_healthy
-    command: bash -c "php artisan queue:work --sleep=3 --tries=3"
-
-  # Frontend: React dev server
+  # ========================================
+  # FRONTEND: React App (Vite)
+  # ========================================
   frontend:
     build:
       context: ./clinic-management-frontend
@@ -142,13 +138,18 @@ services:
       - "3000:5173"
     environment:
       - CHOKIDAR_USEPOLLING=true
+      - VITE_REVERB_HOST=localhost
+      - VITE_REVERB_PORT=8080
+      - VITE_REVERB_SCHEME=http
     command: npm run dev -- --host 0.0.0.0 --port 5173
     networks:
       - app-network
     stdin_open: true
     tty: true
 
-  # Solr Search Engine
+  # ========================================
+  # SOLR: Search Engine
+  # ========================================
   solr:
     image: solr:8.11
     container_name: solr-app
@@ -171,9 +172,23 @@ services:
       - solr-precreate
       - clinic_management
 
+  # ========================================
+  # MAILHOG: Email Testing Tool
+  # ========================================
+  mailhog:
+    image: mailhog/mailhog
+    container_name: mailhog
+    ports:
+      - "8025:8025"  # Web UI
+      - "1025:1025"  # SMTP
+    networks:
+      - app-network
+# ========================================
+# VOLUMES
+# ========================================
 volumes:
   solr_data:
-
+  
 networks:
   app-network:
     driver: bridge

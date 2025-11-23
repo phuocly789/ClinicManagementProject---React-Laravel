@@ -12,11 +12,23 @@ use Illuminate\Support\Facades\Validator;
 use App\Models\StaffSchedule;
 use App\Models\MedicalStaff;
 use Carbon\Carbon;
-
+use Illuminate\Support\Facades\Auth;
 
 class TestResultsController extends Controller
 {
-    private $technicianId = 5; // ✅ ID KỸ THUẬT VIÊN
+    /**
+     * ✅ METHOD TRUNG TÂM: Lấy thông tin technician từ Auth
+     */
+    private function getAuthenticatedTechnician()
+    {
+        $technician = MedicalStaff::where('StaffId', Auth::id())->first();
+
+        if (!$technician) {
+            throw new \Exception('Không tìm thấy thông tin kỹ thuật viên.');
+        }
+
+        return $technician;
+    }
 
     /**
      * Lấy danh sách dịch vụ được chỉ định với phân trang
@@ -24,19 +36,23 @@ class TestResultsController extends Controller
     public function getAssignedServices(Request $request)
     {
         try {
-            Log::info('🔄 Technician ID:', ['technician_id' => $this->technicianId]);
+            // ✅ GỌI METHOD TRUNG TÂM
+            $technician = $this->getAuthenticatedTechnician();
+            $technicianId = $technician->StaffId;
 
-            // Query lấy dịch vụ - CHỈ THÊM SẮP XẾP
+            Log::info('🔄 Technician ID từ Auth:', ['technician_id' => $technicianId]);
+
+            // Query lấy dịch vụ
             $services = ServiceOrder::with([
                 'appointment.patient.user',
                 'service',
                 'medical_staff.user',
                 'appointment.medical_staff.user'
             ])
-                ->where('AssignedStaffId', $this->technicianId)
+                ->where('AssignedStaffId', $technicianId)
                 ->whereIn('Status', ['Đã chỉ định', 'Đang chờ', 'Đang thực hiện'])
-                ->orderBy('OrderDate', 'asc') // ✅ CHỈ THÊM: Sắp xếp sớm nhất lên đầu
-                ->paginate(10);
+                ->orderBy('OrderDate', 'asc')
+                ->paginate(perPage: 100);
 
             // Format data
             $formattedServices = $services->map(function ($order) {
@@ -49,10 +65,15 @@ class TestResultsController extends Controller
                     'success' => true,
                     'data' => [],
                     'message' => 'Không có dịch vụ nào được chỉ định',
+                    'technician_info' => [
+                        'staff_id' => $technician->StaffId,
+                        'position' => $technician->Position ?? 'Kỹ thuật viên',
+                        'department' => $technician->Department ?? 'N/A',
+                    ],
                     'pagination' => [
                         'current_page' => 1,
                         'last_page' => 1,
-                        'per_page' => 10,
+                        'per_page' => 5,
                         'total' => 0,
                         'from' => null,
                         'to' => null,
@@ -61,13 +82,21 @@ class TestResultsController extends Controller
                 ]);
             }
 
-            return response()->json(
-                PaginationHelper::createPaginatedResponse(
-                    $formattedServices,
-                    $services,
-                    'Lấy danh sách dịch vụ thành công'
-                )
+            $response = PaginationHelper::createPaginatedResponse(
+                $formattedServices,
+                $services,
+                'Lấy danh sách dịch vụ thành công'
             );
+
+            // ✅ THÊM THÔNG TIN TECHNICIAN VÀO RESPONSE (giống doctor)
+            $response['technician_info'] = [
+                'staff_id' => $technician->StaffId,
+                'position' => $technician->Position ?? 'Kỹ thuật viên',
+                'department' => $technician->Department ?? 'N/A',
+                'license_number' => $technician->LicenseNumber ?? 'N/A',
+            ];
+
+            return response()->json($response);
 
         } catch (\Exception $e) {
             Log::error('❌ Error getting assigned services: ' . $e->getMessage());
@@ -86,9 +115,13 @@ class TestResultsController extends Controller
         DB::beginTransaction();
 
         try {
+            // ✅ GỌI METHOD TRUNG TÂM
+            $technician = $this->getAuthenticatedTechnician();
+            $technicianId = $technician->StaffId;
+
             Log::info('🔄 updateServiceStatus - START', [
                 'service_order_id' => $serviceOrderId,
-                'technician_id' => $this->technicianId
+                'technician_id' => $technicianId
             ]);
 
             // ✅ XỬ LÝ RAW JSON BODY
@@ -112,7 +145,7 @@ class TestResultsController extends Controller
             }
 
             $serviceOrder = ServiceOrder::where('ServiceOrderId', $serviceOrderId)
-                ->where('AssignedStaffId', $this->technicianId)
+                ->where('AssignedStaffId', $technicianId)
                 ->first();
 
             if (!$serviceOrder) {
@@ -140,22 +173,43 @@ class TestResultsController extends Controller
                 ], 400);
             }
 
-            // ✅ Cập nhật status
-            $updateData = ['Status' => $newStatus];
+            // ✅ Cập nhật status - GIỜ ĐÃ CÓ UpdatedAt trong DB
+            $updateData = [
+                'Status' => $newStatus,
+                'UpdatedAt' => now('Asia/Ho_Chi_Minh')
+            ];
 
             // ✅ THÊM THỜI GIAN HOÀN THÀNH NẾU LÀ TRẠNG THÁI HOÀN THÀNH
             if ($newStatus === 'Hoàn thành') {
-                $updateData['CompletedAt'] = now('Asia/Ho_Chi_Minh');
+                $updateData['completed_at'] = now('Asia/Ho_Chi_Minh');
+
+                Log::info('✅ Đã thêm completed_at cho dịch vụ hoàn thành', [
+                    'service_order_id' => $serviceOrderId,
+                    'completed_at' => now('Asia/Ho_Chi_Minh')->format('d/m/Y H:i')
+                ]);
             }
+
+            // ✅ DEBUG: Kiểm tra dữ liệu trước khi update
+            Log::info('🔍 [DEBUG] Update data:', $updateData);
 
             $serviceOrder->update($updateData);
 
             DB::commit();
 
+            // ✅ DEBUG: Kiểm tra giá trị sau khi update
+            $updatedService = ServiceOrder::find($serviceOrderId);
+            Log::info('🔍 [DEBUG] After update - actual values:', [
+                'Status' => $updatedService->Status,
+                'completed_at' => $updatedService->completed_at,
+                'UpdatedAt' => $updatedService->UpdatedAt
+            ]);
+
             Log::info("✅ Status updated SUCCESS", [
                 'service_order_id' => $serviceOrderId,
                 'old_status' => $oldStatus,
-                'new_status' => $newStatus
+                'new_status' => $newStatus,
+                'completed_at' => $newStatus === 'Hoàn thành' ? now('Asia/Ho_Chi_Minh')->format('d/m/Y H:i') : 'N/A',
+                'updated_at' => now('Asia/Ho_Chi_Minh')->format('d/m/Y H:i')
             ]);
 
             return response()->json([
@@ -165,7 +219,8 @@ class TestResultsController extends Controller
                     'service_order_id' => $serviceOrderId,
                     'old_status' => $oldStatus,
                     'new_status' => $newStatus,
-                    'timestamp' => now()->format('d/m/Y H:i')
+                    'completed_at' => $newStatus === 'Hoàn thành' ? now('Asia/Ho_Chi_Minh')->format('d/m/Y H:i') : null,
+                    'updated_at' => now('Asia/Ho_Chi_Minh')->format('d/m/Y H:i')
                 ]
             ]);
 
@@ -188,9 +243,13 @@ class TestResultsController extends Controller
         DB::beginTransaction();
 
         try {
+            // ✅ GỌI METHOD TRUNG TÂM
+            $technician = $this->getAuthenticatedTechnician();
+            $technicianId = $technician->StaffId;
+
             Log::info('🔄 updateServiceResult - START', [
                 'service_order_id' => $serviceOrderId,
-                'technician_id' => $this->technicianId
+                'technician_id' => $technicianId
             ]);
 
             // ✅ LẤY DỮ LIỆU TỪ REQUEST
@@ -218,7 +277,7 @@ class TestResultsController extends Controller
 
             // ✅ TÌM DỊCH VỤ
             $serviceOrder = ServiceOrder::where('ServiceOrderId', $serviceOrderId)
-                ->where('AssignedStaffId', $this->technicianId)
+                ->where('AssignedStaffId', $technicianId)
                 ->first();
 
             if (!$serviceOrder) {
@@ -285,7 +344,11 @@ class TestResultsController extends Controller
     public function getCompletedServices(Request $request)
     {
         try {
-            Log::info('🔄 [CompletedServices] Technician ID:', ['technician_id' => $this->technicianId]);
+            // ✅ GỌI METHOD TRUNG TÂM
+            $technician = $this->getAuthenticatedTechnician();
+            $technicianId = $technician->StaffId;
+
+            Log::info('🔄 [CompletedServices] Technician ID:', ['technician_id' => $technicianId]);
 
             // Query lấy dịch vụ đã hoàn thành
             $services = ServiceOrder::with([
@@ -293,10 +356,9 @@ class TestResultsController extends Controller
                 'service',
                 'appointment.medical_staff.user'
             ])
-                ->where('AssignedStaffId', $this->technicianId)
+                ->where('AssignedStaffId', $technicianId)
                 ->where('Status', 'Hoàn thành')
-                ->orderBy('OrderDate', 'desc') 
-
+                ->orderBy('OrderDate', 'desc')
                 ->get();
 
             // Format data
@@ -361,10 +423,14 @@ class TestResultsController extends Controller
     public function getWorkSchedule(Request $request)
     {
         try {
-            Log::info('🔄 [WorkSchedule] Getting work schedule for technician:', ['technician_id' => $this->technicianId]);
+            // ✅ GỌI METHOD TRUNG TÂM
+            $technician = $this->getAuthenticatedTechnician();
+            $technicianId = $technician->StaffId;
+
+            Log::info(' [WorkSchedule] Getting work schedule for technician:', ['technician_id' => $technicianId]);
 
             // Lấy toàn bộ lịch làm việc của KTV
-            $schedules = StaffSchedule::where('StaffId', $this->technicianId)
+            $schedules = StaffSchedule::where('StaffId', $technicianId)
                 ->orderBy('WorkDate')
                 ->orderBy('StartTime')
                 ->get()
@@ -397,22 +463,15 @@ class TestResultsController extends Controller
                 });
 
             // Lấy thông tin KTV
-            $technician = MedicalStaff::with('user')
-                ->where('StaffId', $this->technicianId)
-                ->first();
-
-            $technicianInfo = null;
-            if ($technician) {
-                $technicianInfo = [
-                    'staff_id' => $technician->StaffId,
-                    'full_name' => $technician->user->FullName ?? 'N/A',
-                    'position' => $technician->Position ?? 'Kỹ Thuật Viên',
-                    'department' => $technician->Department ?? 'Phòng Kỹ Thuật',
-                    'hire_date' => $technician->HireDate ? $technician->HireDate->format('d/m/Y') : 'N/A',
-                    'phone' => $technician->user->Phone ?? 'N/A',
-                    'email' => $technician->user->Email ?? 'N/A'
-                ];
-            }
+            $technicianInfo = [
+                'staff_id' => $technician->StaffId,
+                'full_name' => $technician->user->FullName ?? 'N/A',
+                'position' => $technician->Position ?? 'Kỹ Thuật Viên',
+                'department' => $technician->Department ?? 'Phòng Kỹ Thuật',
+                'hire_date' => $technician->HireDate ? $technician->HireDate->format('d/m/Y') : 'N/A',
+                'phone' => $technician->user->Phone ?? 'N/A',
+                'email' => $technician->user->Email ?? 'N/A'
+            ];
 
             return response()->json([
                 'success' => true,
@@ -444,8 +503,12 @@ class TestResultsController extends Controller
     public function getWorkScheduleByMonth(Request $request, $year, $month)
     {
         try {
+            // ✅ GỌI METHOD TRUNG TÂM
+            $technician = $this->getAuthenticatedTechnician();
+            $technicianId = $technician->StaffId;
+
             Log::info('🔄 [WorkSchedule] Getting monthly schedule:', [
-                'technician_id' => $this->technicianId,
+                'technician_id' => $technicianId,
                 'year' => $year,
                 'month' => $month
             ]);
@@ -453,7 +516,7 @@ class TestResultsController extends Controller
             $startDate = Carbon::create($year, $month, 1)->startOfMonth();
             $endDate = Carbon::create($year, $month, 1)->endOfMonth();
 
-            $schedules = StaffSchedule::where('StaffId', $this->technicianId)
+            $schedules = StaffSchedule::where('StaffId', $technicianId)
                 ->whereBetween('WorkDate', [$startDate, $endDate])
                 ->orderBy('WorkDate')
                 ->orderBy('StartTime')
@@ -536,7 +599,7 @@ class TestResultsController extends Controller
             7 => 'Tháng Bảy',
             8 => 'Tháng Tám',
             9 => 'Tháng Chín',
-            10 => 'Tháng Mười',
+            5 => 'Tháng Mười',
             11 => 'Tháng Mười Một',
             12 => 'Tháng Mười Hai'
         ];
@@ -547,6 +610,7 @@ class TestResultsController extends Controller
     /**
      * Hàm format dữ liệu dịch vụ đã hoàn thành
      */
+
     private function formatCompletedServiceData($order)
     {
         $user = $order->appointment->patient->user ?? null;
@@ -564,11 +628,14 @@ class TestResultsController extends Controller
             'patient_gender' => $user->Gender ?? 'N/A',
             'service_name' => $order->service->ServiceName ?? 'N/A',
             'service_type' => $order->service->ServiceType ?? 'N/A',
+            'price' => $order->service->Price ?? 0, // ✅ THÊM GIÁ
             'referring_doctor_name' => $order->appointment->medical_staff->user->FullName ?? 'N/A',
+            'assigned_technician_name' => $order->medical_staff->user->FullName ?? 'N/A', // ✅ THÊM KTV
             'order_date' => $order->OrderDate?->format('d/m/Y H:i'),
-            'completed_at' => $order->CompletedAt?->format('d/m/Y H:i'),
+            'completed_at' => $order->completed_at?->format('d/m/Y H:i'), // ✅ SỬA LỖI: order->completed_at
             'result' => $order->Result,
-            'status' => $order->Status
+            'status' => $order->Status,
+            'updated_at' => $order->UpdatedAt?->format('d/m/Y H:i') // ✅ THÊM
         ];
     }
 }
