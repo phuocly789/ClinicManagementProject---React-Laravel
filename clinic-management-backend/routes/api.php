@@ -198,6 +198,8 @@ Route::prefix('technician')->group(function () {
 Route::prefix('receptionist')->group(function () {
     //lịch hẹn
     Route::get('/appointments/today', [AppointmentRecepController::class, 'GetAppointmentToday']);
+    Route::get('/appointments/count-by-timeslot', [AppointmentRecepController::class, 'getAppointmentCountByTimeSlot']);
+    Route::get('/appointments/counts-by-timeslots', [AppointmentRecepController::class, 'getAppointmentCountsByTimeSlots']);
     //hàng chờ
     Route::get('/queue', [QueueController::class, 'GetQueueByDate']);
     Route::get('/queue/{room_id}', [QueueController::class, 'GetQueueByRoomAndDate']);

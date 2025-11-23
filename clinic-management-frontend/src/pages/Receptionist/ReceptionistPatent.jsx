@@ -42,6 +42,12 @@ const ValidationUtils = {
         const minutes = appointmentTime.getMinutes();
         const totalMinutes = hours * 60 + minutes;
         return totalMinutes >= 420 && totalMinutes <= 1080;
+    },
+
+    validateAppointmentTimeSlot: (time) => {
+        if (!time) return true;
+        const timeSlots = generateTimeSlots();
+        return timeSlots.includes(time);
     }
 };
 
@@ -55,23 +61,21 @@ const ErrorMessages = {
     FUTURE_DATE: "Ngày hẹn không được ở quá khứ",
     DOCTOR_REQUIRED: "Vui lòng chọn bác sĩ",
     ROOM_REQUIRED: "Vui lòng chọn phòng khám",
-    PATIENT_REQUIRED: "Vui lòng chọn hoặc tạo bệnh nhân"
+    PATIENT_REQUIRED: "Vui lòng chọn hoặc tạo bệnh nhân",
+    INVALID_APPOINTMENT_TIME_SLOT: "Thời gian hẹn phải là một trong các khung giờ: 7:00, 7:30, 8:00, ..., 16:30",
+    TIMESLOT_FULL: "Khung giờ này đã đầy, vui lòng chọn khung giờ khác"
 };
 
-// Các loại cảnh báo
-const AlertTypes = {
-    WARNING: 'warning',
-    ERROR: 'error'
-};
-
-// Các mã cảnh báo
-const AlertCodes = {
-    MULTIPLE_APPOINTMENTS: 'MULTIPLE_APPOINTMENTS',
-    OUTSIDE_WORKING_HOURS: 'OUTSIDE_WORKING_HOURS',
-    DUPLICATE_PATIENT_INFO: 'DUPLICATE_PATIENT_INFO',
-    SPAM_SUSPICION: 'SPAM_SUSPICION',
-    DOCTOR_UNAVAILABLE: 'DOCTOR_UNAVAILABLE',
-    PAST_APPOINTMENT: 'PAST_APPOINTMENT'
+const generateTimeSlots = () => {
+    const slots = [];
+    for (let hour = 7; hour <= 16; hour++) {
+        slots.push(`${hour.toString().padStart(2, '0')}:00`);
+        if (hour < 16) {
+            slots.push(`${hour.toString().padStart(2, '0')}:30`);
+        }
+    }
+    slots.push('16:30');
+    return slots;
 };
 
 const ReceptionistPatent = () => {
@@ -84,6 +88,7 @@ const ReceptionistPatent = () => {
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState({});
     const [apiError, setApiError] = useState(null);
+    const [isAutoSelecting, setIsAutoSelecting] = useState(false);
 
     // Modal states
     const [showToast, setShowToast] = useState(false);
@@ -95,12 +100,8 @@ const ReceptionistPatent = () => {
     const [patientOptions, setPatientOptions] = useState([]);
     const [selectedPatientOption, setSelectedPatientOption] = useState(null);
     const [isSearchingPatients, setIsSearchingPatients] = useState(false);
-
-    // Alert states - THÊM MỚI
-    const [alerts, setAlerts] = useState([]);
-    const [showAlertModal, setShowAlertModal] = useState(false);
-    const [currentAlert, setCurrentAlert] = useState(null);
-    const [isConfirmDisabled, setIsConfirmDisabled] = useState(false);
+    // Thêm state cho availableTimeSlots (trong component)
+    const [availableTimeSlots, setAvailableTimeSlots] = useState(generateTimeSlots().map(time => ({ time, available: 10 })));
 
     const [appointmentForm, setAppointmentForm] = useState({
         patientId: "",
@@ -127,7 +128,182 @@ const ReceptionistPatent = () => {
     const [doctors, setDoctors] = useState([]);
     const [filteredDoctors, setFilteredDoctors] = useState([]);
     const [onlineAppointments, setOnlineAppointments] = useState([]);
+    const [timeSlotCache, setTimeSlotCache] = useState({});
+    // Thêm hàm tìm khung giờ gần nhất
+    const findNearestTimeSlot = (currentTime) => {
+        const timeSlots = generateTimeSlots();
 
+        // Chuyển currentTime sang phút để so sánh
+        const [currentHours, currentMinutes] = currentTime.split(':').map(Number);
+        const currentTotalMinutes = currentHours * 60 + currentMinutes;
+
+        let nearestSlot = timeSlots[0];
+        let minDifference = Infinity;
+
+        for (const slot of timeSlots) {
+            const [slotHours, slotMinutes] = slot.split(':').map(Number);
+            const slotTotalMinutes = slotHours * 60 + slotMinutes;
+
+            // Tính khoảng cách thời gian
+            const difference = slotTotalMinutes - currentTotalMinutes;
+
+            // Chỉ xét các khung giờ trong tương lai (difference >= 0)
+            if (difference >= 0 && difference < minDifference) {
+                minDifference = difference;
+                nearestSlot = slot;
+            }
+        }
+
+        // Nếu không tìm thấy khung giờ nào trong tương lai, chọn khung giờ đầu tiên
+        return minDifference === Infinity ? timeSlots[0] : nearestSlot;
+    };
+
+    // Thêm hàm kiểm tra và tự động chọn khung giờ
+    const autoSelectTimeSlot = async (date, roomId, staffId) => {
+        if (!date) return;
+        setIsAutoSelecting(true);
+        const currentTime = new Date().toTimeString().slice(0, 5); // Lấy giờ hiện tại
+        const nearestSlot = findNearestTimeSlot(currentTime);
+
+        // Kiểm tra xem khung giờ gần nhất có available không
+        try {
+            const availability = await checkTimeSlotAvailability(nearestSlot, date, roomId, staffId);
+
+            if (!availability.isFull) {
+                // Nếu còn chỗ, tự động chọn
+                setAppointmentForm(prev => ({
+                    ...prev,
+                    appointmentTime: nearestSlot
+                }));
+            } else {
+                // Nếu đầy, tìm khung giờ gần nhất còn chỗ
+                const allSlots = generateTimeSlots();
+                const currentIndex = allSlots.indexOf(nearestSlot);
+
+                // Tìm từ khung giờ hiện tại về sau
+                for (let i = currentIndex; i < allSlots.length; i++) {
+                    const slot = allSlots[i];
+                    const slotAvailability = await checkTimeSlotAvailability(slot, date, roomId, staffId);
+
+                    if (!slotAvailability.isFull) {
+                        setAppointmentForm(prev => ({
+                            ...prev,
+                            appointmentTime: slot
+                        }));
+                        return;
+                    }
+                }
+
+                // Nếu không tìm thấy khung giờ nào còn chỗ, chọn khung giờ đầu tiên
+                setAppointmentForm(prev => ({
+                    ...prev,
+                    appointmentTime: allSlots[0]
+                }));
+            }
+        } catch (error) {
+            console.error("Error auto-selecting time slot:", error);
+            // Nếu có lỗi, vẫn chọn khung giờ gần nhất
+            setAppointmentForm(prev => ({
+                ...prev,
+                appointmentTime: nearestSlot
+            }));
+        } finally {
+            setIsAutoSelecting(false); // KẾT THÚC LOADING
+        }
+    };
+
+    const checkTimeSlotsBatch = async (times, date, roomId, staffId) => {
+        try {
+            const response = await axiosInstance.get('/api/receptionist/appointments/counts-by-timeslots', {
+                params: {
+                    date: date,
+                    times: times,
+                    room_id: roomId,
+                    staff_id: staffId
+                }
+            });
+
+            if (response.data && response.data.success === true) {
+                return times.map(time => response.data.data[time] || {
+                    count: 0, maxCapacity: 10, available: 10, isFull: false
+                });
+            }
+
+            throw new Error('API batch response error');
+
+        } catch (error) {
+            console.error("Batch API error:", error);
+            // Fallback: dùng API cũ cho từng cái
+            const individualResults = [];
+            for (const time of times) {
+                const result = await checkTimeSlotAvailability(time, date, roomId, staffId);
+                individualResults.push(result);
+            }
+            return individualResults;
+        }
+    };
+
+    // Thêm hàm kiểm tra số lượng bệnh nhân trong khung giờ (dựa trên dữ liệu local)
+    const checkTimeSlotAvailability = async (time, date, roomId = null, staffId = null) => {
+        try {
+            const response = await axiosInstance.get('/api/receptionist/appointments/count-by-timeslot', {
+                params: {
+                    time: time,
+                    date: date,
+                    room_id: roomId,
+                    staff_id: staffId
+                }
+            });
+
+            if (response && response.success === true) {
+                return response.data;
+            } else {
+                throw new Error(response?.message || 'Lỗi không xác định');
+            }
+        } catch (error) {
+            console.error("Error checking time slot availability:", error);
+            // Trả về giá trị mặc định nếu có lỗi
+            return {
+                count: 0,
+                maxCapacity: 10,
+                available: 10,
+                isFull: false
+            };
+        }
+    };
+    // Cập nhật hàm loadAvailableTimeSlots để dùng API batch
+    const loadAvailableTimeSlots = async (date, roomId, staffId) => {
+        if (!date) {
+            setAvailableTimeSlots(generateTimeSlots().map(time => ({
+                time,
+                available: 10,
+                isFull: false
+            })));
+            return;
+        }
+
+        try {
+            const allSlots = generateTimeSlots();
+
+            // THAY ĐỔI Ở ĐÂY: Dùng API batch thay vì từng cái
+            const slotResults = await checkTimeSlotsBatch(allSlots, date, roomId, staffId);
+
+            const availableSlots = allSlots.map((slot, index) => ({
+                time: slot,
+                available: slotResults[index].available,
+                isFull: slotResults[index].isFull
+            }));
+
+            setAvailableTimeSlots(availableSlots);
+        } catch (error) {
+            console.error("Error loading available time slots:", error);
+            setAvailableTimeSlots(generateTimeSlots().map(time => ({
+                time,
+                available: 10,
+                isFull: false
+            })));
+        }
+    };
     // Modal functions
     const showToastMessage = (type, message) => {
         setToastConfig({ type, message });
@@ -147,27 +323,7 @@ const ReceptionistPatent = () => {
         setShowConfirmModal(false);
     };
 
-    // Alert functions - THÊM MỚI
-    const addAlert = (alert) => {
-        setAlerts(prev => [...prev, alert]);
-    };
-
-    const clearAlerts = () => {
-        setAlerts([]);
-        setIsConfirmDisabled(false);
-    };
-
-    const showAlertDialog = (alert) => {
-        setCurrentAlert(alert);
-        setShowAlertModal(true);
-    };
-
-    const hideAlertDialog = () => {
-        setShowAlertModal(false);
-        setCurrentAlert(null);
-    };
-
-    // API Calls với error handling
+    // API Calls với error handling và loading
     const api = {
         getRooms: async () => {
             try {
@@ -247,26 +403,6 @@ const ReceptionistPatent = () => {
                     error: message
                 };
             }
-        },
-
-        // THÊM MỚI: API để kiểm tra bất thường
-        checkAppointmentAnomalies: async (appointmentData) => {
-            try {
-                const response = await axiosInstance.post('/api/receptionist/check-anomalies', appointmentData);
-                return response.data;
-            } catch (error) {
-                console.error("API Error - checkAppointmentAnomalies:", error);
-                return { alerts: [] };
-            }
-        },
-
-        // THÊM MỚI: API để log cảnh báo
-        logAlertAction: async (logData) => {
-            try {
-                await axiosInstance.post('/api/receptionist/log-alert', logData);
-            } catch (error) {
-                console.error("API Error - logAlertAction:", error);
-            }
         }
     };
 
@@ -287,185 +423,7 @@ const ReceptionistPatent = () => {
             return dateString;
         }
     };
-    const checkAnomaliesWithRealData = async (appointmentData, patientData, realAppointments, realPatients) => {
-        const alerts = [];
 
-        console.log("🔍 Checking anomalies with real data:", {
-            appointmentData,
-            patientData,
-            realAppointmentsCount: realAppointments?.length,
-            realPatientsCount: realPatients?.length
-        });
-
-        // 1. KIỂM TRA GIỜ KHÁM NGOÀI GIỜ LÀM VIỆC (7:00 - 18:00)
-        if (appointmentData.appointmentTime) {
-            const [hours, minutes] = appointmentData.appointmentTime.split(':').map(Number);
-            const totalMinutes = hours * 60 + minutes;
-
-            if (totalMinutes < 420 || totalMinutes > 1080) {
-                alerts.push({
-                    code: "OUTSIDE_WORKING_HOURS",
-                    type: "error",
-                    title: "Giờ khám ngoài giờ làm việc",
-                    message: `Giờ khám ${appointmentData.appointmentTime} nằm ngoài khung giờ làm việc`,
-                    details: "Vui lòng chọn giờ khám trong khoảng 7:00 - 18:00"
-                });
-            }
-        }
-
-        // 2. KIỂM TRA NHIỀU LỊCH HẸN TRONG NGÀY - QUAN TRỌNG: SỬA LOGIC NÀY
-        if (appointmentData.patientId && realAppointments && appointmentData.appointmentDate) {
-            // Lọc tất cả appointments của patient trong ngày (KHÔNG bao gồm appointment hiện tại nếu có)
-            const patientAppointments = realAppointments.filter(apt =>
-                apt.PatientId?.toString() === appointmentData.patientId?.toString() &&
-                apt.AppointmentDate === appointmentData.appointmentDate &&
-                apt.Status === "Đã đặt" &&
-                // QUAN TRỌNG: Loại trừ appointment hiện tại nếu đang tiếp nhận từ online
-                apt.AppointmentId !== appointmentData.originalAppointmentId
-            );
-
-            console.log("📅 Multiple appointments check - FIXED:", {
-                patientId: appointmentData.patientId,
-                appointmentDate: appointmentData.appointmentDate,
-                foundAppointments: patientAppointments.length,
-                currentAppointmentId: appointmentData.originalAppointmentId,
-                allAppointments: realAppointments.map(a => ({
-                    id: a.AppointmentId,
-                    patientId: a.PatientId,
-                    date: a.AppointmentDate,
-                    time: a.AppointmentTime,
-                    status: a.Status
-                }))
-            });
-
-            // GIẢM NGƯỠNG XUỐNG 1 để dễ test (thay vì 2)
-            if (patientAppointments.length >= 1) {
-                const appointmentTimes = patientAppointments.map(apt => apt.AppointmentTime).join(', ');
-                alerts.push({
-                    code: "MULTIPLE_APPOINTMENTS",
-                    type: "warning",
-                    title: "Nhiều lịch hẹn trong ngày",
-                    message: `Bệnh nhân đã có ${patientAppointments.length} lịch hẹn khác trong ngày hôm nay`,
-                    details: `Các lịch hẹn: ${appointmentTimes}. Vui lòng xác nhận tính hợp lệ.`
-                });
-            }
-        }
-
-        // 3. KIỂM TRA THÔNG TIN BỆNH NHÂN TRÙNG
-        if (!appointmentData.patientId && patientData.phone && realPatients) {
-            const duplicatePatient = realPatients.find(patient => {
-                const user = patient.user || patient;
-                return user.Phone === patientData.phone;
-            });
-
-            if (duplicatePatient) {
-                const existingUser = duplicatePatient.user || duplicatePatient;
-                alerts.push({
-                    code: "DUPLICATE_PATIENT_PHONE",
-                    type: "error",
-                    title: "Số điện thoại đã tồn tại",
-                    message: "Số điện thoại này đã được sử dụng bởi bệnh nhân khác",
-                    details: `Số điện thoại ${patientData.phone} đã thuộc về bệnh nhân: ${existingUser.FullName}`
-                });
-            }
-        }
-
-        // 4. KIỂM TRA NGÀY KHÁM TRONG QUÁ KHỨ
-        if (appointmentData.appointmentDate) {
-            const appointmentDate = new Date(appointmentData.appointmentDate);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-
-            if (appointmentDate < today) {
-                alerts.push({
-                    code: "PAST_APPOINTMENT",
-                    type: "error",
-                    title: "Ngày khám trong quá khứ",
-                    message: "Không thể đặt lịch khám trong quá khứ",
-                    details: "Vui lòng chọn ngày khám từ hôm nay trở đi"
-                });
-            }
-        }
-
-        console.log("🚨 Final alerts:", alerts);
-        return alerts;
-    };
-    // THÊM MỚI: Hàm xử lý khi lễ tân chọn hành động với cảnh báo
-    const handleAlertAction = async (alert, action) => {
-        // Log hành động của lễ tân
-        await api.logAlertAction({
-            alertCode: alert.code,
-            alertMessage: alert.message,
-            action: action,
-            appointmentId: selectedAppointment?.AppointmentId,
-            patientId: selectedPatient?.PatientId || selectedPatient?.UserId,
-            receptionistId: "current_user_id" // Cần lấy từ auth context
-        });
-
-        if (action === 'continue') {
-            // Tiếp tục xử lý cảnh báo tiếp theo hoặc tiếp tục tiếp nhận
-            const remainingAlerts = alerts.filter(a => a !== alert);
-            setAlerts(remainingAlerts);
-
-            if (remainingAlerts.length > 0) {
-                showAlertDialog(remainingAlerts[0]);
-            } else {
-                hideAlertDialog();
-                // Nếu không còn cảnh báo nào, cho phép tiếp nhận
-                setIsConfirmDisabled(false);
-            }
-        } else if (action === 'cancel') {
-            // Hủy tiếp nhận
-            hideAlertDialog();
-            clearAlerts();
-            showToastMessage('warning', 'Đã hủy tiếp nhận do cảnh báo hệ thống');
-            resetAllForms();
-        } else if (action === 'edit') {
-            // Chuyển sang chế độ chỉnh sửa
-            hideAlertDialog();
-            // Có thể tự động focus vào field cần sửa dựa trên alert code
-            handleAutoFocusField(alert.code);
-        }
-    };
-
-    // THÊM MỚI: Hàm tự động focus vào field cần sửa
-    const handleAutoFocusField = (alertCode) => {
-        console.log("🎯 Auto-focusing field for alert:", alertCode);
-
-        switch (alertCode) {
-            case AlertCodes.OUTSIDE_WORKING_HOURS:
-            case "OUTSIDE_WORKING_HOURS":
-                setTimeout(() => {
-                    document.querySelector('input[type="time"]')?.focus();
-                }, 100);
-                break;
-
-            case AlertCodes.DUPLICATE_PATIENT_INFO:
-            case "DUPLICATE_PATIENT_PHONE":
-                setTimeout(() => {
-                    document.querySelector('input[name="phone"]')?.focus();
-                }, 100);
-                break;
-
-            case AlertCodes.DOCTOR_UNAVAILABLE:
-            case "DOCTOR_UNAVAILABLE":
-            case "NO_DOCTORS_IN_ROOM":
-                setTimeout(() => {
-                    document.querySelector('select[name="staffId"]')?.focus();
-                }, 100);
-                break;
-
-            case AlertCodes.PAST_APPOINTMENT:
-            case "PAST_APPOINTMENT":
-                setTimeout(() => {
-                    document.querySelector('input[type="date"]')?.focus();
-                }, 100);
-                break;
-
-            default:
-                break;
-        }
-    };
     // Initialize data
     useEffect(() => {
         initializeData();
@@ -481,18 +439,37 @@ const ReceptionistPatent = () => {
         loadAllPatients();
     }, []);
 
-    // THÊM MỚI: Kiểm tra bất thường khi form thay đổi
     useEffect(() => {
-        if ((selectedAppointment || selectedPatient || showPatientForm) &&
-            appointmentForm.appointmentDate && appointmentForm.appointmentTime) {
-            // Debounce kiểm tra bất thường
-            const timeoutId = setTimeout(() => {
-                checkForAnomalies(appointmentForm, patientForm, activeTab);
-            }, 500);
+        if (!appointmentForm.appointmentDate || !appointmentForm.roomId || !appointmentForm.staffId) return;
 
-            return () => clearTimeout(timeoutId);
-        }
-    }, [appointmentForm, patientForm, selectedAppointment, selectedPatient, showPatientForm]);
+        loadAvailableTimeSlots(
+            appointmentForm.appointmentDate,
+            appointmentForm.roomId,
+            appointmentForm.staffId
+        );
+    }, [
+        appointmentForm.appointmentDate,
+        appointmentForm.roomId,
+        appointmentForm.staffId
+    ]);
+
+    useEffect(() => {
+        if (!appointmentForm.appointmentDate ||
+            !appointmentForm.roomId ||
+            !appointmentForm.staffId ||
+            appointmentForm.appointmentTime // đã có time thì KHÔNG chạy
+        ) return;
+
+        autoSelectTimeSlot(
+            appointmentForm.appointmentDate,
+            appointmentForm.roomId,
+            appointmentForm.staffId
+        );
+    }, [
+        appointmentForm.appointmentDate,
+        appointmentForm.roomId,
+        appointmentForm.staffId
+    ]);
 
     const initializeData = async () => {
         setLoading(true);
@@ -526,6 +503,7 @@ const ReceptionistPatent = () => {
     // Load tất cả patients
     const loadAllPatients = async () => {
         try {
+            setIsSearchingPatients(true);
             const response = await api.getAllPatients();
             const patients = response || [];
 
@@ -545,10 +523,12 @@ const ReceptionistPatent = () => {
         } catch (error) {
             console.error("Error loading patients:", error);
             // Không hiển thị lỗi vì đây là tính năng tải trước
+        } finally {
+            setIsSearchingPatients(false);
         }
     };
 
-    // Tìm kiếm bệnh nhân với React Select - ĐÃ SỬA
+    // Tìm kiếm bệnh nhân với React Select
     const handlePatientSearch = (inputValue) => {
         if (!inputValue || inputValue.trim() === '') {
             loadAllPatients(); // Load lại toàn bộ
@@ -606,6 +586,7 @@ const ReceptionistPatent = () => {
             }));
         } else if (selectedOption) {
             try {
+                setIsSearchingPatients(true);
                 // Load chi tiết patient từ API
                 const response = await axiosInstance.get(`/api/receptionist/patients/${selectedOption.value}`);
                 console.log("API RESPONSE:", response); // DEBUG
@@ -627,6 +608,8 @@ const ReceptionistPatent = () => {
             } catch (error) {
                 console.error("Error loading patient details:", error);
                 showToastMessage('error', 'Không thể tải thông tin bệnh nhân');
+            } finally {
+                setIsSearchingPatients(false);
             }
         } else {
             // Clear selection
@@ -655,7 +638,7 @@ const ReceptionistPatent = () => {
         }
     };
 
-    // Validation functions - ĐÃ SỬA: set errors để hiển thị dưới input
+    // Validation functions
     const validatePatientForm = () => {
         const newErrors = {};
 
@@ -682,7 +665,7 @@ const ReceptionistPatent = () => {
         return newErrors;
     };
 
-    const validateAppointmentForm = () => {
+    const validateAppointmentForm = async () => {
         const newErrors = {};
 
         if (!appointmentForm.staffId) {
@@ -705,17 +688,34 @@ const ReceptionistPatent = () => {
             }
         }
 
-        // if (!ValidationUtils.validateRequired(appointmentForm.appointmentTime)) {
-        //     newErrors.appointmentTime = ErrorMessages.REQUIRED;
-        // } else if (!ValidationUtils.validateAppointmentTime(appointmentForm.appointmentTime, appointmentForm.appointmentDate)) {
-        //     newErrors.appointmentTime = ErrorMessages.INVALID_APPOINTMENT_TIME;
-        // }
+        if (!ValidationUtils.validateRequired(appointmentForm.appointmentTime)) {
+            newErrors.appointmentTime = ErrorMessages.REQUIRED;
+        } else if (!ValidationUtils.validateAppointmentTimeSlot(appointmentForm.appointmentTime)) {
+            newErrors.appointmentTime = ErrorMessages.INVALID_APPOINTMENT_TIME_SLOT;
+        } else if (appointmentForm.appointmentDate) {
+            // Kiểm tra capacity thông qua API
+            try {
+                const availability = await checkTimeSlotAvailability(
+                    appointmentForm.appointmentTime,
+                    appointmentForm.appointmentDate,
+                    appointmentForm.roomId,
+                    appointmentForm.staffId
+                );
+
+                if (availability.isFull) {
+                    newErrors.appointmentTime = ErrorMessages.TIMESLOT_FULL;
+                }
+            } catch (error) {
+                console.error("Error validating time slot:", error);
+                // Nếu có lỗi khi check API, vẫn cho phép tiếp tục
+            }
+        }
 
         return newErrors;
     };
 
-    const validateAll = () => {
-        const appointmentErrors = validateAppointmentForm();
+    const validateAll = async () => {
+        const appointmentErrors = await validateAppointmentForm();
         let patientErrors = {};
 
         if (showPatientForm && !selectedPatient) {
@@ -741,7 +741,6 @@ const ReceptionistPatent = () => {
         setShowPatientForm(false);
         setErrors({});
         setApiError(null);
-        clearAlerts(); // THÊM MỚI: Clear alerts khi reset form
 
         setAppointmentForm({
             patientId: "",
@@ -752,7 +751,6 @@ const ReceptionistPatent = () => {
             appointmentTime: activeTab === 'online'
                 ? ""
                 : getCurrentTime(),
-
             notes: "",
             serviceType: "Khám bệnh"
         });
@@ -809,83 +807,9 @@ const ReceptionistPatent = () => {
         }));
         setErrors({});
     };
-    const checkForAnomalies = async (appointmentData, patientData, receptionType) => {
-        clearAlerts();
 
-        try {
-            console.log("🔄 Starting anomaly check for:", {
-                patientId: appointmentData.patientId,
-                appointmentDate: appointmentData.appointmentDate,
-                receptionType
-            });
-
-            // Lấy dữ liệu THẬT - QUAN TRỌNG: lấy TẤT CẢ status, không chỉ "Đã đặt"
-            const today = appointmentData.appointmentDate || new Date().toISOString().split('T')[0];
-
-            let allAppointments = [];
-            let allPatients = [];
-
-            try {
-                // QUAN TRỌNG: Lấy TẤT CẢ appointments, không chỉ "Đã đặt"
-                const appointmentsResponse = await api.getOnlineAppointments("Tất cả", today);
-                allAppointments = appointmentsResponse || [];
-
-                // Lấy tất cả patients
-                const patientsResponse = await api.getAllPatients();
-                allPatients = patientsResponse || [];
-
-                console.log("📊 Real data loaded:", {
-                    appointments: allAppointments.length,
-                    patients: allPatients.length,
-                    appointmentsDetail: allAppointments.map(a => ({
-                        id: a.AppointmentId,
-                        patientId: a.PatientId,
-                        time: a.AppointmentTime,
-                        status: a.Status
-                    }))
-                });
-            } catch (error) {
-                console.warn("Could not fetch real data for anomaly check:", error);
-            }
-
-            // Kiểm tra bất thường với dữ liệu thật
-            const alerts = await checkAnomaliesWithRealData(
-                appointmentData,
-                patientData,
-                allAppointments,
-                allPatients
-            );
-
-            if (alerts.length > 0) {
-                console.log("🎯 Alerts found:", alerts);
-                setAlerts(alerts);
-
-                const hasErrorAlerts = alerts.some(alert => alert.type === AlertTypes.ERROR);
-                setIsConfirmDisabled(hasErrorAlerts);
-
-                if (alerts.length > 0) {
-                    showAlertDialog(alerts[0]);
-                }
-
-                return true;
-            }
-
-            console.log("✅ No anomalies found");
-            return false;
-
-        } catch (error) {
-            console.error("❌ Error in anomaly check:", error);
-            return false;
-        }
-    };
     const handleCreateAll = async () => {
-        if (!validateAll()) {
-            return;
-        }
-
-
-        const hasAnomalies = await checkForAnomalies(appointmentForm, patientForm, activeTab);
-        if (hasAnomalies) {
+        if (!(await validateAll())) {
             return;
         }
 
@@ -906,7 +830,7 @@ const ReceptionistPatent = () => {
                 existingPatientId: selectedPatient ? (selectedPatient.UserId || selectedPatient.PatientId) : null
             };
 
-            // Thêm bệnh nhân mới nếu cần - SỬA FIELD NAMES
+            // Thêm bệnh nhân mới nếu cần
             if (showPatientForm && !selectedPatient) {
                 receptionData.patient = {
                     FullName: patientForm.fullName,
@@ -936,43 +860,13 @@ const ReceptionistPatent = () => {
                     setOnlineAppointments(appointmentsResponse.data || []);
                 }
             } else {
-                // THÊM MỚI: Bắt lỗi từ API và chuyển thành cảnh báo thông minh
-                if (result.error && result.error.includes("phone has already been taken")) {
-                    // Tạo alert thông minh thay vì hiển thị lỗi thông thường
-                    const duplicateAlert = {
-                        code: "DUPLICATE_PATIENT_PHONE",
-                        type: "error",
-                        title: "Số điện thoại đã tồn tại",
-                        message: "Số điện thoại này đã được sử dụng bởi bệnh nhân khác",
-                        details: "Vui lòng sử dụng số điện thoại khác hoặc tìm bệnh nhân hiện có trong hệ thống"
-                    };
-
-                    setAlerts([duplicateAlert]);
-                    setIsConfirmDisabled(true);
-                    showAlertDialog(duplicateAlert);
-                } else {
-                    throw new Error(result.error || "Lỗi không xác định");
-                }
+                throw new Error(result.error || "Lỗi không xác định");
             }
         } catch (error) {
             console.error("Error creating reception:", error);
-            if (error.response?.data?.error?.includes("phone has already been taken")) {
-                const duplicateAlert = {
-                    code: "DUPLICATE_PATIENT_PHONE",
-                    type: "error",
-                    title: "Số điện thoại đã tồn tại",
-                    message: "Số điện thoại này đã được sử dụng bởi bệnh nhân khác",
-                    details: "Vui lòng sử dụng số điện thoại khác hoặc tìm bệnh nhân hiện có trong hệ thống"
-                };
-
-                setAlerts([duplicateAlert]);
-                setIsConfirmDisabled(true);
-                showAlertDialog(duplicateAlert);
-            } else {
-                const errorMessage = error.message || "Có lỗi xảy ra khi tiếp nhận bệnh nhân!";
-                setApiError(errorMessage);
-                showToastMessage('error', errorMessage);
-            }
+            const errorMessage = error.message || "Có lỗi xảy ra khi tiếp nhận bệnh nhân!";
+            setApiError(errorMessage);
+            showToastMessage('error', errorMessage);
         } finally {
             setLoading(false);
         }
@@ -998,134 +892,7 @@ const ReceptionistPatent = () => {
         return date.toISOString().split('T')[0];
     };
 
-    // THÊM MỚI: Component hiển thị alert modal
-    const AlertModal = () => {
-        if (!currentAlert) return null;
-
-        const getAlertIcon = () => {
-            switch (currentAlert.type) {
-                case AlertTypes.ERROR:
-                    return "bi-exclamation-triangle-fill text-danger";
-                case AlertTypes.WARNING:
-                    return "bi-exclamation-circle-fill text-warning";
-                default:
-                    return "bi-info-circle-fill text-info";
-            }
-        };
-
-        const getAlertTitle = () => {
-            switch (currentAlert.type) {
-                case AlertTypes.ERROR:
-                    return "CẢNH BÁO QUAN TRỌNG";
-                case AlertTypes.WARNING:
-                    return "CẢNH BÁO HỆ THỐNG";
-                default:
-                    return "THÔNG BÁO";
-            }
-        };
-
-        return (
-            <div className={`modal fade ${showAlertModal ? 'show d-block' : ''}`} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-                <div className="modal-dialog modal-dialog-centered">
-                    <div className="modal-content border-0 shadow">
-                        <div className={`modal-header ${currentAlert.type === AlertTypes.ERROR ? 'bg-danger text-white' :
-                            currentAlert.type === AlertTypes.WARNING ? 'bg-warning text-dark' :
-                                'bg-info text-white'
-                            }`}>
-                            <h5 className="modal-title d-flex align-items-center">
-                                <i className={`bi ${getAlertIcon()} me-2`}></i>
-                                {getAlertTitle()}
-                            </h5>
-                            <button type="button" className="btn-close" onClick={hideAlertDialog}></button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="alert alert-light border">
-                                <div className="d-flex">
-                                    <i className={`bi ${getAlertIcon()} me-3 fs-4`}></i>
-                                    <div>
-                                        <h6 className="alert-heading mb-2">{currentAlert.title}</h6>
-                                        <p className="mb-0">{currentAlert.message}</p>
-                                        {currentAlert.details && (
-                                            <div className="mt-2 p-2 bg-white rounded border">
-                                                <small className="text-muted">{currentAlert.details}</small>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="mt-3">
-                                <small className="text-muted">
-                                    <i className="bi bi-info-circle me-1"></i>
-                                    Vui lòng chọn hành động phù hợp:
-                                </small>
-                            </div>
-                        </div>
-                        <div className="modal-footer">
-                            <button
-                                type="button"
-                                className="btn btn-outline-secondary"
-                                onClick={() => handleAlertAction(currentAlert, 'cancel')}
-                            >
-                                <i className="bi bi-x-circle me-1"></i>
-                                Hủy tiếp nhận
-                            </button>
-
-                            {currentAlert.type === AlertTypes.WARNING && (
-                                <button
-                                    type="button"
-                                    className="btn btn-warning"
-                                    onClick={() => handleAlertAction(currentAlert, 'edit')}
-                                >
-                                    <i className="bi bi-pencil me-1"></i>
-                                    Chỉnh sửa thông tin
-                                </button>
-                            )}
-
-                            <button
-                                type="button"
-                                className="btn btn-primary"
-                                onClick={() => handleAlertAction(currentAlert, 'continue')}
-                            >
-                                <i className="bi bi-check-circle me-1"></i>
-                                Tiếp tục tiếp nhận
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    // THÊM MỚI: Component hiển thị alert badge
-    const AlertBadge = () => {
-        if (alerts.length === 0) return null;
-
-        const errorCount = alerts.filter(alert => alert.type === AlertTypes.ERROR).length;
-        const warningCount = alerts.filter(alert => alert.type === AlertTypes.WARNING).length;
-
-        return (
-            <div className="alert-badge position-fixed top-0 end-0 m-3" style={{ zIndex: 1060 }}>
-                <div className="card border-0 shadow-sm">
-                    <div className="card-body p-3">
-                        <div className="d-flex align-items-center mb-2">
-                            <i className="bi bi-shield-exclamation text-warning me-2 fs-5"></i>
-                            <strong className="me-2">Cảnh báo hệ thống</strong>
-                            <span className="badge bg-danger">{errorCount} lỗi</span>
-                            {warningCount > 0 && (
-                                <span className="badge bg-warning text-dark ms-1">{warningCount} cảnh báo</span>
-                            )}
-                        </div>
-                        <div className="small text-muted">
-                            Có {alerts.length} cảnh báo cần xử lý trước khi tiếp nhận
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    // UI components - ĐÃ THÊM: renderInputError trở lại
+    // UI components
     const renderStatusBadge = (status) => {
         const statusConfig = {
             "Đã đặt": { class: "bg-warning text-dark", icon: "bi-clock" },
@@ -1184,13 +951,6 @@ const ReceptionistPatent = () => {
                         THÔNG TIN TIẾP NHẬN
                     </h6>
                     <div className="d-flex align-items-center">
-                        {/* THÊM MỚI: Hiển thị số cảnh báo */}
-                        {alerts.length > 0 && (
-                            <span className="badge bg-warning text-dark me-2">
-                                <i className="bi bi-exclamation-triangle me-1"></i>
-                                {alerts.length} cảnh báo
-                            </span>
-                        )}
                         {loading && (
                             <div className="spinner-border spinner-border-sm" role="status">
                                 <span className="visually-hidden">Loading...</span>
@@ -1200,21 +960,6 @@ const ReceptionistPatent = () => {
                 </div>
 
                 <div className="card-body">
-                    {/* THÊM MỚI: Hiển thị cảnh báo inline */}
-                    {alerts.length > 0 && (
-                        <div className="alert alert-warning mb-3">
-                            <div className="d-flex align-items-center">
-                                <i className="bi bi-shield-exclamation me-2 fs-5"></i>
-                                <div>
-                                    <strong>Hệ thống phát hiện {alerts.length} cảnh báo</strong>
-                                    <div className="small mt-1">
-                                        Vui lòng xử lý các cảnh báo trước khi tiếp nhận bệnh nhân
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
                     {/* Patient Information Section */}
                     <div className="mb-4">
                         <h6 className="fw-semibold text-primary mb-3">
@@ -1381,16 +1126,55 @@ const ReceptionistPatent = () => {
                             {/* Appointment Time */}
                             <div className="col-6">
                                 <label className="form-label small">Giờ khám *</label>
-                                <input
-                                    type="time"
-                                    className={`form-control form-control-sm ${errors.appointmentTime ? 'is-invalid' : ''}`}
-                                    value={appointmentForm.appointmentTime}
-                                    onChange={(e) => {
-                                        setAppointmentForm({ ...appointmentForm, appointmentTime: e.target.value });
-                                        if (errors.appointmentTime) setErrors(prev => ({ ...prev, appointmentTime: null }));
-                                    }}
-                                />
+                                <div className="input-group">
+                                    <select
+                                        className={`form-control form-control-sm ${errors.appointmentTime ? 'is-invalid' : ''}`}
+                                        value={appointmentForm.appointmentTime}
+                                        onChange={(e) => {
+                                            setAppointmentForm({ ...appointmentForm, appointmentTime: e.target.value });
+                                            if (errors.appointmentTime) setErrors(prev => ({ ...prev, appointmentTime: null }));
+                                        }}
+                                    >
+                                        <option value="">Chọn giờ khám</option>
+                                        {availableTimeSlots.map((slot) => (
+                                            <option
+                                                key={slot.time}
+                                                value={slot.time}
+                                                disabled={slot.isFull}
+                                                className={slot.isFull ? 'text-danger' : ''}
+                                            >
+                                                {slot.time} {slot.isFull ? '(Đã đầy)' : `(${slot.available} chỗ trống)`}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-primary btn-sm d-flex align-items-center"
+                                        onClick={async () => {
+                                            await autoSelectTimeSlot(
+                                                appointmentForm.appointmentDate,
+                                                appointmentForm.roomId,
+                                                appointmentForm.staffId
+                                            );
+                                        }}
+                                        disabled={!appointmentForm.appointmentDate || isAutoSelecting}
+                                        title="Tự động chọn khung giờ gần nhất còn chỗ"
+                                    >
+                                        {isAutoSelecting ? (
+                                            <div className="text-primary small mt-1">
+                                                <span className="spinner-border spinner-border-sm me-1"></span>
+                                                Đang tự động chọn khung giờ phù hợp...
+                                            </div>
+                                        ) : (
+                                            <i className="bi bi-clock"></i>
+                                        )}
+                                    </button>
+
+                                </div>
                                 {renderInputError('appointmentTime')}
+                                <div className="form-text">
+                                    <small>Khung giờ làm việc: 7:00 - 16:30, mỗi khung giờ tối đa 10 bệnh nhân</small>
+                                </div>
                             </div>
 
                             {/* Room Selection */}
@@ -1461,7 +1245,7 @@ const ReceptionistPatent = () => {
                         <button
                             className="btn btn-success"
                             onClick={handleCreateAll}
-                            disabled={loading || !appointmentForm.staffId || !appointmentForm.roomId || isConfirmDisabled}
+                            disabled={loading || !appointmentForm.staffId || !appointmentForm.roomId}
                         >
                             {loading ? (
                                 <>
@@ -1471,7 +1255,7 @@ const ReceptionistPatent = () => {
                             ) : (
                                 <>
                                     <i className="bi bi-check-circle me-2"></i>
-                                    {isConfirmDisabled ? 'VUI LÒNG XỬ LÝ CẢNH BÁO' : 'XÁC NHẬN TIẾP NHẬN'}
+                                    XÁC NHẬN TIẾP NHẬN
                                 </>
                             )}
                         </button>
@@ -1519,7 +1303,7 @@ const ReceptionistPatent = () => {
 
     return (
         <>
-            {/* Loading Component - HIỆN KHI CÓ LOADING */}
+            {/* Loading Component */}
             <Loading isLoading={loading} />
 
             {/* Toast Notification */}
@@ -1539,12 +1323,6 @@ const ReceptionistPatent = () => {
                 onConfirm={confirmModalConfig.onConfirm}
                 onCancel={hideConfirmDialog}
             />
-
-            {/* THÊM MỚI: Alert Modal */}
-            <AlertModal />
-
-            {/* THÊM MỚI: Alert Badge */}
-            <AlertBadge />
 
             <div className="container-fluid py-4">
                 <div className="row">
@@ -1724,7 +1502,7 @@ const ReceptionistPatent = () => {
                                     </div>
                                 )}
 
-                                {/* Direct Reception Tab - ĐÃ THÊM LOADING */}
+                                {/* Direct Reception Tab */}
                                 {activeTab === 'direct' && (
                                     <div className="row">
                                         <div className="col-lg-5">
