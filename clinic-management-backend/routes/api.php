@@ -175,7 +175,7 @@ Route::prefix('print')->group(function () {
 
 
 // Technician Routes
-Route::prefix('technician')->group(function () {
+Route::prefix('technician')->middleware(['auth:sanctum', 'role:Kĩ thuật viên'])->group(function () {
     // Danh sách dịch vụ được chỉ định
     Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
 
@@ -248,7 +248,7 @@ Route::middleware(['auth:api', 'role:Admin,Bệnh nhân'])
     ->get('/patient/appointments/histories', [PatientController::class, 'appointmentHistories']);
 Route::post('/test-broadcast', function (Request $request) {
     // Tạo fake appointment data
-    $appointment = (object)[
+    $appointment = (object) [
         'id' => rand(1, 1000),
         'patient_name' => 'Bệnh nhân ' . rand(1, 100),
         'doctor_id' => 1,
