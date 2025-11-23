@@ -29,14 +29,6 @@ services:
       - APP_ENV=local
       - APP_DEBUG=true
 
-      # Reverb Configuration
-      - BROADCAST_DRIVER=reverb
-      - REVERB_APP_ID=clinic_app
-      - REVERB_APP_KEY=local_key
-      - REVERB_APP_SECRET=local_secret
-      - REVERB_HOST=0.0.0.0
-      - REVERB_PORT=8080
-
       # Solr Configuration
       - SOLR_HOST=solr
       - SOLR_PORT=8983
