@@ -4,7 +4,7 @@ namespace App\Http\Controllers\API\Doctor;
 
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
-use App\Models\Patient; // Import nếu cần cho relation
+use App\Models\Patient;
 use App\Models\StaffSchedule;
 use App\Models\MedicalStaff;
 use App\Models\Queue;
@@ -16,24 +16,30 @@ use Carbon\Carbon;
 class AppointmentsController extends Controller
 {
     /**
+     * ✅ METHOD TRUNG TÂM: Lấy thông tin doctor từ Auth
+     */
+    private function getAuthenticatedDoctor()
+    {
+        $doctor = MedicalStaff::where('StaffId', Auth::id())->first();
+
+        if (!$doctor) {
+            throw new \Exception('Không tìm thấy thông tin bác sĩ.');
+        }
+
+        return $doctor;
+    }
+
+    /**
      * Lấy danh sách bệnh nhân hôm nay (Today Section).
      * Filter theo ngày hiện tại, StaffId của bác sĩ đăng nhập.
      */
     public function todayPatients()
     {
         try {
-            // Lấy thông tin bác sĩ đang đăng nhập
-            // StaffId = UserId (foreign key)
-            $doctor = MedicalStaff::where('StaffId', Auth::id())->first();
-
-            if (!$doctor) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Không tìm thấy thông tin bác sĩ.'
-                ], 404);
-            }
-
+            // ✅ GỌI METHOD TRUNG TÂM
+            $doctor = $this->getAuthenticatedDoctor();
             $doctorId = $doctor->StaffId;
+
             $today = now()->format('Y-m-d');
 
             // Lấy danh sách appointment của bác sĩ đang đăng nhập
@@ -157,22 +163,14 @@ class AppointmentsController extends Controller
 
 
     /**
-     * 🩺 Lấy lịch làm việc của bác sĩ theo ID (đầy đủ thông tin)
+     * ✅ LẤY LỊCH LÀM VIỆC CỦA BÁC SĨ ĐANG ĐĂNG NHẬP
      */
-    public function getStaffScheduleById($doctorId)
+    public function getWorkSchedule(Request $request)
     {
         try {
-            // Lấy thông tin bác sĩ
-            $doctor = MedicalStaff::with('user')
-                ->where('StaffId', $doctorId)
-                ->first();
-
-            if (!$doctor) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Không tìm thấy thông tin bác sĩ.'
-                ], 404);
-            }
+            // ✅ GỌI METHOD TRUNG TÂM
+            $doctor = $this->getAuthenticatedDoctor();
+            $doctorId = $doctor->StaffId;
 
             // Lấy toàn bộ lịch làm việc của bác sĩ với quan hệ room
             $schedules = StaffSchedule::with(['room'])
@@ -191,7 +189,7 @@ class AppointmentsController extends Controller
                         $status = 'completed';
                     }
 
-                    // XỬ LÝ THÔNG TIN PHÒNG - PHIÊN BẢN HOÀN CHỈNH
+                    // XỬ LÝ THÔNG TIN PHÒNG
                     $roomInfo = $this->getRoomInfo($item);
 
                     // Format thời gian (bỏ giây nếu có)
@@ -260,6 +258,74 @@ class AppointmentsController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Lỗi khi lấy lịch làm việc: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * ✅ LẤY LỊCH LÀM VIỆC THEO THÁNG
+     */
+    public function getWorkScheduleByMonth(Request $request, $year, $month)
+    {
+        try {
+            // ✅ GỌI METHOD TRUNG TÂM
+            $doctor = $this->getAuthenticatedDoctor();
+            $doctorId = $doctor->StaffId;
+
+            $startDate = Carbon::create($year, $month, 1)->startOfMonth();
+            $endDate = Carbon::create($year, $month, 1)->endOfMonth();
+
+            $schedules = StaffSchedule::with(['room'])
+                ->where('StaffId', $doctorId)
+                ->whereBetween('WorkDate', [$startDate, $endDate])
+                ->orderBy('WorkDate')
+                ->orderBy('StartTime')
+                ->get()
+                ->map(function ($item) {
+                    $workDate = Carbon::parse($item->WorkDate);
+
+                    $status = 'upcoming';
+                    if ($workDate->isToday()) {
+                        $status = 'active';
+                    } elseif ($workDate->isPast()) {
+                        $status = 'completed';
+                    }
+
+                    $roomInfo = $this->getRoomInfo($item);
+
+                    return [
+                        'schedule_id' => $item->ScheduleId,
+                        'date' => $item->WorkDate->format('Y-m-d'),
+                        'start_time' => $item->StartTime,
+                        'end_time' => $item->EndTime,
+                        'time' => $item->StartTime . ' - ' . $item->EndTime,
+                        'room_id' => $item->RoomId,
+                        'room_name' => $roomInfo['name'],
+                        'room_description' => $roomInfo['description'],
+                        'room_is_active' => $roomInfo['is_active'],
+                        'room_status' => $roomInfo['status'],
+                        'type' => $item->IsAvailable ? 'Làm việc toàn thời gian' : 'Làm việc bán thời gian',
+                        'status' => $status,
+                        'is_available' => (bool) $item->IsAvailable,
+                        'notes' => $item->Notes
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'data' => $schedules,
+                'message' => 'Lấy lịch làm việc theo tháng thành công',
+                'period' => [
+                    'month' => (int) $month,
+                    'year' => (int) $year,
+                    'month_name' => $this->getVietnameseMonthName($month)
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi lấy lịch làm việc theo tháng: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -354,6 +420,4 @@ class AppointmentsController extends Controller
 
         return $months[$month] ?? 'N/A';
     }
-
-
 }
