@@ -6,7 +6,7 @@ import Loading from '../../Components/Loading/Loading';
 import {
   BiPlus, BiPencil, BiTrash, BiSearch, BiDownload, BiUpload,
   BiExport, BiImport, BiFilter, BiX, BiCalendar, BiDollar,
-  BiPackage, BiCheckShield, BiError
+  BiPackage, BiChevronDown, BiChevronUp, BiError
 } from 'react-icons/bi';
 import * as XLSX from 'xlsx';
 import medicineService from '../../services/medicineService';
@@ -1189,7 +1189,7 @@ const AdminMedicine = () => {
                   disabled={isLoading}
                   title="Lọc nâng cao"
                 >
-                  <BiSearch size={16} />
+                  {showAdvancedFilter ? <BiChevronUp size={26} /> : <BiChevronDown size={26} />}
                 </button>
               </div>
             </div>

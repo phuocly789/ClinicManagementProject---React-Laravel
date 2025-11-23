@@ -107,34 +107,26 @@ Route::post('/dashboard/broadcast-stats', [DashboardController::class, 'broadcas
 
 
 // Nhóm route cho Bác sĩ
-Route::prefix('doctor')->group(function () {
+Route::prefix('doctor')->middleware(['auth:sanctum', 'role:Bác sĩ'])->group(function () {
     // Danh sách bệnh nhân hôm nay
     Route::get('/today-patients', [AppointmentsController::class, 'todayPatients']);
     Route::apiResource('appointments', AppointmentsController::class);
 
     // Gợi ý chẩn đoán & thuốc
-
-    //Gợi ý lấy từ lịch sử bệnh trước đó
     Route::get('/diagnoses/suggestions', [DiagnosisSuggestionController::class, 'suggestions']);
-    // Tìm kiếm thuốc theo tên, loại
     Route::get('/medicines/search', [DoctorMedicineSearchController::class, 'search']);
-    // Gợi ý thuốc & dịch vụ từ AI
     Route::get('/ai/suggestion', [AISuggestionController::class, 'suggest']);
-    // Lấy danh sách dịch vụ
     Route::get('/services', [ServiceController::class, 'index']);
 
     // Lấy lịch làm việc của bác sĩ
-    Route::get('/schedules/{doctorId}', [AppointmentsController::class, 'getStaffScheduleById']);
-    Route::get('/schedules/{doctorId}/month/{year}/{month}', [AppointmentsController::class, 'getWorkScheduleByMonth']);
-    Route::get('/schedules/{doctorId}/today', [AppointmentsController::class, 'getTodaySchedule']);
-    Route::get('/schedules/{doctorId}/week', [AppointmentsController::class, 'getWeekSchedule']);
+    Route::get('/work-schedule-doctor', [AppointmentsController::class, 'getWorkSchedule']);
+    Route::get('/work-schedule-doctor/{year}/{month}', [AppointmentsController::class, 'getWorkScheduleByMonth']);
 
     // Lấy danh sách tất cả bệnh nhân
     Route::get('/patients', [PatientsController::class, 'index']);
 
     // Lịch sử bệnh nhân
     Route::get('/patients/{patientId}/history', [PatientsController::class, 'getPatientHistory']);
-
 
     // Khám bệnh
     Route::prefix('examinations')->group(function () {
@@ -161,7 +153,6 @@ Route::prefix('users')->group(function () {
     // Tìm kiếm user với Solr
     Route::get('/search', [SearchController::class, 'searchUsers']);
     Route::get('/roles', [AdminUserController::class, 'roles']);
-
 });
 
 Route::get('/roles', [AdminUserController::class, 'roles']);
@@ -181,7 +172,7 @@ Route::prefix('print')->group(function () {
 
 
 // Technician Routes
-Route::prefix('technician')->group(function () {
+Route::prefix('technician')->middleware(['auth:sanctum', 'role:Kĩ thuật viên'])->group(function () {
     // Danh sách dịch vụ được chỉ định
     Route::get('/servicesv1', [TestResultsController::class, 'getAssignedServices']);
 
@@ -205,6 +196,8 @@ Route::prefix('technician')->group(function () {
 Route::prefix('receptionist')->group(function () {
     //lịch hẹn
     Route::get('/appointments/today', [AppointmentRecepController::class, 'GetAppointmentToday']);
+    Route::get('/appointments/count-by-timeslot', [AppointmentRecepController::class, 'getAppointmentCountByTimeSlot']);
+    Route::get('/appointments/counts-by-timeslots', [AppointmentRecepController::class, 'getAppointmentCountsByTimeSlots']);
     //hàng chờ
     Route::get('/queue', [QueueController::class, 'GetQueueByDate']);
     Route::get('/queue/{room_id}', [QueueController::class, 'GetQueueByRoomAndDate']);
@@ -232,8 +225,12 @@ Route::prefix('receptionist')->group(function () {
     // Online appointments
     Route::get('/appointments/online', [AppointmentRecepController::class, 'getOnlineAppointments']);
     //notification
-    Route::middleware(['auth:api', 'role:Admin,Lễ tân'])
-        ->get('/notifications', [ReceptionController::class, 'getNotification']);
+    Route::get('/notifications', [ReceptionController::class, 'getNotifications']);
+    Route::post('/notifications', [ReceptionController::class, 'createNotification']);
+    Route::put('/notifications/{notificationId}', [ReceptionController::class, 'updateNotification']);
+    Route::delete('/notifications/{notificationId}', [ReceptionController::class, 'deleteNotification']);
+    Route::get('/notifications/{notificationId}/detail', [ReceptionController::class, 'getNotificationDetail']);
+    Route::get('/appointments/{appointmentId}/detail', [ReceptionController::class, 'getAppointmentDetail']);
 });
 
 // Patient Routes
@@ -444,7 +441,6 @@ Route::get('/solr/reindex-all', function() {
             'reindexed' => $indexed,
             'test_search' => url('/api/search?q=Nguyễn')
         ]);
-        
     } catch (\Exception $e) {
         return response()->json(['error' => $e->getMessage()], 500);
     }

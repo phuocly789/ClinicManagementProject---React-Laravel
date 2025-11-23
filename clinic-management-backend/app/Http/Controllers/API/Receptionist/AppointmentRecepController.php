@@ -122,4 +122,103 @@ class AppointmentRecepController extends Controller
             'message' => 'Danh sách lịch hẹn online được tải thành công.'
         ]);
     }
+    public function getAppointmentCountByTimeSlot(Request $request)
+    {
+        try {
+            $request->validate([
+                'date' => 'required|date',
+                'time' => 'required|date_format:H:i',
+                'room_id' => 'nullable|integer',
+                'staff_id' => 'nullable|integer'
+            ]);
+
+            $date = $request->input('date');
+            $time = $request->input('time');
+            $roomId = $request->input('room_id');
+            $staffId = $request->input('staff_id');
+
+            // Build query
+            $query = Appointment::where('AppointmentDate', $date)
+                ->where('AppointmentTime', $time)
+                ->whereIn('Status', ['Đã đặt', 'Đang chờ', 'Đang khám']); // Chỉ đếm các status đang active
+
+            // Filter by room if provided
+            if ($roomId) {
+                $query->where('RoomId', $roomId);
+            }
+
+            // Filter by staff if provided
+            if ($staffId) {
+                $query->where('StaffId', $staffId);
+            }
+
+            $count = $query->count();
+            $maxCapacity = 10; // Số lượng tối đa mỗi khung giờ
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'count' => $count,
+                    'maxCapacity' => $maxCapacity,
+                    'available' => max(0, $maxCapacity - $count),
+                    'isFull' => $count >= $maxCapacity,
+                    'timeSlot' => $time,
+                    'date' => $date
+                ]
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi server: ' . $e->getMessage()
+            ], 500, [], JSON_UNESCAPED_UNICODE);
+        }
+    }
+    // Backend - API mới
+    public function getAppointmentCountsByTimeSlots(Request $request)
+    {
+        try {
+            $request->validate([
+                'date' => 'required|date',
+                'times' => 'required|array',
+                'room_id' => 'nullable|integer',
+                'staff_id' => 'nullable|integer'
+            ]);
+
+            $date = $request->input('date');
+            $times = $request->input('times');
+            $roomId = $request->input('room_id');
+            $staffId = $request->input('staff_id');
+
+            $results = [];
+
+            foreach ($times as $time) {
+                $query = Appointment::where('AppointmentDate', $date)
+                    ->where('AppointmentTime', $time)
+                    ->whereIn('Status', ['Đã đặt', 'Đang chờ', 'Đang khám']);
+
+                if ($roomId) $query->where('RoomId', $roomId);
+                if ($staffId) $query->where('StaffId', $staffId);
+
+                $count = $query->count();
+                $maxCapacity = 10;
+
+                $results[$time] = [
+                    'count' => $count,
+                    'maxCapacity' => $maxCapacity,
+                    'available' => max(0, $maxCapacity - $count),
+                    'isFull' => $count >= $maxCapacity
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $results
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi server: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

@@ -20,20 +20,20 @@ class DashboardStatsService
                 WITH today_appointments AS (
                     SELECT
                         COUNT(*) FILTER (WHERE DATE(\"AppointmentDate\") = ?) AS total_today,
-                        COUNT(*) FILTER (WHERE DATE(\"AppointmentDate\") = ? AND \"Status\" = 'pending') AS waiting_today,
+                        COUNT(*) FILTER (WHERE DATE(\"AppointmentDate\") = ? AND \"Status\" = 'Đang chờ') AS waiting_today,
                         COUNT(*) FILTER (WHERE DATE(\"AppointmentDate\") = ? AND \"Status\" = 'Đã khám') AS completed_today
                     FROM \"Appointments\"
                 ),
                 today_invoices AS (
                     SELECT
                         COUNT(*) FILTER (WHERE \"Status\" = 'Chờ thanh toán') AS pending_today,
-                        COALESCE(SUM(\"TotalAmount\") FILTER (WHERE \"Status\" = 'Đã thanh toán' AND DATE(\"CreatedAt\") = ?), 0) AS revenue_today
+                        COALESCE(SUM(\"TotalAmount\") FILTER (WHERE \"Status\" = 'Đã thanh toán' AND DATE(\"InvoiceDate\") = ?), 0) AS revenue_today
                     FROM \"Invoices\"
                 ),
                 today_services AS (
                     SELECT COUNT(*) as processing_today
                     FROM \"ServiceOrders\"
-                    WHERE \"Status\" = 'in_progress'
+                    WHERE \"Status\" = 'Đã chỉ định'
                 )
                 SELECT
                     ta.total_today as appointments_today,
