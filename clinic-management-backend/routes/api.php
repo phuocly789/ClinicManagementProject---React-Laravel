@@ -360,88 +360,137 @@ Route::prefix('doctor')->group(function () {
     Route::get('/medicines/search-solr', [SearchController::class, 'searchMedicines']);
 });
 // Route tạm thời để index dữ liệu - XÓA SAU KHI DÙNG
-Route::get('/solr/quick-index', function() {
-    try {
-        $solrService = app(\App\Services\SolrService::class);
+// Route::get('/solr/quick-index', function() {
+//     try {
+//         $solrService = app(\App\Services\SolrService::class);
         
-        // Index một vài user test
-        $users = \App\Models\User::with('roles')->limit(10)->get();
+//         // Index một vài user test
+//         $users = \App\Models\User::with('roles')->limit(10)->get();
         
-        $indexed = 0;
-        foreach ($users as $user) {
-            $document = [
-                'id' => 'user_' . $user->UserId,
-                'title' => $user->FullName,
-                'content' => "User: {$user->FullName}, Email: {$user->Email}, Phone: {$user->Phone}",
-                'type' => 'user',
-                'category' => ['user'],
-                'status' => $user->IsActive ? 'active' : 'inactive',
-                'full_name' => $user->FullName,
-                'email' => $user->Email,
-                'phone' => $user->Phone,
-                'role' => $user->roles->first()->RoleName ?? 'user'
-            ];
+//         $indexed = 0;
+//         foreach ($users as $user) {
+//             $document = [
+//                 'id' => 'user_' . $user->UserId,
+//                 'title' => $user->FullName,
+//                 'content' => "User: {$user->FullName}, Email: {$user->Email}, Phone: {$user->Phone}",
+//                 'type' => 'user',
+//                 'category' => ['user'],
+//                 'status' => $user->IsActive ? 'active' : 'inactive',
+//                 'full_name' => $user->FullName,
+//                 'email' => $user->Email,
+//                 'phone' => $user->Phone,
+//                 'role' => $user->roles->first()->RoleName ?? 'user'
+//             ];
             
-            if ($solrService->indexDocument($document)) {
-                $indexed++;
-            }
-        }
+//             if ($solrService->indexDocument($document)) {
+//                 $indexed++;
+//             }
+//         }
         
-        return response()->json([
-            'success' => true,
-            'message' => "Đã index $indexed users vào Solr",
-            'test_search_url' => url('/api/search?q=Nguyễn&per_page=10')
-        ]);
+//         return response()->json([
+//             'success' => true,
+//             'message' => "Đã index $indexed users vào Solr",
+//             'test_search_url' => url('/api/search?q=Nguyễn&per_page=10')
+//         ]);
         
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'error' => $e->getMessage()
-        ], 500);
-    }
-});
-// Thêm route để xóa và index lại
-Route::get('/solr/reindex-all', function() {
-    try {
-        $solrService = app(\App\Services\SolrService::class);
+//     } catch (\Exception $e) {
+//         return response()->json([
+//             'success' => false,
+//             'error' => $e->getMessage()
+//         ], 500);
+//     }
+// });
+// // Thêm route để xóa và index lại
+// Route::get('/solr/reindex-all', function() {
+//     try {
+//         $solrService = app(\App\Services\SolrService::class);
         
-        // Xóa tất cả documents cũ
-        $client = app(\Solarium\Client::class);
-        $update = $client->createUpdate();
-        $update->addDeleteQuery('*:*');
-        $update->addCommit();
-        $client->update($update);
+//         // Xóa tất cả documents cũ
+//         $client = app(\Solarium\Client::class);
+//         $update = $client->createUpdate();
+//         $update->addDeleteQuery('*:*');
+//         $update->addCommit();
+//         $client->update($update);
         
-        // Index lại users
-        $users = \App\Models\User::with('roles')->get();
-        $indexed = 0;
+//         // Index lại users
+//         $users = \App\Models\User::with('roles')->get();
+//         $indexed = 0;
         
-        foreach ($users as $user) {
-            $document = [
-                'id' => 'user_' . $user->UserId,
-                'title' => $user->FullName,
-                'content' => $user->FullName . ' ' . $user->Email . ' ' . $user->Phone . ' ' . ($user->roles->first()->RoleName ?? ''),
-                'type' => 'user',
-                'category' => ['user'],
-                'status' => $user->IsActive ? 'active' : 'inactive',
-                'full_name' => $user->FullName,
-                'email' => $user->Email,
-                'phone' => $user->Phone,
-                'username' => $user->Username,
-                'role' => $user->roles->first()->RoleName ?? 'user'
-            ];
+//         foreach ($users as $user) {
+//             $document = [
+//                 'id' => 'user_' . $user->UserId,
+//                 'title' => $user->FullName,
+//                 'content' => $user->FullName . ' ' . $user->Email . ' ' . $user->Phone . ' ' . ($user->roles->first()->RoleName ?? ''),
+//                 'type' => 'user',
+//                 'category' => ['user'],
+//                 'status' => $user->IsActive ? 'active' : 'inactive',
+//                 'full_name' => $user->FullName,
+//                 'email' => $user->Email,
+//                 'phone' => $user->Phone,
+//                 'username' => $user->Username,
+//                 'role' => $user->roles->first()->RoleName ?? 'user'
+//             ];
             
-            if ($solrService->indexDocument($document)) {
-                $indexed++;
-            }
-        }
+//             if ($solrService->indexDocument($document)) {
+//                 $indexed++;
+//             }
+//         }
         
-        return response()->json([
-            'success' => true,
-            'reindexed' => $indexed,
-            'test_search' => url('/api/search?q=Nguyễn')
-        ]);
-    } catch (\Exception $e) {
-        return response()->json(['error' => $e->getMessage()], 500);
-    }
-});
+//         return response()->json([
+//             'success' => true,
+//             'reindexed' => $indexed,
+//             'test_search' => url('/api/search?q=Nguyễn')
+//         ]);
+//     } catch (\Exception $e) {
+//         return response()->json(['error' => $e->getMessage()], 500);
+//     }
+// });
+// Route::get('/solr/reindex-all-fix', function () {
+//     $solrService = app(\App\Services\SolrService::class);
+//     $client = app(\Solarium\Client::class);
+
+//     // 1. XÓA SẠCH HOÀN TOÀN
+//     $update = $client->createUpdate();
+//     $update->addDeleteQuery('*:*');
+//     $update->addCommit();
+//     $client->update($update);
+
+//     // 2. INDEX LẠI VỚI CÁCH CHẮC CHẮN NHẤT
+//     $users = \App\Models\User::with('roles')->get();
+//     $indexed = 0;
+
+//     foreach ($users as $user) {
+//         $fullName = trim($user->FullName ?? '');
+//         if (empty($fullName)) continue;
+
+//         $doc = [
+//             'id' => 'user_' . $user->UserId,
+
+//             // 3 FIELD BẮT BUỘC PHẢI CÓ ĐỂ TÌM ĐƯỢC TIẾNG VIỆT
+//             'title'     => $fullName,
+//             'text'      => $fullName,                                      // ← quan trọng
+//             'search_text' => $fullName . ' ' . ($user->Email ?? '') . ' ' . ($user->Phone ?? ''), // ← cực kỳ quan trọng
+//             '_text_'    => $fullName,                                      // ← trick cuối cùng
+
+//             'type'      => 'user',
+//             'full_name' => $fullName,
+//             'email'     => $user->Email,
+//             'phone'     => $user->Phone,
+//             'username'  => $user->Username ?? '',
+//             'role'      => $user->roles->first()->RoleName ?? 'user',
+//             'is_active' => $user->IsActive ? true : false,
+//         ];
+
+//         if ($solrService->indexDocument($doc)) {
+//             $indexed++;
+//         }
+//     }
+
+//     return response()->json([
+//         'success' => true,
+//         'indexed' => $indexed,
+//         'message' => 'ĐÃ FIX TIẾNG VIỆT – BÂY GIỜ CHẠY URL DƯỚI ĐÂY NGAY:',
+//         'TEST_NGAY' => 'http://localhost:8000/api/search?q=Nguyễn&type=user&per_page=10',
+//         'TEST_TẤT_CẢ' => 'http://localhost:8000/api/search?q=*:*&fq=type:user'
+//     ]);
+// });
