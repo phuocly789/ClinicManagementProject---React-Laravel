@@ -119,10 +119,8 @@ Route::prefix('doctor')->middleware(['auth:sanctum', 'role:Bác sĩ'])->group(fu
     Route::get('/services', [ServiceController::class, 'index']);
 
     // Lấy lịch làm việc của bác sĩ
-    Route::get('/schedules/{doctorId}', [AppointmentsController::class, 'getStaffScheduleById']);
-    Route::get('/schedules/{doctorId}/month/{year}/{month}', [AppointmentsController::class, 'getWorkScheduleByMonth']);
-    Route::get('/schedules/{doctorId}/today', [AppointmentsController::class, 'getTodaySchedule']);
-    Route::get('/schedules/{doctorId}/week', [AppointmentsController::class, 'getWeekSchedule']);
+    Route::get('/work-schedule-doctor', [AppointmentsController::class, 'getWorkSchedule']);
+    Route::get('/work-schedule-doctor/{year}/{month}', [AppointmentsController::class, 'getWorkScheduleByMonth']);
 
     // Lấy danh sách tất cả bệnh nhân
     Route::get('/patients', [PatientsController::class, 'index']);

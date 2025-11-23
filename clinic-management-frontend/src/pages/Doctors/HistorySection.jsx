@@ -33,14 +33,14 @@ const HistorySection = ({
   const [sortBy, setSortBy] = useState('name');
   const [expandedVisit, setExpandedVisit] = useState(null);
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [patientDetail, setPatientDetail] = useState(null);
 
   // Hàm chuyển dịch lỗi BE sang thông báo FE thân thiện
   const translateError = (error) => {
     console.error('🔴 Backend Error:', error);
-    
+
     const backendMessage = error.response?.data?.message || error.message || '';
-    
-    // Map các lỗi phổ biến từ BE sang thông báo tiếng Việt thân thiện
+
     const errorMap = {
       'Patient not found': 'Không tìm thấy thông tin bệnh nhân',
       'No history found': 'Không có lịch sử khám bệnh',
@@ -51,14 +51,12 @@ const HistorySection = ({
       'timeout of 5000ms exceeded': 'Quá thời gian chờ phản hồi',
     };
 
-    // Tìm thông báo tương ứng hoặc trả về mặc định
     for (const [key, value] of Object.entries(errorMap)) {
       if (backendMessage.includes(key) || error.message.includes(key)) {
         return value;
       }
     }
 
-    // Fallback cho các lỗi khác
     if (backendMessage) {
       return `Lỗi: ${backendMessage}`;
     }
@@ -103,7 +101,7 @@ const HistorySection = ({
       setError(null);
       try {
         console.log('🔄 DEBUG - Fetching all patients...');
-        
+
         let response;
         let patientsData = [];
 
@@ -185,10 +183,10 @@ const HistorySection = ({
     updatePagination(filteredPatients, newPage);
   };
 
-  // XỬ LÝ CLICK CHI TIẾT - ĐÃ THÊM CONFIRMATION VỚI SWEETALERT2
+  // XỬ LÝ CLICK CHI TIẾT
   const handlePatientDetailClick = async (patient) => {
     console.log('🔄 DEBUG - Clicked patient detail:', patient);
-    
+
     const result = await showConfirmation({
       title: 'Xem chi tiết bệnh nhân',
       text: `Bạn có chắc muốn xem lịch sử khám bệnh của ${patient.name}?`,
@@ -203,11 +201,12 @@ const HistorySection = ({
 
     try {
       setSelectedPatient(patient);
+      setPatientDetail(null);
       setHistory([]);
       setError(null);
-      
+
       const patientId = patient.patient_id || patient.id;
-      
+
       console.log('🆔 DEBUG - Patient ID to fetch history:', patientId);
 
       if (!patientId) {
@@ -215,16 +214,14 @@ const HistorySection = ({
       }
 
       await fetchPatientHistory(patientId);
-      
-      // Hiển thị thông báo thành công
+
       showSuccessAlert(`Đã tải lịch sử khám bệnh của ${patient.name}`);
-      
+
     } catch (error) {
       const translatedError = translateError(error);
       console.error('❌ Error in handlePatientDetailClick:', error);
       setError(translatedError);
-      
-      // Hiển thị lỗi bằng SweetAlert2
+
       Swal.fire({
         title: 'Lỗi!',
         text: translatedError,
@@ -235,7 +232,7 @@ const HistorySection = ({
     }
   };
 
-  // LẤY LỊCH SỬ - ĐÃ CẢI THIỆN XỬ LÝ LỖI
+  // LẤY LỊCH SỬ - LẤY CẢ THÔNG TIN CHI TIẾT TỪ API HISTORY
   const fetchPatientHistory = async (patientId) => {
     if (!patientId) return;
 
@@ -244,35 +241,29 @@ const HistorySection = ({
       setError(null);
 
       console.log('🌐 DEBUG - Calling history APIs...');
-      
+
       let historyData = [];
+      let patientDetailData = null;
 
       try {
         const response = await doctorService.getPatientHistory(patientId);
+        console.log('🔍 DEBUG - Full API response:', response.data);
+        console.log('🔍 DEBUG - Full API response:', response.patient);
+
+        // API HISTORY TRẢ VỀ CẢ HISTORY VÀ PATIENT INFO
         historyData = response.data.data || response.data || [];
+        patientDetailData = response.patient; // Lấy thông tin chi tiết từ API history
+
         console.log('✅ Used getPatientHistory API');
+        console.log('✅ Patient detail from history API:', patientDetailData);
+
       } catch (error) {
-        console.log('❌ getPatientHistory failed, trying medical-history...');
-        try {
-          const response = await doctorService.getMedicalHistory(patientId);
-          historyData = response.data.data || response.data || [];
-          console.log('✅ Used getMedicalHistory API');
-        } catch (error) {
-          console.log('❌ medical-history failed, trying examinations...');
-          try {
-            const response = await doctorService.getAllExaminations(patientId);
-            historyData = response.data.data || response.data || [];
-            console.log('✅ Used getAllExaminations API');
-          } catch (error) {
-            console.log('❌ All history APIs failed, using getExamination...');
-            const response = await doctorService.getExamination(patientId);
-            historyData = response.data.data ? [response.data.data] : [];
-            console.log('✅ Used getExamination API as fallback');
-          }
-        }
+        console.log('❌ getPatientHistory failed:', error);
+        // ... các fallback APIs khác
       }
 
       setHistory(historyData);
+      setPatientDetail(patientDetailData); // Set thông tin chi tiết
       setExpandedVisit(null);
 
       console.log(`✅ Loaded ${historyData.length} history records`);
@@ -282,15 +273,14 @@ const HistorySection = ({
       console.error('❌ Error fetching patient history:', error);
       setError(translatedError);
       setHistory([]);
-      throw error; // Re-throw để xử lý ở component gọi
+      setPatientDetail(null);
+      throw error;
     } finally {
       setHistoryLoading(false);
     }
   };
-
-  // Hàm quay lại danh sách - ĐÃ THÊM CONFIRMATION VỚI SWEETALERT2
+  // Hàm quay lại danh sách
   const handleBackToList = async () => {
-    // Nếu đang có dữ liệu lịch sử, hỏi xác nhận
     if (history.length > 0) {
       const result = await showConfirmation({
         title: 'Quay lại danh sách',
@@ -306,12 +296,13 @@ const HistorySection = ({
     }
 
     setSelectedPatient(null);
+    setPatientDetail(null);
     setHistory([]);
     setError(null);
     setExpandedVisit(null);
   };
 
-  // Hàm xóa bộ lọc tìm kiếm - ĐÃ THÊM CONFIRMATION VỚI SWEETALERT2
+  // Hàm xóa bộ lọc tìm kiếm
   const handleClearSearch = async () => {
     if (searchTerm) {
       const result = await showConfirmation({
@@ -328,7 +319,7 @@ const HistorySection = ({
     }
   };
 
-  // Hàm reload dữ liệu - ĐÃ THÊM CONFIRMATION VỚI SWEETALERT2
+  // Hàm reload dữ liệu
   const handleReloadData = async () => {
     const result = await showConfirmation({
       title: 'Tải lại dữ liệu',
@@ -341,7 +332,7 @@ const HistorySection = ({
         try {
           setLoading(true);
           setError(null);
-          
+
           let response;
           let patientsData = [];
 
@@ -375,21 +366,6 @@ const HistorySection = ({
     }
   };
 
-  // Hàm xử lý lỗi và hiển thị thông báo
-  const handleError = (error, customMessage = '') => {
-    const translatedError = translateError(error);
-    console.error('❌ Error:', error);
-    setError(translatedError);
-    
-    Swal.fire({
-      title: 'Lỗi!',
-      text: customMessage || translatedError,
-      icon: 'error',
-      confirmButtonColor: '#d33',
-      confirmButtonText: 'OK'
-    });
-  };
-
   const toggleVisitExpansion = (index) => {
     setExpandedVisit(expandedVisit === index ? null : index);
   };
@@ -402,7 +378,7 @@ const HistorySection = ({
 
   const renderPrescriptionDetails = (prescription) => {
     const medicines = prescription.medicines || prescription.details || prescription.prescription_details || [];
-    
+
     if (!medicines || medicines.length === 0) {
       return <p className="text-muted">Không có thông tin thuốc.</p>;
     }
@@ -458,7 +434,7 @@ const HistorySection = ({
               <td>
                 <Badge bg={
                   (service.status || '').toLowerCase() === 'hoàn thành' ? 'success' :
-                  (service.status || '').toLowerCase() === 'đã chỉ định' ? 'primary' : 'secondary'
+                    (service.status || '').toLowerCase() === 'đã chỉ định' ? 'primary' : 'secondary'
                 }>
                   {service.status || 'Chưa xác định'}
                 </Badge>
@@ -491,8 +467,8 @@ const HistorySection = ({
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                   {searchTerm && (
-                    <Button 
-                      variant="outline-secondary" 
+                    <Button
+                      variant="outline-secondary"
                       onClick={handleClearSearch}
                       title="Xóa bộ lọc tìm kiếm"
                     >
@@ -514,16 +490,16 @@ const HistorySection = ({
               <Col md={3}>
                 <div className="d-flex justify-content-between align-items-center">
                   <div className="text-muted small">
-                    <i class="fas fa-signal"></i> Tổng: {filteredPatients.length} bệnh nhân
+                    <i className="fas fa-layer-group text-primary"></i> Tổng: {filteredPatients.length} bệnh nhân
                   </div>
-                  <Button 
-                    variant="outline-primary" 
-                    size="sm" 
+                  <Button
+                    variant="outline-primary"
+                    size="sm"
                     onClick={handleReloadData}
                     title="Tải lại dữ liệu"
                     disabled={loading}
                   >
-                    {loading ? <Spinner size="sm" /> : <i class="fas fa-undo"></i>}
+                    {loading ? <Spinner size="sm" /> : <i className="fas fa-undo"></i>}
                   </Button>
                 </div>
               </Col>
@@ -539,15 +515,15 @@ const HistorySection = ({
                 <Alert.Heading> Lỗi tải danh sách</Alert.Heading>
                 <p>{error}</p>
                 <div className="d-flex gap-2">
-                  <Button 
-                    variant="outline-danger" 
+                  <Button
+                    variant="outline-danger"
                     onClick={handleReloadData}
                     disabled={loading}
                   >
                     {loading ? <Spinner size="sm" /> : 'Thử lại'}
                   </Button>
-                  <Button 
-                    variant="outline-secondary" 
+                  <Button
+                    variant="outline-secondary"
                     onClick={() => setError(null)}
                   >
                     Đóng thông báo
@@ -581,7 +557,7 @@ const HistorySection = ({
                             </small>
                           </div>
                           <Badge bg="primary">
-                            <i class="far fa-eye"></i> Chi tiết
+                            <i className="far fa-eye"></i> Chi tiết
                           </Badge>
                         </div>
                       </ListGroup.Item>
@@ -609,15 +585,15 @@ const HistorySection = ({
               <div>
                 <h4>Chi Tiết Bệnh Nhân</h4>
                 <p className="text-muted mb-0">
-                  {selectedPatient.name} - ID: {selectedPatient.patient_id || selectedPatient.id}
+                  {patientDetail?.name || selectedPatient.name} - ID: {patientDetail?.patient_id || selectedPatient.patient_id || selectedPatient.id}
                 </p>
               </div>
-              <Button 
-                variant="outline-secondary" 
+              <Button
+                variant="outline-secondary"
                 onClick={handleBackToList}
                 disabled={historyLoading}
               >
-                <i class="fas fa-arrow-left"></i> Quay lại danh sách
+                <i className="fas fa-arrow-left"></i> Quay lại danh sách
               </Button>
             </div>
 
@@ -631,15 +607,15 @@ const HistorySection = ({
                 <Alert.Heading>Thông báo</Alert.Heading>
                 <p>{error}</p>
                 <div className="d-flex gap-2">
-                  <Button 
-                    variant="outline-warning" 
+                  <Button
+                    variant="outline-warning"
                     onClick={() => handlePatientDetailClick(selectedPatient)}
                     disabled={historyLoading}
                   >
                     {historyLoading ? <Spinner size="sm" /> : ' Thử lại'}
                   </Button>
-                  <Button 
-                    variant="outline-secondary" 
+                  <Button
+                    variant="outline-secondary"
                     onClick={() => setError(null)}
                   >
                     Đóng thông báo
@@ -652,23 +628,32 @@ const HistorySection = ({
                   <Col md={6}>
                     <Card>
                       <Card.Header className="bg-light">
-                        <strong><i class="fas fa-user-circle"></i> Thông Tin Cá Nhân</strong>
+                        <strong><i className="fas fa-user-circle text-success"></i> Thông Tin Cá Nhân</strong>
                       </Card.Header>
                       <Card.Body>
-                        <p><strong>Họ tên:</strong> {selectedPatient.name}</p>
-                        <p><strong>Mã BN:</strong> {selectedPatient.patient_id || selectedPatient.id}</p>
-                        <p><strong>Tuổi:</strong> {selectedPatient.age}</p>
-                        <p><strong>Giới tính:</strong> {selectedPatient.gender}</p>
-                        <p><strong>SĐT:</strong> {selectedPatient.phone}</p>
-                        <p><strong>Địa chỉ:</strong> {selectedPatient.address || 'N/A'}</p>
-                        <p><strong>Bác sĩ:</strong> {selectedPatient.doctorName || 'N/A'}</p>
+                        <Row>
+                          <Col md={6}>
+                            <p><strong>Mã BN:</strong><br />{patientDetail?.patient_id || selectedPatient.patient_id || selectedPatient.id}</p>
+                            <p><strong>Họ tên:</strong><br />{patientDetail?.name || selectedPatient.name}</p>
+                            <p><strong>Ngày sinh:</strong><br />{patientDetail?.date_of_birth || 'N/A'}</p>
+                            <p><strong>Tuổi:</strong><br />{patientDetail?.age || selectedPatient.age}</p>
+                            <p><strong>Giới tính:</strong><br />{patientDetail?.gender || 'N/A'}</p>
+                          </Col>
+                          <Col md={6}>
+                            <p><strong>SĐT:</strong><br />{patientDetail?.phone || selectedPatient.phone}</p>
+                            <p><strong>Email:</strong><br />{patientDetail?.email || 'N/A'}</p>
+                            <p><strong>Địa chỉ:</strong><br />{patientDetail?.address || selectedPatient.address || 'N/A'}</p>
+                            <p><strong>Tiền sử bệnh:</strong><br />{patientDetail?.medical_history || 'N/A'}</p>
+                            <p><strong>Ngày đăng ký:</strong><br />{patientDetail?.registered_date || 'N/A'}</p>
+                          </Col>
+                        </Row>
                       </Card.Body>
                     </Card>
                   </Col>
                   <Col md={6}>
                     <Card>
                       <Card.Header className="bg-light">
-                        <strong> <i class="fas fa-signal"></i> Thống Kê</strong>
+                        <strong> <i className="fas fa-chart-pie text-warning"></i> Thống Kê</strong>
                       </Card.Header>
                       <Card.Body>
                         <p><strong>Tổng số lần khám:</strong> {history.length}</p>
@@ -683,7 +668,7 @@ const HistorySection = ({
 
                 <Card>
                   <Card.Header className="bg-info text-white">
-                    <h6 className="mb-0"><i class="fas fa-clock"></i> Lịch Sử Khám Bệnh ({history.length} lần)</h6>
+                    <h6 className="mb-0"><i className="fas fa-clock"></i> Lịch Sử Khám Bệnh ({history.length} lần)</h6>
                   </Card.Header>
                   <Card.Body>
                     {history.length === 0 ? (
@@ -718,7 +703,7 @@ const HistorySection = ({
                                 </Col>
                                 <Col md={6}>
                                   <p><strong>Kết quả xét nghiệm:</strong> {visit.test_results || 'Chưa có'}</p>
-                                  <p><strong>Bác sĩ:</strong> {visit.doctorName  || 'N/A'}</p>
+                                  <p><strong>Bác sĩ:</strong> {visit.doctorName || 'N/A'}</p>
                                   <p><strong>Tổng chi phí:</strong> {calculateTotalCost(visit).toLocaleString()} VNĐ</p>
                                 </Col>
                               </Row>

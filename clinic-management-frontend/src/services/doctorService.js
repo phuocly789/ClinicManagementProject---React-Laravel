@@ -33,7 +33,7 @@ const doctorService = {
     },
     getRoom: () => {
         return axios.get("/api/doctor/room-info");
-        },
+    },
 
     // Lấy thông tin khám đã hoàn thành
     getExamination: (patientId) => {
@@ -100,24 +100,14 @@ const doctorService = {
 
     // === API LẤY LỊCH LÀM VIỆC CỦA BÁC SĨ ===
 
-    // Lấy lịch làm việc của bác sĩ - CẬP NHẬT
-    getSchedule: (doctorId) => {
-        return axios.get(`/api/doctor/schedules/${doctorId}`);
+    // ✅ API MỚI: Lấy lịch làm việc của bác sĩ đang đăng nhập - KHÔNG CẦN ID
+    getWorkSchedule: () => {
+        return axios.get(`/api/doctor/work-schedule-doctor`);
     },
 
-    // Lấy lịch làm việc theo tháng - THÊM MỚI
-    getScheduleByMonth: (doctorId, year, month) => {
-        return axios.get(`/api/doctor/schedules/${doctorId}/month/${year}/${month}`);
-    },
-
-    // Lấy lịch làm việc hôm nay - THÊM MỚI
-    getTodaySchedule: (doctorId) => {
-        return axios.get(`/api/doctor/schedules/${doctorId}/today`);
-    },
-
-    // Lấy lịch làm việc tuần này - THÊM MỚI
-    getWeekSchedule: (doctorId) => {
-        return axios.get(`/api/doctor/schedules/${doctorId}/week`);
+    // ✅ API MỚI: Lấy lịch làm việc theo tháng của bác sĩ đang đăng nhập
+    getWorkScheduleByMonth: (year, month) => {
+        return axios.get(`/api/doctor/work-schedule/${year}/${month}`);
     },
 }
 
