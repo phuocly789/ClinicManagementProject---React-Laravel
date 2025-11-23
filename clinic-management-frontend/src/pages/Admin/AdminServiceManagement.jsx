@@ -101,13 +101,13 @@ const AdminServiceManagement = () => {
         try {
             console.log('Fetching services with params:', {
                 page, 
-                per_page: 5, 
+                per_page: 10, 
                 ...apiFilters 
             });
             
             const response = await adminService.getServices({
                 page, 
-                per_page: 5, 
+                per_page: 10, 
                 ...apiFilters 
             });
             

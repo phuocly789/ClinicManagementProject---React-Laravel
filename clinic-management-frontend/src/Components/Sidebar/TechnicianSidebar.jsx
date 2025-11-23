@@ -1,96 +1,101 @@
-// src/components/Sidebar/TechnicianSidebar.jsx
-import React from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
-import { path } from '../../utils/constant';
+import React from "react";
+import { NavLink, Outlet } from "react-router-dom";
+import "../../App.css";
+import { useUser } from "../../context/userContext";
 
 const TechnicianSidebar = () => {
+  const { user, handleLogout } = useUser();
+
+  // Hàm tạo avatar từ tên
+  const getAvatarFromName = (name) => {
+    if (!name) return "KT";
+    
+    const nameParts = name.split(' ');
+    if (nameParts.length === 1) return nameParts[0].charAt(0).toUpperCase();
+    
+    return (nameParts[0].charAt(0) + nameParts[nameParts.length - 1].charAt(0)).toUpperCase();
+  };
+
+  // Lấy tên hiển thị
+  const displayName = user?.full_name || user?.name || user?.username || 'Kỹ Thuật Viên';
+
   return (
     <div className="d-flex" style={{ minHeight: "100vh" }}>
       {/* Sidebar */}
-      <div 
-        className="d-flex flex-column text-white vh-100 position-fixed"
-        style={{
-          width: '280px',
-          background: 'linear-gradient(to bottom, #4e8cb1, #795548)',
-          padding: '2rem 1rem',
-          boxShadow: '2px 0 8px rgba(0, 0, 0, 0.1)',
-          zIndex: 1000
-        }}
-      >
-        {/* Header */}
-        <div className="text-center mb-4">
-          <h4 className="fw-bold mb-3" style={{ fontSize: '1.4rem' }}>Phòng Khám XYZ</h4>
-          <div className="p-3 rounded" style={{ background: 'rgba(255,255,255,0.1)' }}>
-            <p className="mb-1 small opacity-75">Kỹ Thuật Viên,</p>
-            <p className="fw-bold mb-0">Trần Văn Hùng</p>
+      <div className="sidebar d-flex flex-column shadow-sm">
+        <h2 className="sidebar-header text-center fw-bold mb-3">
+          Phòng Khám XYZ
+        </h2>
+
+        {/* User Info với Avatar */}
+        <div className="user-info text-center border-bottom pb-3 mb-3">
+          <div className="avatar-container mb-2">
+            <div 
+              className="avatar-circle d-inline-flex align-items-center justify-content-center"
+              style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: '50%',
+                backgroundColor: '#17a2b8',
+                color: 'white',
+                fontSize: '1.2rem',
+                fontWeight: 'bold'
+              }}
+            >
+              {getAvatarFromName(displayName)}
+            </div>
           </div>
+          <p className="mb-1 opacity-75">Kỹ Thuật Viên</p>
+          <strong className="d-block">{displayName}</strong>
+          <small className="text-muted">{user?.department || 'Phòng Xét nghiệm'}</small>
         </div>
 
-        {/* Navigation với React Router NavLink */}
-        <nav className="flex-column flex-grow-1 d-flex">
-          <div className="nav flex-column flex-grow-1">
-            <div className="nav-item mb-2">
-              <NavLink 
-                to={`${path.TECHNICIAN.ROOT}/${path.TECHNICIAN.SCHEDULE}`}
-                className={({ isActive }) => 
-                  `nav-link py-3 px-3 rounded d-flex align-items-center transition-all ${
-                    isActive ? 'active-tech-nav text-dark' : 'text-white'
-                  }`
-                }
-                style={({ isActive }) => ({ 
-                  background: isActive ? '#fff' : 'transparent',
-                  border: 'none',
-                  textDecoration: 'none'
-                })}
-              >
-                <i className="fa-solid fa-calendar-day me-3" style={{ width: '20px' }}></i>
-                <span className="fw-medium">Lịch Làm Việc</span>
+
+        <nav>
+          <ul className="nav flex-column nav-list">
+            <li>
+              <NavLink to="/technician/schedule" className="nav-item">
+                {/* Avatar thay cho icon lịch */}
+                <div 
+                  className="nav-avatar d-inline-flex align-items-center justify-content-center me-3"
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    backgroundColor: '#17a2b8',
+                    color: 'white',
+                    fontSize: '0.7rem',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  {getAvatarFromName(displayName)}
+                </div>
+                Quản Lý Lịch Làm Việc
               </NavLink>
-            </div>
-            
-            <div className="nav-item mb-2">
-              <NavLink 
-                to={`${path.TECHNICIAN.ROOT}/${path.TECHNICIAN.TEST_RESULTS}`}
-                className={({ isActive }) => 
-                  `nav-link py-3 px-3 rounded d-flex align-items-center transition-all ${
-                    isActive ? 'active-tech-nav text-dark' : 'text-white'
-                  }`
-                }
-                style={({ isActive }) => ({ 
-                  background: isActive ? '#fff' : 'transparent',
-                  border: 'none',
-                  textDecoration: 'none'
-                })}
-              >
-                <i className="fa-solid fa-flask me-3" style={{ width: '20px' }}></i>
-                <span className="fw-medium">Kết Quả Xét Nghiệm</span>
+            </li>
+
+            <li>
+              <NavLink to="/technician/test-results" className="nav-item">
+                <i className="fas fa-vials"></i>                
+                Quản Lý Xét Nghiệm
               </NavLink>
-            </div>
-            
-            {/* Logout */}
-            <div className="nav-item mt-auto">
-              <NavLink 
-                to="/logout"
-                className="nav-link py-3 px-3 rounded d-flex align-items-center text-white transition-all"
-                style={{ 
-                  background: 'transparent', 
-                  border: 'none',
-                  textDecoration: 'none'
-                }}
+            </li>
+
+            <li className="border-top mt-auto pt-3">
+              <button
+                onClick={handleLogout}
+                className="nav-item logout-btn"
               >
-                <i className="fa-solid fa-right-from-bracket me-3" style={{ width: '20px' }}></i>
-                <span className="fw-medium">Đăng Xuất</span>
-              </NavLink>
-            </div>
-          </div>
+                <i className="fa-solid fa-right-from-bracket"></i>
+                Đăng Xuất
+              </button>
+            </li>
+          </ul>
         </nav>
       </div>
 
-      {/* Main Content với Outlet */}
-      <div 
-        className="flex-grow-1 bg-light"
-        style={{ marginLeft: '280px', minHeight: '100vh' }}
-      >
+      {/* Nội dung trang con */}
+      <div className="flex-grow-1">
         <Outlet />
       </div>
     </div>
