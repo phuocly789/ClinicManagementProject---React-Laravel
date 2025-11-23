@@ -82,22 +82,32 @@ class SolrService
     }
 
     protected function formatResults($resultset)
-    {
-        $results = [];
-        foreach ($resultset as $document) {
-            $results[] = [
-                'id' => $document->id,
-                'title' => $document->title ?? '',
-                'content' => $document->content ?? '',
-                'type' => $document->type ?? '',
-                'category' => $document->category ?? [],
-                'status' => $document->status ?? '',
-                'score' => $document->score ?? 0,
-                // Thêm các field khác tùy theo schema
-            ];
-        }
-        return $results;
+{
+    $results = [];
+    foreach ($resultset as $document) {
+        $fields = $document->getFields();
+
+        $results[] = [
+            'id'              => $fields['id'] ?? null,
+            'title'           => $fields['title'] ?? $fields['service_name'] ?? $fields['medicine_name'] ?? $fields['full_name'] ?? 'Không có tiêu đề',
+            'content'         => $fields['content'] ?? $fields['description'] ?? '',
+            'type'            => $fields['type'] ?? '',
+            'service_type'    => $fields['service_type'] ?? null,
+            'service_name'    => $fields['service_name'] ?? null,
+            'price'           => $fields['price'] ?? 0,
+            'description'     => $fields['description'] ?? '',
+            'medicine_name'   => $fields['medicine_name'] ?? null,
+            'full_name'       => $fields['full_name'] ?? null,
+            'phone'           => $fields['phone'] ?? null,
+            'patient_name'    => $fields['patient_name'] ?? null,
+            'doctor_name'     => $fields['doctor_name'] ?? null,
+            'score'           => $fields['score'] ?? 0,
+            // Lấy tất cả field còn lại (rất quan trọng cho debug)
+            '_all_fields'     => $fields,
+        ];
     }
+    return $results;
+}
 
     public function healthCheck()
     {

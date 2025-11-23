@@ -494,3 +494,43 @@ Route::prefix('doctor')->group(function () {
 //         'TEST_TẤT_CẢ' => 'http://localhost:8000/api/search?q=*:*&fq=type:user'
 //     ]);
 // });
+Route::get('/solr/reindex-services', function () {
+    try {
+        $solrService = app(\App\Services\SolrService::class);
+        
+        // Xóa sạch dịch vụ cũ
+        $client = app(\Solarium\Client::class);
+        $update = $client->createUpdate();
+        $update->addDeleteQuery('type:service');
+        $update->addCommit();
+        $client->update($update);
+
+        $services = \App\Models\Service::all();
+        $indexed = 0;
+
+        foreach ($services as $service) {
+            $doc = [
+                'id'            => 'service_' . $service->ServiceId,
+                'title'         => $service->ServiceName,
+                'content'       => $service->ServiceName . ' ' . ($service->Description ?? '') . ' ' . $service->ServiceType,
+                'type'          => 'service',
+                'service_name'  => $service->ServiceName,
+                'service_type'  => $service->ServiceType,
+                'price'         => (float)$service->Price,
+                'description'   => $service->Description ?? '',
+            ];
+
+            if ($solrService->indexDocument($doc)) $indexed++;
+        }
+
+        return response()->json([
+            'success' => true,
+            'indexed' => $indexed,
+            'message' => "ĐÃ INDEX THÀNH CÔNG $indexed DỊCH VỤ!",
+            'test_now' => url('/api/search?q=khám&type=service&per_page=10')
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+});

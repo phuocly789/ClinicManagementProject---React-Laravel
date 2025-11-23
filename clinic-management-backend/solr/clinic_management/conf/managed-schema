@@ -87,7 +87,7 @@
                 <tokenizer class="solr.StandardTokenizerFactory"/>
                 <filter class="solr.LowerCaseFilterFactory"/>
                 <!-- Bỏ SnowballPorterFilter vì không phù hợp tiếng Việt -->
-                <filter class="solr.ASCIIFoldingFilterFactory"/> <!-- Chuyển đổi ký tự có dấu -->
+                <filter class="solr.ASCIIFoldingFilterFactory"/> Chuyển đổi ký tự có dấu
             </analyzer>
             <analyzer type="query">
                 <tokenizer class="solr.StandardTokenizerFactory"/>
