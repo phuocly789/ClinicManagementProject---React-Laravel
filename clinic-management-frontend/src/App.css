@@ -210,6 +210,20 @@ ul {
   background-color: #212b36;
 }
 
+/* Thêm vào phần style */
+.modal-backdrop {
+  z-index: 1040;
+}
+
+.modal {
+  z-index: 1050;
+}
+
+.position-absolute.bg-white {
+  z-index: 1060;
+  /* Loading phải cao hơn modal */
+}
+
 .info-row {
   display: flex;
   justify-content: space-between;

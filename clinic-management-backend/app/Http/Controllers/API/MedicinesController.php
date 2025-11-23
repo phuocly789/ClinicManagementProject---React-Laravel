@@ -66,7 +66,7 @@ class MedicinesController extends Controller
 
         // 5. TỒN KHO THẤP
         if ($request->get('low_stock') === '1') {
-            $query->whereRaw('StockQuantity < LowStockThreshold');
+            $query->whereRaw('"StockQuantity" < "LowStockThreshold"');
         }
 
         // THÊM SAU CÁC FILTER KHÁC
@@ -201,7 +201,7 @@ class MedicinesController extends Controller
     {
         $threshold = $request->get('threshold', 100);
 
-        $lowStock = Medicine::where('StockQuantity', '<', $threshold)->orderBy('StockQuantity', 'asc')->get(['MedicineId', 'MedicineName', 'StockQuantity', 'Unit']);
+        $lowStock = Medicine::whereRaw('"StockQuantity" < ?', [$threshold])->orderBy('"StockQuantity"', 'asc')->get(['MedicineId', 'MedicineName', 'StockQuantity', 'Unit']);
 
         return response()->json([
             'message' => 'Danh sách thuốc tồn kho thấp',
@@ -256,9 +256,9 @@ class MedicinesController extends Controller
             }
             if (isset($filters['low_stock']) && $filters['low_stock'] !== '') {
                 if ($filters['low_stock'] == '1') {
-                    $query->whereColumn('StockQuantity', '<', 'LowStockThreshold');
+                    $query->whereRaw('"StockQuantity" < "LowStockThreshold"');
                 } else {
-                    $query->whereColumn('StockQuantity', '>=', 'LowStockThreshold');
+                    $query->whereRaw('"StockQuantity" >= "LowStockThreshold"');
                 }
             }
 
@@ -503,7 +503,7 @@ class MedicinesController extends Controller
 
         $expired = Medicine::whereDate('ExpiryDate', '<', $today)->get();
 
-        $lowStock = Medicine::whereColumn('StockQuantity', '<=', 'LowStockThreshold')->get();
+        $lowStock = Medicine::whereRaw('"StockQuantity" <= "LowStockThreshold"')->get();
 
         return response()->json([
             'expiring' => $expiring,
