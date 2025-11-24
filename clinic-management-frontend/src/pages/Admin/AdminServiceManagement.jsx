@@ -37,7 +37,7 @@ const FormField = React.memo(({
 const AdminServiceManagement = () => {
     const [services, setServices] = useState([]);
     const [serviceTypes, setServiceTypes] = useState([]);
-    const [pagination, setPagination] = useState({ currentPage: 1, totalPages: 1, totalItems: 0 });
+    const [pagination, setPagination] = useState({ currentPage: 1, totalPages: 1 });
     const [filters, setFilters] = useState({ search: '', type: '' });
     const [debouncedSearchTerm] = useDebounce(filters.search, 500);
     const [modal, setModal] = useState({ type: null, service: null });
@@ -121,11 +121,10 @@ const AdminServiceManagement = () => {
             }));
 
             setServices(formattedServices);
-            setPagination({
-                currentPage: data.current_page || data.currentPage || 1,
-                totalPages: data.last_page || 1,
-                totalItems: data.total || data.totalItems || 0
-            });
+           setPagination({
+        currentPage: response.data.current_page || response.current_page || 1,
+        totalPages: response.data.last_page || response.last_page || 1,
+      });
         } catch (err) {
             console.error('Lỗi khi tải danh sách dịch vụ:', err);
             setToast({
