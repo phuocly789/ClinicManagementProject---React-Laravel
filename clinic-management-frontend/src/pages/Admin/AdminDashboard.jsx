@@ -385,7 +385,7 @@ const PrescriptionAnalytics = ({ analyticsData }) => {
     const CustomTooltip = ({ active, payload, label }) => {
         if (active && payload && payload.length) {
             return (
-                <div className="custom-tooltip bg-dark text-white p-3 rounded shadow">
+                <div className="custom-tooltip bg-white text-dark p-3 rounded shadow">
                     <p className="mb-1 fw-medium">{`Thuốc: ${payload[0].payload.fullName}`}</p>
                     <p className="mb-0 text-success">
                         {`Số lượng: ${new Intl.NumberFormat('vi-VN').format(payload[0].value)}`}

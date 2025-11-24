@@ -53,7 +53,7 @@ const SummaryCards = ({ data }) => {
     pendingInvoices: data?.filter(item => item.Status === 'Chờ thanh toán').length || 0,
   };
 
-  
+
 };
 
 const AdminRevenueReport = () => {
@@ -85,11 +85,12 @@ const AdminRevenueReport = () => {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, pageSize, startDate, endDate]);
+  }, [searchQuery, pageSize, startDate, endDate, currentPage]);
+
 
   useEffect(() => {
-    fetchInvoices(1);
-  }, [fetchInvoices]);
+    fetchInvoices(currentPage);
+  }, [currentPage]);
 
   const handleFilterAction = () => {
     if (new Date(startDate) > new Date(endDate)) {
@@ -105,7 +106,6 @@ const AdminRevenueReport = () => {
   const handlePageChange = ({ selected }) => {
     const newPage = selected + 1;
     setCurrentPage(newPage);
-    fetchInvoices(newPage);
   };
 
   const exportToCsv = () => {
@@ -395,7 +395,7 @@ const AdminRevenueReport = () => {
                   <Pagination
                     pageCount={totalPages}
                     onPageChange={handlePageChange}
-                    forcePage={currentPage - 1}
+                    currentPage={currentPage - 1}
                   />
                 </div>
               )}
