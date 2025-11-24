@@ -14,8 +14,8 @@ import {
   Accordion
 } from 'react-bootstrap';
 import Pagination from '../../Components/Pagination/Pagination';
-
-const API_BASE_URL = 'http://localhost:8000';
+import doctorService from '../../services/doctorService';
+import Swal from 'sweetalert2';
 
 const HistorySection = ({
   currentSection
@@ -32,9 +32,67 @@ const HistorySection = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('name');
   const [expandedVisit, setExpandedVisit] = useState(null);
-  
-  // FIX: Sử dụng state nội bộ thay vì prop
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [patientDetail, setPatientDetail] = useState(null);
+
+  // Hàm chuyển dịch lỗi BE sang thông báo FE thân thiện
+  const translateError = (error) => {
+    console.error('🔴 Backend Error:', error);
+
+    const backendMessage = error.response?.data?.message || error.message || '';
+
+    const errorMap = {
+      'Patient not found': 'Không tìm thấy thông tin bệnh nhân',
+      'No history found': 'Không có lịch sử khám bệnh',
+      'Invalid patient ID': 'Mã bệnh nhân không hợp lệ',
+      'Network Error': 'Lỗi kết nối mạng. Vui lòng kiểm tra kết nối internet',
+      'Request failed with status code 404': 'Không tìm thấy dữ liệu',
+      'Request failed with status code 500': 'Lỗi máy chủ. Vui lòng thử lại sau',
+      'timeout of 5000ms exceeded': 'Quá thời gian chờ phản hồi',
+    };
+
+    for (const [key, value] of Object.entries(errorMap)) {
+      if (backendMessage.includes(key) || error.message.includes(key)) {
+        return value;
+      }
+    }
+
+    if (backendMessage) {
+      return `Lỗi: ${backendMessage}`;
+    }
+
+    return 'Đã xảy ra lỗi không xác định. Vui lòng thử lại sau.';
+  };
+
+  // Hàm hiển thị confirmation với SweetAlert2
+  const showConfirmation = async (options) => {
+    const result = await Swal.fire({
+      title: options.title || 'Xác nhận hành động',
+      text: options.message || 'Bạn có chắc muốn thực hiện hành động này?',
+      icon: options.icon || 'question',
+      showCancelButton: true,
+      confirmButtonColor: options.confirmColor || '#3085d6',
+      cancelButtonColor: options.cancelColor || '#d33',
+      confirmButtonText: options.confirmText || 'Xác nhận',
+      cancelButtonText: options.cancelText || 'Hủy',
+      showLoaderOnConfirm: options.showLoader || false,
+      preConfirm: options.preConfirm || undefined,
+      allowOutsideClick: () => !Swal.isLoading()
+    });
+
+    return result;
+  };
+
+  // Hàm hiển thị thông báo thành công
+  const showSuccessAlert = (message) => {
+    Swal.fire({
+      title: 'Thành công!',
+      text: message,
+      icon: 'success',
+      confirmButtonColor: '#3085d6',
+      confirmButtonText: 'OK'
+    });
+  };
 
   // Fetch patients list
   useEffect(() => {
@@ -42,30 +100,30 @@ const HistorySection = ({
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(`${API_BASE_URL}/api/doctor/patients`);
-        console.log('DEBUG - Patients response status:', response.status);
+        console.log('🔄 DEBUG - Fetching all patients...');
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('DEBUG - Patients error body:', errorText);
-          throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+        let response;
+        let patientsData = [];
+
+        try {
+          response = await doctorService.getAllPatients();
+          patientsData = response.data.data || response.data || [];
+        } catch (error) {
+          console.log('❌ getAllPatients failed, trying getToday...');
+          response = await doctorService.getToday();
+          patientsData = response.data.data || response.data || [];
         }
 
-        const result = await response.json();
-        console.log('DEBUG - All patients loaded:', result);
+        console.log('✅ DEBUG - Patients data loaded:', patientsData);
 
-        if (!result.success) {
-          throw new Error(result.message || 'API response invalid');
-        }
-
-        const patientsData = result.data || result || [];
         setAllPatients(patientsData);
         setFilteredPatients(patientsData);
         updatePagination(patientsData, 0);
 
       } catch (error) {
-        console.error('Error fetching patients:', error);
-        setError(error.message);
+        const translatedError = translateError(error);
+        console.error('❌ Error fetching patients:', error);
+        setError(translatedError);
         setAllPatients([]);
         setFilteredPatients([]);
         setDisplayPatients([]);
@@ -82,7 +140,6 @@ const HistorySection = ({
   useEffect(() => {
     let filtered = allPatients;
 
-    // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(patient =>
         patient.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -91,7 +148,6 @@ const HistorySection = ({
       );
     }
 
-    // Apply sorting
     filtered = [...filtered].sort((a, b) => {
       switch (sortBy) {
         case 'name':
@@ -127,33 +183,56 @@ const HistorySection = ({
     updatePagination(filteredPatients, newPage);
   };
 
-  // FIXED: HÀM XỬ LÝ CLICK CHI TIẾT
+  // XỬ LÝ CLICK CHI TIẾT
   const handlePatientDetailClick = async (patient) => {
     console.log('🔄 DEBUG - Clicked patient detail:', patient);
-    
+
+    const result = await showConfirmation({
+      title: 'Xem chi tiết bệnh nhân',
+      text: `Bạn có chắc muốn xem lịch sử khám bệnh của ${patient.name}?`,
+      confirmText: 'Xem chi tiết',
+      cancelText: 'Hủy',
+      icon: 'info'
+    });
+
+    if (!result.isConfirmed) {
+      return;
+    }
+
     try {
-      // ẨN DANH SÁCH, HIỆN CHI TIẾT
       setSelectedPatient(patient);
-      setHistory([]); // Reset history trước khi load mới
+      setPatientDetail(null);
+      setHistory([]);
       setError(null);
-      
+
       const patientId = patient.patient_id || patient.id;
+
       console.log('🆔 DEBUG - Patient ID to fetch history:', patientId);
 
       if (!patientId) {
-        setError('Không tìm thấy ID bệnh nhân');
-        return;
+        throw new Error('Không tìm thấy ID bệnh nhân');
       }
 
-      // GỌI API ĐỂ LẤY LỊCH SỬ
       await fetchPatientHistory(patientId);
+
+      showSuccessAlert(`Đã tải lịch sử khám bệnh của ${patient.name}`);
+
     } catch (error) {
+      const translatedError = translateError(error);
       console.error('❌ Error in handlePatientDetailClick:', error);
-      setError(`Lỗi khi chọn bệnh nhân: ${error.message}`);
+      setError(translatedError);
+
+      Swal.fire({
+        title: 'Lỗi!',
+        text: translatedError,
+        icon: 'error',
+        confirmButtonColor: '#d33',
+        confirmButtonText: 'OK'
+      });
     }
   };
 
-  // FIXED: HÀM GỌI API LỊCH SỬ
+  // LẤY LỊCH SỬ - LẤY CẢ THÔNG TIN CHI TIẾT TỪ API HISTORY
   const fetchPatientHistory = async (patientId) => {
     if (!patientId) return;
 
@@ -161,76 +240,130 @@ const HistorySection = ({
       setHistoryLoading(true);
       setError(null);
 
-      console.log('🌐 DEBUG - Calling API for history...');
-      
-      const endpoints = [
-        `${API_BASE_URL}/api/doctor/patients/${patientId}/history`,
-        `${API_BASE_URL}/api/doctor/patients/${patientId}/medical-history`,
-        `${API_BASE_URL}/api/doctor/patients/${patientId}/examinations`,
-        `${API_BASE_URL}/api/patients/${patientId}/history`
-      ];
-
-      let response = null;
-      let workingEndpoint = '';
-
-      for (const endpoint of endpoints) {
-        try {
-          console.log(`🔍 Trying endpoint: ${endpoint}`);
-          response = await fetch(endpoint);
-          
-          if (response.ok) {
-            workingEndpoint = endpoint;
-            console.log(`✅ Found working endpoint: ${endpoint}`);
-            break;
-          }
-        } catch (err) {
-          console.log(`❌ Endpoint failed: ${endpoint}`, err);
-          continue;
-        }
-      }
-
-      if (!response || !response.ok) {
-        throw new Error(`Không tìm thấy endpoint phù hợp. Status: ${response?.status}`);
-      }
-
-      const result = await response.json();
-      console.log('📄 DEBUG - History API response data:', result);
+      console.log('🌐 DEBUG - Calling history APIs...');
 
       let historyData = [];
-      
-      if (result.success && result.data) {
-        historyData = result.data;
-      } else if (Array.isArray(result)) {
-        historyData = result;
-      } else if (result.data && Array.isArray(result.data)) {
-        historyData = result.data;
-      } else if (result.history) {
-        historyData = result.history;
-      } else {
-        console.warn('⚠️ Unexpected response format:', result);
-        historyData = result || [];
+      let patientDetailData = null;
+
+      try {
+        const response = await doctorService.getPatientHistory(patientId);
+        console.log('🔍 DEBUG - Full API response:', response.data);
+        console.log('🔍 DEBUG - Full API response:', response.patient);
+
+        // API HISTORY TRẢ VỀ CẢ HISTORY VÀ PATIENT INFO
+        historyData = response.data.data || response.data || [];
+        patientDetailData = response.patient; // Lấy thông tin chi tiết từ API history
+
+        console.log('✅ Used getPatientHistory API');
+        console.log('✅ Patient detail from history API:', patientDetailData);
+
+      } catch (error) {
+        console.log('❌ getPatientHistory failed:', error);
+        // ... các fallback APIs khác
       }
 
       setHistory(historyData);
+      setPatientDetail(patientDetailData); // Set thông tin chi tiết
       setExpandedVisit(null);
 
       console.log(`✅ Loaded ${historyData.length} history records`);
 
     } catch (error) {
+      const translatedError = translateError(error);
       console.error('❌ Error fetching patient history:', error);
-      setError(`Lỗi tải lịch sử: ${error.message}`);
+      setError(translatedError);
       setHistory([]);
+      setPatientDetail(null);
+      throw error;
     } finally {
       setHistoryLoading(false);
     }
   };
+  // Hàm quay lại danh sách
+  const handleBackToList = async () => {
+    if (history.length > 0) {
+      const result = await showConfirmation({
+        title: 'Quay lại danh sách',
+        text: 'Bạn có chắc muốn quay lại danh sách? Dữ liệu lịch sử đang xem sẽ bị ẩn.',
+        confirmText: 'Đồng ý',
+        cancelText: 'Ở lại',
+        icon: 'warning'
+      });
 
-  // FIXED: HÀM QUAY LẠI DANH SÁCH
-  const handleBackToList = () => {
+      if (!result.isConfirmed) {
+        return;
+      }
+    }
+
     setSelectedPatient(null);
+    setPatientDetail(null);
     setHistory([]);
     setError(null);
     setExpandedVisit(null);
+  };
+
+  // Hàm xóa bộ lọc tìm kiếm
+  const handleClearSearch = async () => {
+    if (searchTerm) {
+      const result = await showConfirmation({
+        title: 'Xóa bộ lọc tìm kiếm',
+        text: 'Bạn có chắc muốn xóa bộ lọc tìm kiếm hiện tại?',
+        confirmText: 'Xóa bộ lọc',
+        cancelText: 'Giữ nguyên',
+        icon: 'question'
+      });
+
+      if (result.isConfirmed) {
+        setSearchTerm('');
+      }
+    }
+  };
+
+  // Hàm reload dữ liệu
+  const handleReloadData = async () => {
+    const result = await showConfirmation({
+      title: 'Tải lại dữ liệu',
+      text: 'Bạn có chắc muốn tải lại toàn bộ dữ liệu bệnh nhân?',
+      confirmText: 'Tải lại',
+      cancelText: 'Hủy',
+      icon: 'info',
+      showLoader: true,
+      preConfirm: async () => {
+        try {
+          setLoading(true);
+          setError(null);
+
+          let response;
+          let patientsData = [];
+
+          try {
+            response = await doctorService.getAllPatients();
+            patientsData = response.data.data || response.data || [];
+          } catch (error) {
+            console.log('❌ getAllPatients failed, trying getToday...');
+            response = await doctorService.getToday();
+            patientsData = response.data.data || response.data || [];
+          }
+
+          setAllPatients(patientsData);
+          setFilteredPatients(patientsData);
+          updatePagination(patientsData, 0);
+          setCurrentPage(0);
+
+          return patientsData;
+        } catch (error) {
+          const translatedError = translateError(error);
+          setError(translatedError);
+          Swal.showValidationMessage(`Lỗi: ${translatedError}`);
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
+
+    if (result.isConfirmed) {
+      showSuccessAlert('Đã tải lại dữ liệu thành công!');
+    }
   };
 
   const toggleVisitExpansion = (index) => {
@@ -245,7 +378,7 @@ const HistorySection = ({
 
   const renderPrescriptionDetails = (prescription) => {
     const medicines = prescription.medicines || prescription.details || prescription.prescription_details || [];
-    
+
     if (!medicines || medicines.length === 0) {
       return <p className="text-muted">Không có thông tin thuốc.</p>;
     }
@@ -301,7 +434,7 @@ const HistorySection = ({
               <td>
                 <Badge bg={
                   (service.status || '').toLowerCase() === 'hoàn thành' ? 'success' :
-                  (service.status || '').toLowerCase() === 'đã chỉ định' ? 'primary' : 'secondary'
+                    (service.status || '').toLowerCase() === 'đã chỉ định' ? 'primary' : 'secondary'
                 }>
                   {service.status || 'Chưa xác định'}
                 </Badge>
@@ -314,270 +447,301 @@ const HistorySection = ({
     );
   };
 
-  const renderPatientList = () => {
-    return displayPatients.map(patient => (
-      <ListGroup.Item
-        key={patient.patient_id || patient.id}
-        action
-        onClick={() => handlePatientDetailClick(patient)}
-        className="patient-item"
-        style={{ cursor: 'pointer' }}
-      >
-        <div className="d-flex w-100 justify-content-between align-items-center">
-          <div>
-            <h6 className="mb-1">{patient.name}</h6>
-            <small className="text-muted">
-              ID: {patient.patient_id || patient.id} | Tuổi: {patient.age} | SĐT: {patient.phone}
-            </small>
-          </div>
-          <Badge bg="primary">
-            👁️ Chi tiết
-          </Badge>
-        </div>
-      </ListGroup.Item>
-    ));
-  };
-
-  // RENDER DANH SÁCH BỆNH NHÂN
-  const renderPatientListView = () => {
-    return (
-      <Card.Body>
-        {/* Search and Filter Section */}
-        <Row className="mb-3">
-          <Col md={6}>
-            <InputGroup>
-              <Form.Control
-                type="text"
-                placeholder="🔍 Tìm kiếm theo tên, ID hoặc SĐT..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              {searchTerm && (
-                <Button variant="outline-secondary" onClick={() => setSearchTerm('')}>
-                  ✕
-                </Button>
-              )}
-            </InputGroup>
-          </Col>
-          <Col md={3}>
-            <Form.Select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-            >
-              <option value="name">Sắp xếp theo tên</option>
-              <option value="id">Sắp xếp theo ID</option>
-              <option value="age">Sắp xếp theo tuổi</option>
-            </Form.Select>
-          </Col>
-          <Col md={3}>
-            <div className="text-muted small">
-              📊 Tổng: {filteredPatients.length} bệnh nhân
-            </div>
-          </Col>
-        </Row>
-
-        {loading ? (
-          <div className="text-center py-4">
-            <Spinner animation="border" />
-            <p className="text-muted mt-2">Đang tải danh sách bệnh nhân...</p>
-          </div>
-        ) : error ? (
-          <Alert variant="danger">
-            <Alert.Heading>❌ Lỗi tải danh sách</Alert.Heading>
-            <p>{error}</p>
-            <Button variant="outline-danger" onClick={() => window.location.reload()}>
-              🔄 Thử lại
-            </Button>
-          </Alert>
-        ) : (
-          <>
-            <ListGroup variant="flush">
-              {displayPatients.length === 0 ? (
-                <div className="text-center py-4">
-                  <p className="text-muted">Không tìm thấy bệnh nhân nào.</p>
-                  <Button variant="outline-primary" onClick={() => setSearchTerm('')}>
-                    Xóa bộ lọc
-                  </Button>
-                </div>
-              ) : (
-                renderPatientList()
-              )}
-            </ListGroup>
-
-            {/* Pagination */}
-            {pageCount > 1 && (
-              <div className="mt-3">
-                <Pagination
-                  pageCount={pageCount}
-                  onPageChange={handlePageChange}
-                  currentPage={currentPage}
-                  isLoading={loading}
-                />
-              </div>
-            )}
-          </>
-        )}
-      </Card.Body>
-    );
-  };
-
-  // RENDER CHI TIẾT BỆNH NHÂN
-  const renderPatientDetailView = () => {
-    if (!selectedPatient) return null;
-
-    return (
-      <Card.Body>
-        {/* HEADER CHI TIẾT */}
-        <div className="d-flex justify-content-between align-items-center mb-4">
-          <div>
-            <h4>📋 Chi Tiết Bệnh Nhân</h4>
-            <p className="text-muted mb-0">
-              {selectedPatient.name} - ID: {selectedPatient.patient_id || selectedPatient.id}
-            </p>
-          </div>
-          <Button variant="outline-secondary" onClick={handleBackToList}>
-            ← Quay lại danh sách
-          </Button>
-        </div>
-
-        {historyLoading ? (
-          <div className="text-center py-4">
-            <Spinner animation="border" className="mb-3" />
-            <p className="text-muted">Đang tải lịch sử khám...</p>
-          </div>
-        ) : error ? (
-          <Alert variant="warning">
-            <Alert.Heading>Thông báo</Alert.Heading>
-            <p>{error}</p>
-            <Button variant="outline-warning" onClick={() => handlePatientDetailClick(selectedPatient)}>
-              🔄 Thử lại
-            </Button>
-          </Alert>
-        ) : (
-          <>
-            {/* THÔNG TIN CÁ NHÂN */}
-            <Row className="mb-4">
-              <Col md={6}>
-                <Card>
-                  <Card.Header className="bg-light">
-                    <strong>👤 Thông Tin Cá Nhân</strong>
-                  </Card.Header>
-                  <Card.Body>
-                    <p><strong>Họ tên:</strong> {selectedPatient.name}</p>
-                    <p><strong>Mã BN:</strong> {selectedPatient.patient_id || selectedPatient.id}</p>
-                    <p><strong>Tuổi:</strong> {selectedPatient.age}</p>
-                    <p><strong>Giới tính:</strong> {selectedPatient.gender}</p>
-                    <p><strong>SĐT:</strong> {selectedPatient.phone}</p>
-                    <p><strong>Địa chỉ:</strong> {selectedPatient.address || 'N/A'}</p>
-                  </Card.Body>
-                </Card>
-              </Col>
-              <Col md={6}>
-                <Card>
-                  <Card.Header className="bg-light">
-                    <strong>📊 Thống Kê</strong>
-                  </Card.Header>
-                  <Card.Body>
-                    <p><strong>Tổng số lần khám:</strong> {history.length}</p>
-                    <p><strong>Lần khám gần nhất:</strong> {history[0]?.visit_date || history[0]?.appointment_date || 'N/A'}</p>
-                    <p><strong>Tổng chi phí ước tính:</strong> {' '}
-                      {history.reduce((total, visit) => total + calculateTotalCost(visit), 0).toLocaleString()} VNĐ
-                    </p>
-                  </Card.Body>
-                </Card>
-              </Col>
-            </Row>
-
-            {/* LỊCH SỬ KHÁM BỆNH */}
-            <Card>
-              <Card.Header className="bg-info text-white">
-                <h6 className="mb-0">🏥 Lịch Sử Khám Bệnh ({history.length} lần)</h6>
-              </Card.Header>
-              <Card.Body>
-                {history.length === 0 ? (
-                  <div className="text-center py-4">
-                    <p className="text-muted">Không có lịch sử khám bệnh.</p>
-                  </div>
-                ) : (
-                  <Accordion flush>
-                    {history.map((visit, index) => (
-                      <Accordion.Item key={index} eventKey={index.toString()}>
-                        <Accordion.Header onClick={() => toggleVisitExpansion(index)}>
-                          <div className="d-flex justify-content-between w-100 me-3">
-                            <span>
-                              <strong>Lần khám {history.length - index}</strong> - {visit.visit_date || visit.appointment_date} {visit.time}
-                            </span>
-                            <div className="d-flex gap-2">
-                              <Badge bg={visit.status === 'Đã khám' ? 'success' : 'warning'}>
-                                {visit.status}
-                              </Badge>
-                              <Badge bg="secondary">
-                                {calculateTotalCost(visit).toLocaleString()} VNĐ
-                              </Badge>
-                            </div>
-                          </div>
-                        </Accordion.Header>
-                        <Accordion.Body>
-                          <Row>
-                            <Col md={6}>
-                              <p><strong>Triệu chứng:</strong> {visit.symptoms || 'Không có'}</p>
-                              <p><strong>Chẩn đoán:</strong> {visit.diagnosis || 'Không có'}</p>
-                              <p><strong>Ghi chú:</strong> {visit.notes || visit.note || 'Không có'}</p>
-                            </Col>
-                            <Col md={6}>
-                              <p><strong>Kết quả xét nghiệm:</strong> {visit.test_results || 'Chưa có'}</p>
-                              <p><strong>Bác sĩ:</strong> {visit.doctor_name || visit.doctor || 'N/A'}</p>
-                              <p><strong>Tổng chi phí:</strong> {calculateTotalCost(visit).toLocaleString()} VNĐ</p>
-                            </Col>
-                          </Row>
-
-                          {/* Dịch vụ */}
-                          <div className="mt-3">
-                            <h6>🩺 Dịch vụ đã sử dụng:</h6>
-                            {renderServiceDetails(visit.services)}
-                          </div>
-
-                          {/* Đơn thuốc */}
-                          <div className="mt-3">
-                            <h6>💊 Đơn thuốc:</h6>
-                            {visit.prescriptions && visit.prescriptions.length > 0 ? (
-                              visit.prescriptions.map((prescription, pIndex) => (
-                                <Card key={pIndex} className="mb-3">
-                                  <Card.Header className="bg-light">
-                                    <strong>Đơn thuốc ngày: {prescription.prescription_date || prescription.created_at || visit.visit_date}</strong>
-                                  </Card.Header>
-                                  <Card.Body>
-                                    <p><strong>Hướng dẫn:</strong> {prescription.instructions || prescription.note || 'Không có'}</p>
-                                    {renderPrescriptionDetails(prescription)}
-                                  </Card.Body>
-                                </Card>
-                              ))
-                            ) : (
-                              <p className="text-muted">Không có đơn thuốc cho lần khám này.</p>
-                            )}
-                          </div>
-                        </Accordion.Body>
-                      </Accordion.Item>
-                    ))}
-                  </Accordion>
-                )}
-              </Card.Body>
-            </Card>
-          </>
-        )}
-      </Card.Body>
-    );
-  };
-
   return (
     <div className={`section ${currentSection === 'history' ? 'active' : ''}`} id="history">
       <Card>
         <Card.Header className="bg-success text-white">
-          <h5 className="mb-0">📁 Lịch Sử Bệnh Nhân</h5>
+          <h5 className="mb-0"> Lịch Sử Bệnh Nhân</h5>
         </Card.Header>
 
-        {/* TOGGLE VIEW: DANH SÁCH HOẶC CHI TIẾT */}
-        {!selectedPatient ? renderPatientListView() : renderPatientDetailView()}
+        {!selectedPatient ? (
+          // Render danh sách bệnh nhân
+          <Card.Body>
+            <Row className="mb-3">
+              <Col md={6}>
+                <InputGroup>
+                  <Form.Control
+                    type="text"
+                    placeholder="Tìm kiếm theo tên, ID hoặc SĐT..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  {searchTerm && (
+                    <Button
+                      variant="outline-secondary"
+                      onClick={handleClearSearch}
+                      title="Xóa bộ lọc tìm kiếm"
+                    >
+                      ✕
+                    </Button>
+                  )}
+                </InputGroup>
+              </Col>
+              <Col md={3}>
+                <Form.Select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                >
+                  <option value="name">Sắp xếp theo tên</option>
+                  <option value="id">Sắp xếp theo ID</option>
+                  <option value="age">Sắp xếp theo tuổi</option>
+                </Form.Select>
+              </Col>
+              <Col md={3}>
+                <div className="d-flex justify-content-between align-items-center">
+                  <div className="text-muted small">
+                    <i className="fas fa-layer-group text-primary"></i> Tổng: {filteredPatients.length} bệnh nhân
+                  </div>
+                  <Button
+                    variant="outline-primary"
+                    size="sm"
+                    onClick={handleReloadData}
+                    title="Tải lại dữ liệu"
+                    disabled={loading}
+                  >
+                    {loading ? <Spinner size="sm" /> : <i className="fas fa-undo"></i>}
+                  </Button>
+                </div>
+              </Col>
+            </Row>
+
+            {loading ? (
+              <div className="text-center py-4">
+                <Spinner animation="border" />
+                <p className="text-muted mt-2">Đang tải danh sách bệnh nhân...</p>
+              </div>
+            ) : error ? (
+              <Alert variant="danger">
+                <Alert.Heading> Lỗi tải danh sách</Alert.Heading>
+                <p>{error}</p>
+                <div className="d-flex gap-2">
+                  <Button
+                    variant="outline-danger"
+                    onClick={handleReloadData}
+                    disabled={loading}
+                  >
+                    {loading ? <Spinner size="sm" /> : 'Thử lại'}
+                  </Button>
+                  <Button
+                    variant="outline-secondary"
+                    onClick={() => setError(null)}
+                  >
+                    Đóng thông báo
+                  </Button>
+                </div>
+              </Alert>
+            ) : (
+              <>
+                <ListGroup variant="flush">
+                  {displayPatients.length === 0 ? (
+                    <div className="text-center py-4">
+                      <p className="text-muted">Không tìm thấy bệnh nhân nào.</p>
+                      <Button variant="outline-primary" onClick={handleClearSearch}>
+                        Xóa bộ lọc
+                      </Button>
+                    </div>
+                  ) : (
+                    displayPatients.map(patient => (
+                      <ListGroup.Item
+                        key={patient.patient_id || patient.id}
+                        action
+                        onClick={() => handlePatientDetailClick(patient)}
+                        className="patient-item"
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <div className="d-flex w-100 justify-content-between align-items-center">
+                          <div>
+                            <h6 className="mb-1">{patient.name}</h6>
+                            <small className="text-muted">
+                              ID: {patient.patient_id || patient.id} | Tuổi: {patient.age} | SĐT: {patient.phone}
+                            </small>
+                          </div>
+                          <Badge bg="primary">
+                            <i className="far fa-eye"></i> Chi tiết
+                          </Badge>
+                        </div>
+                      </ListGroup.Item>
+                    ))
+                  )}
+                </ListGroup>
+
+                {pageCount > 1 && (
+                  <div className="mt-3">
+                    <Pagination
+                      pageCount={pageCount}
+                      onPageChange={handlePageChange}
+                      currentPage={currentPage}
+                      isLoading={loading}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </Card.Body>
+        ) : (
+          // Render chi tiết bệnh nhân
+          <Card.Body>
+            <div className="d-flex justify-content-between align-items-center mb-4">
+              <div>
+                <h4>Chi Tiết Bệnh Nhân</h4>
+                <p className="text-muted mb-0">
+                  {patientDetail?.name || selectedPatient.name} - ID: {patientDetail?.patient_id || selectedPatient.patient_id || selectedPatient.id}
+                </p>
+              </div>
+              <Button
+                variant="outline-secondary"
+                onClick={handleBackToList}
+                disabled={historyLoading}
+              >
+                <i className="fas fa-arrow-left"></i> Quay lại danh sách
+              </Button>
+            </div>
+
+            {historyLoading ? (
+              <div className="text-center py-4">
+                <Spinner animation="border" className="mb-3" />
+                <p className="text-muted">Đang tải lịch sử khám...</p>
+              </div>
+            ) : error ? (
+              <Alert variant="warning">
+                <Alert.Heading>Thông báo</Alert.Heading>
+                <p>{error}</p>
+                <div className="d-flex gap-2">
+                  <Button
+                    variant="outline-warning"
+                    onClick={() => handlePatientDetailClick(selectedPatient)}
+                    disabled={historyLoading}
+                  >
+                    {historyLoading ? <Spinner size="sm" /> : ' Thử lại'}
+                  </Button>
+                  <Button
+                    variant="outline-secondary"
+                    onClick={() => setError(null)}
+                  >
+                    Đóng thông báo
+                  </Button>
+                </div>
+              </Alert>
+            ) : (
+              <>
+                <Row className="mb-4">
+                  <Col md={6}>
+                    <Card>
+                      <Card.Header className="bg-light">
+                        <strong><i className="fas fa-user-circle text-success"></i> Thông Tin Cá Nhân</strong>
+                      </Card.Header>
+                      <Card.Body>
+                        <Row>
+                          <Col md={6}>
+                            <p><strong>Mã BN:</strong><br />{patientDetail?.patient_id || selectedPatient.patient_id || selectedPatient.id}</p>
+                            <p><strong>Họ tên:</strong><br />{patientDetail?.name || selectedPatient.name}</p>
+                            <p><strong>Ngày sinh:</strong><br />{patientDetail?.date_of_birth || 'N/A'}</p>
+                            <p><strong>Tuổi:</strong><br />{patientDetail?.age || selectedPatient.age}</p>
+                            <p><strong>Giới tính:</strong><br />{patientDetail?.gender || 'N/A'}</p>
+                          </Col>
+                          <Col md={6}>
+                            <p><strong>SĐT:</strong><br />{patientDetail?.phone || selectedPatient.phone}</p>
+                            <p><strong>Email:</strong><br />{patientDetail?.email || 'N/A'}</p>
+                            <p><strong>Địa chỉ:</strong><br />{patientDetail?.address || selectedPatient.address || 'N/A'}</p>
+                            <p><strong>Tiền sử bệnh:</strong><br />{patientDetail?.medical_history || 'N/A'}</p>
+                            <p><strong>Ngày đăng ký:</strong><br />{patientDetail?.registered_date || 'N/A'}</p>
+                          </Col>
+                        </Row>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                  <Col md={6}>
+                    <Card>
+                      <Card.Header className="bg-light">
+                        <strong> <i className="fas fa-chart-pie text-warning"></i> Thống Kê</strong>
+                      </Card.Header>
+                      <Card.Body>
+                        <p><strong>Tổng số lần khám:</strong> {history.length}</p>
+                        <p><strong>Lần khám gần nhất:</strong> {history[0]?.visit_date || history[0]?.appointment_date || 'N/A'}</p>
+                        <p><strong>Tổng chi phí ước tính:</strong> {' '}
+                          {history.reduce((total, visit) => total + calculateTotalCost(visit), 0).toLocaleString()} VNĐ
+                        </p>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+
+                <Card>
+                  <Card.Header className="bg-info text-white">
+                    <h6 className="mb-0"><i className="fas fa-clock"></i> Lịch Sử Khám Bệnh ({history.length} lần)</h6>
+                  </Card.Header>
+                  <Card.Body>
+                    {history.length === 0 ? (
+                      <div className="text-center py-4">
+                        <p className="text-muted">Không có lịch sử khám bệnh.</p>
+                      </div>
+                    ) : (
+                      <Accordion flush>
+                        {history.map((visit, index) => (
+                          <Accordion.Item key={index} eventKey={index.toString()}>
+                            <Accordion.Header onClick={() => toggleVisitExpansion(index)}>
+                              <div className="d-flex justify-content-between w-100 me-3">
+                                <span>
+                                  <strong>Lần khám {history.length - index}</strong> - {visit.visit_date || visit.appointment_date} {visit.time}
+                                </span>
+                                <div className="d-flex gap-2">
+                                  <Badge bg={visit.status === 'Đã khám' ? 'success' : 'warning'}>
+                                    {visit.status}
+                                  </Badge>
+                                  <Badge bg="secondary">
+                                    {calculateTotalCost(visit).toLocaleString()} VNĐ
+                                  </Badge>
+                                </div>
+                              </div>
+                            </Accordion.Header>
+                            <Accordion.Body>
+                              <Row>
+                                <Col md={6}>
+                                  <p><strong>Triệu chứng:</strong> {visit.symptoms || 'Không có'}</p>
+                                  <p><strong>Chẩn đoán:</strong> {visit.diagnosis || 'Không có'}</p>
+                                  <p><strong>Ghi chú:</strong> {visit.notes || visit.note || 'Không có'}</p>
+                                </Col>
+                                <Col md={6}>
+                                  <p><strong>Kết quả xét nghiệm:</strong> {visit.test_results || 'Chưa có'}</p>
+                                  <p><strong>Bác sĩ:</strong> {visit.doctorName || 'N/A'}</p>
+                                  <p><strong>Tổng chi phí:</strong> {calculateTotalCost(visit).toLocaleString()} VNĐ</p>
+                                </Col>
+                              </Row>
+
+                              <div className="mt-3">
+                                <h6>Dịch vụ đã sử dụng:</h6>
+                                {renderServiceDetails(visit.services)}
+                              </div>
+
+                              <div className="mt-3">
+                                <h6>Đơn thuốc:</h6>
+                                {visit.prescriptions && visit.prescriptions.length > 0 ? (
+                                  visit.prescriptions.map((prescription, pIndex) => (
+                                    <Card key={pIndex} className="mb-3">
+                                      <Card.Header className="bg-light">
+                                        <strong>Đơn thuốc ngày: {prescription.prescription_date || prescription.created_at || visit.visit_date}</strong>
+                                      </Card.Header>
+                                      <Card.Body>
+                                        <p><strong>Hướng dẫn:</strong> {prescription.instructions || prescription.note || 'Không có'}</p>
+                                        {renderPrescriptionDetails(prescription)}
+                                      </Card.Body>
+                                    </Card>
+                                  ))
+                                ) : (
+                                  <p className="text-muted">Không có đơn thuốc cho lần khám này.</p>
+                                )}
+                              </div>
+                            </Accordion.Body>
+                          </Accordion.Item>
+                        ))}
+                      </Accordion>
+                    )}
+                  </Card.Body>
+                </Card>
+              </>
+            )}
+          </Card.Body>
+        )}
       </Card>
     </div>
   );

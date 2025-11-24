@@ -42,6 +42,12 @@ const ValidationUtils = {
         const minutes = appointmentTime.getMinutes();
         const totalMinutes = hours * 60 + minutes;
         return totalMinutes >= 420 && totalMinutes <= 1080;
+    },
+
+    validateAppointmentTimeSlot: (time) => {
+        if (!time) return true;
+        const timeSlots = generateTimeSlots();
+        return timeSlots.includes(time);
     }
 };
 
@@ -55,7 +61,21 @@ const ErrorMessages = {
     FUTURE_DATE: "Ngày hẹn không được ở quá khứ",
     DOCTOR_REQUIRED: "Vui lòng chọn bác sĩ",
     ROOM_REQUIRED: "Vui lòng chọn phòng khám",
-    PATIENT_REQUIRED: "Vui lòng chọn hoặc tạo bệnh nhân"
+    PATIENT_REQUIRED: "Vui lòng chọn hoặc tạo bệnh nhân",
+    INVALID_APPOINTMENT_TIME_SLOT: "Thời gian hẹn phải là một trong các khung giờ: 7:00, 7:30, 8:00, ..., 16:30",
+    TIMESLOT_FULL: "Khung giờ này đã đầy, vui lòng chọn khung giờ khác"
+};
+
+const generateTimeSlots = () => {
+    const slots = [];
+    for (let hour = 7; hour <= 16; hour++) {
+        slots.push(`${hour.toString().padStart(2, '0')}:00`);
+        if (hour < 16) {
+            slots.push(`${hour.toString().padStart(2, '0')}:30`);
+        }
+    }
+    slots.push('16:30');
+    return slots;
 };
 
 const ReceptionistPatent = () => {
@@ -68,6 +88,7 @@ const ReceptionistPatent = () => {
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState({});
     const [apiError, setApiError] = useState(null);
+    const [isAutoSelecting, setIsAutoSelecting] = useState(false);
 
     // Modal states
     const [showToast, setShowToast] = useState(false);
@@ -79,6 +100,8 @@ const ReceptionistPatent = () => {
     const [patientOptions, setPatientOptions] = useState([]);
     const [selectedPatientOption, setSelectedPatientOption] = useState(null);
     const [isSearchingPatients, setIsSearchingPatients] = useState(false);
+    // Thêm state cho availableTimeSlots (trong component)
+    const [availableTimeSlots, setAvailableTimeSlots] = useState(generateTimeSlots().map(time => ({ time, available: 10 })));
 
     const [appointmentForm, setAppointmentForm] = useState({
         patientId: "",
@@ -105,7 +128,182 @@ const ReceptionistPatent = () => {
     const [doctors, setDoctors] = useState([]);
     const [filteredDoctors, setFilteredDoctors] = useState([]);
     const [onlineAppointments, setOnlineAppointments] = useState([]);
+    const [timeSlotCache, setTimeSlotCache] = useState({});
+    // Thêm hàm tìm khung giờ gần nhất
+    const findNearestTimeSlot = (currentTime) => {
+        const timeSlots = generateTimeSlots();
 
+        // Chuyển currentTime sang phút để so sánh
+        const [currentHours, currentMinutes] = currentTime.split(':').map(Number);
+        const currentTotalMinutes = currentHours * 60 + currentMinutes;
+
+        let nearestSlot = timeSlots[0];
+        let minDifference = Infinity;
+
+        for (const slot of timeSlots) {
+            const [slotHours, slotMinutes] = slot.split(':').map(Number);
+            const slotTotalMinutes = slotHours * 60 + slotMinutes;
+
+            // Tính khoảng cách thời gian
+            const difference = slotTotalMinutes - currentTotalMinutes;
+
+            // Chỉ xét các khung giờ trong tương lai (difference >= 0)
+            if (difference >= 0 && difference < minDifference) {
+                minDifference = difference;
+                nearestSlot = slot;
+            }
+        }
+
+        // Nếu không tìm thấy khung giờ nào trong tương lai, chọn khung giờ đầu tiên
+        return minDifference === Infinity ? timeSlots[0] : nearestSlot;
+    };
+
+    // Thêm hàm kiểm tra và tự động chọn khung giờ
+    const autoSelectTimeSlot = async (date, roomId, staffId) => {
+        if (!date) return;
+        setIsAutoSelecting(true);
+        const currentTime = new Date().toTimeString().slice(0, 5); // Lấy giờ hiện tại
+        const nearestSlot = findNearestTimeSlot(currentTime);
+
+        // Kiểm tra xem khung giờ gần nhất có available không
+        try {
+            const availability = await checkTimeSlotAvailability(nearestSlot, date, roomId, staffId);
+
+            if (!availability.isFull) {
+                // Nếu còn chỗ, tự động chọn
+                setAppointmentForm(prev => ({
+                    ...prev,
+                    appointmentTime: nearestSlot
+                }));
+            } else {
+                // Nếu đầy, tìm khung giờ gần nhất còn chỗ
+                const allSlots = generateTimeSlots();
+                const currentIndex = allSlots.indexOf(nearestSlot);
+
+                // Tìm từ khung giờ hiện tại về sau
+                for (let i = currentIndex; i < allSlots.length; i++) {
+                    const slot = allSlots[i];
+                    const slotAvailability = await checkTimeSlotAvailability(slot, date, roomId, staffId);
+
+                    if (!slotAvailability.isFull) {
+                        setAppointmentForm(prev => ({
+                            ...prev,
+                            appointmentTime: slot
+                        }));
+                        return;
+                    }
+                }
+
+                // Nếu không tìm thấy khung giờ nào còn chỗ, chọn khung giờ đầu tiên
+                setAppointmentForm(prev => ({
+                    ...prev,
+                    appointmentTime: allSlots[0]
+                }));
+            }
+        } catch (error) {
+            console.error("Error auto-selecting time slot:", error);
+            // Nếu có lỗi, vẫn chọn khung giờ gần nhất
+            setAppointmentForm(prev => ({
+                ...prev,
+                appointmentTime: nearestSlot
+            }));
+        } finally {
+            setIsAutoSelecting(false); // KẾT THÚC LOADING
+        }
+    };
+
+    const checkTimeSlotsBatch = async (times, date, roomId, staffId) => {
+        try {
+            const response = await axiosInstance.get('/api/receptionist/appointments/counts-by-timeslots', {
+                params: {
+                    date: date,
+                    times: times,
+                    room_id: roomId,
+                    staff_id: staffId
+                }
+            });
+
+            if (response.data && response.data.success === true) {
+                return times.map(time => response.data.data[time] || {
+                    count: 0, maxCapacity: 10, available: 10, isFull: false
+                });
+            }
+
+            throw new Error('API batch response error');
+
+        } catch (error) {
+            console.error("Batch API error:", error);
+            // Fallback: dùng API cũ cho từng cái
+            const individualResults = [];
+            for (const time of times) {
+                const result = await checkTimeSlotAvailability(time, date, roomId, staffId);
+                individualResults.push(result);
+            }
+            return individualResults;
+        }
+    };
+
+    // Thêm hàm kiểm tra số lượng bệnh nhân trong khung giờ (dựa trên dữ liệu local)
+    const checkTimeSlotAvailability = async (time, date, roomId = null, staffId = null) => {
+        try {
+            const response = await axiosInstance.get('/api/receptionist/appointments/count-by-timeslot', {
+                params: {
+                    time: time,
+                    date: date,
+                    room_id: roomId,
+                    staff_id: staffId
+                }
+            });
+
+            if (response && response.success === true) {
+                return response.data;
+            } else {
+                throw new Error(response?.message || 'Lỗi không xác định');
+            }
+        } catch (error) {
+            console.error("Error checking time slot availability:", error);
+            // Trả về giá trị mặc định nếu có lỗi
+            return {
+                count: 0,
+                maxCapacity: 10,
+                available: 10,
+                isFull: false
+            };
+        }
+    };
+    // Cập nhật hàm loadAvailableTimeSlots để dùng API batch
+    const loadAvailableTimeSlots = async (date, roomId, staffId) => {
+        if (!date) {
+            setAvailableTimeSlots(generateTimeSlots().map(time => ({
+                time,
+                available: 10,
+                isFull: false
+            })));
+            return;
+        }
+
+        try {
+            const allSlots = generateTimeSlots();
+
+            // THAY ĐỔI Ở ĐÂY: Dùng API batch thay vì từng cái
+            const slotResults = await checkTimeSlotsBatch(allSlots, date, roomId, staffId);
+
+            const availableSlots = allSlots.map((slot, index) => ({
+                time: slot,
+                available: slotResults[index].available,
+                isFull: slotResults[index].isFull
+            }));
+
+            setAvailableTimeSlots(availableSlots);
+        } catch (error) {
+            console.error("Error loading available time slots:", error);
+            setAvailableTimeSlots(generateTimeSlots().map(time => ({
+                time,
+                available: 10,
+                isFull: false
+            })));
+        }
+    };
     // Modal functions
     const showToastMessage = (type, message) => {
         setToastConfig({ type, message });
@@ -125,7 +323,7 @@ const ReceptionistPatent = () => {
         setShowConfirmModal(false);
     };
 
-    // API Calls với error handling
+    // API Calls với error handling và loading
     const api = {
         getRooms: async () => {
             try {
@@ -149,10 +347,12 @@ const ReceptionistPatent = () => {
             }
         },
 
-        getOnlineAppointments: async (status = "Đã đặt", date = null) => {
+        getOnlineAppointments: async (status = "Tất cả", date = null) => {
             try {
-                const params = { status };
+                const params = {};
+                if (status !== "Tất cả") params.status = status;
                 if (date) params.date = date;
+
                 const response = await axiosInstance.get('/api/receptionist/appointments/online', { params });
                 return response.data;
             } catch (error) {
@@ -239,6 +439,38 @@ const ReceptionistPatent = () => {
         loadAllPatients();
     }, []);
 
+    useEffect(() => {
+        if (!appointmentForm.appointmentDate || !appointmentForm.roomId || !appointmentForm.staffId) return;
+
+        loadAvailableTimeSlots(
+            appointmentForm.appointmentDate,
+            appointmentForm.roomId,
+            appointmentForm.staffId
+        );
+    }, [
+        appointmentForm.appointmentDate,
+        appointmentForm.roomId,
+        appointmentForm.staffId
+    ]);
+
+    useEffect(() => {
+        if (!appointmentForm.appointmentDate ||
+            !appointmentForm.roomId ||
+            !appointmentForm.staffId ||
+            appointmentForm.appointmentTime // đã có time thì KHÔNG chạy
+        ) return;
+
+        autoSelectTimeSlot(
+            appointmentForm.appointmentDate,
+            appointmentForm.roomId,
+            appointmentForm.staffId
+        );
+    }, [
+        appointmentForm.appointmentDate,
+        appointmentForm.roomId,
+        appointmentForm.staffId
+    ]);
+
     const initializeData = async () => {
         setLoading(true);
         setApiError(null);
@@ -271,6 +503,7 @@ const ReceptionistPatent = () => {
     // Load tất cả patients
     const loadAllPatients = async () => {
         try {
+            setIsSearchingPatients(true);
             const response = await api.getAllPatients();
             const patients = response || [];
 
@@ -290,10 +523,12 @@ const ReceptionistPatent = () => {
         } catch (error) {
             console.error("Error loading patients:", error);
             // Không hiển thị lỗi vì đây là tính năng tải trước
+        } finally {
+            setIsSearchingPatients(false);
         }
     };
 
-    // Tìm kiếm bệnh nhân với React Select - ĐÃ SỬA
+    // Tìm kiếm bệnh nhân với React Select
     const handlePatientSearch = (inputValue) => {
         if (!inputValue || inputValue.trim() === '') {
             loadAllPatients(); // Load lại toàn bộ
@@ -351,6 +586,7 @@ const ReceptionistPatent = () => {
             }));
         } else if (selectedOption) {
             try {
+                setIsSearchingPatients(true);
                 // Load chi tiết patient từ API
                 const response = await axiosInstance.get(`/api/receptionist/patients/${selectedOption.value}`);
                 console.log("API RESPONSE:", response); // DEBUG
@@ -372,6 +608,8 @@ const ReceptionistPatent = () => {
             } catch (error) {
                 console.error("Error loading patient details:", error);
                 showToastMessage('error', 'Không thể tải thông tin bệnh nhân');
+            } finally {
+                setIsSearchingPatients(false);
             }
         } else {
             // Clear selection
@@ -400,7 +638,7 @@ const ReceptionistPatent = () => {
         }
     };
 
-    // Validation functions - ĐÃ SỬA: set errors để hiển thị dưới input
+    // Validation functions
     const validatePatientForm = () => {
         const newErrors = {};
 
@@ -427,7 +665,7 @@ const ReceptionistPatent = () => {
         return newErrors;
     };
 
-    const validateAppointmentForm = () => {
+    const validateAppointmentForm = async () => {
         const newErrors = {};
 
         if (!appointmentForm.staffId) {
@@ -452,15 +690,32 @@ const ReceptionistPatent = () => {
 
         if (!ValidationUtils.validateRequired(appointmentForm.appointmentTime)) {
             newErrors.appointmentTime = ErrorMessages.REQUIRED;
-        } else if (!ValidationUtils.validateAppointmentTime(appointmentForm.appointmentTime, appointmentForm.appointmentDate)) {
-            newErrors.appointmentTime = ErrorMessages.INVALID_APPOINTMENT_TIME;
+        } else if (!ValidationUtils.validateAppointmentTimeSlot(appointmentForm.appointmentTime)) {
+            newErrors.appointmentTime = ErrorMessages.INVALID_APPOINTMENT_TIME_SLOT;
+        } else if (appointmentForm.appointmentDate) {
+            // Kiểm tra capacity thông qua API
+            try {
+                const availability = await checkTimeSlotAvailability(
+                    appointmentForm.appointmentTime,
+                    appointmentForm.appointmentDate,
+                    appointmentForm.roomId,
+                    appointmentForm.staffId
+                );
+
+                if (availability.isFull) {
+                    newErrors.appointmentTime = ErrorMessages.TIMESLOT_FULL;
+                }
+            } catch (error) {
+                console.error("Error validating time slot:", error);
+                // Nếu có lỗi khi check API, vẫn cho phép tiếp tục
+            }
         }
 
         return newErrors;
     };
 
-    const validateAll = () => {
-        const appointmentErrors = validateAppointmentForm();
+    const validateAll = async () => {
+        const appointmentErrors = await validateAppointmentForm();
         let patientErrors = {};
 
         if (showPatientForm && !selectedPatient) {
@@ -496,7 +751,6 @@ const ReceptionistPatent = () => {
             appointmentTime: activeTab === 'online'
                 ? ""
                 : getCurrentTime(),
-
             notes: "",
             serviceType: "Khám bệnh"
         });
@@ -555,7 +809,7 @@ const ReceptionistPatent = () => {
     };
 
     const handleCreateAll = async () => {
-        if (!validateAll()) {
+        if (!(await validateAll())) {
             return;
         }
 
@@ -576,7 +830,7 @@ const ReceptionistPatent = () => {
                 existingPatientId: selectedPatient ? (selectedPatient.UserId || selectedPatient.PatientId) : null
             };
 
-            // Thêm bệnh nhân mới nếu cần - SỬA FIELD NAMES
+            // Thêm bệnh nhân mới nếu cần
             if (showPatientForm && !selectedPatient) {
                 receptionData.patient = {
                     FullName: patientForm.fullName,
@@ -638,7 +892,7 @@ const ReceptionistPatent = () => {
         return date.toISOString().split('T')[0];
     };
 
-    // UI components - ĐÃ THÊM: renderInputError trở lại
+    // UI components
     const renderStatusBadge = (status) => {
         const statusConfig = {
             "Đã đặt": { class: "bg-warning text-dark", icon: "bi-clock" },
@@ -696,11 +950,13 @@ const ReceptionistPatent = () => {
                         <i className="bi bi-person-plus me-2"></i>
                         THÔNG TIN TIẾP NHẬN
                     </h6>
-                    {loading && (
-                        <div className="spinner-border spinner-border-sm" role="status">
-                            <span className="visually-hidden">Loading...</span>
-                        </div>
-                    )}
+                    <div className="d-flex align-items-center">
+                        {loading && (
+                            <div className="spinner-border spinner-border-sm" role="status">
+                                <span className="visually-hidden">Loading...</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <div className="card-body">
@@ -870,16 +1126,55 @@ const ReceptionistPatent = () => {
                             {/* Appointment Time */}
                             <div className="col-6">
                                 <label className="form-label small">Giờ khám *</label>
-                                <input
-                                    type="time"
-                                    className={`form-control form-control-sm ${errors.appointmentTime ? 'is-invalid' : ''}`}
-                                    value={appointmentForm.appointmentTime}
-                                    onChange={(e) => {
-                                        setAppointmentForm({ ...appointmentForm, appointmentTime: e.target.value });
-                                        if (errors.appointmentTime) setErrors(prev => ({ ...prev, appointmentTime: null }));
-                                    }}
-                                />
+                                <div className="input-group">
+                                    <select
+                                        className={`form-control form-control-sm ${errors.appointmentTime ? 'is-invalid' : ''}`}
+                                        value={appointmentForm.appointmentTime}
+                                        onChange={(e) => {
+                                            setAppointmentForm({ ...appointmentForm, appointmentTime: e.target.value });
+                                            if (errors.appointmentTime) setErrors(prev => ({ ...prev, appointmentTime: null }));
+                                        }}
+                                    >
+                                        <option value="">Chọn giờ khám</option>
+                                        {availableTimeSlots.map((slot) => (
+                                            <option
+                                                key={slot.time}
+                                                value={slot.time}
+                                                disabled={slot.isFull}
+                                                className={slot.isFull ? 'text-danger' : ''}
+                                            >
+                                                {slot.time} {slot.isFull ? '(Đã đầy)' : `(${slot.available} chỗ trống)`}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-primary btn-sm d-flex align-items-center"
+                                        onClick={async () => {
+                                            await autoSelectTimeSlot(
+                                                appointmentForm.appointmentDate,
+                                                appointmentForm.roomId,
+                                                appointmentForm.staffId
+                                            );
+                                        }}
+                                        disabled={!appointmentForm.appointmentDate || isAutoSelecting}
+                                        title="Tự động chọn khung giờ gần nhất còn chỗ"
+                                    >
+                                        {isAutoSelecting ? (
+                                            <div className="text-primary small mt-1">
+                                                <span className="spinner-border spinner-border-sm me-1"></span>
+                                                Đang tự động chọn khung giờ phù hợp...
+                                            </div>
+                                        ) : (
+                                            <i className="bi bi-clock"></i>
+                                        )}
+                                    </button>
+
+                                </div>
                                 {renderInputError('appointmentTime')}
+                                <div className="form-text">
+                                    <small>Khung giờ làm việc: 7:00 - 16:30, mỗi khung giờ tối đa 10 bệnh nhân</small>
+                                </div>
                             </div>
 
                             {/* Room Selection */}
@@ -1008,7 +1303,7 @@ const ReceptionistPatent = () => {
 
     return (
         <>
-            {/* Loading Component - HIỆN KHI CÓ LOADING */}
+            {/* Loading Component */}
             <Loading isLoading={loading} />
 
             {/* Toast Notification */}
@@ -1207,7 +1502,7 @@ const ReceptionistPatent = () => {
                                     </div>
                                 )}
 
-                                {/* Direct Reception Tab - ĐÃ THÊM LOADING */}
+                                {/* Direct Reception Tab */}
                                 {activeTab === 'direct' && (
                                     <div className="row">
                                         <div className="col-lg-5">
