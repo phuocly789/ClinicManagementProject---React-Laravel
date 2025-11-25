@@ -14,6 +14,9 @@ import medicineService from '../../services/medicineService';
 const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
 const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class|import|export|\$\w+)/i;
 
+const [alertCount, setAlertCount] = useState(0);
+const [recentAlerts, setRecentAlerts] = useState([]);
+
 const medicineTypes = [
   'Thuốc viên',
   'Chống viêm không steroid',
@@ -37,7 +40,7 @@ const medicineTypes = [
   'Điều trị ung thư'
 ];
 
-const units = ['Viên', 'Chai', 'Ống', 'Gói', 'Tuýp', 'Lọ','Hộp'];
+const units = ['Viên', 'Chai', 'Ống', 'Gói', 'Tuýp', 'Lọ', 'Hộp'];
 
 const availableColumns = [
   { value: 'MedicineId', label: 'Mã Thuốc' },
@@ -102,6 +105,13 @@ const AdminMedicine = () => {
   const cache = useRef(new Map());
   const fileInputRef = useRef(null);
 
+  // Thêm các state cho AI
+  const [aiEnabled, setAiEnabled] = useState(localStorage.getItem('aiEnabled') !== 'false');
+  const [showSuggestModal, setShowSuggestModal] = useState(false);
+  const [suggestedData, setSuggestedData] = useState(null);
+  const [suggestError, setSuggestError] = useState('');
+
+  const formRef = useRef(null);
   // Toast
   const showToast = useCallback((type, message) => {
     setToast({ show: true, type, message });
@@ -142,7 +152,44 @@ const AdminMedicine = () => {
       setIsLoading(false);
     }
   }, [showToast]);
+  // AI Suggest
+  const handleSuggest = async () => {
+    const name = formData.MedicineName?.trim();
+    if (!name) {
+      showToast('warning', 'Nhập tên thuốc trước');
+      return;
+    }
 
+    try {
+      setIsLoading(true);
+      const data = await medicineService.suggestAI(name);
+
+      let error = '';
+      if (!medicineTypes.includes(data.type)) error += 'Loại không hợp lệ. ';
+      if (!units.includes(data.unit)) error += 'Đơn vị không hợp lệ. ';
+
+      setSuggestedData(data);
+      setSuggestError(error);
+      setShowSuggestModal(true);
+    } catch (err) {
+      showToast('error', err.message || 'Gợi ý AI lỗi');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Hàm áp dụng gợi ý AI
+  const handleApproveSuggest = () => {
+    if (suggestedData) {
+      setFormData(prev => ({
+        ...prev,
+        MedicineType: suggestedData.type || prev.MedicineType,
+        Unit: suggestedData.unit || prev.Unit,
+        Description: suggestedData.description || prev.Description
+      }));
+    }
+    setShowSuggestModal(false);
+  };
   // Tính toán cảnh báo
   const calculateAlerts = (medicinesList) => {
     const lowStock = medicinesList.filter(medicine =>
@@ -608,16 +655,42 @@ const AdminMedicine = () => {
                   <label className="form-label">
                     Tên thuốc <span className="text-danger">*</span>
                   </label>
-                  <input
-                    type="text"
-                    name="MedicineName"
-                    value={formData.MedicineName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, MedicineName: e.target.value }))}
-                    className={`form-control ${formErrors.MedicineName ? 'is-invalid' : ''}`}
-                    placeholder="Nhập tên thuốc..."
-                    required
-                  />
+                  <div className="input-group">
+                    <input
+                      type="text"
+                      name="MedicineName"
+                      value={formData.MedicineName}
+                      onChange={(e) => setFormData(prev => ({ ...prev, MedicineName: e.target.value }))}
+                      className={`form-control ${formErrors.MedicineName ? 'is-invalid' : ''}`}
+                      placeholder="Nhập tên thuốc..."
+                      required
+                    />
+                    {aiEnabled && (
+                      <button
+                        type="button"
+                        className="btn btn-info"
+                        onClick={handleSuggest}
+                        disabled={isLoading || !formData.MedicineName.trim()}
+                      >
+                        Gợi ý AI
+                      </button>
+                    )}
+                  </div>
                   {formErrors.MedicineName && <div className="invalid-feedback">{formErrors.MedicineName}</div>}
+
+                  {/* Thêm switch bật/tắt AI */}
+                  <div className="form-check form-switch mt-2">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      checked={aiEnabled}
+                      onChange={(e) => {
+                        setAiEnabled(e.target.checked);
+                        localStorage.setItem('aiEnabled', e.target.checked);
+                      }}
+                    />
+                    <label className="form-check-label small">Bật gợi ý AI</label>
+                  </div>
                 </div>
               </div>
               <div className="col-md-6">
@@ -1034,7 +1107,51 @@ const AdminMedicine = () => {
         return null;
     }
   };
+  // Thêm hàm render modal gợi ý AI
+  const renderSuggestModal = () => {
+    if (!showSuggestModal) return null;
 
+    return (
+      <>
+        <div className="modal-backdrop fade show"></div>
+        <div className="modal fade show d-block" tabIndex="-1" onClick={() => setShowSuggestModal(false)}>
+          <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg">
+              <div className="modal-header">
+                <h5 className="modal-title fw-semibold">Gợi Ý AI</h5>
+                <button type="button" className="btn-close" onClick={() => setShowSuggestModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                {suggestError && (
+                  <div className="alert alert-warning">
+                    {suggestError}
+                  </div>
+                )}
+                {suggestedData && (
+                  <>
+                    <p><strong>Loại:</strong> {suggestedData.type}</p>
+                    <p><strong>Đơn vị:</strong> {suggestedData.unit}</p>
+                    <p><strong>Mô tả:</strong> {suggestedData.description}</p>
+                    <p><strong>Cảnh báo:</strong> {suggestedData.warnings || 'Không có'}</p>
+                  </>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setShowSuggestModal(false)}>Hủy</button>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleApproveSuggest}
+                  disabled={!!suggestError}
+                >
+                  Áp dụng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  };
   // Confirm Import Modal
   const renderConfirmImportModal = () => {
     if (!showConfirmImportModal) return null;
@@ -1067,7 +1184,28 @@ const AdminMedicine = () => {
   useEffect(() => {
     fetchMedicines(1, filterParams);
   }, [fetchMedicines, filterParams]);
+  useEffect(() => {
+    // Lắng nghe real-time medicine alerts
+    window.Echo.private('admin-alerts')
+      .listen('MedicineAlertTriggered', (e) => {
+        console.log('🚨 Nhận cảnh báo thuốc:', e);
 
+        // Hiển thị notification
+        toast.error(`🚨 ${e.alert.message}`, {
+          position: "top-right",
+          autoClose: 10000, // 10 giây
+          closeOnClick: false,
+        });
+
+        // Cập nhật badge cảnh báo
+        setAlertCount(prev => prev + 1);
+        setRecentAlerts(prev => [e, ...prev.slice(0, 4)]); // Giữ 5 alerts gần nhất
+      });
+
+    return () => {
+      window.Echo.leave('admin-alerts');
+    };
+  }, []);
   return (
     <div className="d-flex vh-100">
       <main className="main-content flex-grow-1 p-4 d-flex flex-column gap-4 overflow-hidden">
@@ -1078,7 +1216,29 @@ const AdminMedicine = () => {
             onClose={hideToast}
           />
         )}
+        <div>
+          {/* Badge cảnh báo trên dashboard */}
+          {alertCount > 0 && (
+            <div className="alert-badge">
+              <span className="badge bg-danger">{alertCount}</span>
+              <small>Cảnh báo thuốc</small>
+            </div>
+          )}
 
+          {/* Hiển thị alerts gần nhất */}
+          {recentAlerts.length > 0 && (
+            <div className="recent-alerts">
+              <h6>Cảnh báo gần đây:</h6>
+              {recentAlerts.map((alert, index) => (
+                <div key={index} className="alert-item">
+                  <strong>{alert.alert.message}</strong>
+                  <br />
+                  <small>Thuốc: {alert.medicine.MedicineName}</small>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         {/* Header với thống kê - fixed height */}
         <header className="d-flex justify-content-between align-items-center flex-shrink-0">
           <div>
@@ -1414,6 +1574,7 @@ const AdminMedicine = () => {
 
         {renderModal()}
         {renderConfirmImportModal()}
+        {renderSuggestModal()}
       </main>
     </div>
   );
