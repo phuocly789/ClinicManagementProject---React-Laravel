@@ -132,7 +132,7 @@ class ReceptionController extends Controller
                 'TicketNumber' => $newTicketNumber,
                 'QueuePosition' => $newQueuePosition,
                 'QueueDate' => $today,
-                'QueueTime' => $currentTime,
+                'QueueTime' => $request->appointment['AppointmentTime'],
                 'Status' => 'Đang chờ',
                 'CreatedBy' => $createdBy
             ]);
