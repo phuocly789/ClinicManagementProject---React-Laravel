@@ -66,4 +66,9 @@ class Medicine extends Model
 	{
 		return $this->hasMany(ImportDetail::class, 'MedicineId');
 	}
+
+	public function alerts()
+	{
+		return $this->hasMany(Alert::class, 'medicine_id', 'MedicineId');
+	}
 }

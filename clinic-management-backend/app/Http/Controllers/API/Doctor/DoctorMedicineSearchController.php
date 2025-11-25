@@ -20,7 +20,16 @@ class DoctorMedicineSearchController extends Controller
         }
 
         $medicines = DB::table('Medicines')
-            ->select('MedicineId', 'MedicineName', 'MedicineType', 'Price', 'StockQuantity')
+            ->select(
+                'MedicineName',
+                'MedicineType',
+                'Unit',
+                'Price',
+                'StockQuantity',
+                'Description',
+                'ExpiryDate',
+                'LowStockThreshold'
+            )
             ->where('MedicineName', 'ILIKE', "%{$q}%")
             ->orWhere('MedicineType', 'ILIKE', "%{$q}%")
             ->limit(10)

@@ -8,6 +8,7 @@ use App\Models\Invoice;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 
 class PaymentController extends Controller
 {
@@ -18,49 +19,169 @@ class PaymentController extends Controller
         $this->paymentService = $paymentService;
     }
 
+    /**
+     * Kiểm tra kết nối database
+     */
+    private function checkDatabaseConnection()
+    {
+        try {
+            DB::connection()->getPdo();
+            return true;
+        } catch (\Exception $e) {
+            Log::error('❌ [DATABASE_CONNECTION] Lỗi kết nối database: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Xử lý response lỗi
+     */
+    private function handleError($message, $errorCode = 'SYSTEM_ERROR', $statusCode = 500, $context = '')
+    {
+        if (!empty($context)) {
+            $message .= ' (' . $context . ')';
+        }
+
+        Log::error("❌ [{$errorCode}] {$message}");
+
+        return response()->json([
+            'success' => false,
+            'message' => $message,
+            'error_code' => $errorCode,
+            'timestamp' => now()->format('Y-m-d H:i:s')
+        ], $statusCode);
+    }
+
+    /**
+     * Validate invoice có thể thanh toán
+     */
+    private function validateInvoiceForPayment(Invoice $invoice, $orderId = null)
+    {
+        // Kiểm tra invoice tồn tại
+        if (!$invoice) {
+            return ['success' => false, 'message' => 'Hóa đơn không tồn tại', 'code' => 'INVOICE_NOT_FOUND'];
+        }
+
+        // Kiểm tra trạng thái
+        if ($invoice->Status !== 'Chờ thanh toán') {
+            $currentStatus = $invoice->Status;
+            $statusMessages = [
+                'Đã thanh toán' => 'Hóa đơn đã được thanh toán trước đó',
+                'Đã hủy' => 'Hóa đơn đã bị hủy',
+            ];
+
+            return [
+                'success' => false,
+                'message' => $statusMessages[$currentStatus] ?? "Hóa đơn không thể thanh toán (trạng thái: {$currentStatus})",
+                'code' => 'INVALID_INVOICE_STATUS'
+            ];
+        }
+
+        // Kiểm tra OrderId trùng (tránh thanh toán trùng)
+        if ($invoice->OrderId && $invoice->OrderId !== $orderId) {
+            return [
+                'success' => false,
+                'message' => 'Hóa đơn đang trong quá trình thanh toán khác. Vui lòng tải lại trang',
+                'code' => 'DUPLICATE_PAYMENT_ATTEMPT'
+            ];
+        }
+
+        // Kiểm tra số tiền
+        if ($invoice->TotalAmount <= 0) {
+            return [
+                'success' => false,
+                'message' => 'Số tiền thanh toán không hợp lệ',
+                'code' => 'INVALID_AMOUNT'
+            ];
+        }
+
+        return ['success' => true];
+    }
+
     // API TẠO THANH TOÁN
     public function createPayment(Request $request)
     {
         Log::info('📱 [CREATE_PAYMENT] Request received:', $request->all());
 
-        $request->validate([
-            'invoiceId' => 'required|integer',
-            'orderId' => 'required|string',
-            'amount' => 'required|numeric|min:1000',
-            'orderInfo' => 'required|string',
+        // Kiểm tra kết nối database
+        if (!$this->checkDatabaseConnection()) {
+            return $this->handleError('Lỗi mất kết nối database', 'DATABASE_CONNECTION_ERROR', 503, 'Tạo thanh toán');
+        }
+
+        // Validate request
+        $validator = Validator::make($request->all(), [
+            'invoiceId' => 'required|integer|min:1',
+            'orderId' => 'required|string|max:50',
+            'amount' => 'required|numeric|min:1000|max:1000000000',
+            'orderInfo' => 'required|string|max:255',
             'paymentMethod' => 'required|in:momo,napas'
+        ], [
+            'invoiceId.required' => 'Thiếu ID hóa đơn',
+            'invoiceId.integer' => 'ID hóa đơn không hợp lệ',
+            'invoiceId.min' => 'ID hóa đơn phải lớn hơn 0',
+            'orderId.required' => 'Thiếu mã đơn hàng',
+            'orderId.string' => 'Mã đơn hàng không hợp lệ',
+            'orderId.max' => 'Mã đơn hàng quá dài',
+            'amount.required' => 'Thiếu số tiền thanh toán',
+            'amount.numeric' => 'Số tiền phải là số',
+            'amount.min' => 'Số tiền tối thiểu là 1,000 VND',
+            'amount.max' => 'Số tiền tối đa là 1,000,000,000 VND',
+            'orderInfo.required' => 'Thiếu thông tin đơn hàng',
+            'orderInfo.string' => 'Thông tin đơn hàng không hợp lệ',
+            'orderInfo.max' => 'Thông tin đơn hàng quá dài',
+            'paymentMethod.required' => 'Thiếu phương thức thanh toán',
+            'paymentMethod.in' => 'Phương thức thanh toán không hợp lệ'
         ]);
 
-        try {
-            DB::beginTransaction();
+        if ($validator->fails()) {
+            Log::warning('⚠️ [CREATE_PAYMENT] Validation failed', ['errors' => $validator->errors()->toArray()]);
 
+            return response()->json([
+                'success' => false,
+                'message' => 'Dữ liệu không hợp lệ',
+                'errors' => $validator->errors(),
+                'error_code' => 'VALIDATION_ERROR',
+                'timestamp' => now()->format('Y-m-d H:i:s')
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
             // TÌM INVOICE
             $invoice = Invoice::find($request->invoiceId);
-            if (!$invoice) {
-                Log::error('❌ [CREATE_PAYMENT] Invoice not found');
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Hóa đơn không tồn tại'
-                ], 404);
+
+            // Validate invoice
+            $validationResult = $this->validateInvoiceForPayment($invoice, $request->orderId);
+            if (!$validationResult['success']) {
+                DB::rollBack();
+                return $this->handleError(
+                    $validationResult['message'],
+                    $validationResult['code'],
+                    400,
+                    'Tạo thanh toán'
+                );
             }
 
-            // KIỂM TRA TRẠNG THÁI - THÊM ĐIỀU KIỆN ORDERId
-            if ($invoice->Status !== 'Chờ thanh toán' || $invoice->OrderId) {
-                Log::warning('⚠️ [CREATE_PAYMENT] Invoice cannot be processed', [
-                    'currentStatus' => $invoice->Status,
-                    'existingOrderId' => $invoice->OrderId
-                ]);
+            // Kiểm tra số tiền khớp với hóa đơn
+            $invoiceAmount = (float) $invoice->TotalAmount;
+            $requestAmount = (float) $request->amount;
 
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Hóa đơn đang trong quá trình thanh toán'
-                ], 400);
+            if (abs($invoiceAmount - $requestAmount) > 1000) { // Cho phép sai số 1000 VND
+                DB::rollBack();
+                return $this->handleError(
+                    "Số tiền thanh toán không khớp với hóa đơn. Hóa đơn: {$invoiceAmount}, Thanh toán: {$requestAmount}",
+                    'AMOUNT_MISMATCH',
+                    400,
+                    'Tạo thanh toán'
+                );
             }
 
             // LƯU THÔNG TIN PAYMENT
             $invoice->update([
                 'OrderId' => $request->orderId,
-                'PaymentMethod' => $request->paymentMethod
+                'PaymentMethod' => $request->paymentMethod,
+                'updated_at' => now()
             ]);
 
             Log::info('💾 [CREATE_PAYMENT] Invoice updated', [
@@ -77,9 +198,24 @@ class PaymentController extends Controller
                 $request->paymentMethod
             );
 
+            if (!$result || !isset($result['resultCode'])) {
+                DB::rollBack();
+                $this->resetInvoicePayment($invoice);
+
+                return $this->handleError(
+                    'Lỗi kết nối đến cổng thanh toán',
+                    'PAYMENT_GATEWAY_ERROR',
+                    502,
+                    'Tạo thanh toán'
+                );
+            }
+
             if ($result['resultCode'] == 0) {
                 DB::commit();
-                Log::info('✅ [CREATE_PAYMENT] Payment created successfully');
+                Log::info('✅ [CREATE_PAYMENT] Payment created successfully', [
+                    'invoiceId' => $invoice->InvoiceId,
+                    'orderId' => $request->orderId
+                ]);
 
                 return response()->json([
                     'success' => true,
@@ -87,41 +223,69 @@ class PaymentController extends Controller
                     'deeplink' => $result['deeplink'] ?? '',
                     'qrCodeUrl' => $result['qrCodeUrl'] ?? '',
                     'paymentMethod' => $request->paymentMethod,
-                    'message' => 'Tạo thanh toán thành công'
-                ]);
+                    'message' => 'Tạo thanh toán thành công',
+                    'invoice_id' => $invoice->InvoiceId,
+                    'order_id' => $request->orderId,
+                    'timestamp' => now()->format('Y-m-d H:i:s')
+                ], 200);
             } else {
                 DB::rollBack();
+                $this->resetInvoicePayment($invoice);
 
-                // RESET KHI MOMO TRẢ LỖI
-                $invoice->update([
-                    'OrderId' => null,
-                    'PaymentMethod' => null
+                $errorMessage = $result['message'] ?? 'Lỗi từ cổng thanh toán';
+                $errorCode = 'PAYMENT_GATEWAY_ERROR';
+
+                // Phân loại lỗi từ MoMo
+                if (isset($result['resultCode'])) {
+                    switch ($result['resultCode']) {
+                        case 1001:
+                            $errorMessage = 'Số tiền không hợp lệ';
+                            $errorCode = 'INVALID_AMOUNT';
+                            break;
+                        case 1002:
+                            $errorMessage = 'Đơn hàng đã tồn tại';
+                            $errorCode = 'DUPLICATE_ORDER';
+                            break;
+                        case 1003:
+                            $errorMessage = 'Thông tin đơn hàng không hợp lệ';
+                            $errorCode = 'INVALID_ORDER_INFO';
+                            break;
+                        case 1006:
+                            $errorMessage = 'Hệ thống cổng thanh toán đang bận';
+                            $errorCode = 'PAYMENT_GATEWAY_BUSY';
+                            break;
+                    }
+                }
+
+                Log::error('❌ [CREATE_PAYMENT] Payment gateway error', [
+                    'result' => $result,
+                    'invoiceId' => $invoice->InvoiceId
                 ]);
 
-                Log::error('❌ [CREATE_PAYMENT] MoMo error', $result);
-
-                return response()->json([
-                    'success' => false,
-                    'message' => $result['message'] ?? 'Lỗi từ MoMo'
-                ], 400);
+                return $this->handleError($errorMessage, $errorCode, 400, 'Tạo thanh toán');
             }
 
+        } catch (\Illuminate\Database\QueryException $e) {
+            DB::rollBack();
+            Log::error('💥 [CREATE_PAYMENT] Database exception: ' . $e->getMessage());
+            return $this->handleError('Lỗi cơ sở dữ liệu', 'DATABASE_ERROR', 500, 'Tạo thanh toán');
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('💥 [CREATE_PAYMENT] Exception: ' . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Lỗi hệ thống: ' . $e->getMessage()
-            ], 500);
+            Log::error('💥 [CREATE_PAYMENT] System exception: ' . $e->getMessage());
+            return $this->handleError('Lỗi hệ thống', 'SYSTEM_ERROR', 500, 'Tạo thanh toán');
         }
     }
 
     // CALLBACK TỪ MOMO - IPN URL
-    // CALLBACK TỪ MOMO - CŨNG PHẢI RESET KHI HỦY
     public function handleCallback(Request $request)
     {
         Log::info('🔔 [MOMO_CALLBACK] Received', $request->all());
+
+        // Kiểm tra kết nối database
+        if (!$this->checkDatabaseConnection()) {
+            Log::error('❌ [MOMO_CALLBACK] Database connection failed');
+            return response()->json(['resultCode' => -1], 503);
+        }
 
         $data = $request->all();
         $signature = $request->signature ?? '';
@@ -131,17 +295,18 @@ class PaymentController extends Controller
             return response()->json(['resultCode' => -1], 400);
         }
 
+        DB::beginTransaction();
+
         try {
-            // VERIFY SIGNATURE
+            // VERIFY SIGNATURE (bỏ qua trong môi trường test)
             if (!isset($data['test'])) {
                 $isValid = $this->paymentService->verifySignature($data, $signature);
                 if (!$isValid) {
-                    Log::error('❌ [MOMO_CALLBACK] Invalid signature');
+                    Log::error('❌ [MOMO_CALLBACK] Invalid signature', ['data' => $data]);
+                    DB::rollBack();
                     return response()->json(['resultCode' => -1], 400);
                 }
             }
-
-            DB::beginTransaction();
 
             $orderId = $data['orderId'];
             $invoice = Invoice::where('OrderId', $orderId)->first();
@@ -158,6 +323,7 @@ class PaymentController extends Controller
                 'resultCode' => $data['resultCode']
             ]);
 
+            // Xử lý kết quả thanh toán
             if ($data['resultCode'] == 0) {
                 // THANH TOÁN THÀNH CÔNG
                 $paymentMethod = 'momo';
@@ -169,26 +335,23 @@ class PaymentController extends Controller
                     'Status' => 'Đã thanh toán',
                     'TransactionId' => $data['transId'] ?? '',
                     'Paidat' => now('Asia/Ho_Chi_Minh'),
-                    'PaymentMethod' => $paymentMethod
+                    'PaymentMethod' => $paymentMethod,
+                    'updated_at' => now()
                 ]);
 
                 Log::info("✅ [MOMO_CALLBACK] Payment success", [
                     'invoiceId' => $invoice->InvoiceId,
-                    'paymentMethod' => $paymentMethod
+                    'paymentMethod' => $paymentMethod,
+                    'transactionId' => $data['transId'] ?? ''
                 ]);
             } else {
-                // QUAN TRỌNG: CALLBACK CŨNG PHẢI RESET KHI HỦY
-                $invoice->update([
-                    'Status' => 'Chờ thanh toán',
-                    'OrderId' => null,        // RESET OrderId
-                    'PaymentMethod' => null,  // RESET PaymentMethod
-                    'TransactionId' => null
-                ]);
+                // THANH TOÁN THẤT BẠI - RESET để cho phép thanh toán lại
+                $this->resetInvoicePayment($invoice);
 
-                Log::info("🔄 [MOMO_CALLBACK] Payment failed - RESET FOR RETRY", [
+                Log::info("🔄 [MOMO_CALLBACK] Payment failed - Reset for retry", [
                     'invoiceId' => $invoice->InvoiceId,
-                    'error' => $data['message'] ?? 'Unknown',
-                    'canRetry' => true
+                    'error' => $data['message'] ?? 'Unknown error',
+                    'resultCode' => $data['resultCode']
                 ]);
             }
 
@@ -202,8 +365,7 @@ class PaymentController extends Controller
         }
     }
 
-    // RETURN URL SAU KHI THANH TOÁN - REDIRECT URL
-    // RETURN URL SAU KHI THANH TOÁN - FIX LỖI KHÔNG CHO THANH TOÁN LẠI
+    // RETURN URL SAU KHI THANH TOÁN
     public function handleReturn(Request $request)
     {
         Log::info('🔄 [MOMO_RETURN] User returned', $request->all());
@@ -212,44 +374,30 @@ class PaymentController extends Controller
         $resultCode = $data['resultCode'] ?? -1;
         $orderId = $data['orderId'] ?? null;
 
-        try {
-            DB::beginTransaction();
+        if (!$orderId) {
+            Log::error('❌ [MOMO_RETURN] Missing orderId');
+            return $this->redirectToFrontend('error', 'Thiếu thông tin đơn hàng');
+        }
 
-            $invoice = $orderId ? Invoice::where('OrderId', $orderId)->first() : null;
+        DB::beginTransaction();
+
+        try {
+            $invoice = Invoice::where('OrderId', $orderId)->first();
 
             if (!$invoice) {
-                Log::error('❌ [MOMO_RETURN] Invoice not found');
+                Log::error('❌ [MOMO_RETURN] Invoice not found', ['orderId' => $orderId]);
                 DB::rollBack();
-                return $this->redirectToFrontend('error', 'Hóa đơn không tồn tại');
+                return $this->redirectToFrontend('error', 'Không tìm thấy hóa đơn');
             }
 
             Log::info("📋 [MOMO_RETURN] Processing invoice", [
                 'invoiceId' => $invoice->InvoiceId,
                 'currentStatus' => $invoice->Status,
-                'resultCode' => $resultCode,
-                'orderId' => $invoice->OrderId
+                'resultCode' => $resultCode
             ]);
 
-            // QUAN TRỌNG: LUÔN RESET KHI THANH TOÁN THẤT BẠI/HỦY - ĐỂ CHO PHÉP THANH TOÁN LẠI
-            if ($resultCode != 0) {
-                // RESET HOÀN TOÀN - QUAN TRỌNG: phải reset OrderId và PaymentMethod
-                $invoice->update([
-                    'Status' => 'Chờ thanh toán',
-                    'OrderId' => null,        // QUAN TRỌNG: Reset OrderId
-                    'PaymentMethod' => null,  // QUAN TRỌNG: Reset PaymentMethod
-                    'TransactionId' => null,
-                    'Paidat' => null
-                ]);
-
-                Log::info("🔄 [MOMO_RETURN] Payment cancelled - RESET COMPLETED", [
-                    'invoiceId' => $invoice->InvoiceId,
-                    'oldOrderId' => $orderId,
-                    'reason' => $data['message'] ?? 'User cancelled',
-                    'canRetry' => true
-                ]);
-            }
-            // THANH TOÁN THÀNH CÔNG
-            else if ($resultCode == 0) {
+            if ($resultCode == 0) {
+                // THANH TOÁN THÀNH CÔNG
                 $paymentMethod = 'momo';
                 if (isset($data['payType']) && $data['payType'] === 'napas') {
                     $paymentMethod = 'napas';
@@ -259,81 +407,141 @@ class PaymentController extends Controller
                     'Status' => 'Đã thanh toán',
                     'TransactionId' => $data['transId'] ?? '',
                     'Paidat' => now('Asia/Ho_Chi_Minh'),
-                    'PaymentMethod' => $paymentMethod
-                    // GIỮ OrderId để tránh bị reuse
+                    'PaymentMethod' => $paymentMethod,
+                    'updated_at' => now()
                 ]);
 
                 Log::info("✅ [MOMO_RETURN] Payment success", [
                     'invoiceId' => $invoice->InvoiceId,
                     'paymentMethod' => $paymentMethod
                 ]);
-            }
 
-            DB::commit();
-
-            // Redirect với thông báo phù hợp
-            if ($resultCode == 0) {
+                DB::commit();
                 return $this->redirectToFrontend('success', 'Thanh toán thành công', $invoice, $data);
             } else {
-                return $this->redirectToFrontend('cancelled', 'Bạn đã hủy thanh toán. Có thể thanh toán lại ngay!', $invoice, $data);
+                // THANH TOÁN THẤT BẠI/HỦY - RESET
+                $this->resetInvoicePayment($invoice);
+
+                $errorMessage = $this->getPaymentErrorMessage($resultCode, $data['message'] ?? '');
+
+                Log::info("🔄 [MOMO_RETURN] Payment failed - Reset completed", [
+                    'invoiceId' => $invoice->InvoiceId,
+                    'reason' => $errorMessage
+                ]);
+
+                DB::commit();
+                return $this->redirectToFrontend('cancelled', $errorMessage, $invoice, $data);
             }
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('💥 [MOMO_RETURN] Exception: ' . $e->getMessage());
-            return $this->redirectToFrontend('error', 'Lỗi hệ thống');
+            return $this->redirectToFrontend('error', 'Lỗi hệ thống xử lý thanh toán');
         }
+    }
+
+    /**
+     * Lấy thông báo lỗi thanh toán
+     */
+    private function getPaymentErrorMessage($resultCode, $defaultMessage = '')
+    {
+        $errorMessages = [
+            -1 => 'Giao dịch bị lỗi',
+            1001 => 'Bạn đã hủy thanh toán',
+            1002 => 'Giao dịch hết thời gian chờ',
+            1003 => 'Số tiền không hợp lệ',
+            1004 => 'Thông tin thẻ không hợp lệ',
+            1005 => 'Số dư không đủ',
+            1006 => 'Lỗi hệ thống ngân hàng',
+        ];
+
+        return $errorMessages[$resultCode] ?? ($defaultMessage ?: 'Thanh toán không thành công');
     }
 
     // API RESET THANH TOÁN THỦ CÔNG
     public function resetPayment(Request $request)
     {
-        $request->validate([
-            'invoiceId' => 'required|integer'
+        Log::info('🔄 [RESET_PAYMENT] Manual reset requested', $request->all());
+
+        // Kiểm tra kết nối database
+        if (!$this->checkDatabaseConnection()) {
+            return $this->handleError('Lỗi kết nối database', 'DATABASE_CONNECTION_ERROR', 503, 'Reset thanh toán');
+        }
+
+        $validator = Validator::make($request->all(), [
+            'invoiceId' => 'required|integer|min:1'
+        ], [
+            'invoiceId.required' => 'Thiếu ID hóa đơn',
+            'invoiceId.integer' => 'ID hóa đơn không hợp lệ',
+            'invoiceId.min' => 'ID hóa đơn phải lớn hơn 0'
         ]);
 
-        try {
-            DB::beginTransaction();
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dữ liệu không hợp lệ',
+                'errors' => $validator->errors(),
+                'error_code' => 'VALIDATION_ERROR'
+            ], 422);
+        }
 
+        DB::beginTransaction();
+
+        try {
             $invoice = Invoice::find($request->invoiceId);
 
             if (!$invoice) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Hóa đơn không tồn tại'
-                ], 404);
+                DB::rollBack();
+                return $this->handleError('Hóa đơn không tồn tại', 'INVOICE_NOT_FOUND', 404, 'Reset thanh toán');
+            }
+
+            // Chỉ cho reset nếu đang ở trạng thái chờ thanh toán
+            if ($invoice->Status !== 'Chờ thanh toán') {
+                DB::rollBack();
+                return $this->handleError(
+                    'Không thể reset hóa đơn đã được xử lý',
+                    'INVALID_RESET_ATTEMPT',
+                    400,
+                    'Reset thanh toán'
+                );
             }
 
             $this->resetInvoicePayment($invoice);
 
             DB::commit();
 
-            Log::info("🔄 [RESET_PAYMENT] Success", ['invoiceId' => $invoice->InvoiceId]);
+            Log::info("✅ [RESET_PAYMENT] Manual reset successful", ['invoiceId' => $invoice->InvoiceId]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Reset thanh toán thành công'
+                'message' => 'Reset thanh toán thành công',
+                'invoice_id' => $invoice->InvoiceId,
+                'timestamp' => now()->format('Y-m-d H:i:s')
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('💥 [RESET_PAYMENT] Exception: ' . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Lỗi hệ thống'
-            ], 500);
+            return $this->handleError('Lỗi hệ thống', 'SYSTEM_ERROR', 500, 'Reset thanh toán');
         }
     }
-    // Thêm vào PaymentController.php
+
+    // Reset các invoice bị kẹt
     public function resetStuckInvoices()
     {
+        Log::info('🔄 [RESET_STUCK_INVOICES] Starting automated reset');
+
+        if (!$this->checkDatabaseConnection()) {
+            Log::error('❌ [RESET_STUCK_INVOICES] Database connection failed');
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi kết nối database'
+            ], 503);
+        }
+
+        DB::beginTransaction();
+
         try {
-            DB::beginTransaction();
-
-            Log::info('🔄 [RESET_STUCK_INVOICES] Starting reset process');
-
-            // Tìm các hóa đơn bị kẹt (có OrderId nhưng status vẫn là PENDING và quá 30 phút)
             $stuckInvoices = Invoice::where('Status', 'Chờ thanh toán')
                 ->whereNotNull('OrderId')
                 ->where('OrderId', '!=', '')
@@ -356,56 +564,16 @@ class PaymentController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => "Đã reset {$resetCount} hóa đơn bị kẹt",
-                'resetCount' => $resetCount
+                'reset_count' => $resetCount,
+                'timestamp' => now()->format('Y-m-d H:i:s')
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('💥 [RESET_STUCK_INVOICES] Exception: ' . $e->getMessage());
-
             return response()->json([
                 'success' => false,
                 'message' => 'Lỗi hệ thống khi reset hóa đơn bị kẹt'
-            ], 500);
-        }
-    }
-
-    // Thêm method resetSingleInvoice nếu chưa có
-    public function resetSingleInvoice($invoiceId)
-    {
-        try {
-            DB::beginTransaction();
-
-            Log::info('🔄 [RESET_SINGLE_INVOICE] Resetting invoice:', ['invoiceId' => $invoiceId]);
-
-            $invoice = Invoice::find($invoiceId);
-
-            if (!$invoice) {
-                Log::error('❌ [RESET_SINGLE_INVOICE] Invoice not found');
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Hóa đơn không tồn tại'
-                ], 404);
-            }
-
-            $this->resetInvoicePayment($invoice);
-
-            DB::commit();
-
-            Log::info("✅ [RESET_SINGLE_INVOICE] Successfully reset invoice: {$invoiceId}");
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Reset hóa đơn thành công'
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('💥 [RESET_SINGLE_INVOICE] Exception: ' . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Lỗi hệ thống khi reset hóa đơn'
             ], 500);
         }
     }
@@ -420,8 +588,11 @@ class PaymentController extends Controller
             'OrderId' => null,
             'PaymentMethod' => null,
             'TransactionId' => null,
-            'Paidat' => null
+            'Paidat' => null,
+            'updated_at' => now()
         ]);
+
+        Log::info("🔄 [RESET_INVOICE] Reset payment info", ['invoiceId' => $invoice->InvoiceId]);
     }
 
     /**
@@ -438,7 +609,6 @@ class PaymentController extends Controller
             'countdown' => 5
         ];
 
-        // THÊM THÔNG TIN NẾU CÓ
         if ($invoice) {
             $queryParams['invoiceId'] = $invoice->InvoiceId;
             $queryParams['orderId'] = $invoice->OrderId;
@@ -450,10 +620,12 @@ class PaymentController extends Controller
             $queryParams['transId'] = $data['transId'];
         if (isset($data['amount']))
             $queryParams['amount'] = $data['amount'];
+        if (isset($data['resultCode']))
+            $queryParams['resultCode'] = $data['resultCode'];
 
         $redirectUrl = $frontendUrl . "/payment/result?" . http_build_query($queryParams);
 
-        Log::info("🔄 [REDIRECT] To: " . $redirectUrl);
+        Log::info("🔀 [REDIRECT] Redirecting to frontend: " . $redirectUrl);
         return redirect()->away($redirectUrl);
     }
 }
