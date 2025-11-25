@@ -180,13 +180,13 @@ const PaymentSection = () => {
 
     switch (paymentMethod) {
       case PAYMENT_METHODS.MOMO:
-        return <Badge bg="primary">💜 MoMo</Badge>;
+        return <Badge bg="primary"><i class="fas fa-mobile-alt text-danger"></i> MoMo</Badge>;
       case PAYMENT_METHODS.CASH:
-        return <Badge bg="success">💵 Tiền mặt</Badge>;
+        return <Badge bg="success"> <i class="fas fa-money-bill text-warning"></i> Tiền mặt</Badge>;
       case PAYMENT_METHODS.BANK_TRANSFER:
-        return <Badge bg="info">🏦 Thẻ napas</Badge>;
+        return <Badge bg="info"><i class="fas fa-credit-card text-primary"></i> Thẻ napas</Badge>;
       case PAYMENT_METHODS.INSURANCE:
-        return <Badge bg="warning">🛡️ Bảo hiểm</Badge>;
+        return <Badge bg="warning"> Bảo hiểm</Badge>;
       default:
         return <Badge bg="light" text="dark">{paymentMethod}</Badge>;
     }
@@ -864,7 +864,6 @@ const PaymentSection = () => {
               <Nav.Link eventKey={TAB_KEYS.PAYMENT_HISTORY} className="fw-semibold">
                 <i className="fas fa-history me-2"></i>
                 Lịch sử thanh toán
-                <Badge bg="info" className="ms-2">{invoiceCounts.payment_history}</Badge>
               </Nav.Link>
             </Nav.Item>
           </Nav>
