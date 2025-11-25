@@ -18,6 +18,7 @@ const PrescriptionSection = ({
   services,
   setToast,
   diagnoses,
+  doctorInfo,
 }) => {
   const navigate = useNavigate();
 
@@ -60,7 +61,7 @@ const PrescriptionSection = ({
     clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
     clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
     clinicPhone: '028 1234 5678',
-    doctorName: 'Hệ thống',
+    doctorName: doctorInfo?.doctor_Name || 'Hệ thống',
     customTitle: 'Toa Thuốc',
 
     // Page settings
@@ -96,9 +97,9 @@ const PrescriptionSection = ({
   // HÀM CHUYỂN DỊCH LỖI BE SANG FE
   const translateError = (error) => {
     console.error('🔴 Backend Error:', error);
-    
+
     const backendMessage = error.response?.data?.message || error.message || '';
-    
+
     // Map các lỗi phổ biến từ BE sang thông báo tiếng Việt thân thiện
     const errorMap = {
       'Patient not found': 'Không tìm thấy thông tin bệnh nhân',
@@ -162,7 +163,7 @@ const PrescriptionSection = ({
   const handleError = (error, customMessage = '') => {
     const translatedError = translateError(error);
     console.error('❌ Error:', error);
-    
+
     Swal.fire({
       title: 'Lỗi!',
       text: customMessage || translatedError,
@@ -193,7 +194,7 @@ const PrescriptionSection = ({
       if (newRow.medicine.trim().length >= 2) {
         try {
           const response = await doctorService.searchMedicines(newRow.medicine);
-          
+
           // XỬ LÝ CẤU TRÚC RESPONSE
           let medicines = [];
           if (Array.isArray(response)) {
@@ -203,7 +204,7 @@ const PrescriptionSection = ({
           } else {
             console.warn('⚠️ Cấu trúc response không xác định:', response);
           }
-          
+
           setSuggestions(medicines);
         } catch (err) {
           console.error("Lỗi khi tìm thuốc:", err);
@@ -295,7 +296,7 @@ const PrescriptionSection = ({
         ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
         : new Date().toLocaleDateString('vi-VN'),
       appointment_time: selectedTodayPatient.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-      doctor_name: selectedTodayPatient.doctor_name || 'Bác sĩ chưa rõ',
+      doctor_name: doctorInfo?.doctor_Name || 'Bác sĩ chưa rõ',
       prescriptions: [
         {
           details: prescriptionRows.map(row => ({
@@ -635,7 +636,7 @@ const PrescriptionSection = ({
           ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
           : new Date().toLocaleDateString('vi-VN'),
         appointment_time: selectedTodayPatient.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        doctor_name: selectedTodayPatient.doctor_name || 'Bác sĩ chưa rõ',
+        doctor_name: doctorInfo?.doctor_Name  || 'Bác sĩ chưa rõ',
         prescriptions: [
           {
             details: prescriptionRows.map(row => ({
@@ -718,7 +719,7 @@ const PrescriptionSection = ({
           ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
           : new Date().toLocaleDateString('vi-VN'),
         appointment_time: selectedTodayPatient.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        doctor_name: selectedTodayPatient.doctor_name || 'Bác sĩ chưa rõ',
+        doctor_name: doctorInfo?.doctor_Name || 'Bác sĩ chưa rõ',
         prescriptions: [
           {
             details: prescriptionRows.map(row => ({
@@ -951,9 +952,20 @@ const PrescriptionSection = ({
                             onMouseEnter={(e) => e.target.style.backgroundColor = '#e9ecef'}
                             onMouseLeave={(e) => e.target.style.backgroundColor = '#f8f9fa'}
                           >
-                            <div><strong>{s.MedicineName}</strong> ({s.Unit})</div>
-                            <div className="text-success">💰 {s.Price?.toLocaleString()}₫</div>
-                            <div className="text-muted small mt-1">{s.Reason}</div>
+                            <div><strong>{s.MedicineName}/{s.Unit}</strong> ({s.MedicineType})</div>
+                            <div className="text-success">
+                              {(() => {
+                                const price = s.Price ? Number(s.Price) : 0;
+                                if (isNaN(price)) return 'N/A'; // Fallback nếu không parse được
+                                return price.toLocaleString('vi-VN', {
+                                  style: 'currency',
+                                  currency: 'VND',
+                                  minimumFractionDigits: 0,
+                                  maximumFractionDigits: 0
+                                });
+                              })()}
+                            </div>
+                            <div className="text-muted small mt-1">{s.Description}</div>
                           </div>
                         ))}
                       </div>
@@ -1038,7 +1050,7 @@ const PrescriptionSection = ({
       {/* MODAL PREVIEW TOA THUỐC */}
       <Modal show={showPDFPreview} onHide={handleClosePreview} size="xl" centered>
         <Modal.Header closeButton>
-          <Modal.Title>👁️ Xem trước Toa Thuốc</Modal.Title>
+          <Modal.Title> Xem trước Toa Thuốc</Modal.Title>
         </Modal.Header>
         <Modal.Body style={{ minHeight: '500px' }}>
           <PDFPreviewEditor
