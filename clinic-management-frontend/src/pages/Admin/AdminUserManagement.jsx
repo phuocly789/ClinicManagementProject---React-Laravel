@@ -54,7 +54,7 @@ const AdminUserManagement = () => {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [formErrors, setFormErrors] = useState({});
-  const [solrAvailable, setSolrAvailable] = useState(false);
+  const [solrAvailable, setSolrAvailable] = useState(true);
 
   const apiFilters = useMemo(() => ({
     search: debouncedSearchTerm,
@@ -71,6 +71,7 @@ const AdminUserManagement = () => {
       // Kiểm tra response structure để xác định Solr có hoạt động không
       if (response.data && response.data.success !== false && !response.data.fallback) {
         setSolrAvailable(true);
+        localStorage.setItem('solr_available', 'true');
         return true;
       } else {
         setSolrAvailable(false);
@@ -149,12 +150,20 @@ const AdminUserManagement = () => {
   const searchUsersFromSolr = useCallback(async (page = 1) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        q: debouncedSearchTerm || '*:*',
-        page: page.toString(),
-        per_page: '10',
-        type: 'user'
-      });
+      const params = new URLSearchParams();
+
+      // Query tìm kiếm chính xác trên các field quan trọng
+      if (debouncedSearchTerm && debouncedSearchTerm.trim()) {
+        const keyword = debouncedSearchTerm.trim();
+        params.append('q', `(full_name:*${keyword}* OR username:*${keyword}* OR email:*${keyword}* OR phone:*${keyword}* OR user_role:*${keyword}* OR specialty:*${keyword}* OR license_number:*${keyword}*)`);
+      } else {
+        params.append('q', '*:*');
+      }
+
+      params.append('fq', 'type:user');           // Dùng filter query thay vì type trong q
+      params.append('page', page.toString());
+      params.append('per_page', 10);              // số, không cần dấu nháy
+      params.append('sort', 'score desc, id asc');
 
       if (filters.gender) {
         params.append('gender', filters.gender);
@@ -166,8 +175,7 @@ const AdminUserManagement = () => {
         params.append('is_active', filters.status === '1' ? 'true' : 'false');
       }
 
-      const response = await instance.get(`/api/search?${params.toString()}`);
-
+      const response = await instance.get(`/api/users/search?${params.toString()}`);
       if (!response.data) {
         throw new Error('Dữ liệu trả về không hợp lệ');
       }
@@ -191,34 +199,31 @@ const AdminUserManagement = () => {
       }
 
       const formattedUsers = results.map((item, index) => {
-        const user = {
-          UserId: item.id || item.UserId || `solr-${index}`,
-          Username: item.username || item.Username || 'N/A',
-          FullName: item.title || item.full_name || item.FullName || item.name || 'Chưa có tên',
-          Email: item.email || item.Email || 'N/A',
-          Phone: item.phone || item.Phone || 'N/A',
-          Gender: item.gender || item.Gender || 'Chưa có',
-          DateOfBirth: item.date_of_birth || item.DateOfBirth,
-          BirthDate: item.date_of_birth || item.DateOfBirth ?
-            dayjs(item.date_of_birth || item.DateOfBirth).format('DD/MM/YYYY') : 'Chưa có',
-          Address: item.address || item.Address || 'Chưa có',
-          Role: item.role || item.Role || item.user_role || 'Chưa có',
-          Specialty: item.specialty || item.Specialty || '',
-          LicenseNumber: item.license_number || item.LicenseNumber || '',
-          IsActive: true,
+        // Helper lấy giá trị đầu nếu là mảng (vì Solr trả về mảng)
+        const get = (field, fallback = 'Chưa có') => {
+          const val = item[field];
+          if (Array.isArray(val)) return val[0] || fallback;
+          return val !== undefined && val !== null ? val : fallback;
         };
 
-        if (item.is_active !== undefined) {
-          user.IsActive = item.is_active;
-        } else if (item.IsActive !== undefined) {
-          user.IsActive = item.IsActive;
-        } else if (item.status === 'inactive') {
-          user.IsActive = false;
-        }
+        const fullName = get('full_name', 'Chưa có tên');
+        const role = get('user_role', 'Chưa có');
 
-        return user;
+        return {
+          UserId: item.id?.replace('user_', '') || index + 1,
+          Username: get('username', 'N/A'),
+          FullName: fullName,
+          Email: get('email', 'N/A'),
+          Phone: get('phone', 'N/A'),
+          Gender: get('gender', 'Chưa có'),
+          Address: get('address', 'Chưa có'),
+          Role: role,
+          IsActive: item.is_active !== undefined ? Boolean(item.is_active) : true,
+          Specialty: get('specialty', ''),
+          LicenseNumber: get('license_number', ''),
+          BirthDate: item.date_of_birth ? dayjs(item.date_of_birth).format('DD/MM/YYYY') : 'Chưa có',
+        };
       });
-
       setUsers(formattedUsers);
 
       const totalResults = solrData.total || results.length;
@@ -240,7 +245,7 @@ const AdminUserManagement = () => {
 
   // Hàm chung để fetch users - Tự động chọn Solr hoặc Database
   const fetchUsers = useCallback(async (page = 1) => {
-    const shouldUseSolr = debouncedSearchTerm && debouncedSearchTerm.length >= 2 && solrAvailable;
+    const shouldUseSolr = debouncedSearchTerm?.trim() && solrAvailable;
 
     if (shouldUseSolr) {
       await searchUsersFromSolr(page);
@@ -310,6 +315,7 @@ const AdminUserManagement = () => {
         ...user,
         DateOfBirth: user.DateOfBirth ? dayjs(user.DateOfBirth).format('YYYY-MM-DD') : '',
         Role: user.roles && user.roles.length > 0 ? user.roles[0].RoleName : user.Role,
+        updated_at: user.updated_at
       });
     } else {
       setFormData(initialFormState);
@@ -366,7 +372,7 @@ const AdminUserManagement = () => {
     const method = isEditing ? 'put' : 'post';
 
     try {
-      const payload = { ...formData };
+      const payload = { ...formData,updated_at: modal.user?.updated_at };
       if (isEditing && !payload.Password) {
         delete payload.Password;
       }
@@ -382,6 +388,15 @@ const AdminUserManagement = () => {
       fetchUsers(pagination.currentPage);
     } catch (err) {
       console.error('Lỗi khi gửi form:', err);
+      if (err.response?.status === 409 && err.response?.data?.requires_reload) {
+      setToast({ 
+        type: 'error', 
+        message: 'Dữ liệu đã được cập nhật bởi người khác. Vui lòng tải lại trang!' 
+      });
+      handleCloseModal();
+      fetchUsers(pagination.currentPage); // Reload dữ liệu
+      return;
+    }
       const errorMessage = err.response?.data?.errors
         ? Object.values(err.response.data.errors).flat().join(' ')
         : (err.response?.data?.message || err.message || 'Có lỗi xảy ra.');
