@@ -26,6 +26,7 @@ use App\Http\Controllers\API\Doctor\PatientsController;
 use App\Http\Controllers\API\PatientController;
 use App\Http\Controllers\API\Payment\InvoiceController;
 use App\Http\Controllers\API\Payment\PaymentController;
+use App\Http\Controllers\API\PrescriptionAnalyticsController;
 //----------------------------------------------Hết-------------------------------
 use App\Http\Controllers\API\User\AdminUserController;
 use App\Http\Controllers\API\Print\InvoicePrintController;
@@ -33,6 +34,7 @@ use App\Http\Controllers\API\Receptionist\MedicalStaffController;
 use App\Http\Controllers\API\Receptionist\PatientByRecepController;
 use App\Http\Controllers\API\Receptionist\QueueController;
 use App\Http\Controllers\API\Receptionist\ReceptionController;
+use App\Http\Controllers\API\RevenueForecastController;
 use App\Http\Controllers\API\Technician\TestResultsController;
 use App\Http\Controllers\TestWebSocketController;
 use App\Http\Controllers\API\SearchController;
@@ -104,7 +106,10 @@ Route::get('/rooms', [RoomController::class, 'getAllRooms']);
 //
 Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
 Route::post('/dashboard/broadcast-stats', [DashboardController::class, 'broadcastStats']);
-
+//
+Route::get('/revenue-forecast', [RevenueForecastController::class, 'forecast']);
+//
+Route::get('/prescription-analytics', [PrescriptionAnalyticsController::class, 'analytics']);
 
 // Nhóm route cho Bác sĩ
 Route::prefix('doctor')->middleware(['auth:sanctum', 'role:Bác sĩ'])->group(function () {
@@ -196,6 +201,8 @@ Route::prefix('technician')->middleware(['auth:sanctum', 'role:Kĩ thuật viên
 Route::prefix('receptionist')->group(function () {
     //lịch hẹn
     Route::get('/appointments/today', [AppointmentRecepController::class, 'GetAppointmentToday']);
+    Route::get('/appointments/count-by-timeslot', [AppointmentRecepController::class, 'getAppointmentCountByTimeSlot']);
+    Route::get('/appointments/counts-by-timeslots', [AppointmentRecepController::class, 'getAppointmentCountsByTimeSlots']);
     //hàng chờ
     Route::get('/queue', [QueueController::class, 'GetQueueByDate']);
     Route::get('/queue/{room_id}', [QueueController::class, 'GetQueueByRoomAndDate']);
@@ -309,7 +316,7 @@ Route::prefix('payments')->group(function () {
     // Tìm kiếm hóa đơn với Solr
     Route::get('/invoices/search', [SearchController::class, 'searchInvoices']);
 });
-Route::middleware(['auth:api'])->get('/doctor/room-info', [DoctorExaminationsController::class, 'getRoomInfo']);
+Route::middleware(['auth:api'])->get('/doctor/room-info', [AppointmentsController::class, 'getRoomInfo']);
 
 // ==================== SEARCH ROUTES - TÍCH HỢP SOLR ====================
 Route::prefix('search')->group(function () {
@@ -357,84 +364,138 @@ Route::prefix('doctor')->group(function () {
     // Tìm kiếm thuốc cho doctor
     Route::get('/medicines/search-solr', [SearchController::class, 'searchMedicines']);
 });
-// routes/api.php hoặc routes/web.php
+// Route tạm thời để index dữ liệu - XÓA SAU KHI DÙNG
+// Route::get('/solr/quick-index', function() {
+//     try {
+//         $solrService = app(\App\Services\SolrService::class);
+        
+//         // Index một vài user test
+//         $users = \App\Models\User::with('roles')->limit(10)->get();
+        
+//         $indexed = 0;
+//         foreach ($users as $user) {
+//             $document = [
+//                 'id' => 'user_' . $user->UserId,
+//                 'title' => $user->FullName,
+//                 'content' => "User: {$user->FullName}, Email: {$user->Email}, Phone: {$user->Phone}",
+//                 'type' => 'user',
+//                 'category' => ['user'],
+//                 'status' => $user->IsActive ? 'active' : 'inactive',
+//                 'full_name' => $user->FullName,
+//                 'email' => $user->Email,
+//                 'phone' => $user->Phone,
+//                 'role' => $user->roles->first()->RoleName ?? 'user'
+//             ];
+            
+//             if ($solrService->indexDocument($document)) {
+//                 $indexed++;
+//             }
+//         }
+        
+//         return response()->json([
+//             'success' => true,
+//             'message' => "Đã index $indexed users vào Solr",
+//             'test_search_url' => url('/api/search?q=Nguyễn&per_page=10')
+//         ]);
+        
+//     } catch (\Exception $e) {
+//         return response()->json([
+//             'success' => false,
+//             'error' => $e->getMessage()
+//         ], 500);
+//     }
+// });
+// // Thêm route để xóa và index lại
+// Route::get('/solr/reindex-all', function() {
+//     try {
+//         $solrService = app(\App\Services\SolrService::class);
+        
+//         // Xóa tất cả documents cũ
+//         $client = app(\Solarium\Client::class);
+//         $update = $client->createUpdate();
+//         $update->addDeleteQuery('*:*');
+//         $update->addCommit();
+//         $client->update($update);
+        
+//         // Index lại users
+//         $users = \App\Models\User::with('roles')->get();
+//         $indexed = 0;
+        
+//         foreach ($users as $user) {
+//             $document = [
+//                 'id' => 'user_' . $user->UserId,
+//                 'title' => $user->FullName,
+//                 'content' => $user->FullName . ' ' . $user->Email . ' ' . $user->Phone . ' ' . ($user->roles->first()->RoleName ?? ''),
+//                 'type' => 'user',
+//                 'category' => ['user'],
+//                 'status' => $user->IsActive ? 'active' : 'inactive',
+//                 'full_name' => $user->FullName,
+//                 'email' => $user->Email,
+//                 'phone' => $user->Phone,
+//                 'username' => $user->Username,
+//                 'role' => $user->roles->first()->RoleName ?? 'user'
+//             ];
+            
+//             if ($solrService->indexDocument($document)) {
+//                 $indexed++;
+//             }
+//         }
+        
+//         return response()->json([
+//             'success' => true,
+//             'reindexed' => $indexed,
+//             'test_search' => url('/api/search?q=Nguyễn')
+//         ]);
+//     } catch (\Exception $e) {
+//         return response()->json(['error' => $e->getMessage()], 500);
+//     }
+// });
+// Route::get('/solr/reindex-all-fix', function () {
+//     $solrService = app(\App\Services\SolrService::class);
+//     $client = app(\Solarium\Client::class);
 
-Route::get('/solr-test', function () {
-    try {
-        $client = app(\Solarium\Client::class);
+//     // 1. XÓA SẠCH HOÀN TOÀN
+//     $update = $client->createUpdate();
+//     $update->addDeleteQuery('*:*');
+//     $update->addCommit();
+//     $client->update($update);
 
-        // Test ping
-        $ping = $client->createPing();
-        $result = $client->ping($ping);
+//     // 2. INDEX LẠI VỚI CÁCH CHẮC CHẮN NHẤT
+//     $users = \App\Models\User::with('roles')->get();
+//     $indexed = 0;
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Solr connection successful',
-            'endpoint' => [
-                'host' => env('SOLR_HOST'),
-                'port' => env('SOLR_PORT'),
-                'path' => env('SOLR_PATH'),
-                'core' => env('SOLR_CORE'),
-                'full_url' => sprintf(
-                    '%s://%s:%s%s/%s/',  // Thêm / giữa path và core
-                    env('SOLR_SCHEME'),
-                    env('SOLR_HOST'),
-                    env('SOLR_PORT'),
-                    env('SOLR_PATH'),
-                    env('SOLR_CORE')
-                )
-            ],
-            'ping_response' => $result->getData()
-        ]);
-    } catch (\Exception $e) {
-        // \Log::error('Solr connection error: ' . $e->getMessage());
+//     foreach ($users as $user) {
+//         $fullName = trim($user->FullName ?? '');
+//         if (empty($fullName)) continue;
 
-        return response()->json([
-            'status' => 'error',
-            'message' => $e->getMessage(),
-            'endpoint' => [
-                'host' => env('SOLR_HOST'),
-                'port' => env('SOLR_PORT'),
-                'path' => env('SOLR_PATH'),
-                'core' => env('SOLR_CORE'),
-                'full_url' => sprintf(
-                    '%s://%s:%s%s/%s/',
-                    env('SOLR_SCHEME'),
-                    env('SOLR_HOST'),
-                    env('SOLR_PORT'),
-                    env('SOLR_PATH'),
-                    env('SOLR_CORE')
-                )
-            ]
-        ], 500);
-    }
-});
+//         $doc = [
+//             'id' => 'user_' . $user->UserId,
 
-Route::get('/solr-debug', function () {
-    try {
-        $client = app(\Solarium\Client::class);
+//             // 3 FIELD BẮT BUỘC PHẢI CÓ ĐỂ TÌM ĐƯỢC TIẾNG VIỆT
+//             'title'     => $fullName,
+//             'text'      => $fullName,                                      // ← quan trọng
+//             'search_text' => $fullName . ' ' . ($user->Email ?? '') . ' ' . ($user->Phone ?? ''), // ← cực kỳ quan trọng
+//             '_text_'    => $fullName,                                      // ← trick cuối cùng
 
-        // Test ping
-        $ping = $client->createPing();
-        $pingResult = $client->ping($ping);
+//             'type'      => 'user',
+//             'full_name' => $fullName,
+//             'email'     => $user->Email,
+//             'phone'     => $user->Phone,
+//             'username'  => $user->Username ?? '',
+//             'role'      => $user->roles->first()->RoleName ?? 'user',
+//             'is_active' => $user->IsActive ? true : false,
+//         ];
 
-        // Test core status
-        $coreAdmin = $client->createCoreAdmin();
-        $status = $coreAdmin->createStatus();
-        $coreAdmin->setAction($status);
-        $result = $client->coreAdmin($coreAdmin);
+//         if ($solrService->indexDocument($doc)) {
+//             $indexed++;
+//         }
+//     }
 
-        return response()->json([
-            'status' => 'success',
-            'ping' => $pingResult->getStatus(),
-            'core_status' => $result->getStatus(),
-            'endpoints' => $client->getEndpoints(),
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ], 500);
-    }
-});
+//     return response()->json([
+//         'success' => true,
+//         'indexed' => $indexed,
+//         'message' => 'ĐÃ FIX TIẾNG VIỆT – BÂY GIỜ CHẠY URL DƯỚI ĐÂY NGAY:',
+//         'TEST_NGAY' => 'http://localhost:8000/api/search?q=Nguyễn&type=user&per_page=10',
+//         'TEST_TẤT_CẢ' => 'http://localhost:8000/api/search?q=*:*&fq=type:user'
+//     ]);
+// });

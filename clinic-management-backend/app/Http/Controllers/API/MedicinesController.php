@@ -201,7 +201,9 @@ class MedicinesController extends Controller
     {
         $threshold = $request->get('threshold', 100);
 
-        $lowStock = Medicine::whereRaw('"StockQuantity" < ?', [$threshold])->orderBy('"StockQuantity"', 'asc')->get(['MedicineId', 'MedicineName', 'StockQuantity', 'Unit']);
+        $lowStock = Medicine::where('StockQuantity', '<', $threshold)
+            ->orderBy('StockQuantity', 'asc')
+            ->get(['MedicineId', 'MedicineName', 'StockQuantity', 'Unit']);
 
         return response()->json([
             'message' => 'Danh sách thuốc tồn kho thấp',
@@ -209,6 +211,7 @@ class MedicinesController extends Controller
             'data' => $lowStock
         ]);
     }
+
 
     // Export nâng cao (ĐÃ OK, chỉ thêm parse filters nếu cần)
     public function export(Request $request)

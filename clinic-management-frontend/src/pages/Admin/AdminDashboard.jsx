@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
-    Tooltip, Legend, ResponsiveContainer, AreaChart, Area
+    Tooltip, Legend, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell
 } from 'recharts';
 import AdminSidebar from '../../Components/Sidebar/AdminSidebar';
 import instance from '../../axios';
@@ -15,12 +15,14 @@ import {
     BiTrendingUp,
     BiPackage,
     BiCalendar,
-    BiStats
+    BiStats,
+    BiCapsule,
+    BiUserVoice
 } from 'react-icons/bi';
 import echo from '../../config/echo';
 import '../../App.css';
 
-// Component con cho thẻ thống kê - GIỮ NGUYÊN
+// Component con cho thẻ thống kê
 const StatCard = ({ icon, label, value, color, trend }) => (
     <div className={`stat-card card border-0 h-100 stat-card--${color}`}>
         <div className="card-body p-4">
@@ -43,7 +45,7 @@ const StatCard = ({ icon, label, value, color, trend }) => (
     </div>
 );
 
-// Component Realtime Stats - COMPACT
+// Component Realtime Stats - CHỈ GIỮ LẠI 4 CARD QUAN TRỌNG
 const RealtimeStats = ({ realtimeData }) => {
     if (!realtimeData) return null;
 
@@ -52,7 +54,7 @@ const RealtimeStats = ({ realtimeData }) => {
             <div className="dashboard-header compact-header">
                 <h3 className="dashboard-title compact-title">
                     <BiTrendingUp className="me-2 text-primary" />
-                    Hôm Nay - Realtime
+                    Thống Kê Hôm Nay
                 </h3>
                 <div className="last-updated compact-updated">
                     <small className="text-muted">
@@ -62,6 +64,24 @@ const RealtimeStats = ({ realtimeData }) => {
             </div>
 
             <div className="stats-grid compact-grid">
+                {/* Today Revenue */}
+                <div className="stat-card compact-card today-revenue">
+                    <div className="stat-icon compact-icon">
+                        <BiSolidDollarCircle className="icon" />
+                    </div>
+                    <div className="stat-content compact-content">
+                        <div className="stat-value compact-value" id="today-revenue">
+                            {new Intl.NumberFormat('vi-VN', {
+                                style: 'currency',
+                                currency: 'VND',
+                                notation: 'compact',
+                                maximumFractionDigits: 0
+                            }).format(realtimeData.todayRevenue || 0)}
+                        </div>
+                        <div className="stat-label compact-label">Doanh thu</div>
+                    </div>
+                </div>
+
                 {/* Waiting Patients */}
                 <div className="stat-card compact-card waiting-patients">
                     <div className="stat-icon compact-icon">
@@ -100,57 +120,12 @@ const RealtimeStats = ({ realtimeData }) => {
                         <div className="stat-label compact-label">Đã khám</div>
                     </div>
                 </div>
-
-                {/* Processing Services */}
-                <div className="stat-card compact-card processing-services">
-                    <div className="stat-icon compact-icon">
-                        <BiSolidTimeFive className="icon" />
-                    </div>
-                    <div className="stat-content compact-content">
-                        <div className="stat-value compact-value" id="processing-services">
-                            {realtimeData.processingServices || 0}
-                        </div>
-                        <div className="stat-label compact-label">Dịch vụ</div>
-                    </div>
-                </div>
-
-                {/* Pending Invoices */}
-                <div className="stat-card compact-card pending-invoices">
-                    <div className="stat-icon compact-icon">
-                        <BiSolidTimeFive className="icon" />
-                    </div>
-                    <div className="stat-content compact-content">
-                        <div className="stat-value compact-value" id="pending-invoices">
-                            {realtimeData.pendingInvoices || 0}
-                        </div>
-                        <div className="stat-label compact-label">Hóa đơn chờ</div>
-                    </div>
-                </div>
-
-                {/* Today Revenue */}
-                <div className="stat-card compact-card today-revenue">
-                    <div className="stat-icon compact-icon">
-                        <BiSolidDollarCircle className="icon" />
-                    </div>
-                    <div className="stat-content compact-content">
-                        <div className="stat-value compact-value" id="today-revenue">
-                            {new Intl.NumberFormat('vi-VN', {
-                                style: 'currency',
-                                currency: 'VND',
-                                notation: 'compact',
-                                maximumFractionDigits: 0
-                            }).format(realtimeData.todayRevenue || 0)}
-                        </div>
-                        <div className="stat-label compact-label">Doanh thu</div>
-                    </div>
-                    <div className="stat-badge compact-badge">LIVE</div>
-                </div>
             </div>
         </div>
     );
 };
 
-// Component Historical Stats - TƯƠNG TỰ REALTIME NHƯNG CHO NHIỀU NGÀY
+// Component Historical Stats - BÁO CÁO LỌC THEO NGÀY (GIỮ NGUYÊN)
 const HistoricalStats = ({ stats, totalRevenue, dateRange }) => {
     if (!stats || !totalRevenue) return null;
 
@@ -180,7 +155,7 @@ const HistoricalStats = ({ stats, totalRevenue, dateRange }) => {
                                 style: 'currency',
                                 currency: 'VND',
                                 notation: 'compact',
-                                maximumFractionDigits: 0
+                                maximumFractionDigits: 2
                             }).format(totalRevenue?.totalRevenue || 0)}
                         </div>
                         <div className="stat-label compact-label">Tổng doanh thu</div>
@@ -238,7 +213,7 @@ const HistoricalStats = ({ stats, totalRevenue, dateRange }) => {
                                     style: 'currency',
                                     currency: 'VND',
                                     notation: 'compact',
-                                    maximumFractionDigits: 0
+                                    maximumFractionDigits: 2
                                 }).format(totalRevenue.totalRevenue / totalRevenue.byDate.length)
                                 : '0'
                             }
@@ -246,17 +221,125 @@ const HistoricalStats = ({ stats, totalRevenue, dateRange }) => {
                         <div className="stat-label compact-label">Doanh thu TB/ngày</div>
                     </div>
                 </div>
+            </div>
+        </div>
+    );
+};
 
-                {/* Days Count */}
-                <div className="stat-card compact-card days-count">
-                    <div className="stat-icon compact-icon">
-                        <BiCalendar className="icon" />
+// Component Revenue Forecast - DỰ BÁO DOANH THU AI
+const RevenueForecast = ({ forecastData }) => {
+    if (!forecastData || !forecastData.historical || !forecastData.forecast) {
+        return (
+            <div className="card shadow-sm border-0 h-100">
+                <div className="card-header bg-transparent border-0 d-flex justify-content-between align-items-center py-3">
+                    <h5 className="mb-0 fw-bold text-dark">
+                        <BiTrendingUp className="me-2 text-primary" />
+                        Dự Báo Doanh Thu 
+                    </h5>
+                    <span className="badge bg-primary bg-opacity-10 text-primary">
+                        Machine Learning
+                    </span>
+                </div>
+                <div className="card-body d-flex align-items-center justify-content-center">
+                    <div className="text-center text-muted">
+                        <BiTrendingUp size={48} className="mb-3 opacity-50" />
+                        <p>Đang tải dữ liệu dự báo...</p>
                     </div>
-                    <div className="stat-content compact-content">
-                        <div className="stat-value compact-value" id="days-count">
-                            {totalRevenue?.byDate?.length || 0}
+                </div>
+            </div>
+        );
+    }
+
+    const chartData = [
+        ...forecastData.historical.map((item, index) => ({
+            name: `T${index + 1}`,
+            revenue: item.revenue,
+            type: 'historical',
+            fullLabel: `Tháng ${item.month}/${item.year}`
+        })),
+        {
+            name: 'DỰ BÁO',
+            revenue: forecastData.forecast.predicted_revenue,
+            type: 'forecast',
+            fullLabel: `Dự báo tháng tới`
+        }
+    ];
+
+    const COLORS = {
+        historical: '#0d6efd',
+        forecast: '#ff6b35'
+    };
+
+    return (
+        <div className="card shadow-sm border-0 h-100">
+            <div className="card-header bg-transparent border-0 d-flex justify-content-between align-items-center py-3">
+                <h5 className="mb-0 fw-bold text-dark">
+                    <BiTrendingUp className="me-2 text-primary" />
+                    Dự Báo Doanh Thu
+                </h5>
+                <span className="badge bg-primary bg-opacity-10 text-primary">
+                    Machine Learning
+                </span>
+            </div>
+            <div className="card-body">
+                <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis
+                            dataKey="name"
+                            stroke="#6c757d"
+                            fontSize={12}
+                        />
+                        <YAxis
+                            stroke="#6c757d"
+                            fontSize={12}
+                            tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`}
+                        />
+                        <Tooltip
+                            formatter={(value) => [
+                                new Intl.NumberFormat('vi-VN').format(value) + ' VND',
+                                'Doanh thu'
+                            ]}
+                            labelFormatter={(label, items) => {
+                                const item = items[0];
+                                return item.payload.fullLabel || label;
+                            }}
+                        />
+                        <Legend />
+                        <Bar
+                            dataKey="revenue"
+                            name="Doanh thu"
+                        >
+                            {chartData.map((entry, index) => (
+                                <Cell
+                                    key={`cell-${index}`}
+                                    fill={entry.type === 'forecast' ? COLORS.forecast : COLORS.historical}
+                                    stroke={entry.type === 'forecast' ? COLORS.forecast : COLORS.historical}
+                                    strokeWidth={entry.type === 'forecast' ? 2 : 1}
+                                />
+                            ))}
+                        </Bar>
+                    </BarChart>
+                </ResponsiveContainer>
+
+                {/* Thông tin dự báo */}
+                <div className="mt-3 p-3 bg-light rounded">
+                    <div className="row text-center">
+                        <div className="col-6">
+                            <small className="text-muted d-block">Doanh thu dự báo</small>
+                            <strong className="text-success">
+                                {new Intl.NumberFormat('vi-VN', {
+                                    style: 'currency',
+                                    currency: 'VND'
+                                }).format(forecastData.forecast.predicted_revenue)}
+                            </strong>
                         </div>
-                        <div className="stat-label compact-label">Số ngày</div>
+                        <div className="col-6">
+                            <small className="text-muted d-block">Độ tin cậy</small>
+                            <strong className="text-info">
+                                {(forecastData.forecast.confidence * 100).toFixed(1)}%
+                            </strong>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -264,11 +347,155 @@ const HistoricalStats = ({ stats, totalRevenue, dateRange }) => {
     );
 };
 
-// Custom Tooltip cho biểu đồ
+// Component Prescription Analytics - THỐNG KÊ ĐƠN THUỐC
+const PrescriptionAnalytics = ({ analyticsData }) => {
+    if (!analyticsData || !analyticsData.success) {
+        return (
+            <div className="card shadow-sm border-0 h-100">
+                <div className="card-header bg-transparent border-0 d-flex justify-content-between align-items-center py-3">
+                    <h5 className="mb-0 fw-bold text-dark">
+                        <BiCapsule className="me-2 text-success" />
+                        Phân Tích Đơn Thuốc
+                    </h5>
+                    <span className="badge bg-success bg-opacity-10 text-success">
+                        Analytics
+                    </span>
+                </div>
+                <div className="card-body d-flex align-items-center justify-content-center">
+                    <div className="text-center text-muted">
+                        <BiCapsule size={48} className="mb-3 opacity-50" />
+                        <p>Đang tải dữ liệu phân tích...</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    const { topMedicines, topDoctors, bestSellingMedicines } = analyticsData;
+
+    // Dữ liệu cho biểu đồ top thuốc
+    const medicineChartData = topMedicines.slice(0, 5).map(med => ({
+        name: med.MedicineName.length > 15 ? med.MedicineName.substring(0, 15) + '...' : med.MedicineName,
+        quantity: med.total_quantity,
+        fullName: med.MedicineName
+    }));
+
+    const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+
+    const CustomTooltip = ({ active, payload, label }) => {
+        if (active && payload && payload.length) {
+            return (
+                <div className="custom-tooltip bg-white text-dark p-3 rounded shadow">
+                    <p className="mb-1 fw-medium">{`Thuốc: ${payload[0].payload.fullName}`}</p>
+                    <p className="mb-0 text-success">
+                        {`Số lượng: ${new Intl.NumberFormat('vi-VN').format(payload[0].value)}`}
+                    </p>
+                </div>
+            );
+        }
+        return null;
+    };
+
+    return (
+        <div className="card shadow-sm border-0 h-100">
+            <div className="card-header bg-transparent border-0 d-flex justify-content-between align-items-center py-3">
+                <h5 className="mb-0 fw-bold text-dark">
+                    <BiCapsule className="me-2 text-success" />
+                    Phân Tích Đơn Thuốc
+                </h5>
+                <span className="badge bg-success bg-opacity-10 text-success">
+                    Analytics
+                </span>
+            </div>
+            <div className="card-body">
+                <div className="row">
+                    {/* Biểu đồ top thuốc */}
+                    <div className="col-md-6 mb-4">
+                        <h6 className="fw-bold text-muted mb-3">Top 5 Thuốc Kê Nhiều Nhất</h6>
+                        <ResponsiveContainer width="100%" height={300}>
+                            <PieChart>
+                                <Pie
+                                    data={medicineChartData}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                                    outerRadius={80}
+                                    fill="#8884d8"
+                                    dataKey="quantity"
+                                >
+                                    {medicineChartData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip content={<CustomTooltip />} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+
+                    {/* Top bác sĩ */}
+                    <div className="col-md-6 mb-4">
+                        <h6 className="fw-bold text-muted mb-3">Top Bác Sĩ Kê Đơn</h6>
+                        <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                            {topDoctors.slice(0, 5).map((doctor, index) => (
+                                <div key={doctor.StaffId} className="d-flex align-items-center justify-content-between p-2 border-bottom">
+                                    <div className="d-flex align-items-center">
+                                        <span className="badge bg-primary me-2">{index + 1}</span>
+                                        <div>
+                                            <div className="fw-medium text-dark small">{doctor.FullName}</div>
+                                            <small className="text-muted">{doctor.Specialty}</small>
+                                        </div>
+                                    </div>
+                                    <span className="badge bg-light text-dark">{doctor.prescription_count} đơn</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Thuốc bán chạy */}
+                    <div className="col-12">
+                        <h6 className="fw-bold text-muted mb-3">Thuốc Bán Chạy Nhất</h6>
+                        <div className="table-responsive">
+                            <table className="table table-sm table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th className="fw-medium text-muted">Tên thuốc</th>
+                                        <th className="fw-medium text-muted text-end">Số lượng bán</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {bestSellingMedicines.slice(0, 5).map((medicine, index) => (
+                                        <tr key={medicine.MedicineId}>
+                                            <td>
+                                                <div className="d-flex align-items-center">
+                                                    <span className={`badge ${index === 0 ? 'bg-warning' :
+                                                            index === 1 ? 'bg-secondary' : 'bg-info'
+                                                        } me-2`}>
+                                                        {index + 1}
+                                                    </span>
+                                                    <span className="fw-medium text-dark">{medicine.MedicineName}</span>
+                                                </div>
+                                            </td>
+                                            <td className="text-end fw-bold text-primary">
+                                                {new Intl.NumberFormat('vi-VN').format(medicine.total_sold)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Custom Tooltip cho biểu đồ doanh thu
 const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
         return (
-            <div className="custom-tooltip bg-dark text-white p-3 rounded shadow">
+            <div className="custom-tooltip bg-white text-dark p-3 rounded shadow">
                 <p className="mb-1 fw-medium">{`Ngày: ${label}`}</p>
                 <p className="mb-0 text-success">
                     {`Doanh thu: ${new Intl.NumberFormat('vi-VN').format(payload[0].value)} VND`}
@@ -290,19 +517,24 @@ const AdminDashboard = () => {
     );
     const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
-    // State mới cho realtime data
+    // State mới cho 2 chức năng mới
     const [realtimeData, setRealtimeData] = useState(null);
+    const [revenueForecast, setRevenueForecast] = useState(null);
+    const [prescriptionAnalytics, setPrescriptionAnalytics] = useState(null);
 
     const fetchData = useCallback(async (start, end) => {
         setLoading(true);
         try {
-            const [lowStockRes, revenueRes, realtimeRes] = await Promise.all([
+            const [lowStockRes, revenueRes, realtimeRes, forecastRes, analyticsRes] = await Promise.all([
                 instance.get('api/medicines/low-stock?threshold=200'),
                 instance.get(`api/report-revenue/combined?startDate=${start}&endDate=${end}`),
-                instance.get('/api/dashboard/stats') // API realtime - HÔM NAY
+                instance.get('/api/dashboard/stats'),
+                // API mới cho 2 chức năng
+                instance.get('/api/revenue-forecast'), // Dự báo doanh thu
+                instance.get('/api/prescription-analytics') // Phân tích đơn thuốc
             ]);
 
-            // XỬ LÝ HISTORICAL DATA (nhiều ngày)
+            // XỬ LÝ HISTORICAL DATA (BÁO CÁO LỌC THEO NGÀY)
             if (revenueRes.data) {
                 setStats({
                     totalAppointmentsToday: revenueRes.data.totalAppointmentsToday,
@@ -315,28 +547,33 @@ const AdminDashboard = () => {
                 });
             }
 
-            // XỬ LÝ REALTIME DATA (hôm nay)
-            setRealtimeData(realtimeRes);
+            // XỬ LÝ REALTIME DATA
+            setRealtimeData(realtimeRes.data || realtimeRes);
             setLowStockMedicines(lowStockRes.data || []);
 
+            // XỬ LÝ DỮ LIỆU MỚI
+            setRevenueForecast(forecastRes);
+            setPrescriptionAnalytics(analyticsRes);
+
         } catch (error) {
-            setToast({ type: 'error', message: error.message || 'Không thể tải dữ liệu dashboard!' });
+            console.error('Error fetching data:', error);
+            setToast({
+                type: 'error',
+                message: error.response?.data?.message || error.message || 'Không thể tải dữ liệu dashboard!'
+            });
         } finally {
             setLoading(false);
         }
     }, []);
-
 
     useEffect(() => {
         // Load lần đầu
         const loadInitial = async () => {
             try {
                 const res = await instance.get('/api/dashboard/stats');
-                console.log(res);
-                
-                setRealtimeData(res);
+                setRealtimeData(res.data || res);
             } catch (err) {
-                console.error(err);
+                console.error('Error loading initial data:', err);
             }
         };
         loadInitial();
@@ -346,7 +583,6 @@ const AdminDashboard = () => {
             .listen('DashboardStatsUpdated', (e) => {
                 console.log('Realtime Dashboard Updated!', e.stats);
                 setRealtimeData(e.stats);
-                animateNumbers();
             });
 
         return () => {
@@ -354,18 +590,12 @@ const AdminDashboard = () => {
             echo.leaveChannel('dashboard-stats');
         };
     }, []);
-    const animateNumbers = () => { // ← bỏ tham số
-        const cards = document.querySelectorAll('.stat-card'); // hoặc '.stat-card'
-        cards.forEach(card => {
-            card.classList.add('stat-updating');
-            setTimeout(() => card.classList.remove('stat-updating'), 800);
-        });
-    };
+
     useEffect(() => {
         fetchData(startDate, endDate);
     }, [fetchData, startDate, endDate]);
 
-    // Format data cho Recharts (từ historical data)
+    // Format data cho Recharts
     const chartData = useMemo(() => {
         return totalRevenue?.byDate?.map((item) => ({
             date: new Date(item.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }),
@@ -383,8 +613,7 @@ const AdminDashboard = () => {
     };
 
     return (
-        // THAY ĐỔI: Không cố định chiều cao, cho phép scroll
-        <main className="main-content flex-grow-1 p-4 d-flex flex-column min-vh-100 ">
+        <main className="main-content flex-grow-1 p-4 d-flex flex-column min-vh-100">
             {toast && (
                 <CustomToast
                     type={toast.type}
@@ -439,10 +668,10 @@ const AdminDashboard = () => {
                 </div>
             ) : (
                 <div className="flex-grow-1 d-flex flex-column" style={{ gap: '1.5rem', overflowX: 'hidden' }}>
-                    {/* Realtime Stats Section - HÔM NAY */}
+                    {/* Realtime Stats Section - CHỈ 4 CARD QUAN TRỌNG */}
                     <RealtimeStats realtimeData={realtimeData} />
 
-                    {/* Historical Stats Section - THEO NGÀY */}
+                    {/* Historical Stats Section - BÁO CÁO LỌC THEO NGÀY (GIỮ NGUYÊN) */}
                     <HistoricalStats
                         stats={stats}
                         totalRevenue={totalRevenue}
@@ -451,8 +680,8 @@ const AdminDashboard = () => {
 
                     {/* Dashboard Grid */}
                     <div className="row g-4">
-                        {/* Biểu đồ doanh thu - HISTORICAL */}
-                        <div className="col-xl-8">
+                        {/* Biểu đồ doanh thu lịch sử */}
+                        <div className="col-xl-6">
                             <div className="card shadow-sm border-0 h-100">
                                 <div className="card-header bg-transparent border-0 d-flex justify-content-between align-items-center py-3">
                                     <h5 className="mb-0 fw-bold text-dark">
@@ -498,6 +727,16 @@ const AdminDashboard = () => {
                             </div>
                         </div>
 
+                        {/* Dự báo doanh thu AI */}
+                        <div className="col-xl-6">
+                            <RevenueForecast forecastData={revenueForecast} />
+                        </div>
+
+                        {/* Phân tích đơn thuốc */}
+                        <div className="col-xl-8">
+                            <PrescriptionAnalytics analyticsData={prescriptionAnalytics} />
+                        </div>
+
                         {/* Cảnh báo tồn kho */}
                         <div className="col-xl-4">
                             <div className="card shadow-sm border-0 h-100">
@@ -511,7 +750,7 @@ const AdminDashboard = () => {
                                     </span>
                                 </div>
                                 <div className="card-body p-0">
-                                    <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                                    <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
                                         <table className="table table-hover mb-0">
                                             <thead className="table-light sticky-top">
                                                 <tr>
