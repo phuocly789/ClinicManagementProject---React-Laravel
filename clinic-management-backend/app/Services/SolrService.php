@@ -82,22 +82,31 @@ class SolrService
     }
 
     protected function formatResults($resultset)
-    {
-        $results = [];
-        foreach ($resultset as $document) {
-            $results[] = [
-                'id' => $document->id,
-                'title' => $document->title ?? '',
-                'content' => $document->content ?? '',
-                'type' => $document->type ?? '',
-                'category' => $document->category ?? [],
-                'status' => $document->status ?? '',
-                'score' => $document->score ?? 0,
-                // Thêm các field khác tùy theo schema
-            ];
-        }
-        return $results;
+{
+    $results = [];
+    foreach ($resultset as $document) {
+        $fields = $document->getFields();
+
+        $results[] = [
+            'id'             => $fields['id'] ?? '',
+            'type'           => $fields['type'] ?? '',
+            // ÉP VỀ STRING nếu là mảng (rất quan trọng!)
+            'title'          => is_array($fields['title'] ?? null) ? ($fields['title'][0] ?? '') : ($fields['title'] ?? ''),
+            'content'        => is_array($fields['content'] ?? null) ? ($fields['content'][0] ?? '') : ($fields['content'] ?? ''),
+            'full_name'      => is_array($fields['full_name'] ?? null) ? ($fields['full_name'][0] ?? '') : ($fields['full_name'] ?? ''),
+            'username'       => is_array($fields['username'] ?? null) ? ($fields['username'][0] ?? '') : ($fields['username'] ?? ''),
+            'email'          => is_array($fields['email'] ?? null) ? ($fields['email'][0] ?? '') : ($fields['email'] ?? ''),
+            'phone'          => is_array($fields['phone'] ?? null) ? ($fields['phone'][0] ?? '') : ($fields['phone'] ?? ''),
+            'gender'         => is_array($fields['gender'] ?? null) ? ($fields['gender'][0] ?? '') : ($fields['gender'] ?? ''),
+            'address'        => is_array($fields['address'] ?? null) ? ($fields['address'][0] ?? '') : ($fields['address'] ?? ''),
+            'user_role'      => is_array($fields['user_role'] ?? null) ? ($fields['user_role'][0] ?? '') : ($fields['user_role'] ?? ''),
+            'is_active'      => $fields['is_active'] ?? true,
+            'specialty'      => is_array($fields['specialty'] ?? null) ? ($fields['specialty'][0] ?? '') : ($fields['specialty'] ?? ''),
+            'license_number' => is_array($fields['license_number'] ?? null) ? ($fields['license_number'][0] ?? '') : ($fields['license_number'] ?? ''),
+        ];
     }
+    return $results;
+}
 
     public function healthCheck()
     {
@@ -143,6 +152,32 @@ class SolrService
             return $result->getStatus() === 0;
         } catch (\Exception $e) {
             Log::error('Solr delete error: ' . $e->getMessage());
+            return false;
+        }
+    }
+    public function indexDocuments(array $documents)
+    {
+        if (empty($documents)) {
+            return true;
+        }
+
+        try {
+            $update = $this->client->createUpdate();
+
+            foreach ($documents as $documentData) {
+                $doc = $update->createDocument();
+                foreach ($documentData as $field => $value) {
+                    $doc->$field = $value;
+                }
+                $update->addDocument($doc);
+            }
+
+            $update->addCommit();
+            $result = $this->client->update($update);
+
+            return $result->getStatus() === 0;
+        } catch (\Exception $e) {
+            Log::error('Solr batch index error: ' . $e->getMessage());
             return false;
         }
     }

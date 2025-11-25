@@ -6,6 +6,8 @@ use Illuminate\Support\ServiceProvider;
 use Solarium\Client;
 use Solarium\Core\Client\Adapter\Curl;
 use Symfony\Component\EventDispatcher\EventDispatcher;
+use App\Observers\UserSolrObserver;
+use App\Models\User;
 
 class SolrServiceProvider extends ServiceProvider
 {
@@ -20,6 +22,6 @@ class SolrServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        //
+        User::observe(UserSolrObserver::class);
     }
 }
