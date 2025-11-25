@@ -181,16 +181,20 @@ class ReceptionController extends Controller
             $offset = ($current - 1) * $pageSize;
 
             // Lấy danh sách lịch hẹn có thể tạo thông báo
-            $appointments = Appointment::with(['patient.user', 'staff.user'])
-                ->where('Status', 'Đang chờ')
+            $appointments = Appointment::with(['patient.user', 'medical_staff.user'])
+                ->where('Status', 'Đã đặt')
                 ->whereDate('AppointmentDate', '>=', now()->toDateString())
+                ->orderByRaw('CASE WHEN EXISTS (
+    SELECT 1 FROM "Notifications"
+    WHERE "Notifications"."AppointmentId" = "Appointments"."AppointmentId"
+) THEN 1 ELSE 0 END') // Đã có notification -> 1, chưa có -> 0
                 ->orderBy('AppointmentDate', 'asc')
                 ->orderBy('AppointmentTime', 'asc')
                 ->offset($offset)
                 ->limit($pageSize)
                 ->get();
 
-            $total = Appointment::where('Status', 'Đang chờ')
+            $total = Appointment::where('Status', 'Đã đặt')
                 ->whereDate('AppointmentDate', '>=', now()->toDateString())
                 ->count();
 
@@ -207,7 +211,8 @@ class ReceptionController extends Controller
                     'email' => $appointment->patient->user->Email ?? 'N/A',
                     'date' => $appointment->AppointmentDate,
                     'time' => $appointment->AppointmentTime,
-                    'doctor_name' => $appointment->staff->user->FullName ?? 'N/A',
+                    'doctor_name' => optional(optional($appointment->medical_staff)->user)->FullName
+                        ?? "Chờ xác nhận",
                     'service_type' => $appointment->ServiceType ?? 'Khám bệnh',
                     'has_notification' => !is_null($existingNotification),
                     'notification_id' => $existingNotification ? $existingNotification->NotificationId : null,
@@ -276,7 +281,7 @@ class ReceptionController extends Controller
                 'Message' => $request->message,
                 'Type' => 'Appointment Reminder',
                 'SentAt' => $sendAt,
-                'Status' => 'Scheduled'
+                'Status' => 'Đã lên lịch'
             ]);
 
             DB::commit();
@@ -298,8 +303,7 @@ class ReceptionController extends Controller
     public function updateNotification(Request $request, $notificationId)
     {
         $validator = Validator::make($request->all(), [
-            'message' => 'required|string|max:500',
-            'status' => 'nullable|string|in:Scheduled,Sent,Failed'
+            'message' => 'required|string|max:500'
         ]);
 
         if ($validator->fails()) {
@@ -320,8 +324,7 @@ class ReceptionController extends Controller
             }
 
             $notification->update([
-                'Message' => $request->message,
-                'Status' => $request->status ?? $notification->Status
+                'Message' => $request->message
             ]);
 
             return response()->json([
@@ -365,7 +368,7 @@ class ReceptionController extends Controller
     public function getAppointmentDetail($appointmentId)
     {
         try {
-            $appointment = Appointment::with(['patient.user', 'staff.user', 'room'])
+            $appointment = Appointment::with(['patient.user', 'medical_staff.user'])
                 ->find($appointmentId);
 
             if (!$appointment) {
@@ -382,10 +385,10 @@ class ReceptionController extends Controller
                 'email' => $appointment->patient->user->Email,
                 'date' => $appointment->AppointmentDate,
                 'time' => $appointment->AppointmentTime,
-                'doctor_name' => $appointment->staff->user->FullName,
+                'doctor_name' => optional(optional($appointment->medical_staff)->user)->FullName
+                    ?? "Chờ xác nhận",
                 'service_type' => $appointment->ServiceType,
                 'notes' => $appointment->Notes,
-                'room_name' => $appointment->room->RoomName ?? 'N/A'
             ];
 
             return response()->json([
@@ -403,7 +406,7 @@ class ReceptionController extends Controller
     public function getNotificationDetail($notificationId)
     {
         try {
-            $notification = Notification::with(['appointment.patient.user', 'appointment.staff.user'])
+            $notification = Notification::with(['appointment.patient.user', 'appointment.medical_staff.user'])
                 ->find($notificationId);
 
             if (!$notification) {
@@ -424,7 +427,8 @@ class ReceptionController extends Controller
                     'full_name' => $notification->appointment->patient->user->FullName,
                     'date' => $notification->appointment->AppointmentDate,
                     'time' => $notification->appointment->AppointmentTime,
-                    'doctor_name' => $notification->appointment->staff->user->FullName,
+                    'doctor_name' => optional(optional($notification->appointment->medical_staff)->user)->FullName
+                        ?? "Chờ xác nhận",
                 ]
             ];
 
