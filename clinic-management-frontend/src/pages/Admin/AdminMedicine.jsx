@@ -14,8 +14,7 @@ import medicineService from '../../services/medicineService';
 const specialCharRegex = /[<>{}[\]()\\\/;:'"`~!@#$%^&*+=|?]/;
 const codePatternRegex = /(function|var|let|const|if|else|for|while|return|class|import|export|\$\w+)/i;
 
-const [alertCount, setAlertCount] = useState(0);
-const [recentAlerts, setRecentAlerts] = useState([]);
+
 
 const medicineTypes = [
   'Thuốc viên',
@@ -62,6 +61,8 @@ const AdminMedicine = () => {
   const [pageCount, setPageCount] = useState(0);
   const [totalItems, setTotalItems] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [alertCount, setAlertCount] = useState(0);
+  const [recentAlerts, setRecentAlerts] = useState([]);
   const [toast, setToast] = useState({ show: false, type: 'info', message: '' });
   const [modal, setModal] = useState({ type: null, medicine: null });
   const [filters, setFilters] = useState({

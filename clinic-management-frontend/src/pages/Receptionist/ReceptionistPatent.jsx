@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axiosInstance from "../../axios";
 import Select from 'react-select';
 import CustomToast from "../../Components/CustomToast/CustomToast";
@@ -87,7 +87,6 @@ const ReceptionistPatent = () => {
     const [showPatientForm, setShowPatientForm] = useState(false);
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState({});
-    const [apiError, setApiError] = useState(null);
     const [isAutoSelecting, setIsAutoSelecting] = useState(false);
 
     // Modal states
@@ -95,7 +94,10 @@ const ReceptionistPatent = () => {
     const [toastConfig, setToastConfig] = useState({ type: 'success', message: '' });
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [confirmModalConfig, setConfirmModalConfig] = useState({});
-
+    // Ref để kiểm soát việc tìm kiếm
+    const searchTimeoutRef = useRef(null);
+    // State để lưu danh sách patients gốc
+    const [allPatients, setAllPatients] = useState([]);
     // React Select states
     const [patientOptions, setPatientOptions] = useState([]);
     const [selectedPatientOption, setSelectedPatientOption] = useState(null);
@@ -157,58 +159,75 @@ const ReceptionistPatent = () => {
         // Nếu không tìm thấy khung giờ nào trong tương lai, chọn khung giờ đầu tiên
         return minDifference === Infinity ? timeSlots[0] : nearestSlot;
     };
-
-    // Thêm hàm kiểm tra và tự động chọn khung giờ
+    // tự chọn khung giờ
     const autoSelectTimeSlot = async (date, roomId, staffId) => {
         if (!date) return;
         setIsAutoSelecting(true);
-        const currentTime = new Date().toTimeString().slice(0, 5); // Lấy giờ hiện tại
+
+        const now = new Date();
+        const currentTime = now.toTimeString().slice(0, 5);
+        const today = new Date().toISOString().split('T')[0];
+
+        // Nếu là ngày hôm nay và đã qua giờ làm việc
+        if (date === today) {
+            const lastTimeSlot = "16:30";
+            const lastSlotTime = new Date(`${date}T${lastTimeSlot}`);
+
+            // Nếu hiện tại đã qua giờ làm việc cuối cùng
+            if (now > lastSlotTime) {
+                setIsAutoSelecting(false);
+                showToastMessage('warning', 'Đã hết giờ làm việc hôm nay, không thể đặt lịch');
+                setAppointmentForm(prev => ({ ...prev, appointmentTime: "" }));
+                return;
+            }
+        }
+
         const nearestSlot = findNearestTimeSlot(currentTime);
 
-        // Kiểm tra xem khung giờ gần nhất có available không
         try {
-            const availability = await checkTimeSlotAvailability(nearestSlot, date, roomId, staffId);
+            const allSlots = generateTimeSlots();
+            const now = new Date();
 
-            if (!availability.isFull) {
-                // Nếu còn chỗ, tự động chọn
-                setAppointmentForm(prev => ({
-                    ...prev,
-                    appointmentTime: nearestSlot
-                }));
-            } else {
-                // Nếu đầy, tìm khung giờ gần nhất còn chỗ
-                const allSlots = generateTimeSlots();
-                const currentIndex = allSlots.indexOf(nearestSlot);
-
-                // Tìm từ khung giờ hiện tại về sau
-                for (let i = currentIndex; i < allSlots.length; i++) {
-                    const slot = allSlots[i];
-                    const slotAvailability = await checkTimeSlotAvailability(slot, date, roomId, staffId);
-
-                    if (!slotAvailability.isFull) {
-                        setAppointmentForm(prev => ({
-                            ...prev,
-                            appointmentTime: slot
-                        }));
-                        return;
-                    }
-                }
-
-                // Nếu không tìm thấy khung giờ nào còn chỗ, chọn khung giờ đầu tiên
-                setAppointmentForm(prev => ({
-                    ...prev,
-                    appointmentTime: allSlots[0]
-                }));
+            // Lọc bỏ các khung giờ đã qua (nếu là ngày hôm nay)
+            let availableSlots = allSlots;
+            if (date === today) {
+                availableSlots = allSlots.filter(slot => {
+                    const slotDateTime = new Date(`${date}T${slot}`);
+                    return slotDateTime > now;
+                });
             }
+
+            // Nếu không còn khung giờ nào trong ngày hôm nay
+            if (availableSlots.length === 0) {
+                setIsAutoSelecting(false);
+                showToastMessage('warning', 'Không còn khung giờ nào khả dụng trong ngày hôm nay');
+                setAppointmentForm(prev => ({ ...prev, appointmentTime: "" }));
+                return;
+            }
+
+            // Tìm khung giờ gần nhất còn chỗ
+            for (const slot of availableSlots) {
+                const availability = await checkTimeSlotAvailability(slot, date, roomId, staffId);
+
+                if (!availability.isFull) {
+                    setAppointmentForm(prev => ({
+                        ...prev,
+                        appointmentTime: slot
+                    }));
+                    setIsAutoSelecting(false);
+                    return;
+                }
+            }
+
+            // Nếu không tìm thấy khung giờ nào còn chỗ
+            setIsAutoSelecting(false);
+            showToastMessage('warning', 'Tất cả các khung giờ còn lại đã đầy, vui lòng chọn thủ công');
+            setAppointmentForm(prev => ({ ...prev, appointmentTime: "" }));
+
         } catch (error) {
             console.error("Error auto-selecting time slot:", error);
-            // Nếu có lỗi, vẫn chọn khung giờ gần nhất
-            setAppointmentForm(prev => ({
-                ...prev,
-                appointmentTime: nearestSlot
-            }));
-        } finally {
-            setIsAutoSelecting(false); // KẾT THÚC LOADING
+            setIsAutoSelecting(false);
+            setAppointmentForm(prev => ({ ...prev, appointmentTime: "" }));
         }
     };
 
@@ -271,7 +290,7 @@ const ReceptionistPatent = () => {
             };
         }
     };
-    // Cập nhật hàm loadAvailableTimeSlots để dùng API batch
+    // hàm loadAvailableTimeSlots để dùng API batch
     const loadAvailableTimeSlots = async (date, roomId, staffId) => {
         if (!date) {
             setAvailableTimeSlots(generateTimeSlots().map(time => ({
@@ -285,7 +304,6 @@ const ReceptionistPatent = () => {
         try {
             const allSlots = generateTimeSlots();
 
-            // THAY ĐỔI Ở ĐÂY: Dùng API batch thay vì từng cái
             const slotResults = await checkTimeSlotsBatch(allSlots, date, roomId, staffId);
 
             const availableSlots = allSlots.map((slot, index) => ({
@@ -520,64 +538,94 @@ const ReceptionistPatent = () => {
             });
 
             setPatientOptions(options);
+            setAllPatients(options); // LƯU DANH SÁCH GỐC
         } catch (error) {
             console.error("Error loading patients:", error);
-            // Không hiển thị lỗi vì đây là tính năng tải trước
         } finally {
             setIsSearchingPatients(false);
         }
+
     };
 
     // Tìm kiếm bệnh nhân với React Select
     const handlePatientSearch = (inputValue) => {
-        if (!inputValue || inputValue.trim() === '') {
-            loadAllPatients(); // Load lại toàn bộ
-            return;
+        // Clear timeout cũ
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
         }
 
-        const searchLower = inputValue.toLowerCase().trim();
+        // Set timeout mới để tránh search quá nhiều
+        searchTimeoutRef.current = setTimeout(() => {
+            if (!inputValue || inputValue.trim() === '') {
+                // KHI XÓA HẾT, LOAD LẠI TOÀN BỘ
+                setPatientOptions(allPatients);
+                return;
+            }
 
-        // Lọc từ danh sách đã load (patientOptions)
-        const filtered = patientOptions
-            .filter(option => {
+            const searchLower = removeAccents(inputValue.toLowerCase().trim());
+
+            // Lọc từ danh sách gốc (allPatients)
+            const filtered = allPatients.filter(option => {
                 if (!option.patientData) return false;
                 const patient = option.patientData;
+
+                // Sử dụng hàm removeAccents để tìm kiếm không dấu
+                const patientName = removeAccents(patient.FullName || '').toLowerCase();
+                const patientPhone = patient.Phone || '';
+                const patientEmail = removeAccents(patient.Email || '').toLowerCase();
+
                 return (
-                    (patient.FullName || '').toLowerCase().includes(searchLower) ||
-                    (patient.Phone || '').includes(searchLower) ||
-                    (patient.Email || '').toLowerCase().includes(searchLower)
+                    patientName.includes(searchLower) ||
+                    patientPhone.includes(inputValue) || // Giữ nguyên số điện thoại
+                    patientEmail.includes(searchLower)
                 );
             });
 
-        let options = filtered;
+            let options = filtered;
 
-        // Nếu không tìm thấy VÀ input có ít nhất 2 ký tự → thêm option "Tạo mới"
-        if (options.length === 0 && inputValue.length >= 2) {
-            options = [{
-                value: 'create_new',
-                label: `+ Tạo bệnh nhân mới: ${inputValue}`,
-                isCreateNew: true,
-                searchTerm: inputValue
-            }];
-        } else if (options.length === 0 && inputValue.length < 2) {
-            // Nếu input ít hơn 2 ký tự và không tìm thấy, không hiển thị gì cả
-            options = [];
-        }
+            // Nếu không tìm thấy VÀ input có ít nhất 2 ký tự → thêm option "Tạo mới"
+            if (options.length === 0 && inputValue.length >= 2) {
+                options = [{
+                    value: 'create_new',
+                    label: `+ Tạo bệnh nhân mới: ${inputValue}`,
+                    isCreateNew: true,
+                    searchTerm: inputValue
+                }];
+            }
 
-        setPatientOptions(options);
+            setPatientOptions(options);
+        }, 300); // Debounce 300ms
     };
 
-    const handlePatientSelect = async (selectedOption) => {
+    // THÊM: Hàm xóa dấu tiếng Việt
+    const removeAccents = (str) => {
+        if (!str) return '';
+        return str.normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/đ/g, 'd').replace(/Đ/g, 'D');
+    };
+
+
+    const handlePatientSelect = async (selectedOption, action) => {
+        if (action.action === 'clear') {
+            setPatientOptions(allPatients);
+        }
         setSelectedPatientOption(selectedOption);
 
         if (selectedOption?.isCreateNew) {
-            // Tạo bệnh nhân mới
+
+            // Tạo bệnh nhân mới - PHÂN BIỆT SỐ ĐIỆN THOẠI VÀ TÊN
+            const searchTerm = selectedOption.searchTerm || '';
+
+            // Kiểm tra xem searchTerm có phải là số điện thoại không
+            const isPhoneNumber = /^(0[3|5|7|8|9])+([0-9]{8})$/.test(searchTerm.replace(/\s/g, ''));
+
             setSelectedPatient(null);
             setShowPatientForm(true);
             setPatientForm(prev => ({
                 ...prev,
-                phone: selectedOption.searchTerm || '',
-                fullName: '',
+                fullName: isPhoneNumber ? '' : searchTerm, // Nếu là tên thì đưa vào fullName
+                phone: isPhoneNumber ? searchTerm : '', // Nếu là số điện thoại thì đưa vào phone
                 email: '',
                 dateOfBirth: '',
                 gender: '',
@@ -693,6 +741,14 @@ const ReceptionistPatent = () => {
         } else if (!ValidationUtils.validateAppointmentTimeSlot(appointmentForm.appointmentTime)) {
             newErrors.appointmentTime = ErrorMessages.INVALID_APPOINTMENT_TIME_SLOT;
         } else if (appointmentForm.appointmentDate) {
+            const appointmentDateTime = new Date(`${appointmentForm.appointmentDate}T${appointmentForm.appointmentTime}`);
+            const now = new Date();
+
+            // Nếu chọn ngày hôm nay, kiểm tra giờ không được ở quá khứ
+            const today = new Date().toISOString().split('T')[0];
+            if (appointmentForm.appointmentDate === today && appointmentDateTime < now) {
+                newErrors.appointmentTime = "Giờ khám không được ở quá khứ";
+            }
             // Kiểm tra capacity thông qua API
             try {
                 const availability = await checkTimeSlotAvailability(
@@ -1115,10 +1171,17 @@ const ReceptionistPatent = () => {
                                     className={`form-control form-control-sm ${errors.appointmentDate ? 'is-invalid' : ''}`}
                                     value={appointmentForm.appointmentDate}
                                     onChange={(e) => {
+                                        // CHỈ CHO PHÉP CHỌN NGÀY HÔM NAY
+                                        const today = new Date().toISOString().split('T')[0];
+                                        if (e.target.value !== today) {
+                                            showToastMessage('warning', 'Chỉ có thể tiếp nhận bệnh nhân cho ngày hôm nay');
+                                            return;
+                                        }
                                         setAppointmentForm({ ...appointmentForm, appointmentDate: e.target.value });
                                         if (errors.appointmentDate) setErrors(prev => ({ ...prev, appointmentDate: null }));
                                     }}
                                     min={new Date().toISOString().split('T')[0]}
+                                    max={new Date().toISOString().split('T')[0]}
                                 />
                                 {renderInputError('appointmentDate')}
                             </div>
@@ -1169,11 +1232,10 @@ const ReceptionistPatent = () => {
                                             <i className="bi bi-clock"></i>
                                         )}
                                     </button>
-
                                 </div>
                                 {renderInputError('appointmentTime')}
                                 <div className="form-text">
-                                    <small>Khung giờ làm việc: 7:00 - 16:30, mỗi khung giờ tối đa 10 bệnh nhân</small>
+                                    <small>Khung giờ làm việc: 7:00 - 16:30, số chỗ trống được cập nhật từ hệ thống</small>
                                 </div>
                             </div>
 
@@ -1272,6 +1334,14 @@ const ReceptionistPatent = () => {
             </div>
         );
     };
+    //Cleanup effect cho timeout
+    useEffect(() => {
+        return () => {
+            if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+            }
+        };
+    }, []);
 
     // Filter appointments for online tab
     const filteredAppointments = (onlineAppointments || []).filter(appointment => {
@@ -1286,20 +1356,7 @@ const ReceptionistPatent = () => {
         return matchesSearch && matchesStatus;
     });
 
-    // Hiển thị lỗi API nếu có
-    if (apiError) {
-        return (
-            <div className="container-fluid py-4">
-                <div className="alert alert-danger">
-                    <h4 className="alert-heading">Lỗi hệ thống</h4>
-                    <p>{apiError}</p>
-                    <button className="btn btn-primary" onClick={initializeData}>
-                        Thử lại
-                    </button>
-                </div>
-            </div>
-        );
-    }
+  
 
     return (
         <>
