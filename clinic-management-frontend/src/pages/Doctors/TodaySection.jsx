@@ -15,6 +15,7 @@ import DiagnosisSection from '../Doctors/DotorTodayCompo/DiagnosisSection';
 import ServicesSection from '../Doctors/DotorTodayCompo/ServicesSection';
 import PrescriptionSection from '../Doctors/DotorTodayCompo/PrescriptionSection';
 import doctorService from "../../services/doctorService";
+import CustomToast from "../../Components/CustomToast/CustomToast";
 
 const TodaySection = ({
   currentSection = "today",
@@ -35,23 +36,49 @@ const TodaySection = ({
   setSelectedTodayPatient = () => { },
   todayPatients = [],
   setTodayPatients = () => { },
-  setToast = () => { },
+   doctorInfo = null,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isExamining, setIsExamining] = useState(false);
   const [viewMode, setViewMode] = useState(false);
   const [diagnoses, setDiagnoses] = useState([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // THÊM STATE CHO CUSTOM TOAST
+  const [toast, setToastState] = useState({
+    show: false,
+    type: 'success',
+    message: ''
+  });
+
   const printRef = useRef(null);
 
   const isFormDisabled = viewMode || !selectedTodayPatient || selectedTodayPatient?.status !== 'Đang khám';
 
-  // HÀM CHUYỂN DỊCH LỖI BE SANG FE
-  const translateError = (error) => {
+  // HÀM HIỂN THỊ TOAST - THÊM MỚI
+  const showToast = useCallback((type, message) => {
+    setToastState({
+      show: true,
+      type,
+      message
+    });
+  }, []);
+
+  // HÀM ĐÓNG TOAST - THÊM MỚI
+  const closeToast = useCallback(() => {
+    setToastState({
+      show: false,
+      type: 'success',
+      message: ''
+    });
+  }, []);
+
+  // HÀM CHUYỂN DỊCH LỖI BE SANG FE - FIX: DÙNG useCallback
+  const translateError = useCallback((error) => {
     console.error('🔴 Backend Error:', error);
-    
+
     const backendMessage = error.response?.data?.message || error.message || '';
-    
+
     // Map các lỗi phổ biến từ BE sang thông báo tiếng Việt thân thiện
     const errorMap = {
       'Patient not found': 'Không tìm thấy thông tin bệnh nhân',
@@ -80,10 +107,10 @@ const TodaySection = ({
     }
 
     return 'Đã xảy ra lỗi không xác định. Vui lòng thử lại sau.';
-  };
+  }, []);
 
-  // HÀM HIỂN THỊ CONFIRMATION VỚI SWEETALERT2
-  const showConfirmation = async (options) => {
+  // HÀM HIỂN THỊ CONFIRMATION VỚI SWEETALERT2 - FIX: DÙNG useCallback
+  const showConfirmation = useCallback(async (options) => {
     const result = await Swal.fire({
       title: options.title || 'Xác nhận hành động',
       text: options.message || 'Bạn có chắc muốn thực hiện hành động này?',
@@ -99,10 +126,10 @@ const TodaySection = ({
     });
 
     return result;
-  };
+  }, []);
 
-  // HÀM HIỂN THỊ THÔNG BÁO THÀNH CÔNG
-  const showSuccessAlert = (message) => {
+  // HÀM HIỂN THỊ THÔNG BÁO THÀNH CÔNG - FIX: DÙNG useCallback
+  const showSuccessAlert = useCallback((message) => {
     Swal.fire({
       title: 'Thành công!',
       text: message,
@@ -110,21 +137,16 @@ const TodaySection = ({
       confirmButtonColor: '#3085d6',
       confirmButtonText: 'OK'
     });
-  };
+  }, []);
 
-  // HÀM XỬ LÝ LỖI VÀ HIỂN THỊ THÔNG BÁO
-  const handleError = (error, customMessage = '') => {
+  // HÀM XỬ LÝ LỖI VÀ HIỂN THỊ THÔNG BÁO - FIX: DÙNG useCallback
+  const handleError = useCallback((error, customMessage = '') => {
     const translatedError = translateError(error);
     console.error('❌ Error:', error);
-    
-    Swal.fire({
-      title: 'Lỗi!',
-      text: customMessage || translatedError,
-      icon: 'error',
-      confirmButtonColor: '#d33',
-      confirmButtonText: 'OK'
-    });
-  };
+
+    // SỬ DỤNG CUSTOM TOAST THAY VÌ SWAL
+    showToast('error', customMessage || translatedError);
+  }, [translateError, showToast]);
 
   const getStatusVariant = useCallback((status) => {
     if (!status) return "secondary";
@@ -147,61 +169,59 @@ const TodaySection = ({
     }
   }, []);
 
-  // FETCH TODAY PATIENTS - ĐÃ THÊM XỬ LÝ LỖI
-  const fetchTodayPatients = async () => {
+  // FETCH TODAY PATIENTS - FIX: TÁCH RIÊNG VÀ DÙNG useCallback
+  const fetchTodayPatients = useCallback(async () => {
     try {
       setIsLoading(true);
       console.log('🔄 Đang tải danh sách bệnh nhân...');
 
       const response = await doctorService.getToday();
       console.log('📊 TOÀN BỘ API Response:', response);
-      console.log('📊 response.data:', response.data);
-      console.log('📊 response.data.data:', response.data?.data);
 
-      // THỬ CÁC CẤU TRÚC DỮ LIỆU KHÁC NHAU
       if (response && response.data) {
-        // Thử các cấu trúc phổ biến
         const patientsData =
-          response.data.data || // { success: true, data: [...] }
-          response.data.patients || // { patients: [...] }
-          response.data || // trực tiếp là array
+          response.data.data ||
+          response.data.patients ||
+          response.data ||
           [];
 
         console.log('📊 Dữ liệu bệnh nhân cuối cùng:', patientsData);
 
         setTodayPatients(Array.isArray(patientsData) ? patientsData : []);
-        console.log('✅ Đã cập nhật danh sách bệnh nhân:', patientsData);
       } else {
         console.warn('⚠️ Không có dữ liệu trong response:', response);
         setTodayPatients([]);
+        showToast('info', 'Không có dữ liệu bệnh nhân hôm nay');
       }
     } catch (error) {
-      const translatedError = translateError(error);
       console.error('❌ Lỗi fetch today patients:', error);
       setTodayPatients([]);
       handleError(error, 'Lỗi tải danh sách bệnh nhân');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [setTodayPatients, showToast, handleError]);
 
+  // EFFECT CHÍNH - CHỈ CHẠY KHI MOUNT
   useEffect(() => {
     fetchTodayPatients();
-  }, []);
+  }, []); // CHỈ CHẠY 1 LẦN KHI MOUNT
 
+  // EFFECT CHO REFRESH TRIGGER - FIX: CHỈ CHẠY KHI refreshTrigger THAY ĐỔI
   useEffect(() => {
     if (refreshTrigger > 0) {
       fetchTodayPatients();
     }
-  }, [refreshTrigger]);
+  }, [refreshTrigger, fetchTodayPatients]);
 
-  // FIXED: LOAD COMPLETED EXAM - ĐÃ THÊM XỬ LÝ LỖI
+  // FIXED: LOAD COMPLETED EXAM - FIX: GIẢM DEPENDENCY
   const loadCompletedExam = useCallback(async (appointmentId) => {
     console.log('=== 🚨 DEBUG API CALL START 🚨 ===');
     console.log('🔍 appointmentId:', appointmentId);
 
     if (!appointmentId) {
       console.error('❌ appointmentId is null or undefined');
+      showToast('error', 'Không tìm thấy ID cuộc hẹn');
       return;
     }
 
@@ -209,7 +229,6 @@ const TodaySection = ({
     try {
       console.log('1. 📞 Calling doctorService.getExamination...');
 
-      // Test service call với try-catch riêng
       let response;
       try {
         response = await doctorService.getExamination(appointmentId);
@@ -220,28 +239,18 @@ const TodaySection = ({
       }
 
       console.log('3. 📦 Response object:', response);
-      console.log('4. 🔍 Response exists?', !!response);
-      console.log('5. 🔍 Response.data exists?', !!response?.data);
 
       if (!response) {
         throw new Error('NO RESPONSE OBJECT - API call completely failed');
       }
 
-      if (!response.data) {
-        console.warn('⚠️ Response exists but response.data is undefined/empty');
-        console.log('🔍 Full response structure:', JSON.stringify(response, null, 2));
-      }
-
-      // FIX: Thử các vị trí data có thể có
       const data = response.data || response;
       console.log('6. 🔍 Using data from:', data === response.data ? 'response.data' : 'response');
-      console.log('7. 📊 Data content:', data);
 
       if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
         throw new Error('API returned empty data object');
       }
 
-      // FIX: Mapping data với fallback mạnh mẽ
       console.log('8. 🗺️ Starting data mapping...');
 
       const symptomsValue = data.symptoms || data.diagnoses?.[0]?.Symptoms || '';
@@ -287,7 +296,7 @@ const TodaySection = ({
       setDiagnoses(data.diagnoses || []);
 
       console.log('9. 🎉 DATA MAPPING COMPLETED SUCCESSFULLY');
-      showSuccessAlert('Đã tải hồ sơ cũ để xem.');
+      showToast('success', 'Đã tải hồ sơ cũ để xem.');
 
     } catch (error) {
       console.error('🚨 FINAL ERROR in loadCompletedExam:', error);
@@ -296,13 +305,12 @@ const TodaySection = ({
       setIsLoading(false);
       console.log('=== 🚨 DEBUG API CALL END 🚨 ===');
     }
-  }, [setSymptoms, setDiagnosis, setServices, setRequestedServices, setPrescriptionRows]);
+  }, [showToast, handleError, setSymptoms, setDiagnosis, setServices, setRequestedServices, setPrescriptionRows]);
 
-  // START EXAMINATION - ĐÃ THÊM CONFIRMATION
+  // START EXAMINATION - FIX: GIẢM DEPENDENCY
   const startExamination = useCallback(async (patientId, patientName) => {
     if (!patientId) return null;
 
-    // Hiển thị confirmation trước khi bắt đầu khám
     const result = await showConfirmation({
       title: 'Bắt đầu khám bệnh',
       text: `Bạn có chắc muốn bắt đầu khám cho bệnh nhân ${patientName}?`,
@@ -315,7 +323,6 @@ const TodaySection = ({
           setIsLoading(true);
           const result = await doctorService.startExamination(patientId);
 
-          // SỬA LỖI: axios response có data property
           console.log('DEBUG - API start response:', result.data);
 
           const updatedPatient = { ...selectedTodayPatient, status: 'Đang khám' };
@@ -337,13 +344,13 @@ const TodaySection = ({
     });
 
     if (result.isConfirmed) {
-      showSuccessAlert(result.value);
+      showToast('success', result.value);
       return result.value;
     }
     return null;
-  }, [setSelectedTodayPatient, selectedTodayPatient]);
+  }, [showConfirmation, selectedTodayPatient, setSelectedTodayPatient, fetchTodayPatients, translateError, showToast]);
 
-  // FIXED: HANDLE SELECT PATIENT - ĐÃ THÊM CONFIRMATION
+  // FIXED: HANDLE SELECT PATIENT - FIX: GIẢM DEPENDENCY VÀ TÁCH LOGIC
   const handleSelectPatient = useCallback(async (patient) => {
     console.log('🔄 Chọn bệnh nhân:', patient);
 
@@ -403,8 +410,7 @@ const TodaySection = ({
       console.log('🟢 Bệnh nhân đã khám - xem hồ sơ');
       setIsExamining(false);
       setViewMode(true);
-      
-      // Hiển thị confirmation khi xem hồ sơ cũ
+
       const result = await showConfirmation({
         title: 'Xem hồ sơ đã khám',
         text: `Bạn có muốn xem hồ sơ khám bệnh của ${patient.name}?`,
@@ -420,7 +426,19 @@ const TodaySection = ({
     } else {
       handleError(new Error(`Trạng thái không hợp lệ: ${currentStatus}`));
     }
-  }, [startExamination, getStatusText, loadCompletedExam, setSelectedTodayPatient, selectedTodayPatient, symptoms, diagnosis, services, prescriptionRows]);
+  }, [
+    selectedTodayPatient,
+    symptoms,
+    diagnosis,
+    services,
+    prescriptionRows,
+    showConfirmation,
+    setSelectedTodayPatient,
+    getStatusText,
+    startExamination,
+    loadCompletedExam,
+    handleError
+  ]);
 
   const findNextPatient = useCallback((currentPatientId, patients) => {
     if (!patients.length) return null;
@@ -446,20 +464,19 @@ const TodaySection = ({
     return waitingPatients[0] || null;
   }, [getStatusText]);
 
-  // HANDLE EXAMINATION SUBMIT - ĐÃ THÊM CONFIRMATION
+  // HANDLE EXAMINATION SUBMIT - FIX: TÁCH RIÊNG
   const handleExaminationSubmit = async (e) => {
     e.preventDefault();
     if (!selectedTodayPatient) {
-      setToast({ show: true, message: "Chưa chọn bệnh nhân.", variant: "warning" });
+      showToast('warning', "Chưa chọn bệnh nhân.");
       return;
     }
 
     if (!symptoms && !diagnosis && Object.keys(services).length === 0 && prescriptionRows.length === 0) {
-      setToast({ show: true, message: "Chưa có dữ liệu nào để lưu. Vui lòng nhập chẩn đoán hoặc chọn dịch vụ/thuốc.", variant: "warning" });
+      showToast('warning', "Chưa có dữ liệu nào để lưu. Vui lòng nhập chẩn đoán hoặc chọn dịch vụ/thuốc.");
       return;
     }
 
-    // Hiển thị confirmation trước khi hoàn tất khám
     const result = await showConfirmation({
       title: 'Hoàn tất khám bệnh',
       text: `Bạn có chắc muốn hoàn tất khám cho bệnh nhân ${selectedTodayPatient.name}? Hồ sơ sẽ được lưu vào cơ sở dữ liệu.`,
@@ -482,7 +499,6 @@ const TodaySection = ({
 
           const saveResult = await doctorService.completeExamination(selectedTodayPatient.id, submitData);
 
-          // SỬA LỖI: axios response có data property
           const result = saveResult.data;
 
           await fetchTodayPatients();
@@ -531,23 +547,22 @@ const TodaySection = ({
     });
 
     if (result.isConfirmed) {
-      showSuccessAlert(result.value);
+      showToast('success', result.value);
     }
   };
 
-  // HANDLE TEMP SAVE - ĐÃ THÊM CONFIRMATION
+  // HANDLE TEMP SAVE - FIX: TÁCH RIÊNG
   const handleTempSave = async () => {
     if (!selectedTodayPatient) {
-      setToast({ show: true, message: "Chưa chọn bệnh nhân.", variant: "warning" });
+      showToast('warning', "Chưa chọn bệnh nhân.");
       return;
     }
 
     if (!symptoms && !diagnosis && Object.keys(services).length === 0 && prescriptionRows.length === 0) {
-      setToast({ show: true, message: "Chưa có dữ liệu nào để tạm lưu.", variant: "info" });
+      showToast('info', "Chưa có dữ liệu nào để tạm lưu.");
       return;
     }
 
-    // Hiển thị confirmation trước khi tạm lưu
     const result = await showConfirmation({
       title: 'Tạm lưu dữ liệu',
       text: 'Bạn có chắc muốn tạm lưu dữ liệu khám hiện tại? Dữ liệu sẽ được lưu nhưng trạng thái bệnh nhân không thay đổi.',
@@ -558,7 +573,6 @@ const TodaySection = ({
       preConfirm: async () => {
         try {
           setIsLoading(true);
-          // FIX: THÊM DRAFT DATA BỊ THIẾU
           const draftData = {
             symptoms,
             diagnosis,
@@ -571,7 +585,6 @@ const TodaySection = ({
 
           const tempSaveResult = await doctorService.tempSaveExamination(selectedTodayPatient.id, draftData);
 
-          // SỬA LỖI: axios response có data property
           const result = tempSaveResult.data;
 
           return "Đã tạm lưu dữ liệu khám (không đổi trạng thái).";
@@ -585,11 +598,11 @@ const TodaySection = ({
     });
 
     if (result.isConfirmed) {
-      showSuccessAlert(result.value);
+      showToast('success', result.value);
     }
   };
 
-  // HANDLE REFRESH PATIENTS - ĐÃ THÊM CONFIRMATION
+  // HANDLE REFRESH PATIENTS - FIX: TÁCH RIÊNG
   const handleRefreshPatients = async () => {
     const result = await showConfirmation({
       title: 'Làm mới danh sách',
@@ -601,11 +614,11 @@ const TodaySection = ({
 
     if (result.isConfirmed) {
       await fetchTodayPatients();
-      showSuccessAlert('Đã làm mới danh sách bệnh nhân');
+      showToast('success', 'Đã làm mới danh sách bệnh nhân');
     }
   };
 
-  // HANDLE START FIRST EXAMINATION - ĐÃ THÊM CONFIRMATION
+  // HANDLE START FIRST EXAMINATION - FIX: TÁCH RIÊNG
   const handleStartFirstExamination = async () => {
     const firstPatient = todayPatients.find(p => getStatusText(p.status) === 'Đang chờ') || todayPatients[0];
     if (firstPatient) {
@@ -637,7 +650,7 @@ const TodaySection = ({
 
     if (result.isConfirmed) {
       removePrescription(index);
-      showSuccessAlert('Đã xóa thuốc khỏi đơn');
+      showToast('success', 'Đã xóa thuốc khỏi đơn');
     }
   };
 
@@ -745,7 +758,7 @@ const TodaySection = ({
                       isFormDisabled={isFormDisabled}
                       prescriptionRows={prescriptionRows}
                       setPrescriptionRows={setPrescriptionRows}
-                      setToast={setToast}
+                      setToast={showToast}
                       onDiagnosisUpdate={(newDiagnoses) => {
                         if (!diagnoses.length || diagnoses[0].Diagnosis !== newDiagnoses.Diagnosis || diagnoses[0].Symptoms !== newDiagnoses.Symptoms) {
                           setDiagnoses([newDiagnoses]);
@@ -760,10 +773,11 @@ const TodaySection = ({
                       setRequestedServices={setRequestedServices}
                       diagnosis={diagnosis}
                       isFormDisabled={isFormDisabled}
-                      setToast={setToast}
+                      setToast={showToast}
                       selectedTodayPatient={selectedTodayPatient}
                       symptoms={symptoms}
                       diagnoses={diagnoses}
+                       doctorInfo={doctorInfo}
                     />
 
                     <PrescriptionSection
@@ -776,8 +790,9 @@ const TodaySection = ({
                       symptoms={symptoms}
                       diagnosis={diagnosis}
                       services={services}
-                      setToast={setToast}
+                      setToast={showToast}
                       diagnoses={diagnoses}
+                       doctorInfo={doctorInfo}
                     />
                   </Row>
 
@@ -809,6 +824,15 @@ const TodaySection = ({
         </Row>
 
         <div id="print-content" ref={printRef} style={{ display: 'none' }} />
+
+        {/* THÊM CUSTOM TOAST COMPONENT */}
+        {toast.show && (
+          <CustomToast
+            type={toast.type}
+            message={toast.message}
+            onClose={closeToast}
+          />
+        )}
       </div>
     </>
   );
