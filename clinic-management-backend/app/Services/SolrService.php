@@ -24,7 +24,7 @@ class SolrService
         $config = [
             'endpoint' => [
                 'localhost' => [
-                    'host' => config('solr.endpoint.localhost.host', 'solr'),
+                    'host' => config('solr.endpoint.localhost.host', '127.0.0.1'),
                     'port' => config('solr.endpoint.localhost.port', 8983),
                     'path' => config('solr.endpoint.localhost.path', '/solr'),
                     'core' => config('solr.endpoint.localhost.core', 'clinic_management'),
@@ -36,7 +36,7 @@ class SolrService
         $this->client = new Client($adapter, $eventDispatcher, $config);
     }
 
-    public function search($query = '', $filters = [], $page = 1, $perPage = 10)
+    public function search($query = '', $filters = [], $page = 1, $perPage = 10, $sort = 'score desc, id asc')
     {
         try {
             // Tạo query
@@ -53,13 +53,40 @@ class SolrService
             $solrQuery->setStart(($page - 1) * $perPage);
             $solrQuery->setRows($perPage);
 
+            // Thiết lập sorting
+          if (!empty($sort)) {
+    $sortParts = array_map('trim', explode(',', $sort));
+    foreach ($sortParts as $part) {
+        $part = trim($part);
+        if (empty($part)) continue;
+
+        $pieces = preg_split('/\s+/', $part);
+        $field = $pieces[0];
+        $direction = isset($pieces[1]) ? strtolower($pieces[1]) : 'asc';
+
+        if (in_array($direction, ['asc', 'desc'])) {
+            $solrQuery->addSort($field, $direction);
+        } else {
+            $solrQuery->addSort($field, 'asc');
+        }
+    }
+} else {
+    // Default sort nếu không có
+    $solrQuery->addSort('score', 'desc');
+}
+
             // Thêm filters
             if (!empty($filters)) {
                 foreach ($filters as $field => $value) {
-                    $solrQuery->createFilterQuery($field)
-                        ->setQuery("$field:\"$value\"");
+                    if (!empty($value)) {
+                        $solrQuery->createFilterQuery($field)
+                            ->setQuery("$field:\"$value\"");
+                    }
                 }
             }
+
+            // Thêm các field cần trả về
+            $solrQuery->setFields(['*']);
 
             // Thực thi query
             $resultset = $this->client->select($solrQuery);
@@ -77,36 +104,58 @@ class SolrService
 
         } catch (\Exception $e) {
             Log::error('Solr search error: ' . $e->getMessage());
-            throw $e;
+            throw new \Exception('Solr search failed: ' . $e->getMessage());
         }
     }
 
     protected function formatResults($resultset)
-{
-    $results = [];
-    foreach ($resultset as $document) {
-        $fields = $document->getFields();
+    {
+        $results = [];
+        foreach ($resultset as $document) {
+            $fields = $document->getFields();
 
-        $results[] = [
-            'id'             => $fields['id'] ?? '',
-            'type'           => $fields['type'] ?? '',
-            // ÉP VỀ STRING nếu là mảng (rất quan trọng!)
-            'title'          => is_array($fields['title'] ?? null) ? ($fields['title'][0] ?? '') : ($fields['title'] ?? ''),
-            'content'        => is_array($fields['content'] ?? null) ? ($fields['content'][0] ?? '') : ($fields['content'] ?? ''),
-            'full_name'      => is_array($fields['full_name'] ?? null) ? ($fields['full_name'][0] ?? '') : ($fields['full_name'] ?? ''),
-            'username'       => is_array($fields['username'] ?? null) ? ($fields['username'][0] ?? '') : ($fields['username'] ?? ''),
-            'email'          => is_array($fields['email'] ?? null) ? ($fields['email'][0] ?? '') : ($fields['email'] ?? ''),
-            'phone'          => is_array($fields['phone'] ?? null) ? ($fields['phone'][0] ?? '') : ($fields['phone'] ?? ''),
-            'gender'         => is_array($fields['gender'] ?? null) ? ($fields['gender'][0] ?? '') : ($fields['gender'] ?? ''),
-            'address'        => is_array($fields['address'] ?? null) ? ($fields['address'][0] ?? '') : ($fields['address'] ?? ''),
-            'user_role'      => is_array($fields['user_role'] ?? null) ? ($fields['user_role'][0] ?? '') : ($fields['user_role'] ?? ''),
-            'is_active'      => $fields['is_active'] ?? true,
-            'specialty'      => is_array($fields['specialty'] ?? null) ? ($fields['specialty'][0] ?? '') : ($fields['specialty'] ?? ''),
-            'license_number' => is_array($fields['license_number'] ?? null) ? ($fields['license_number'][0] ?? '') : ($fields['license_number'] ?? ''),
-        ];
+            // Helper function để xử lý cả single value và multi-value fields
+            $getFieldValue = function ($fieldName, $default = '') use ($fields) {
+                $value = $fields[$fieldName] ?? $default;
+                if (is_array($value)) {
+                    return !empty($value) ? $value[0] : $default;
+                }
+                return $value !== null ? $value : $default;
+            };
+
+            $results[] = [
+                'id'             => $getFieldValue('id'),
+                'type'           => $getFieldValue('type'),
+                
+                // User fields
+                'full_name'      => $getFieldValue('full_name'),
+                'username'       => $getFieldValue('username'),
+                'email'          => $getFieldValue('email'),
+                'phone'          => $getFieldValue('phone'),
+                'gender'         => $getFieldValue('gender'),
+                'address'        => $getFieldValue('address'),
+                'user_role'      => $getFieldValue('user_role'),
+                'is_active'      => $getFieldValue('is_active', true),
+                'specialty'      => $getFieldValue('specialty'),
+                'license_number' => $getFieldValue('license_number'),
+                'date_of_birth'  => $getFieldValue('date_of_birth'),
+                
+                // Service fields
+                'service_name'   => $getFieldValue('service_name'),
+                'service_type'   => $getFieldValue('service_type'),
+                'price'          => $getFieldValue('price', 0),
+                'description'    => $getFieldValue('description'),
+                
+                // Common fields
+                'title'          => $getFieldValue('title'),
+                'content'        => $getFieldValue('content'),
+                'status'         => $getFieldValue('status'),
+                'created_at'     => $getFieldValue('created_at'),
+                'updated_at'     => $getFieldValue('updated_at'),
+            ];
+        }
+        return $results;
     }
-    return $results;
-}
 
     public function healthCheck()
     {
@@ -127,6 +176,10 @@ class SolrService
             $doc = $update->createDocument();
             
             foreach ($document as $field => $value) {
+                // Xử lý boolean values
+                if (is_bool($value)) {
+                    $value = $value ? 'true' : 'false';
+                }
                 $doc->$field = $value;
             }
             
@@ -155,6 +208,7 @@ class SolrService
             return false;
         }
     }
+
     public function indexDocuments(array $documents)
     {
         if (empty($documents)) {
@@ -167,6 +221,10 @@ class SolrService
             foreach ($documents as $documentData) {
                 $doc = $update->createDocument();
                 foreach ($documentData as $field => $value) {
+                    // Xử lý boolean values
+                    if (is_bool($value)) {
+                        $value = $value ? 'true' : 'false';
+                    }
                     $doc->$field = $value;
                 }
                 $update->addDocument($doc);
@@ -178,6 +236,53 @@ class SolrService
             return $result->getStatus() === 0;
         } catch (\Exception $e) {
             Log::error('Solr batch index error: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Search users với các filter cụ thể
+     */
+    public function searchUsers($query = '', $filters = [], $page = 1, $perPage = 10)
+    {
+        $baseFilters = ['type' => 'user'];
+        $mergedFilters = array_merge($baseFilters, $filters);
+        
+        return $this->search($query, $mergedFilters, $page, $perPage, 'score desc, full_name asc');
+    }
+
+    /**
+     * Search services với các filter cụ thể
+     */
+    public function searchServices($query = '', $filters = [], $page = 1, $perPage = 10)
+    {
+        $baseFilters = ['type' => 'service'];
+        $mergedFilters = array_merge($baseFilters, $filters);
+        
+        return $this->search($query, $mergedFilters, $page, $perPage, 'score desc, service_name asc');
+    }
+
+    /**
+     * Kiểm tra xem core có tồn tại không
+     */
+    public function checkCoreExists($coreName = null)
+    {
+        try {
+            $coreAdmin = $this->client->createCoreAdmin();
+            $statusAction = $coreAdmin->createStatus();
+            
+            if ($coreName) {
+                $statusAction->setCore($coreName);
+            } else {
+                $statusAction->setCore(config('solr.endpoint.localhost.core', 'clinic_management'));
+            }
+            
+            $coreAdmin->setAction($statusAction);
+            $response = $coreAdmin->execute();
+            
+            return $response->getStatusResult()->getUptime() > 0;
+        } catch (\Exception $e) {
+            Log::error('Solr core check failed: ' . $e->getMessage());
             return false;
         }
     }
