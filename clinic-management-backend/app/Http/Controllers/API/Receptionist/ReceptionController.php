@@ -169,7 +169,7 @@ class ReceptionController extends Controller
             // Nếu có phiếu cũ thì +1, chưa có (đầu ngày) thì là 1
             $newTicketNumber = $lastTicketEntry ? $lastTicketEntry->TicketNumber + 1 : 1;
 
-       
+
             $lastPositionEntry = Queue::where('QueueDate', $today)
                 ->orderBy('QueuePosition', 'desc')
                 ->lockForUpdate()
@@ -259,6 +259,7 @@ class ReceptionController extends Controller
                     'notification_id' => $existingNotification ? $existingNotification->NotificationId : null,
                     'notification_message' => $existingNotification ? $existingNotification->Message : null,
                     'notification_status' => $existingNotification ? $existingNotification->Status : null,
+                    'updated_at' => $existingNotification?->UpdatedAt?->toISOString(),
                 ];
             });
 
@@ -299,15 +300,13 @@ class ReceptionController extends Controller
 
         DB::beginTransaction();
         try {
-            // Kiểm tra xem đã có thông báo cho lịch hẹn này chưa
-            $existingNotification = Notification::where('AppointmentId', $request->appointment_id)->first();
-            if ($existingNotification) {
+            $exists = Notification::where('AppointmentId', $request->appointment_id)->exists();
+            if ($exists) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Đã tồn tại thông báo cho lịch hẹn này'
-                ], 400);
+                    'message' => 'Thông báo đã được tạo bởi người khác!'
+                ], 409); // 409 Conflict
             }
-
             // Lấy thông tin lịch hẹn
             $appointment = Appointment::find($request->appointment_id);
 
@@ -330,7 +329,11 @@ class ReceptionController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Tạo thông báo thành công',
-                'data' => $notification
+                'data' => [
+                    'notification_id' => $notification->NotificationId,
+                    'updated_at' => $notification->UpdatedAt?->toISOString(), // thêm dòng này
+                    // các field khác nếu cần
+                ]
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -344,7 +347,8 @@ class ReceptionController extends Controller
     public function updateNotification(Request $request, $notificationId)
     {
         $validator = Validator::make($request->all(), [
-            'message' => 'required|string|max:500'
+            'message' => 'required|string|max:500',
+            'updated_at' => 'nullable|date'
         ]);
 
         if ($validator->fails()) {
@@ -362,6 +366,13 @@ class ReceptionController extends Controller
                     'success' => false,
                     'message' => 'Thông báo không tồn tại'
                 ], 404);
+            }
+            if ($notification->UpdatedAt && $notification->UpdatedAt->gt($request->updated_at)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Thông báo đã được sửa bởi người khác!',
+                    'error_code' => 'CONFLICT'
+                ], 409);
             }
 
             $notification->update([
