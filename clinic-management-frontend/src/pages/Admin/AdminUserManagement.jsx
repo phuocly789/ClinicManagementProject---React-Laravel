@@ -15,7 +15,7 @@ const initialFormState = {
   Specialty: '', LicenseNumber: '', StaffType: '',
 };
 
-// Tách FormField component ra ngoài để tránh re-render
+// Tách FormField component 
 const FormField = React.memo(({
   label,
   name,
@@ -24,24 +24,55 @@ const FormField = React.memo(({
   value,
   onChange,
   error,
+  maxLength,
+  showCharCount = false,
   ...props
-}) => (
-  <div className="mb-3">
-    <label className="form-label">
-      {label} {required && <span className="text-danger">*</span>}
-    </label>
-    <input
-      type={type}
-      name={name}
-      value={value || ''}
-      onChange={onChange}
-      className={`form-control ${error ? 'is-invalid' : ''}`}
-      required={required}
-      {...props}
-    />
-    {error && <div className="invalid-feedback">{error}</div>}
-  </div>
-));
+}) => {
+  const handleChange = (e) => {
+    let newValue = e.target.value;
+
+    // Giới hạn độ dài nếu có maxLength
+    if (maxLength && newValue.length > maxLength) {
+      newValue = newValue.slice(0, maxLength);
+    }
+
+    // Tạo event mới với giá trị đã được xử lý
+    const syntheticEvent = {
+      ...e,
+      target: {
+        ...e.target,
+        name: e.target.name,
+        value: newValue
+      }
+    };
+
+    onChange(syntheticEvent);
+  };
+
+  return (
+    <div className="mb-3">
+      <label className="form-label">
+        {label} {required && <span className="text-danger">*</span>}
+        {showCharCount && (
+          <small className="text-muted ms-1">
+            ({value?.length || 0}/{maxLength || '∞'})
+          </small>
+        )}
+      </label>
+      <input
+        type={type}
+        name={name}
+        value={value || ''}
+        onChange={handleChange}
+        className={`form-control ${error ? 'is-invalid' : ''}`}
+        required={required}
+        maxLength={maxLength}
+        {...props}
+      />
+      {error && <div className="invalid-feedback">{error}</div>}
+    </div>
+  );
+});
 
 const AdminUserManagement = () => {
   const [users, setUsers] = useState([]);
@@ -66,9 +97,7 @@ const AdminUserManagement = () => {
   // Kiểm tra kết nối Solr - Xử lý lỗi 404 và các lỗi khác
   const checkSolrHealth = useCallback(async () => {
     try {
-      // Thử gọi endpoint search với query đơn giản
       const response = await instance.get('/api/search?q=*:*&type=user&per_page=1');
-      // Kiểm tra response structure để xác định Solr có hoạt động không
       if (response.data && response.data.success !== false && !response.data.fallback) {
         setSolrAvailable(true);
         localStorage.setItem('solr_available', 'true');
@@ -78,7 +107,6 @@ const AdminUserManagement = () => {
         return false;
       }
     } catch (error) {
-      // Xử lý tất cả các lỗi (404, 500, network error, etc.)
       console.warn('❌ Solr connection failed:', error.response?.status || error.message);
       setSolrAvailable(false);
       return false;
@@ -94,7 +122,7 @@ const AdminUserManagement = () => {
         retryInterval = setInterval(async () => {
           console.log('🔄 Tự động thử lại kết nối Solr...');
           await checkSolrHealth();
-        }, 30000); // 30 giây
+        }, 30000);
       }
     };
 
@@ -111,8 +139,11 @@ const AdminUserManagement = () => {
   const fetchUsersFromDatabase = useCallback(async (page = 1) => {
     setLoading(true);
     try {
+      // Đảm bảo page là số hợp lệ (Tình huống 9)
+      const safePage = Math.max(1, parseInt(page) || 1);
+
       const params = new URLSearchParams({
-        page,
+        page: safePage,
         per_page: 10,
         ...apiFilters
       });
@@ -136,9 +167,18 @@ const AdminUserManagement = () => {
       });
     } catch (err) {
       console.error('Lỗi khi tải danh sách người dùng:', err);
+
+      // Xử lý lỗi phân trang (Tình huống 9)
+      let errorMessage = 'Lỗi khi tải danh sách người dùng.';
+      if (err.response?.status === 422) {
+        errorMessage = 'Tham số tìm kiếm không hợp lệ. Vui lòng kiểm tra lại.';
+      } else if (err.response?.status === 400) {
+        errorMessage = 'Tham số phân trang không hợp lệ.';
+      }
+
       setToast({
         type: 'error',
-        message: err.response?.data?.message || 'Lỗi khi tải danh sách người dùng.'
+        message: err.response?.data?.message || errorMessage
       });
       setUsers([]);
     } finally {
@@ -150,9 +190,10 @@ const AdminUserManagement = () => {
   const searchUsersFromSolr = useCallback(async (page = 1) => {
     setLoading(true);
     try {
+      const safePage = Math.max(1, parseInt(page) || 1);
+
       const params = new URLSearchParams();
 
-      // Query tìm kiếm chính xác trên các field quan trọng
       if (debouncedSearchTerm && debouncedSearchTerm.trim()) {
         const keyword = debouncedSearchTerm.trim();
         params.append('q', `(full_name:*${keyword}* OR username:*${keyword}* OR email:*${keyword}* OR phone:*${keyword}* OR user_role:*${keyword}* OR specialty:*${keyword}* OR license_number:*${keyword}*)`);
@@ -160,9 +201,9 @@ const AdminUserManagement = () => {
         params.append('q', '*:*');
       }
 
-      params.append('fq', 'type:user');           // Dùng filter query thay vì type trong q
-      params.append('page', page.toString());
-      params.append('per_page', 10);              // số, không cần dấu nháy
+      params.append('fq', 'type:user');
+      params.append('page', safePage.toString());
+      params.append('per_page', '10');
       params.append('sort', 'score desc, id asc');
 
       if (filters.gender) {
@@ -182,15 +223,13 @@ const AdminUserManagement = () => {
 
       const solrData = response.data;
 
-      // Kiểm tra nếu Solr trả về lỗi (success: false) hoặc fallback
       if (solrData.success === false || solrData.fallback) {
-        console.warn(' Solr unavailable, using database fallback');
+        console.warn('Solr unavailable, using database fallback');
         setSolrAvailable(false);
-        await fetchUsersFromDatabase(page);
+        await fetchUsersFromDatabase(safePage);
         return;
       }
 
-      // Xử lý kết quả thành công từ Solr
       let results = [];
       if (solrData.results && Array.isArray(solrData.results)) {
         results = solrData.results;
@@ -199,7 +238,6 @@ const AdminUserManagement = () => {
       }
 
       const formattedUsers = results.map((item, index) => {
-        // Helper lấy giá trị đầu nếu là mảng (vì Solr trả về mảng)
         const get = (field, fallback = 'Chưa có') => {
           const val = item[field];
           if (Array.isArray(val)) return val[0] || fallback;
@@ -228,16 +266,15 @@ const AdminUserManagement = () => {
 
       const totalResults = solrData.total || results.length;
       setPagination({
-        currentPage: page,
+        currentPage: safePage,
         totalPages: Math.max(1, Math.ceil(totalResults / 10)),
       });
 
     } catch (err) {
-      // Xử lý tất cả lỗi từ Solr (404, 500, network, etc.)
       console.error('Solr search error:', err.response?.status || err.message);
       setSolrAvailable(false);
-      // Tự động fallback về database
-      await fetchUsersFromDatabase(page);
+      const safePage = Math.max(1, parseInt(page) || 1);
+      await fetchUsersFromDatabase(safePage);
     } finally {
       setLoading(false);
     }
@@ -245,12 +282,21 @@ const AdminUserManagement = () => {
 
   // Hàm chung để fetch users - Tự động chọn Solr hoặc Database
   const fetchUsers = useCallback(async (page = 1) => {
+    const safePage = Math.max(1, parseInt(page) || 1);
     const shouldUseSolr = debouncedSearchTerm?.trim() && solrAvailable;
 
-    if (shouldUseSolr) {
-      await searchUsersFromSolr(page);
-    } else {
-      await fetchUsersFromDatabase(page);
+    try {
+      if (shouldUseSolr) {
+        await searchUsersFromSolr(safePage);
+      } else {
+        await fetchUsersFromDatabase(safePage);
+      }
+    } catch (error) {
+      console.error('Lỗi khi tải dữ liệu:', error);
+      setToast({
+        type: 'error',
+        message: 'Có lỗi xảy ra khi tải dữ liệu. Vui lòng thử lại.'
+      });
     }
   }, [debouncedSearchTerm, solrAvailable, searchUsersFromSolr, fetchUsersFromDatabase]);
 
@@ -322,35 +368,100 @@ const AdminUserManagement = () => {
     }
   };
 
+  // Hàm xử lý thay đổi form với sanitization
   const handleFormChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+
+    // Clean data - loại bỏ các thẻ HTML nguy hiểm (Tình huống 5)
+    let cleanedValue = value;
+    if (typeof value === 'string') {
+      // Loại bỏ script tags và các thẻ HTML nguy hiểm
+      cleanedValue = value.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+      cleanedValue = cleanedValue.replace(/<[^>]*>/g, '');
+    }
+
+    setFormData(prev => ({ ...prev, [name]: cleanedValue }));
     if (formErrors[name]) {
       setFormErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
 
-  // Kiểm tra tính hợp lệ của form
+  // Kiểm tra tính hợp lệ 
   const validateForm = () => {
     const errors = {};
 
-    if (!formData.Username?.trim()) errors.Username = 'Tên đăng nhập là bắt buộc';
-    if (!formData.FullName?.trim()) errors.FullName = 'Họ tên là bắt buộc';
-    if (!formData.Email?.trim()) errors.Email = 'Email là bắt buộc';
-    else if (!/\S+@\S+\.\S+/.test(formData.Email)) errors.Email = 'Email không hợp lệ';
-    if (!formData.Phone?.trim()) errors.Phone = 'Số điện thoại là bắt buộc';
-    if (!formData.Gender) errors.Gender = 'Giới tính là bắt buộc';
-    if (!formData.Role) errors.Role = 'Vai trò là bắt buộc';
-
-    if (modal.type === 'add' && !formData.Password) {
-      errors.Password = 'Mật khẩu là bắt buộc';
-    } else if (modal.type === 'add' && formData.Password.length < 6) {
-      errors.Password = 'Mật khẩu phải có ít nhất 6 ký tự';
+    // Tình huống 4 & 6: Validate chi tiết
+    if (!formData.Username?.trim()) {
+      errors.Username = 'Tên đăng nhập là bắt buộc';
+    } else if (formData.Username.length > 50) {
+      errors.Username = 'Tên đăng nhập không được vượt quá 50 ký tự';
+    } else if (!/^[a-zA-Z0-9_]+$/.test(formData.Username)) {
+      errors.Username = 'Tên đăng nhập chỉ được chứa chữ cái, số và dấu gạch dưới';
     }
 
+    if (!formData.FullName?.trim()) {
+      errors.FullName = 'Họ tên là bắt buộc';
+    } else if (formData.FullName.trim().length === 0) {
+      errors.FullName = 'Họ tên không được để trống';
+    } else if (formData.FullName.length > 255) {
+      errors.FullName = 'Họ tên không được vượt quá 255 ký tự';
+    } else if (formData.FullName.includes('　')) {
+      errors.FullName = 'Họ tên không được chứa khoảng trắng không hợp lệ';
+    }
+
+    if (!formData.Email?.trim()) {
+      errors.Email = 'Email là bắt buộc';
+    } else if (!/\S+@\S+\.\S+/.test(formData.Email)) {
+      errors.Email = 'Email không hợp lệ';
+    } else if (formData.Email.length > 255) {
+      errors.Email = 'Email không được vượt quá 255 ký tự';
+    }
+
+    if (!formData.Phone?.trim()) {
+      errors.Phone = 'Số điện thoại là bắt buộc';
+    } else {
+      const numericOnly = formData.Phone.replace(/[^0-9]/g, '');
+      if (!/^0\d{9}$/.test(numericOnly)) {
+        errors.Phone = 'Số điện thoại phải bắt đầu bằng 0 và đúng 10 chữ số';
+      }
+    }
+
+    if (!formData.Gender) {
+      errors.Gender = 'Giới tính là bắt buộc';
+    }
+
+    if (!formData.Role) {
+      errors.Role = 'Vai trò là bắt buộc';
+    }
+
+    if (modal.type === 'add') {
+      if (!formData.Password) {
+        errors.Password = 'Mật khẩu là bắt buộc';
+      } else if (formData.Password.length < 6) {
+        errors.Password = 'Mật khẩu phải có ít nhất 6 ký tự';
+      } else if (formData.Password.length > 100) {
+        errors.Password = 'Mật khẩu không được vượt quá 100 ký tự';
+      }
+    }
+
+    // Validate cho bác sĩ
     if (formData.Role === 'Bác sĩ') {
-      if (!formData.Specialty?.trim()) errors.Specialty = 'Chuyên khoa là bắt buộc';
-      if (!formData.LicenseNumber?.trim()) errors.LicenseNumber = 'Số giấy phép hành nghề là bắt buộc';
+      if (!formData.Specialty?.trim()) {
+        errors.Specialty = 'Chuyên khoa là bắt buộc';
+      } else if (formData.Specialty.length > 100) {
+        errors.Specialty = 'Chuyên khoa không được vượt quá 100 ký tự';
+      }
+
+      if (!formData.LicenseNumber?.trim()) {
+        errors.LicenseNumber = 'Số giấy phép hành nghề là bắt buộc';
+      } else if (formData.LicenseNumber.length > 50) {
+        errors.LicenseNumber = 'Số giấy phép không được vượt quá 50 ký tự';
+      }
+    }
+
+    // Validate địa chỉ
+    if (formData.Address && formData.Address.length > 500) {
+      errors.Address = 'Địa chỉ không được vượt quá 500 ký tự';
     }
 
     setFormErrors(errors);
@@ -372,7 +483,12 @@ const AdminUserManagement = () => {
     const method = isEditing ? 'put' : 'post';
 
     try {
-      const payload = { ...formData,updated_at: modal.user?.updated_at };
+      const payload = {
+        ...formData,
+        updated_at: modal.user?.updated_at
+      };
+
+      //Xóa password nếu không có trong edit mode
       if (isEditing && !payload.Password) {
         delete payload.Password;
       }
@@ -388,15 +504,27 @@ const AdminUserManagement = () => {
       fetchUsers(pagination.currentPage);
     } catch (err) {
       console.error('Lỗi khi gửi form:', err);
+
+      // Tình huống 2: Xử lý optimistic locking
       if (err.response?.status === 409 && err.response?.data?.requires_reload) {
-      setToast({ 
-        type: 'error', 
-        message: 'Dữ liệu đã được cập nhật bởi người khác. Vui lòng tải lại trang!' 
-      });
-      handleCloseModal();
-      fetchUsers(pagination.currentPage); // Reload dữ liệu
-      return;
-    }
+        setToast({
+          type: 'error',
+          message: 'Dữ liệu đã được cập nhật bởi người khác. Vui lòng tải lại trang!'
+        });
+        handleCloseModal();
+        fetchUsers(pagination.currentPage);
+        return;
+      }
+
+      // Tình huống 8: Xử lý trùng lặp
+      if (err.response?.status === 409) {
+        setToast({
+          type: 'error',
+          message: 'Người dùng đã tồn tại trong hệ thống'
+        });
+        return;
+      }
+
       const errorMessage = err.response?.data?.errors
         ? Object.values(err.response.data.errors).flat().join(' ')
         : (err.response?.data?.message || err.message || 'Có lỗi xảy ra.');
@@ -420,6 +548,27 @@ const AdminUserManagement = () => {
       fetchUsers(newPage);
     } catch (err) {
       console.error('Lỗi khi xóa người dùng:', err);
+
+      // Tình huống 1: Xử lý xóa mục không tồn tại
+      if (err.response?.status === 404) {
+        setToast({
+          type: 'error',
+          message: 'Người dùng không tồn tại hoặc đã bị xóa'
+        });
+        handleCloseModal();
+        fetchUsers(pagination.currentPage);
+        return;
+      }
+
+      // Tình huống 3: Xử lý ID không hợp lệ
+      if (err.response?.status === 400) {
+        setToast({
+          type: 'error',
+          message: 'ID người dùng không hợp lệ'
+        });
+        return;
+      }
+
       setToast({
         type: 'error',
         message: err.response?.data?.error || err.response?.data?.message || err.message || 'Lỗi khi xóa người dùng.'
@@ -486,7 +635,7 @@ const AdminUserManagement = () => {
       <>
         <div className="modal-backdrop fade show"></div>
         <div className="modal fade show d-block" tabIndex="-1" onClick={handleCloseModal}>
-          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth }} onClick={e => e.stopPropagation()}>
+          <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable" style={{ maxWidth }} onClick={e => e.stopPropagation()}>
             <div className="modal-content border-0 shadow-lg">
               <div className="modal-header">
                 <h5 className="modal-title fw-semibold">{title}</h5>
@@ -524,6 +673,9 @@ const AdminUserManagement = () => {
                   value={formData.Username}
                   onChange={handleFormChange}
                   error={formErrors.Username}
+                  maxLength={50}
+                  showCharCount={true}
+                  placeholder="Chỉ chứa chữ cái, số và dấu gạch dưới"
                 />
               </div>
               <div className="col-md-6">
@@ -534,6 +686,8 @@ const AdminUserManagement = () => {
                   value={formData.FullName}
                   onChange={handleFormChange}
                   error={formErrors.FullName}
+                  maxLength={255}
+                  showCharCount={true}
                 />
               </div>
 
@@ -545,9 +699,12 @@ const AdminUserManagement = () => {
                     type="password"
                     required
                     minLength={6}
+                    maxLength={100}
                     value={formData.Password}
                     onChange={handleFormChange}
                     error={formErrors.Password}
+                    showCharCount={true}
+                    placeholder="Ít nhất 6 ký tự"
                   />
                 </div>
               )}
@@ -561,6 +718,8 @@ const AdminUserManagement = () => {
                   value={formData.Email}
                   onChange={handleFormChange}
                   error={formErrors.Email}
+                  maxLength={255}
+                  showCharCount={true}
                 />
               </div>
               <div className="col-md-6">
@@ -572,6 +731,8 @@ const AdminUserManagement = () => {
                   value={formData.Phone}
                   onChange={handleFormChange}
                   error={formErrors.Phone}
+                  maxLength={20}
+                  placeholder=""
                 />
               </div>
 
@@ -601,6 +762,7 @@ const AdminUserManagement = () => {
                     <option value="">Chọn giới tính</option>
                     <option value="Nam">Nam</option>
                     <option value="Nữ">Nữ</option>
+                    <option value="Khác">Khác</option>
                   </select>
                   {formErrors.Gender && <div className="invalid-feedback">{formErrors.Gender}</div>}
                 </div>
@@ -612,6 +774,8 @@ const AdminUserManagement = () => {
                   name="Address"
                   value={formData.Address}
                   onChange={handleFormChange}
+                  maxLength={500}
+                  showCharCount={true}
                 />
               </div>
 
@@ -648,6 +812,8 @@ const AdminUserManagement = () => {
                       value={formData.Specialty}
                       onChange={handleFormChange}
                       error={formErrors.Specialty}
+                      maxLength={100}
+                      showCharCount={true}
                     />
                   </div>
                   <div className="col-md-6">
@@ -659,6 +825,8 @@ const AdminUserManagement = () => {
                       value={formData.LicenseNumber}
                       onChange={handleFormChange}
                       error={formErrors.LicenseNumber}
+                      maxLength={50}
+                      showCharCount={true}
                     />
                   </div>
                 </>
@@ -708,7 +876,7 @@ const AdminUserManagement = () => {
           'Xác Nhận Reset Mật Khẩu',
           <>
             <p>Bạn có chắc muốn reset mật khẩu cho người dùng <strong>{modal.user.FullName}</strong>?</p>
-            <p className="text-warning fw-semibold">
+            <p className="text-success fw-semibold">
               Mật khẩu sẽ được đặt lại thành: <strong>123456</strong>
             </p>
             <p className="text-muted small">
@@ -717,7 +885,7 @@ const AdminUserManagement = () => {
           </>,
           <>
             <button className="btn btn-secondary" onClick={handleCloseModal}>Hủy</button>
-            <button className="btn btn-warning" onClick={handleResetPassword} disabled={loading}>
+            <button className="btn btn-success" onClick={handleResetPassword} disabled={loading}>
               {loading ? 'Đang xử lý...' : 'Reset Mật Khẩu'}
             </button>
           </>,
@@ -764,7 +932,6 @@ const AdminUserManagement = () => {
           />
         )}
 
-        {/* Header sạch sẽ, không có thông tin Solr */}
         <header className="d-flex justify-content-between align-items-center flex-shrink-0">
           <div>
             <h1 className="h4 mb-0">Quản Lý Người Dùng</h1>
@@ -777,7 +944,6 @@ const AdminUserManagement = () => {
           </button>
         </header>
 
-        {/* Bộ lọc sạch sẽ */}
         <div className="card shadow-sm border-0 flex-shrink-0">
           <div className="card-body p-4">
             <div className="row g-3 align-items-end">
@@ -793,6 +959,7 @@ const AdminUserManagement = () => {
                   placeholder="Tìm theo tên, email, SĐT, địa chỉ..."
                   value={filters.search}
                   onChange={handleFilterChange}
+                  maxLength={255}
                 />
               </div>
               <div className="col-md-2">
@@ -806,6 +973,7 @@ const AdminUserManagement = () => {
                   <option value="">Tất cả</option>
                   <option value="Nam">Nam</option>
                   <option value="Nữ">Nữ</option>
+                  <option value="Khác">Khác</option>
                 </select>
               </div>
               <div className="col-md-2">
@@ -850,7 +1018,6 @@ const AdminUserManagement = () => {
           </div>
         </div>
 
-        {/* Bảng dữ liệu */}
         <div className="card shadow-sm border-0 table-panel">
           {loading ? (
             <Loading isLoading={loading} />
@@ -938,7 +1105,6 @@ const AdminUserManagement = () => {
                 </table>
               </div>
 
-              {/* Phân trang */}
               {pagination.totalPages > 1 && (
                 <div className="card-footer p-3 border-0 flex-shrink-0">
                   <Pagination

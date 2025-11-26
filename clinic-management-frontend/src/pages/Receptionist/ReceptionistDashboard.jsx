@@ -72,20 +72,41 @@ const ReceptionistDashboard = () => {
   const [loading, setLoading] = useState(false);
 
   // Initialize WebSocket
+  // Initialize WebSocket
   useEffect(() => {
-    const echoClient = createEchoClient();
-    setEcho(echoClient);
+    let echoClient = null;
+    let mounted = true;
 
-    // Listen to receptionist channel
-    echoClient
-      .channel("receptionist")
-      .listen(".queue.status.updated", (event) => {
-        console.log("Receptionist received:", event);
-        handleReceptionistQueueUpdate(event);
-      });
+    const initWebSocket = () => {
+      if (!mounted) return;
+
+      echoClient = createEchoClient();
+      setEcho(echoClient);
+
+      // ✅ Log để debug
+      console.log("📡 Subscribing to channel: receptionist");
+
+      // Listen to receptionist channel
+      echoClient
+        .channel("receptionist")
+        .listen(".queue.status.updated", (event) => {
+          if (!mounted) return;
+          console.log("✅ Receptionist received event:", event);
+          handleReceptionistQueueUpdate(event);
+        })
+        .error((error) => {
+          console.error("❌ Channel subscription error:", error);
+        });
+    };
+
+    initWebSocket();
 
     return () => {
-      echoClient.disconnect();
+      mounted = false;
+      if (echoClient) {
+        console.log("🔌 Disconnecting WebSocket");
+        echoClient.disconnect();
+      }
     };
   }, []);
 

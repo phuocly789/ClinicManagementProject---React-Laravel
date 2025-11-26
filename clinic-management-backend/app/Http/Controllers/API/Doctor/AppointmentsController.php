@@ -85,11 +85,9 @@ class AppointmentsController extends Controller
             $doctor = $this->getAuthenticatedDoctor();
             $doctorId = $doctor->StaffId;
 
-            $today = now()->format('Y-m-d');
-
             // Lấy danh sách appointment của bác sĩ đang đăng nhập
             $appointmentIds = Appointment::where('StaffId', $doctorId)
-                ->whereDate('AppointmentDate', $today)
+                ->whereDate('AppointmentDate', now('Asia/Ho_Chi_Minh'))
                 ->pluck('AppointmentId');
 
             // Nếu không có appointment nào, trả về mảng rỗng
@@ -113,9 +111,9 @@ class AppointmentsController extends Controller
             }
 
             $queues = Queue::with(['patient.user', 'appointment'])
-                ->whereDate('QueueDate', $today)
+                ->whereDate('QueueDate', now('Asia/Ho_Chi_Minh'))
                 ->whereIn('AppointmentId', $appointmentIds)
-                ->whereIn('Status', ['waiting', 'in-progress', 'done', 'Đang chờ', 'Đang khám', 'Đã khám'])
+                ->whereIn('Status', ['Đang khám'])
                 ->orderByRaw("
                 CASE
                     WHEN \"Status\" IN ('Đang khám', 'in-progress') THEN 1
@@ -174,6 +172,7 @@ class AppointmentsController extends Controller
                         'gender' => $user?->Gender ?? 'Không xác định',
                         'phone' => $user?->Phone ?? 'Không có số',
                         'address' => $user->Address ?? 'Không có địa chỉ',
+                        'queue_id' => $queue->QueueId,
                         'patient_id' => $queue->PatientId,
                         'queue_position' => $queue->QueuePosition,
                         'ticket_number' => $queue->TicketNumber,
@@ -188,7 +187,7 @@ class AppointmentsController extends Controller
                 'message' => 'Danh sách bệnh nhân hôm nay đã được tải thành công.',
                 'doctor_info' => [
                     'staff_id' => $doctor->StaffId,
-                    'doctor_Name'=>$doctor->user->FullName ?? 'Không có tên',
+                    'doctor_Name' => $doctor->user->FullName ?? 'Không có tên',
                     'specialty' => $doctor->Specialty ?? 'Bác sĩ đa khoa',
                     'license_number' => $doctor->LicenseNumber ?? 'Chưa có',
                 ],
@@ -200,7 +199,6 @@ class AppointmentsController extends Controller
                     'done' => $queues->where('status', 'Đã khám')->count(),
                 ]
             ]);
-
         } catch (\Illuminate\Database\QueryException $e) {
             Log::error('Lỗi database khi lấy danh sách bệnh nhân: ' . $e->getMessage());
 
@@ -323,7 +321,6 @@ class AppointmentsController extends Controller
                 ],
                 'message' => 'Lịch làm việc đã được tải thành công'
             ]);
-
         } catch (\Illuminate\Database\QueryException $e) {
             Log::error('Lỗi database khi lấy lịch làm việc: ' . $e->getMessage());
 
@@ -422,7 +419,6 @@ class AppointmentsController extends Controller
                     'month_name' => $this->getVietnameseMonthName($month)
                 ]
             ]);
-
         } catch (\Illuminate\Database\QueryException $e) {
             Log::error('Lỗi database khi lấy lịch làm việc theo tháng: ' . $e->getMessage());
 

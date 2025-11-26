@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Table, Button, Row, Col, Badge, Alert, Spinner, Modal, Form
+  Card, Table, Button, Row, Col, Badge, Spinner, Modal, Form
 } from 'react-bootstrap';
 import Swal from 'sweetalert2';
 import technicianService from '../../services/technicianService';
@@ -25,16 +25,116 @@ const ACTION_TYPES = {
 
 const ITEMS_PER_PAGE = 5;
 
+// ✅ Custom Toast Component
+const CustomToast = ({ show, message, type, onClose, delay = 3000 }) => {
+  useEffect(() => {
+    if (show) {
+      const timer = setTimeout(onClose, delay);
+      return () => clearTimeout(timer);
+    }
+  }, [show, delay, onClose]);
+
+  if (!show) return null;
+
+  const bgColor = type === 'success' ? 'bg-success' :
+    type === 'error' ? 'bg-danger' :
+      type === 'warning' ? 'bg-warning' : 'bg-info';
+
+  return (
+    <div
+      className={`${bgColor} text-white position-fixed top-0 end-0 m-4 p-3 rounded shadow`}
+      style={{ zIndex: 9999, minWidth: '300px' }}
+    >
+      <div className="d-flex justify-content-between align-items-center">
+        <span>{message}</span>
+        <button
+          type="button"
+          className="btn-close btn-close-white"
+          onClick={onClose}
+        ></button>
+      </div>
+    </div>
+  );
+};
+
+// ✅ Alert Helper Functions
+const showAlert = {
+  // For loading states
+  loading: (message = 'Đang xử lý...') => {
+    Swal.fire({
+      title: message,
+      didOpen: () => Swal.showLoading(),
+      allowOutsideClick: false,
+      showConfirmButton: false
+    });
+  },
+
+  // For success messages
+  success: (title, message, config = {}) => {
+    return Swal.fire({
+      title,
+      text: message,
+      icon: 'success',
+      confirmButtonColor: '#198754',
+      timer: 2000,
+      showConfirmButton: false,
+      ...config
+    });
+  },
+
+  // For error messages
+  error: (title, message, config = {}) => {
+    return Swal.fire({
+      title,
+      text: message,
+      icon: 'error',
+      confirmButtonColor: '#dc3545',
+      ...config
+    });
+  },
+
+  // For info messages
+  info: (title, message, config = {}) => {
+    return Swal.fire({
+      title,
+      text: message,
+      icon: 'info',
+      confirmButtonColor: '#0dcaf0',
+      ...config
+    });
+  },
+
+  // Close any open alert
+  close: () => Swal.close()
+};
+
 const TechnicianSection = ({ testResultsData, completedServicesData, updateStats, loading, pagination, onPageChange }) => {
   const navigate = useNavigate();
-  console.log('🎯 TechnicianSection rendered');
+
+  // ✅ STATE CHO TOAST
+  const [toast, setToast] = useState({
+    show: false,
+    message: '',
+    type: 'success'
+  });
+
+  // ✅ Toast functions
+  const showToast = (message, type = 'success') => {
+    setToast({
+      show: true,
+      message,
+      type
+    });
+  };
+
+  const closeToast = () => {
+    setToast(prev => ({ ...prev, show: false }));
+  };
 
   // ✅ STATE
   const [localData, setLocalData] = useState([]);
   const [completedServices, setCompletedServices] = useState([]);
   const [localLoading, setLocalLoading] = useState(false);
-  const [localError, setLocalError] = useState('');
-  const [localSuccess, setLocalSuccess] = useState('');
   const [showResultModal, setShowResultModal] = useState(false);
   const [currentService, setCurrentService] = useState(null);
   const [resultText, setResultText] = useState('');
@@ -86,6 +186,65 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
       setCompletedServices([]);
     }
   }, [completedServicesData]);
+
+  // ✅ XỬ LÝ LỖI API CHUNG
+  const handleApiError = (error, defaultMessage = 'Có lỗi xảy ra, vui lòng thử lại') => {
+    console.error('❌ API Error:', error);
+
+    let errorMessage = defaultMessage;
+
+    if (error.response) {
+      // Lỗi từ server (4xx, 5xx)
+      const status = error.response.status;
+      const serverMessage = error.response.data?.message || error.response.data?.error;
+
+      switch (status) {
+        case 400:
+          errorMessage = serverMessage || 'Dữ liệu gửi lên không hợp lệ';
+          break;
+        case 401:
+          errorMessage = 'Bạn không có quyền thực hiện hành động này';
+          break;
+        case 403:
+          errorMessage = 'Truy cập bị từ chối';
+          break;
+        case 404:
+          errorMessage = 'Không tìm thấy tài nguyên';
+          break;
+        case 409:
+          errorMessage = 'Dữ liệu đã tồn tại hoặc xung đột';
+          break;
+        case 422:
+          errorMessage = serverMessage || 'Dữ liệu không hợp lệ';
+          break;
+        case 500:
+          errorMessage = 'Lỗi máy chủ, vui lòng thử lại sau';
+          break;
+        case 502:
+          errorMessage = 'Lỗi kết nối đến server';
+          break;
+        case 503:
+          errorMessage = 'Dịch vụ tạm thời không khả dụng';
+          break;
+        default:
+          errorMessage = serverMessage || `Lỗi server (${status})`;
+      }
+    } else if (error.request) {
+      // Không nhận được response từ server
+      errorMessage = 'Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng.';
+    } else if (error.message) {
+      // Lỗi khác
+      if (error.message.includes('Network Error')) {
+        errorMessage = 'Lỗi kết nối mạng. Vui lòng kiểm tra internet.';
+      } else if (error.message.includes('timeout')) {
+        errorMessage = 'Kết nối quá thời gian chờ. Vui lòng thử lại.';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+
+    return errorMessage;
+  };
 
   // ✅ SWEETALERT2 CONFIRM FUNCTIONS - CHO CÁC HÀNH ĐỘNG CHÍNH
   const showConfirmDialog = (action, data) => {
@@ -214,12 +373,7 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
   // ✅ CONFIRM CHO XEM CHI TIẾT KẾT QUẢ
   const confirmViewResultDetail = (service) => {
     if (!service.result || service.result.trim() === '') {
-      Swal.fire({
-        title: 'Thông Báo',
-        text: 'Chưa có kết quả xét nghiệm cho dịch vụ này',
-        icon: 'info',
-        confirmButtonColor: '#0d6efd'
-      });
+      showAlert.info('Thông Báo', 'Chưa có kết quả xét nghiệm cho dịch vụ này');
       return;
     }
 
@@ -263,12 +417,7 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
   const confirmSaveResult = () => {
     const trimmedResult = resultText.trim();
     if (!trimmedResult) {
-      Swal.fire({
-        title: 'Lỗi',
-        text: 'Vui lòng nhập kết quả xét nghiệm',
-        icon: 'error',
-        confirmButtonColor: '#dc3545'
-      });
+      showToast('Vui lòng nhập kết quả xét nghiệm', 'error');
       return;
     }
 
@@ -315,12 +464,7 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
   // ✅ CONFIRM CHO IN PDF
   const confirmPrintPDF = (service) => {
     if (!service.result || service.result.trim() === '') {
-      Swal.fire({
-        title: 'Thông Báo',
-        text: 'Chưa có kết quả xét nghiệm để in',
-        icon: 'warning',
-        confirmButtonColor: '#0d6efd'
-      });
+      showAlert.info('Thông Báo', 'Chưa có kết quả xét nghiệm để in');
       return;
     }
 
@@ -367,12 +511,7 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
   // ✅ CONFIRM CHO CHUYỂN TRANG TÙY CHỈNH PDF
   const confirmCustomizePDF = (service) => {
     if (!service.result || service.result.trim() === '') {
-      Swal.fire({
-        title: 'Thông Báo',
-        text: 'Chưa có kết quả xét nghiệm để tùy chỉnh',
-        icon: 'warning',
-        confirmButtonColor: '#0d6efd'
-      });
+      showAlert.info('Thông Báo', 'Chưa có kết quả xét nghiệm để tùy chỉnh');
       return;
     }
 
@@ -515,17 +654,15 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
     return dateString;
   }, []);
 
-  // ✅ OPTIMISTIC UPDATE: handleStatusChange
+  // ✅ OPTIMISTIC UPDATE: handleStatusChange với xử lý lỗi đầy đủ
   const handleStatusChange = async (serviceOrderId, patientName, serviceName, newStatus) => {
     if (localLoading) {
-      console.log('⏳ Đang xử lý, vui lòng chờ...');
+      showAlert.info('Đang xử lý...', 'Vui lòng chờ trong giây lát', { timer: 1500 });
       return;
     }
 
     try {
       setLocalLoading(true);
-      setLocalError('');
-      setLocalSuccess('');
 
       console.log(`🔄 Đang thay đổi trạng thái: ${serviceOrderId} -> ${newStatus}`);
 
@@ -564,96 +701,57 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
         if (isSuccess) {
           console.log('✅ API cập nhật thành công');
           const actionMessage = getActionMessage(newStatus, patientName, serviceName);
-          setLocalSuccess(`✅ ${actionMessage}`);
-          
-          // Hiển thị SweetAlert2 success
-          Swal.fire({
-            title: 'Thành Công!',
-            text: actionMessage,
-            icon: 'success',
-            confirmButtonColor: '#198754',
-            timer: 2000,
-            showConfirmButton: false
-          });
-          
-          setTimeout(() => setLocalSuccess(''), 3000);
+          showToast(actionMessage, 'success');
+
         } else {
-          console.warn('⚠️ API trả về success=false, nhưng có thể đã update DB');
-          const actionMessage = getActionMessage(newStatus, patientName, serviceName);
-          setLocalSuccess(`✅ ${actionMessage} (đã đồng bộ)`);
-          setTimeout(() => setLocalSuccess(''), 3000);
+          // ❌ API trả về success = false
+          const errorMessage = response.data?.message || 'Cập nhật trạng thái thất bại';
+          console.warn('⚠️ API trả về success=false:', errorMessage);
+
+          // Rollback UI
+          setLocalData(previousData);
+          setCompletedServices(previousCompleted);
+
+          showToast(errorMessage, 'error');
         }
 
       } catch (apiError) {
         console.error('❌ Lỗi API:', apiError);
 
-        if (apiError.response?.status >= 500) {
-          console.warn('⚠️ Lỗi server, có thể đã update DB');
-          const actionMessage = getActionMessage(newStatus, patientName, serviceName);
-          setLocalSuccess(`✅ ${actionMessage} (đã đồng bộ)`);
-          setTimeout(() => setLocalSuccess(''), 3000);
-        } else {
-          console.error('❌ Lỗi client, rollback UI');
-          setLocalData(previousData);
-          setCompletedServices(previousCompleted);
+        // Rollback UI khi có lỗi
+        setLocalData(previousData);
+        setCompletedServices(previousCompleted);
 
-          let errorMessage = '❌ Lỗi cập nhật';
-          if (apiError.response?.data?.message) {
-            errorMessage = `❌ ${apiError.response.data.message}`;
-          } else if (apiError.message) {
-            errorMessage = `❌ ${apiError.message}`;
-          }
-
-          setLocalError(errorMessage);
-          
-          // Hiển thị SweetAlert2 error
-          Swal.fire({
-            title: 'Lỗi!',
-            text: errorMessage,
-            icon: 'error',
-            confirmButtonColor: '#dc3545'
-          });
-          
-          setTimeout(() => setLocalError(''), 5000);
-        }
+        const errorMessage = handleApiError(apiError, 'Cập nhật trạng thái thất bại');
+        showToast(errorMessage, 'error');
       }
 
     } catch (err) {
       console.error('💥 Lỗi không mong muốn:', err);
-      setLocalError('❌ Có lỗi xảy ra, vui lòng thử lại');
-      
-      Swal.fire({
-        title: 'Lỗi!',
-        text: 'Có lỗi xảy ra, vui lòng thử lại',
-        icon: 'error',
-        confirmButtonColor: '#dc3545'
-      });
-      
-      setTimeout(() => setLocalError(''), 5000);
+      showToast('Có lỗi xảy ra, vui lòng thử lại', 'error');
+
     } finally {
       setLocalLoading(false);
     }
   };
 
-  // ✅ handleSaveResult với SweetAlert2
   const handleSaveResult = async () => {
     if (localLoading) return;
 
     if (!currentService) {
-      setLocalError('❌ Không tìm thấy thông tin dịch vụ');
+      showToast('Không tìm thấy thông tin dịch vụ', 'error');
       return;
     }
 
     const trimmedResult = resultText.trim();
     if (!trimmedResult) {
-      setLocalError('❌ Vui lòng nhập kết quả xét nghiệm');
+      showToast('Vui lòng nhập kết quả xét nghiệm', 'error');
       return;
     }
 
     try {
       setLocalLoading(true);
-      setLocalError('');
-      setLocalSuccess('');
+      showAlert.loading('Đang lưu kết quả...');
 
       console.log(`🔄 Đang lưu kết quả cho dịch vụ: ${currentService.service_order_id}`);
 
@@ -671,19 +769,10 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
       console.log('✅ API Response:', response);
 
       if (response.data?.success) {
-        const successMessage = `✅ Đã lưu kết quả "${currentService.service_name}" cho ${currentService.patient_name}`;
-        setLocalSuccess(successMessage);
+        const successMessage = `Đã lưu kết quả "${currentService.service_name}" cho ${currentService.patient_name}`;
 
-        // Hiển thị SweetAlert2 success
-        Swal.fire({
-          title: 'Lưu Thành Công!',
-          text: `Đã lưu kết quả xét nghiệm cho ${currentService.patient_name}`,
-          icon: 'success',
-          confirmButtonColor: '#198754',
-          timer: 2000,
-          showConfirmButton: false
-        });
-
+        showAlert.close();
+        showToast(successMessage, 'success');
         closeResultModal();
 
         // ✅ RELOAD DATA TRONG BACKGROUND
@@ -694,36 +783,28 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
           }
         }, 800);
 
-        setTimeout(() => setLocalSuccess(''), 3000);
       } else {
-        throw new Error(response.data?.message || 'Lưu kết quả thất bại');
+        // ❌ API trả về success = false
+        const errorMessage = response.data?.message || 'Lưu kết quả thất bại';
+        throw new Error(errorMessage);
       }
 
     } catch (err) {
       console.error('❌ Lỗi lưu kết quả:', err);
+      showAlert.close();
 
+      // Rollback UI khi có lỗi
       if (currentService) {
         updateLocalStatus(currentService.service_order_id, currentService.status, oldResult);
       }
 
-      let errorMessage = '❌ Không thể lưu kết quả. Vui lòng thử lại.';
-      if (err.response?.data?.message) {
-        errorMessage = `❌ ${err.response.data.message}`;
-      } else if (err.message) {
-        errorMessage = `❌ ${err.message}`;
-      }
+      const errorMessage = handleApiError(err, 'Không thể lưu kết quả. Vui lòng thử lại.');
 
-      setLocalError(errorMessage);
-      
-      // Hiển thị SweetAlert2 error
-      Swal.fire({
-        title: 'Lỗi Lưu Kết Quả!',
-        text: errorMessage,
-        icon: 'error',
-        confirmButtonColor: '#dc3545'
-      });
-      
-      setTimeout(() => setLocalError(''), 5000);
+      // ✅ PHƯƠNG ÁN DỰ PHÒNG: Dùng SweetAlert2 cho lỗi
+      showAlert.error('Lỗi', errorMessage);
+
+      // Vẫn thử hiển thị Toast (để test)
+      showToast(errorMessage, 'error');
 
     } finally {
       setLocalLoading(false);
@@ -764,66 +845,15 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
     }
   }, []);
 
-  // ✅ Modal functions
-  const openResultModal = (service) => {
-    setCurrentService(service);
-    setResultText(service.result || '');
-    setShowResultModal(true);
-  };
-
-  const closeResultModal = () => {
-    // Confirm khi đóng modal nếu có thay đổi
-    if (resultText !== (currentService?.result || '')) {
-      Swal.fire({
-        title: 'Thoát mà không lưu?',
-        text: 'Bạn có thay đổi chưa lưu. Bạn có chắc muốn thoát?',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Thoát',
-        cancelButtonText: 'Ở lại',
-        confirmButtonColor: '#dc3545',
-        cancelButtonColor: '#6c757d',
-        reverseButtons: true
-      }).then((result) => {
-        if (result.isConfirmed) {
-          setShowResultModal(false);
-          setCurrentService(null);
-          setResultText('');
-        }
-      });
-    } else {
-      setShowResultModal(false);
-      setCurrentService(null);
-      setResultText('');
-    }
-  };
-
-  // ✅ Hàm đóng modal xem kết quả
-  const closeViewResultModal = () => {
-    setShowViewResultModal(false);
-    setViewingService(null);
-  };
-
-  // ✅ Hàm in PDF kết quả xét nghiệm với SweetAlert2
+  // ✅ Hàm in PDF với xử lý lỗi đầy đủ
   const printPDFResult = async (service) => {
     try {
       setPrintingPdf(true);
-      setLocalError('');
-      setLocalSuccess('');
+      showAlert.loading('Đang tạo PDF...');
 
       console.log('🔄 Đang tạo PDF kết quả xét nghiệm...', {
         serviceId: service.service_order_id,
         patient: service.patient_name
-      });
-
-      // Hiển thị loading SweetAlert2
-      Swal.fire({
-        title: 'Đang tạo PDF...',
-        text: 'Vui lòng chờ trong giây lát',
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        }
       });
 
       // ✅ CHUẨN BỊ DỮ LIỆU CHO PDF
@@ -835,12 +865,11 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
         patient_code: `BN${service.patient_id}`,
         lab_number: `XN${service.service_order_id}`,
         department: 'KHOA XÉT NGHIỆM',
-        technician_name: 'Kỹ thuật viên Xét nghiệm',
+        technician_name: service.assigned_technician_name || 'Kỹ thuật viên Xét nghiệm',
         appointment_date: service.order_date || new Date().toLocaleDateString('vi-VN'),
         appointment_time: new Date().toLocaleTimeString('vi-VN'),
-        doctor_name: service.referring_doctor_name || 'Bác sĩ chỉ định',
+        doctorName: service.referring_doctor_name || 'Bác sĩ chỉ định',
 
-        // ✅ CHUYỂN ĐỔI KẾT QUẢ THÀNH DẠNG MẢNG TEST RESULTS
         test_results: [
           {
             test_name: service.service_name,
@@ -852,7 +881,6 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
           }
         ],
 
-        // ✅ PDF SETTINGS
         pdf_settings: {
           fontFamily: 'Times New Roman',
           fontSize: '14px',
@@ -865,14 +893,12 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
           fontStyle: 'normal',
           fontWeight: 'normal',
 
-          // Clinic info
           clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
           clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
           clinicPhone: '028 1234 5678',
-          doctorName: 'Hệ thống',
+          doctorName: `${service.referring_doctor_name}` || 'Bác sĩ chỉ định',
           customTitle: 'Phiếu KQ Xét Nghiệm',
 
-          // Page settings
           pageOrientation: 'portrait',
           pageSize: 'A4',
           marginTop: '15mm',
@@ -880,96 +906,39 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
           marginLeft: '10mm',
           marginRight: '10mm',
 
-          // Logo settings (disabled)
-          logo: {
-            enabled: false,
-            url: '',
-            width: '80px',
-            height: '80px',
-            position: 'left',
-            opacity: 0.8
-          },
-
-          // Watermark settings (disabled)
-          watermark: {
-            enabled: false,
-            text: 'MẪU BẢN QUYỀN',
-            url: '',
-            opacity: 0.1,
-            fontSize: 48,
-            color: '#cccccc',
-            rotation: -45
-          }
+          logo: { enabled: false },
+          watermark: { enabled: false }
         }
       };
 
       console.log('📤 PDF Data gửi đi:', pdfData);
 
-      // ✅ SỬA LẠI TÊN HÀM: printPDF thay vì printPaymentInvoice
       await printPdfService.printPDF(pdfData);
 
-      // Đóng loading và hiển thị success
-      Swal.fire({
-        title: 'Thành Công!',
-        text: `Đã xuất PDF kết quả xét nghiệm cho ${service.patient_name}`,
-        icon: 'success',
-        confirmButtonColor: '#198754',
-        timer: 3000,
-        showConfirmButton: false
-      });
-
-      setLocalSuccess(`✅ Đã xuất PDF kết quả xét nghiệm cho ${service.patient_name}`);
-      setTimeout(() => setLocalSuccess(''), 5000);
+      showAlert.close();
+      showToast(`Đã xuất PDF kết quả xét nghiệm cho ${service.patient_name}`, 'success');
 
     } catch (error) {
       console.error('❌ Lỗi khi in PDF:', error);
+      showAlert.close();
 
-      let errorMessage = '❌ Lỗi khi tạo PDF kết quả xét nghiệm';
-      if (error.message.includes('Network Error')) {
-        errorMessage = '❌ Lỗi kết nối đến server. Vui lòng kiểm tra kết nối mạng.';
-      } else if (error.message.includes('404')) {
-        errorMessage = '❌ Không tìm thấy API in PDF. Vui lòng liên hệ quản trị viên.';
-      } else if (error.message.includes('500')) {
-        errorMessage = '❌ Lỗi server khi tạo PDF. Vui lòng thử lại sau.';
-      } else if (error.message.includes('timeout')) {
-        errorMessage = '❌ Timeout khi tạo PDF. Vui lòng thử lại.';
-      }
+      const errorMessage = handleApiError(error, 'Lỗi khi tạo PDF kết quả xét nghiệm');
+      showToast(errorMessage, 'error');
 
-      // Đóng loading và hiển thị error
-      Swal.fire({
-        title: 'Lỗi!',
-        text: errorMessage,
-        icon: 'error',
-        confirmButtonColor: '#dc3545'
-      });
-
-      setLocalError(errorMessage);
-      setTimeout(() => setLocalError(''), 5000);
     } finally {
       setPrintingPdf(false);
     }
   };
 
-  // ✅ Hàm tùy chỉnh PDF kết quả xét nghiệm với SweetAlert2
+  // ✅ Hàm tùy chỉnh PDF với xử lý lỗi
   const customizePDFResult = async (service) => {
     try {
       setCustomizingPdf(true);
-      setLocalError('');
-      setLocalSuccess('');
+      showAlert.loading('Đang chuẩn bị...');
 
       console.log('🎨 Đang chuẩn bị dữ liệu cho trình chỉnh sửa PDF...', {
         serviceId: service.service_order_id,
         patient: service.patient_name
-      });
-
-      // Hiển thị loading SweetAlert2
-      Swal.fire({
-        title: 'Đang chuẩn bị...',
-        text: 'Đang mở trình chỉnh sửa PDF',
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        }
       });
 
       // ✅ CHUẨN BỊ DỮ LIỆU CHO PDF EDITOR
@@ -977,22 +946,20 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
         type: 'test_result',
         source: 'technician',
 
-        // Thông tin bệnh nhân
         patient_name: service.patient_name,
         patient_age: service.patient_age || 'N/A',
         patient_gender: service.patient_gender || 'N/A',
         patient_phone: service.patient_phone || 'N/A',
         patient_address: service.patient_address || 'N/A',
 
-        // Thông tin dịch vụ
         lab_number: `XN${service.service_order_id}`,
+        patient_code: `BN${service.patient_id}`,
         department: 'KHOA XÉT NGHIỆM',
-        technician_name: 'Kỹ thuật viên Xét nghiệm',
+        technician_name: service.assigned_technician_name || 'Kỹ thuật viên Xét nghiệm',
         appointment_date: service.order_date || new Date().toLocaleDateString('vi-VN'),
         appointment_time: new Date().toLocaleTimeString('vi-VN'),
         doctor_name: service.referring_doctor_name || 'Bác sĩ chỉ định',
 
-        // Kết quả xét nghiệm
         test_results: [
           {
             test_name: service.service_name,
@@ -1004,7 +971,6 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
           }
         ],
 
-        // PDF Settings mặc định
         pdf_settings: {
           fontFamily: 'Times New Roman',
           fontSize: '14px',
@@ -1020,7 +986,7 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
           clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
           clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
           clinicPhone: '028 1234 5678',
-          doctorName: 'Hệ thống',
+          doctorName: `${service.referring_doctor_name}` || 'Bác sĩ chỉ định',
           customTitle: 'Phiếu KQ Xét Nghiệm',
 
           pageOrientation: 'portrait',
@@ -1044,8 +1010,8 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
       sessionStorage.setItem('editorSource', 'technician');
       sessionStorage.setItem('shouldRefreshOnReturn', 'true');
 
-      // Đóng loading
-      Swal.close();
+      showAlert.close();
+      showToast(`Đang chuyển đến trình chỉnh sửa PDF cho ${service.patient_name}`, 'success');
 
       // ✅ CHUYỂN HƯỚNG ĐẾN TRANG EDITOR
       const editorUrl = '/technician/technician-print-pdf-editor';
@@ -1075,29 +1041,55 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
         window.location.href = editorUrl;
       }
 
-      setLocalSuccess(`✅ Đang chuyển đến trình chỉnh sửa PDF cho ${service.patient_name}`);
-      setTimeout(() => setLocalSuccess(''), 3000);
-
     } catch (error) {
       console.error('❌ Lỗi khi mở trình chỉnh sửa PDF:', error);
+      showAlert.close();
 
-      let errorMessage = '❌ Lỗi khi mở trình chỉnh sửa PDF';
-      if (error.message.includes('Network Error')) {
-        errorMessage = '❌ Lỗi kết nối. Vui lòng kiểm tra đường dẫn.';
-      }
+      const errorMessage = handleApiError(error, 'Lỗi khi mở trình chỉnh sửa PDF');
+      showToast(errorMessage, 'error');
 
-      Swal.fire({
-        title: 'Lỗi!',
-        text: errorMessage,
-        icon: 'error',
-        confirmButtonColor: '#dc3545'
-      });
-
-      setLocalError(errorMessage);
-      setTimeout(() => setLocalError(''), 5000);
     } finally {
       setCustomizingPdf(false);
     }
+  };
+
+  // ✅ Modal functions
+  const openResultModal = (service) => {
+    setCurrentService(service);
+    setResultText(service.result || '');
+    setShowResultModal(true);
+  };
+
+  const closeResultModal = () => {
+    if (resultText !== (currentService?.result || '')) {
+      Swal.fire({
+        title: 'Thoát mà không lưu?',
+        text: 'Bạn có thay đổi chưa lưu. Bạn có chắc muốn thoát?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Thoát',
+        cancelButtonText: 'Ở lại',
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        reverseButtons: true
+      }).then((result) => {
+        if (result.isConfirmed) {
+          setShowResultModal(false);
+          setCurrentService(null);
+          setResultText('');
+        }
+      });
+    } else {
+      setShowResultModal(false);
+      setCurrentService(null);
+      setResultText('');
+    }
+  };
+
+  // ✅ Hàm đóng modal xem kết quả
+  const closeViewResultModal = () => {
+    setShowViewResultModal(false);
+    setViewingService(null);
   };
 
   // ✅ Message helpers
@@ -1468,20 +1460,14 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
   // ✅ Main render
   return (
     <div className="technician-section">
-      {/* Alert Messages */}
-      {localError && (
-        <Alert variant="danger" dismissible onClose={() => setLocalError('')}>
-          <i className="fas fa-exclamation-triangle me-2"></i>
-          {localError}
-        </Alert>
-      )}
-
-      {localSuccess && (
-        <Alert variant="success" dismissible onClose={() => setLocalSuccess('')}>
-          <i className="fas fa-check-circle me-2"></i>
-          {localSuccess}
-        </Alert>
-      )}
+      {/* ✅ CUSTOM TOAST COMPONENT */}
+      <CustomToast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={closeToast}
+        delay={3000}
+      />
 
       {/* Statistics Cards */}
       <div className="mb-4">
