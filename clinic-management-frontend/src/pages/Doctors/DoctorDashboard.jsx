@@ -77,26 +77,32 @@ const DoctorDashboard = () => {
     const { doctor, action } = event;
 
     if (!doctor || action !== "updated") return;
+    // Check if patient already exists
+    setTodayPatients((prevPatients) => {
+      const existingIndex = prevPatients.findIndex((p) => p.id === doctor.id);
 
-    setTodayPatients((prev) => {
-      const exists = prev.find((p) => p.id === doctor.id);
-
-      if (exists) {
-        // Update bệnh nhân đã có trong danh sách
-        return prev.map((p) => (p.id === doctor.id ? { ...p, ...doctor } : p));
+      if (existingIndex !== -1) {
+        // Update existing patient
+        const updated = [...prevPatients];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          ...doctor,
+        };
+        return updated;
+      } else {
+        // Add new patient to the list
+        return [...prevPatients, doctor];
       }
-
-      // Nếu là bệnh nhân mới => thêm vào hàng chờ
-      return [...prev, doctor];
     });
 
-    // 🔔 Hiện thông báo realtime
+    // Show toast notification
     setToast({
       show: true,
-      message: `Trạng thái của ${doctor.name} đã thay đổi: ${doctor.status}`,
+      message: `Bệnh nhân ${doctor.name} đã được gọi vào khám`,
       variant: "info",
     });
 
+    // Play notification sound (optional)
     playNotificationSound();
   };
 
@@ -145,31 +151,21 @@ const DoctorDashboard = () => {
   }, []);
 
   // Initialize WebSocket for doctor's room
-  // Initialize WebSocket for doctor's room
   useEffect(() => {
-    if (!roomId) {
-      console.warn("⚠️ Room ID not available yet");
-      return;
-    }
+    if (!roomId) return;
 
     const echoClient = createEchoClient();
     setEcho(echoClient);
-
-    console.log(`📡 Subscribing to channel: room.${roomId}`);
 
     // Listen to doctor's room channel
     echoClient
       .channel(`room.${roomId}`)
       .listen(".queue.status.updated", (event) => {
-        console.log("✅ Doctor received update:", event);
+        console.log("Doctor received update:", event);
         handleDoctorQueueUpdate(event);
-      })
-      .error((error) => {
-        console.error("❌ Channel subscription error:", error);
       });
 
     return () => {
-      console.log("🔌 Disconnecting WebSocket");
       echoClient.disconnect();
     };
   }, [roomId]);
@@ -262,11 +258,13 @@ const DoctorDashboard = () => {
     e.preventDefault();
     if (!selectedTodayPatient) return;
     const isSave = confirmType === "save";
+
     try {
       setIsProcessing(true);
       const data = {
         appointment_id: selectedTodayPatient.id,
         patient_id: selectedTodayPatient.patient_id,
+        queue_id: selectedPatient.queue_id,
         symptoms,
         diagnosis,
         services,
@@ -371,7 +369,6 @@ const DoctorDashboard = () => {
               setSelectedTodayPatient={setSelectedTodayPatient}
               todayPatients={todayPatients}
               setTodayPatients={setTodayPatients}
-              onQueueUpdate={handleDoctorQueueUpdate} // Truyền prop cho realtime
               doctorInfo={doctorInfo} // THÊM DÒNG NÀY
               setToast={setToast}
             />
