@@ -93,14 +93,14 @@ return [
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'require'),
             'options' => [
-                PDO::ATTR_PERSISTENT => true, 
+                PDO::ATTR_PERSISTENT => true,
             ],
         ],
 
         'sqlsrv' => [
             'driver' => 'sqlsrv',
             'url' => env('DB_URL'),
-            'host' => env('DB_HOST', 'localhost'),
+            'host' => env('DB_HOST', '125.212.218.44'),
             'port' => env('DB_PORT', '1433'),
             'database' => env('DB_DATABASE', 'laravel'),
             'username' => env('DB_USERNAME', 'root'),
@@ -147,7 +147,7 @@ return [
 
         'options' => [
             'cluster' => env('REDIS_CLUSTER', 'redis'),
-            'prefix' => env('REDIS_PREFIX', Str::slug(env('APP_NAME', 'laravel'), '_').'_database_'),
+            'prefix' => env('REDIS_PREFIX', Str::slug(env('APP_NAME', 'laravel'), '_') . '_database_'),
         ],
 
         'default' => [

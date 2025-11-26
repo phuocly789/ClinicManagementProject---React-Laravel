@@ -130,7 +130,7 @@ services:
       - "3000:5173"
     environment:
       - CHOKIDAR_USEPOLLING=true
-      - VITE_REVERB_HOST=localhost
+      - VITE_REVERB_HOST=125.212.218.44
       - VITE_REVERB_PORT=8080
       - VITE_REVERB_SCHEME=http
     command: npm run dev -- --host 0.0.0.0 --port 5173
@@ -155,7 +155,7 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8983/solr/admin/cores?action=STATUS"]
+      test: ["CMD", "curl", "-f", "http://125.212.218.44:8983/solr/admin/cores?action=STATUS"]
       interval: 30s
       timeout: 10s
       retries: 10

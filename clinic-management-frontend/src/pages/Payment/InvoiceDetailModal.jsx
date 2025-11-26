@@ -258,7 +258,7 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
       console.log('👁️ Sending preview data:', previewData);
 
       // Gọi API preview HTML
-      const response = await fetch('http://localhost:8000/api/print/preview-html', {
+      const response = await fetch('http://125.212.218.44:8000/api/print/preview-html', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

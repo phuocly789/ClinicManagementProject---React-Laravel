@@ -13,7 +13,7 @@ class PassportSeeder extends Seeder
         Client::create([
             'name' => 'Password Grant Client',
             'secret' => 'secret-password',
-            'redirect' => 'http://localhost',
+            'redirect' => 'http://125.212.218.44',
             'personal_access_client' => false,
             'password_client' => true,
             'revoked' => false,
@@ -23,7 +23,7 @@ class PassportSeeder extends Seeder
         Client::create([
             'name' => 'Personal Access Client',
             'secret' => 'secret-personal',
-            'redirect' => 'http://localhost',
+            'redirect' => 'http://125.212.218.44',
             'personal_access_client' => true,
             'password_client' => false,
             'revoked' => false,

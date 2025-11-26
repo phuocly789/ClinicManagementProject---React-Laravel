@@ -6,7 +6,7 @@ window.Pusher = Pusher;
 const echo = new Echo({
     broadcaster: 'reverb',
     key: import.meta.env.VITE_REVERB_APP_KEY || 'local_key',
-    wsHost: import.meta.env.VITE_REVERB_HOST || 'localhost',
+    wsHost: import.meta.env.VITE_REVERB_HOST || '125.212.218.44',
     wsPort: import.meta.env.VITE_REVERB_PORT || 8080,
     wssPort: import.meta.env.VITE_REVERB_PORT || 8080,
     forceTLS: false,

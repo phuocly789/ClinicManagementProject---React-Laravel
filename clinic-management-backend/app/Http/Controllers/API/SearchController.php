@@ -54,7 +54,6 @@ class SearchController extends Controller
             $results = $this->solrService->search($query, $filters, $page, $perPage, $sort);
 
             return response()->json($results);
-
         } catch (\Exception $e) {
             Log::error('Search error: ' . $e->getMessage(), [
                 'query' => $request->get('q'),
@@ -116,10 +115,9 @@ class SearchController extends Controller
             $results = $this->solrService->searchUsers($query, $filters, $page, $perPage);
 
             return response()->json($results);
-
         } catch (\Exception $e) {
             Log::error('User search error: ' . $e->getMessage());
-            
+
             // Fallback to database search
             return $this->fallbackUserSearch($request);
         }
@@ -160,10 +158,9 @@ class SearchController extends Controller
             $results = $this->solrService->searchServices($query, $filters, $page, $perPage);
 
             return response()->json($results);
-
         } catch (\Exception $e) {
             Log::error('Service search error: ' . $e->getMessage());
-            
+
             // Fallback to database search
             return $this->fallbackServiceSearch($request);
         }
@@ -184,12 +181,11 @@ class SearchController extends Controller
                 'core_exists' => $coreExists,
                 'timestamp' => now()->toISOString(),
                 'details' => [
-                    'host' => config('solr.endpoint.localhost.host', '127.0.0.1'),
-                    'port' => config('solr.endpoint.localhost.port', 8983),
-                    'core' => config('solr.endpoint.localhost.core', 'clinic_management')
+                    'host' => config('solr.endpoint.125.212.218.44.host', '127.0.0.1'),
+                    'port' => config('solr.endpoint.125.212.218.44.port', 8983),
+                    'core' => config('solr.endpoint.125.212.218.44.core', 'clinic_management')
                 ]
             ], $isHealthy && $coreExists ? 200 : 503);
-
         } catch (\Exception $e) {
             Log::error('Solr health check error: ' . $e->getMessage());
 
@@ -240,7 +236,6 @@ class SearchController extends Controller
             $success = $this->solrService->indexDocument($document);
 
             return $success;
-
         } catch (\Exception $e) {
             Log::error('Index user error: ' . $e->getMessage());
             return false;
@@ -268,7 +263,6 @@ class SearchController extends Controller
             $success = $this->solrService->indexDocument($document);
 
             return $success;
-
         } catch (\Exception $e) {
             Log::error('Index service error: ' . $e->getMessage());
             return false;
@@ -321,7 +315,6 @@ class SearchController extends Controller
                 'message' => $success ? 'Users indexed successfully' : 'Failed to index users',
                 'count' => count($documents)
             ]);
-
         } catch (\Exception $e) {
             Log::error('Bulk index users error: ' . $e->getMessage());
             return response()->json([
@@ -363,7 +356,6 @@ class SearchController extends Controller
                 'message' => $success ? 'Services indexed successfully' : 'Failed to index services',
                 'count' => count($documents)
             ]);
-
         } catch (\Exception $e) {
             Log::error('Bulk index services error: ' . $e->getMessage());
             return response()->json([
@@ -402,7 +394,6 @@ class SearchController extends Controller
                 'success' => $success,
                 'message' => $success ? 'Document indexed successfully' : 'Failed to index document'
             ], $success ? 200 : 500);
-
         } catch (\Exception $e) {
             Log::error('Index document error: ' . $e->getMessage());
 
@@ -440,7 +431,6 @@ class SearchController extends Controller
                 'message' => $success ? 'Documents indexed successfully' : 'Failed to index documents',
                 'count' => $success ? count($request->documents) : 0
             ], $success ? 200 : 500);
-
         } catch (\Exception $e) {
             Log::error('Bulk index error: ' . $e->getMessage());
 
@@ -470,7 +460,6 @@ class SearchController extends Controller
                 'success' => $success,
                 'message' => $success ? 'Document deleted successfully' : 'Failed to delete document'
             ], $success ? 200 : 500);
-
         } catch (\Exception $e) {
             Log::error('Delete document error: ' . $e->getMessage());
 
@@ -492,17 +481,17 @@ class SearchController extends Controller
             // Search filter
             if ($request->has('q') && !empty($request->q)) {
                 $search = $request->q;
-                $query->where(function($q) use ($search) {
+                $query->where(function ($q) use ($search) {
                     $q->where('FullName', 'like', "%{$search}%")
-                      ->orWhere('Username', 'like', "%{$search}%")
-                      ->orWhere('Email', 'like', "%{$search}%")
-                      ->orWhere('Phone', 'like', "%{$search}%");
+                        ->orWhere('Username', 'like', "%{$search}%")
+                        ->orWhere('Email', 'like', "%{$search}%")
+                        ->orWhere('Phone', 'like', "%{$search}%");
                 });
             }
 
             // Role filter
             if ($request->has('user_role') && !empty($request->user_role)) {
-                $query->whereHas('roles', function($q) use ($request) {
+                $query->whereHas('roles', function ($q) use ($request) {
                     $q->where('RoleName', $request->user_role);
                 });
             }
@@ -523,7 +512,7 @@ class SearchController extends Controller
 
             $users = $query->orderBy('FullName', 'asc')->paginate($perPage, ['*'], 'page', $page);
 
-            $formattedResults = $users->map(function($user) {
+            $formattedResults = $users->map(function ($user) {
                 return [
                     'id' => 'user_' . $user->UserId,
                     'type' => 'user',
@@ -551,7 +540,6 @@ class SearchController extends Controller
                 'fallback' => true,
                 'solr_available' => false
             ]);
-
         } catch (\Exception $e) {
             Log::error('Fallback user search error: ' . $e->getMessage());
             return $this->fallbackResponse('users');
@@ -569,10 +557,10 @@ class SearchController extends Controller
             // Search filter
             if ($request->has('q') && !empty($request->q)) {
                 $search = $request->q;
-                $query->where(function($q) use ($search) {
+                $query->where(function ($q) use ($search) {
                     $q->where('ServiceName', 'like', "%{$search}%")
-                      ->orWhere('ServiceType', 'like', "%{$search}%")
-                      ->orWhere('Description', 'like', "%{$search}%");
+                        ->orWhere('ServiceType', 'like', "%{$search}%")
+                        ->orWhere('Description', 'like', "%{$search}%");
                 });
             }
 
@@ -595,7 +583,7 @@ class SearchController extends Controller
 
             $services = $query->orderBy('ServiceName', 'asc')->paginate($perPage, ['*'], 'page', $page);
 
-            $formattedResults = $services->map(function($service) {
+            $formattedResults = $services->map(function ($service) {
                 return [
                     'id' => 'service_' . $service->ServiceId,
                     'type' => 'service',
@@ -616,7 +604,6 @@ class SearchController extends Controller
                 'fallback' => true,
                 'solr_available' => false
             ]);
-
         } catch (\Exception $e) {
             Log::error('Fallback service search error: ' . $e->getMessage());
             return $this->fallbackResponse('services');

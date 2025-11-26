@@ -13,7 +13,7 @@ import HistorySection from "./HistorySection";
 import { createEchoClient } from "../../utils/echo";
 import notificationSound from "../../assets/notification.mp3";
 import doctorService from "../../services/doctorService";
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = "http://125.212.218.44:8000";
 
 const DoctorDashboard = () => {
   const [currentSection, setCurrentSection] = useState("today");

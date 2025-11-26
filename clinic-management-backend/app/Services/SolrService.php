@@ -23,12 +23,12 @@ class SolrService
 
         $config = [
             'endpoint' => [
-                'localhost' => [
-                    'host' => config('solr.endpoint.localhost.host', '127.0.0.1'),
-                    'port' => config('solr.endpoint.localhost.port', 8983),
-                    'path' => config('solr.endpoint.localhost.path', '/solr'),
-                    'core' => config('solr.endpoint.localhost.core', 'clinic_management'),
-                    'timeout' => config('solr.endpoint.localhost.timeout', 30),
+                '125.212.218.44' => [
+                    'host' => config('solr.endpoint.125.212.218.44.host', '127.0.0.1'),
+                    'port' => config('solr.endpoint.125.212.218.44.port', 8983),
+                    'path' => config('solr.endpoint.125.212.218.44.path', '/solr'),
+                    'core' => config('solr.endpoint.125.212.218.44.core', 'clinic_management'),
+                    'timeout' => config('solr.endpoint.125.212.218.44.timeout', 30),
                 ]
             ]
         ];
@@ -41,7 +41,7 @@ class SolrService
         try {
             // Tạo query
             $solrQuery = $this->client->createSelect();
-            
+
             // Thiết lập query string
             if (!empty($query)) {
                 $solrQuery->setQuery($query);
@@ -54,26 +54,26 @@ class SolrService
             $solrQuery->setRows($perPage);
 
             // Thiết lập sorting
-          if (!empty($sort)) {
-    $sortParts = array_map('trim', explode(',', $sort));
-    foreach ($sortParts as $part) {
-        $part = trim($part);
-        if (empty($part)) continue;
+            if (!empty($sort)) {
+                $sortParts = array_map('trim', explode(',', $sort));
+                foreach ($sortParts as $part) {
+                    $part = trim($part);
+                    if (empty($part)) continue;
 
-        $pieces = preg_split('/\s+/', $part);
-        $field = $pieces[0];
-        $direction = isset($pieces[1]) ? strtolower($pieces[1]) : 'asc';
+                    $pieces = preg_split('/\s+/', $part);
+                    $field = $pieces[0];
+                    $direction = isset($pieces[1]) ? strtolower($pieces[1]) : 'asc';
 
-        if (in_array($direction, ['asc', 'desc'])) {
-            $solrQuery->addSort($field, $direction);
-        } else {
-            $solrQuery->addSort($field, 'asc');
-        }
-    }
-} else {
-    // Default sort nếu không có
-    $solrQuery->addSort('score', 'desc');
-}
+                    if (in_array($direction, ['asc', 'desc'])) {
+                        $solrQuery->addSort($field, $direction);
+                    } else {
+                        $solrQuery->addSort($field, 'asc');
+                    }
+                }
+            } else {
+                // Default sort nếu không có
+                $solrQuery->addSort('score', 'desc');
+            }
 
             // Thêm filters
             if (!empty($filters)) {
@@ -101,7 +101,6 @@ class SolrService
                 'per_page' => $perPage,
                 'facets' => []
             ];
-
         } catch (\Exception $e) {
             Log::error('Solr search error: ' . $e->getMessage());
             throw new \Exception('Solr search failed: ' . $e->getMessage());
@@ -126,7 +125,7 @@ class SolrService
             $results[] = [
                 'id'             => $getFieldValue('id'),
                 'type'           => $getFieldValue('type'),
-                
+
                 // User fields
                 'full_name'      => $getFieldValue('full_name'),
                 'username'       => $getFieldValue('username'),
@@ -139,13 +138,13 @@ class SolrService
                 'specialty'      => $getFieldValue('specialty'),
                 'license_number' => $getFieldValue('license_number'),
                 'date_of_birth'  => $getFieldValue('date_of_birth'),
-                
+
                 // Service fields
                 'service_name'   => $getFieldValue('service_name'),
                 'service_type'   => $getFieldValue('service_type'),
                 'price'          => $getFieldValue('price', 0),
                 'description'    => $getFieldValue('description'),
-                
+
                 // Common fields
                 'title'          => $getFieldValue('title'),
                 'content'        => $getFieldValue('content'),
@@ -174,7 +173,7 @@ class SolrService
         try {
             $update = $this->client->createUpdate();
             $doc = $update->createDocument();
-            
+
             foreach ($document as $field => $value) {
                 // Xử lý boolean values
                 if (is_bool($value)) {
@@ -182,10 +181,10 @@ class SolrService
                 }
                 $doc->$field = $value;
             }
-            
+
             $update->addDocument($doc);
             $update->addCommit();
-            
+
             $result = $this->client->update($update);
             return $result->getStatus() === 0;
         } catch (\Exception $e) {
@@ -200,7 +199,7 @@ class SolrService
             $update = $this->client->createUpdate();
             $update->addDeleteById($id);
             $update->addCommit();
-            
+
             $result = $this->client->update($update);
             return $result->getStatus() === 0;
         } catch (\Exception $e) {
@@ -247,7 +246,7 @@ class SolrService
     {
         $baseFilters = ['type' => 'user'];
         $mergedFilters = array_merge($baseFilters, $filters);
-        
+
         return $this->search($query, $mergedFilters, $page, $perPage, 'score desc, full_name asc');
     }
 
@@ -258,7 +257,7 @@ class SolrService
     {
         $baseFilters = ['type' => 'service'];
         $mergedFilters = array_merge($baseFilters, $filters);
-        
+
         return $this->search($query, $mergedFilters, $page, $perPage, 'score desc, service_name asc');
     }
 
@@ -270,16 +269,16 @@ class SolrService
         try {
             $coreAdmin = $this->client->createCoreAdmin();
             $statusAction = $coreAdmin->createStatus();
-            
+
             if ($coreName) {
                 $statusAction->setCore($coreName);
             } else {
-                $statusAction->setCore(config('solr.endpoint.localhost.core', 'clinic_management'));
+                $statusAction->setCore(config('solr.endpoint.125.212.218.44.core', 'clinic_management'));
             }
-            
+
             $coreAdmin->setAction($statusAction);
             $response = $coreAdmin->execute();
-            
+
             return $response->getStatusResult()->getUptime() > 0;
         } catch (\Exception $e) {
             Log::error('Solr core check failed: ' . $e->getMessage());

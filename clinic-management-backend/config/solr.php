@@ -2,7 +2,7 @@
 
 return [
     'endpoint' => [
-        'localhost' => [
+        '125.212.218.44' => [
             'host' => env('SOLR_HOST', 'solr'),
             'port' => (int) env('SOLR_PORT', 8983),
             'path' => env('SOLR_PATH', '/'),

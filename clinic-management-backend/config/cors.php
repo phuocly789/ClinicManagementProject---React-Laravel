@@ -1,14 +1,14 @@
 <?php
 
 return [
-    'paths' => ['api/*', 'oauth/*','sanctum/csrf-cookie'],
+    'paths' => ['api/*', 'oauth/*', 'sanctum/csrf-cookie'],
 
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
-        'http://localhost:3000',
+        'http://125.212.218.44:3000',
         'http://127.0.0.1:3000',
-        'http://localhost:5173',
+        'http://125.212.218.44:5173',
         'http://127.0.0.1:5173',
     ],
 

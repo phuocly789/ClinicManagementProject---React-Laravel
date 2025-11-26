@@ -100,7 +100,7 @@ Xây dựng một hệ thống phần mềm web cho phép phòng khám hoạt đ
         ```bash
         npm run dev
         ```
-        > Frontend sẽ chạy tại: `http://localhost:5173` (hoặc một cổng khác)
+        > Frontend sẽ chạy tại: `http://125.212.218.44:5173` (hoặc một cổng khác)
 
 ---
 

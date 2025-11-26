@@ -264,7 +264,6 @@ class PaymentController extends Controller
 
                 return $this->handleError($errorMessage, $errorCode, 400, 'Tạo thanh toán');
             }
-
         } catch (\Illuminate\Database\QueryException $e) {
             DB::rollBack();
             Log::error('💥 [CREATE_PAYMENT] Database exception: ' . $e->getMessage());
@@ -357,7 +356,6 @@ class PaymentController extends Controller
 
             DB::commit();
             return response()->json(['resultCode' => 0]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('💥 [MOMO_CALLBACK] Exception: ' . $e->getMessage());
@@ -432,7 +430,6 @@ class PaymentController extends Controller
                 DB::commit();
                 return $this->redirectToFrontend('cancelled', $errorMessage, $invoice, $data);
             }
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('💥 [MOMO_RETURN] Exception: ' . $e->getMessage());
@@ -518,7 +515,6 @@ class PaymentController extends Controller
                 'invoice_id' => $invoice->InvoiceId,
                 'timestamp' => now()->format('Y-m-d H:i:s')
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('💥 [RESET_PAYMENT] Exception: ' . $e->getMessage());
@@ -567,7 +563,6 @@ class PaymentController extends Controller
                 'reset_count' => $resetCount,
                 'timestamp' => now()->format('Y-m-d H:i:s')
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('💥 [RESET_STUCK_INVOICES] Exception: ' . $e->getMessage());
@@ -600,7 +595,7 @@ class PaymentController extends Controller
      */
     private function redirectToFrontend($status, $message, $invoice = null, $data = [])
     {
-        $frontendUrl = config('app.frontend_url', 'http://localhost:3000');
+        $frontendUrl = config('app.frontend_url', 'http://125.212.218.44:3000');
 
         $queryParams = [
             'status' => $status,

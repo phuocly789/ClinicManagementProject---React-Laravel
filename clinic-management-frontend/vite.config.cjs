@@ -11,13 +11,13 @@ export default defineConfig({
         },
         proxy: {
             '/api': {
-                target: 'http://localhost:8000',
+                target: 'http://125.212.218.44:8000',
                 changeOrigin: true,
                 secure: false,
             },
         },
         cors: {
-            origin: ['http://localhost:8000'],
+            origin: ['http://125.212.218.44:8000'],
             credentials: true, // Cho phép gửi cookie
         },
     },

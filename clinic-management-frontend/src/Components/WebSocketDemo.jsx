@@ -13,9 +13,9 @@ const WebSocketDemo = () => {
 
   // Config
   const config = {
-    apiUrl: import.meta.env.VITE_API_URL || "http://localhost:8000",
+    apiUrl: import.meta.env.VITE_API_URL || "http://125.212.218.44:8000",
     reverbKey: import.meta.env.VITE_REVERB_APP_KEY,
-    reverbHost: import.meta.env.VITE_REVERB_HOST || "localhost",
+    reverbHost: import.meta.env.VITE_REVERB_HOST || "125.212.218.44",
     reverbPort: import.meta.env.VITE_REVERB_PORT || "8080",
     channel: import.meta.env.VITE_REVERB_CHANNEL || "appointments",
     eventName: import.meta.env.VITE_REVERB_EVENT || ".appointment.updated",
@@ -57,8 +57,7 @@ const WebSocketDemo = () => {
       echoInstance.connector.pusher.connection.bind("error", (error) => {
         console.error("WebSocket error:", error);
         addEvent(
-          `❌ Connection Error: ${
-            error.error?.data?.message || "Unknown error"
+          `❌ Connection Error: ${error.error?.data?.message || "Unknown error"
           }`,
           "danger"
         );
@@ -96,8 +95,7 @@ const WebSocketDemo = () => {
       channel.listen(config.eventName, (data) => {
         console.log("📅 Event received:", data);
         addEvent(
-          `📅 ${data.patient_name || "Patient"} - Status: ${
-            data.status || "N/A"
+          `📅 ${data.patient_name || "Patient"} - Status: ${data.status || "N/A"
           } (${data.action || "updated"})`,
           "info"
         );
@@ -196,9 +194,8 @@ const WebSocketDemo = () => {
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h3 className="fw-bold mb-0">🚀 WebSocket Test Dashboard</h3>
             <span
-              className={`badge rounded-pill fs-6 ${
-                isConnected ? "bg-success" : "bg-danger"
-              }`}
+              className={`badge rounded-pill fs-6 ${isConnected ? "bg-success" : "bg-danger"
+                }`}
             >
               {isConnected ? "● Connected" : "○ Disconnected"}
             </span>
@@ -245,9 +242,8 @@ const WebSocketDemo = () => {
             <button
               onClick={connectWebSocket}
               disabled={isConnected}
-              className={`btn ${
-                isConnected ? "btn-secondary" : "btn-primary"
-              } flex-fill`}
+              className={`btn ${isConnected ? "btn-secondary" : "btn-primary"
+                } flex-fill`}
             >
               {isConnected ? "✓ Connected" : "🔌 Connect"}
             </button>
@@ -255,9 +251,8 @@ const WebSocketDemo = () => {
             <button
               onClick={subscribeToChannel}
               disabled={!isConnected || isSubscribed}
-              className={`btn ${
-                isSubscribed ? "btn-secondary" : "btn-success"
-              } flex-fill`}
+              className={`btn ${isSubscribed ? "btn-secondary" : "btn-success"
+                } flex-fill`}
             >
               {isSubscribed ? "✓ Subscribed" : "📡 Subscribe"}
             </button>
@@ -265,9 +260,8 @@ const WebSocketDemo = () => {
             <button
               onClick={triggerTestEvent}
               disabled={!isSubscribed}
-              className={`btn ${
-                !isSubscribed ? "btn-secondary" : "btn-warning text-white"
-              } flex-fill`}
+              className={`btn ${!isSubscribed ? "btn-secondary" : "btn-warning text-white"
+                } flex-fill`}
             >
               🧪 Test Event
             </button>

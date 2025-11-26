@@ -9,7 +9,7 @@
             "pathMappings": {
                 "/var/www/html": "${workspaceFolder}/clinic-management-backend"
             },
-            "hostname": "localhost",
+            "hostname": "125.212.218.44",
             "ignore": ["**/vendor/**"],
             "log": true
         },
@@ -27,7 +27,7 @@
             "name": "Debug React (Chrome)",
             "type": "chrome",
             "request": "launch",
-            "url": "http://localhost:3000",
+            "url": "http://125.212.218.44:3000",
             "webRoot": "${workspaceFolder}/clinic-management-frontend/src",
             "sourceMaps": true,
             "sourceMapPathOverrides": {
@@ -39,7 +39,7 @@
             "type": "node",
             "request": "attach",
             "port": 5173,  // Port Vite debug
-            "address": "localhost",
+            "address": "125.212.218.44",
             "localRoot": "${workspaceFolder}/clinic-management-frontend",
             "remoteRoot": "/app",
             "skipFiles": ["<node_internals>/**"]
@@ -48,7 +48,7 @@
             "name": "Debug React (Chrome) Host",
             "type": "chrome",
             "request": "launch",
-            "url": "http://localhost:5173",
+            "url": "http://125.212.218.44:5173",
             "webRoot": "${workspaceFolder}/clinic-management-frontend/src",
             "sourceMaps": true,
             "sourceMapPathOverrides": {

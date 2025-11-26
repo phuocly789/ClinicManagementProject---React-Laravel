@@ -4,7 +4,7 @@ import Cookies from 'js-cookie';
 import NProgress from "nprogress";
 import "nprogress/nprogress.css";
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = "http://125.212.218.44:8000";
 
 NProgress.configure({ showSpinner: false });
 

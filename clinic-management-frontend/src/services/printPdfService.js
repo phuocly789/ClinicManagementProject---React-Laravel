@@ -13,7 +13,7 @@ const printPdfService = {
             });
 
             // ✅ Dùng fetch thay vì axios để tránh interceptor conflict
-            const response = await fetch('http://localhost:8000/api/print/prescription/preview', {
+            const response = await fetch('http://125.212.218.44:8000/api/print/prescription/preview', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -45,8 +45,8 @@ RUN composer require laravel/reverb --no-update && composer update
 # Permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage \
-    && chmod 600 /var/www/html/storage/oauth-*.key \
-    && chmod 600 /var/www/html/storage/*.key
+    && chmod 600 /var/www/html/storage/oauth-*.key || true \
+    && chmod 600 /var/www/html/storage/*.key || true
 
 
 
