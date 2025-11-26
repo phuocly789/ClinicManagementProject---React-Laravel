@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Class Notification
- * 
+ *
  * @property int $NotificationId
  * @property int|null $UserId
  * @property int|null $AppointmentId
@@ -19,7 +19,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $Type
  * @property Carbon|null $SentAt
  * @property string|null $Status
- * 
+ *
  * @property User|null $user
  * @property Appointment|null $appointment
  *
@@ -30,8 +30,8 @@ class Notification extends Model
 	protected $table = 'Notifications';
 	protected $primaryKey = 'NotificationId';
 	public $incrementing = false;
-	public $timestamps = false;
-
+	public $timestamps = true;
+    const UPDATED_AT = 'UpdatedAt';
 	protected $casts = [
 		'NotificationId' => 'int',
 		'UserId' => 'int',
@@ -45,7 +45,8 @@ class Notification extends Model
 		'Message',
 		'Type',
 		'SentAt',
-		'Status'
+		'Status',
+        'UpdatedAt'
 	];
 
 	public function user()

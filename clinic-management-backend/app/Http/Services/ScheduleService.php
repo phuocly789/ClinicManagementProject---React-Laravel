@@ -32,6 +32,7 @@ class ScheduleService
                     'StaffSchedules.EndTime',
                     'StaffSchedules.IsAvailable',
                     'StaffSchedules.RoomId',
+                    'StaffSchedules.UpdatedAt',
                     'Users.FullName as StaffName',
                     'UserRoles.RoleId', // Lấy RoleId từ bảng UserRoles
                     'Roles.RoleName', // Lấy trực tiếp tên role
@@ -59,6 +60,7 @@ class ScheduleService
                     'RoomId' => $sched->RoomId,
                     'RoomName' => $sched->RoomName,
                     'RoomDescription' => $sched->RoomDescription,
+                    'UpdatedAt' => $sched->UpdatedAt ? Carbon::parse($sched->UpdatedAt)->timezone('UTC')->toISOString() : null,
                 ];
             });
 
@@ -190,6 +192,7 @@ class ScheduleService
             }
 
             $schedule = StaffSchedule::find($scheduleId);
+
             if (!$schedule) {
                 return [
                     'data' => null,
@@ -198,14 +201,18 @@ class ScheduleService
                 ];
             }
 
-            // BỎ restriction về cùng ngày (cho phép update sang ngày khác)
-            // if ($schedule->WorkDate->toDateString() !== $workDate->toDateString()) {
-            //     return [
-            //         'data' => null,
-            //         'status' => 'BadRequest',
-            //         'message' => 'Chỉ có thể cập nhật lịch trong cùng ngày.'
-            //     ];
-            // }
+            $clientUpdatedAt = $data['UpdatedAt'] ?? null;
+
+            // SO SÁNH: Nếu DB mới hơn → có người đã sửa trước!
+            if ($clientUpdatedAt && $schedule->UpdatedAt && $schedule->UpdatedAt->greaterThan($clientUpdatedAt)) {
+                return [
+                    'status' => 'Conflict',
+                    'message' => 'Lịch này đã được sửa bởi người khác!',
+                    'data' => null
+                ];
+            }
+
+
 
             $staffExists = MedicalStaff::where('StaffId', $data['StaffId'])->exists();
             if (!$staffExists) {
@@ -252,15 +259,16 @@ class ScheduleService
 
             DB::beginTransaction();
 
-            $schedule->update([
-                'StaffId' => $data['StaffId'], // CHO PHÉP đổi StaffId
+            $schedule->fill([
+                'StaffId' => $data['StaffId'],
                 'WorkDate' => $workDate->toDateString(),
                 'StartTime' => $startTime,
                 'EndTime' => $endTime,
                 'IsAvailable' => $data['IsAvailable'],
-                'RoomId' => $data['RoomId'] ?? $schedule->RoomId, // CẬP NHẬT RoomId
+                'RoomId' => $data['RoomId'] ?? $schedule->RoomId,
             ]);
 
+            $schedule->save();
             DB::commit();
 
             return [
@@ -271,7 +279,8 @@ class ScheduleService
                     'StartTime' => $schedule->StartTime,
                     'EndTime' => $schedule->EndTime,
                     'IsAvailable' => $schedule->IsAvailable,
-                    'RoomId' => $schedule->RoomId, // THÊM RoomId
+                    'RoomId' => $schedule->RoomId,
+                    'UpdatedAt' => $schedule->UpdatedAt->timezone('UTC')->toISOString()
                 ],
                 'status' => 'Success',
                 'message' => 'Cập nhật lịch thành công.'

@@ -44,7 +44,7 @@ export default function NotificationManagement() {
         params: {
           current: page + 1,
           pageSize: pageSize,
-          
+
         }
       });
 
@@ -105,7 +105,8 @@ export default function NotificationManagement() {
     try {
       setIsLoading(true);
       const response = await axiosInstance.put(`/api/receptionist/notifications/${selectedNotification.id}`, {
-        message: formData.message
+        message: formData.message,
+        updated_at: selectedNotification.updated_at||null
       });
 
       if (response.success) {
@@ -116,8 +117,13 @@ export default function NotificationManagement() {
         getAppointments(current);
       }
     } catch (error) {
-      console.error(error);
-      showToast("error", error.response?.message || "Lỗi khi cập nhật thông báo");
+      if (error.response?.status === 409) {
+        showToast("error", "Thông báo đã được sửa/xóa bởi người khác! Đang tải lại...");
+        getAppointments(current); // tự reload
+        setShowEditModal(false);
+      } else {
+        showToast("error", error.response?.data?.message || "Lỗi cập nhật");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -137,7 +143,7 @@ export default function NotificationManagement() {
       }
     } catch (error) {
       console.error(error);
-      showToast("error", error.response?.message || "Lỗi khi xóa thông báo");
+      showToast("error", error.response?.message || "Thông báo không tồn tại");
     } finally {
       setIsLoading(false);
     }
@@ -176,13 +182,14 @@ export default function NotificationManagement() {
   };
 
   const openEditModal = (appointment) => {
+    if (!appointment.has_notification) return;
+
     setSelectedNotification({
       id: appointment.notification_id,
-      message: appointment.notification_message
+      message: appointment.notification_message || "",
+      updated_at: appointment.updated_at || null  
     });
-    setFormData({
-      message: appointment.notification_message
-    });
+    setFormData({ message: appointment.notification_message || "" });
     setShowEditModal(true);
   };
 

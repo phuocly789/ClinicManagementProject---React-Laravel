@@ -131,13 +131,21 @@ class SuppliersController extends Controller
             ], 422);
         }
 
-        $supplier->update([
+        if ($request->version != $supplier->version) {
+            return response()->json([
+                'message' => 'Dữ liệu đã thay đổi bởi người khác. Vui lòng tải lại trang trước khi cập nhật.'
+            ], 409);  // 409 Conflict
+        }
+
+        $supplier->update($request->only([
             'SupplierName' => $request->SupplierName ?? $supplier->SupplierName,
             'ContactEmail' => $request->ContactEmail ?? $supplier->ContactEmail,
             'ContactPhone' => $request->ContactPhone ?? $supplier->ContactPhone,
             'Address' => $request->Address ?? $supplier->Address,
             'Description' => $request->Description ?? $supplier->Description
-        ]);
+        ]));
+
+        $supplier->increment('version');
 
         return response()->json([
             'status' => 'success',

@@ -215,7 +215,6 @@ Route::prefix('receptionist')->group(function () {
     Route::get('/rooms', [RoomController::class, 'getAllRooms']);
     //Tiếp nhận patient
     Route::get('/searchPatient', [PatientByRecepController::class, 'searchPatients']); // Giữ cũ
-    Route::get('/patients/search', [SearchController::class, 'searchPatients']); // Mới với Solr
     Route::post('/patients', [PatientController::class, 'createPatient']);
     Route::get('/patients', [PatientByRecepController::class, 'getPatient']);
     // Thêm route này vào receptionist routes
@@ -313,189 +312,35 @@ Route::prefix('payments')->group(function () {
     Route::get('/invoices/payment-history', [InvoiceController::class, 'paymentHistory']);
     Route::get('/invoices/{id}', [InvoiceController::class, 'show']);
     Route::post('/invoices', [InvoiceController::class, 'store']);
-    // Tìm kiếm hóa đơn với Solr
-    Route::get('/invoices/search', [SearchController::class, 'searchInvoices']);
 });
+
 Route::middleware(['auth:api'])->get('/doctor/room-info', [AppointmentsController::class, 'getRoomInfo']);
 
-// ==================== SEARCH ROUTES - TÍCH HỢP SOLR ====================
+//  SEARCH ROUTES 
+Route::get('/services/search', [SearchController::class, 'searchServices']);
+Route::get('/users/search', [SearchController::class, 'searchUsers']);
+Route::get('/search', [SearchController::class, 'search']);
+
+// Các route gọn hơn (có thể dùng thay thế hoặc song song)
 Route::prefix('search')->group(function () {
-    // Tìm kiếm tổng quát - tìm tất cả mọi thứ
-    Route::get('/', [SearchController::class, 'search']);
-
-    // Tìm kiếm chuyên biệt theo từng loại dữ liệu
-    Route::get('/patients', [SearchController::class, 'searchPatients']);
-    Route::get('/medicines', [SearchController::class, 'searchMedicines']);
-    Route::get('/appointments', [SearchController::class, 'searchAppointments']);
     Route::get('/services', [SearchController::class, 'searchServices']);
-    Route::get('/staff', [SearchController::class, 'searchStaff']);
     Route::get('/users', [SearchController::class, 'searchUsers']);
-    Route::get('/suppliers', [SearchController::class, 'searchSuppliers']);
-    Route::get('/invoices', [SearchController::class, 'searchInvoices']);
-    Route::get('/test-results', [SearchController::class, 'searchTestResults']);
-
-    // Health check và quản lý index
     Route::get('/health', [SearchController::class, 'health']);
+});
+
+// Route admin user
+Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
+    Route::get('/services/search', [SearchController::class, 'searchServices']);
+    Route::get('/users/search', [SearchController::class, 'searchUsers']);
+    Route::post('/services/bulk-index', [SearchController::class, 'bulkIndexServices']);
+    Route::post('/users/bulk-index', [SearchController::class, 'bulkIndexUsers']);
+});
+
+// Route admin services
+Route::middleware(['auth:sanctum', 'admin'])->prefix('search')->group(function () {
     Route::post('/index', [SearchController::class, 'indexDocument']);
     Route::post('/bulk-index', [SearchController::class, 'bulkIndex']);
+    Route::post('/bulk-index-users', [SearchController::class, 'bulkIndexUsers']);
+    Route::post('/bulk-index-services', [SearchController::class, 'bulkIndexServices']);
     Route::delete('/{id}', [SearchController::class, 'deleteDocument']);
 });
-
-// ==================== MEDICINES SEARCH ROUTES ====================
-Route::prefix('medicines')->group(function () {
-    Route::get('/search', [DoctorMedicineSearchController::class, 'search']); // Giữ cũ
-    Route::get('/search-solr', [SearchController::class, 'searchMedicines']); // Mới với Solr
-});
-
-// ==================== SUPPLIERS SEARCH ROUTES ====================
-Route::prefix('suppliers')->group(function () {
-    Route::get('/search', [SearchController::class, 'searchSuppliers']);
-});
-
-// ==================== TEST RESULTS SEARCH ROUTES ====================
-Route::prefix('test-results')->group(function () {
-    Route::get('/search', [SearchController::class, 'searchTestResults']);
-});
-
-// ==================== DOCTOR SPECIFIC SEARCH ROUTES ====================
-Route::prefix('doctor')->group(function () {
-    // Tìm kiếm bệnh nhân cho doctor
-    Route::get('/patients/search', [SearchController::class, 'searchPatients']);
-    // Tìm kiếm thuốc cho doctor
-    Route::get('/medicines/search-solr', [SearchController::class, 'searchMedicines']);
-});
-// Route tạm thời để index dữ liệu - XÓA SAU KHI DÙNG
-// Route::get('/solr/quick-index', function() {
-//     try {
-//         $solrService = app(\App\Services\SolrService::class);
-        
-//         // Index một vài user test
-//         $users = \App\Models\User::with('roles')->limit(10)->get();
-        
-//         $indexed = 0;
-//         foreach ($users as $user) {
-//             $document = [
-//                 'id' => 'user_' . $user->UserId,
-//                 'title' => $user->FullName,
-//                 'content' => "User: {$user->FullName}, Email: {$user->Email}, Phone: {$user->Phone}",
-//                 'type' => 'user',
-//                 'category' => ['user'],
-//                 'status' => $user->IsActive ? 'active' : 'inactive',
-//                 'full_name' => $user->FullName,
-//                 'email' => $user->Email,
-//                 'phone' => $user->Phone,
-//                 'role' => $user->roles->first()->RoleName ?? 'user'
-//             ];
-            
-//             if ($solrService->indexDocument($document)) {
-//                 $indexed++;
-//             }
-//         }
-        
-//         return response()->json([
-//             'success' => true,
-//             'message' => "Đã index $indexed users vào Solr",
-//             'test_search_url' => url('/api/search?q=Nguyễn&per_page=10')
-//         ]);
-        
-//     } catch (\Exception $e) {
-//         return response()->json([
-//             'success' => false,
-//             'error' => $e->getMessage()
-//         ], 500);
-//     }
-// });
-// // Thêm route để xóa và index lại
-// Route::get('/solr/reindex-all', function() {
-//     try {
-//         $solrService = app(\App\Services\SolrService::class);
-        
-//         // Xóa tất cả documents cũ
-//         $client = app(\Solarium\Client::class);
-//         $update = $client->createUpdate();
-//         $update->addDeleteQuery('*:*');
-//         $update->addCommit();
-//         $client->update($update);
-        
-//         // Index lại users
-//         $users = \App\Models\User::with('roles')->get();
-//         $indexed = 0;
-        
-//         foreach ($users as $user) {
-//             $document = [
-//                 'id' => 'user_' . $user->UserId,
-//                 'title' => $user->FullName,
-//                 'content' => $user->FullName . ' ' . $user->Email . ' ' . $user->Phone . ' ' . ($user->roles->first()->RoleName ?? ''),
-//                 'type' => 'user',
-//                 'category' => ['user'],
-//                 'status' => $user->IsActive ? 'active' : 'inactive',
-//                 'full_name' => $user->FullName,
-//                 'email' => $user->Email,
-//                 'phone' => $user->Phone,
-//                 'username' => $user->Username,
-//                 'role' => $user->roles->first()->RoleName ?? 'user'
-//             ];
-            
-//             if ($solrService->indexDocument($document)) {
-//                 $indexed++;
-//             }
-//         }
-        
-//         return response()->json([
-//             'success' => true,
-//             'reindexed' => $indexed,
-//             'test_search' => url('/api/search?q=Nguyễn')
-//         ]);
-//     } catch (\Exception $e) {
-//         return response()->json(['error' => $e->getMessage()], 500);
-//     }
-// });
-// Route::get('/solr/reindex-all-fix', function () {
-//     $solrService = app(\App\Services\SolrService::class);
-//     $client = app(\Solarium\Client::class);
-
-//     // 1. XÓA SẠCH HOÀN TOÀN
-//     $update = $client->createUpdate();
-//     $update->addDeleteQuery('*:*');
-//     $update->addCommit();
-//     $client->update($update);
-
-//     // 2. INDEX LẠI VỚI CÁCH CHẮC CHẮN NHẤT
-//     $users = \App\Models\User::with('roles')->get();
-//     $indexed = 0;
-
-//     foreach ($users as $user) {
-//         $fullName = trim($user->FullName ?? '');
-//         if (empty($fullName)) continue;
-
-//         $doc = [
-//             'id' => 'user_' . $user->UserId,
-
-//             // 3 FIELD BẮT BUỘC PHẢI CÓ ĐỂ TÌM ĐƯỢC TIẾNG VIỆT
-//             'title'     => $fullName,
-//             'text'      => $fullName,                                      // ← quan trọng
-//             'search_text' => $fullName . ' ' . ($user->Email ?? '') . ' ' . ($user->Phone ?? ''), // ← cực kỳ quan trọng
-//             '_text_'    => $fullName,                                      // ← trick cuối cùng
-
-//             'type'      => 'user',
-//             'full_name' => $fullName,
-//             'email'     => $user->Email,
-//             'phone'     => $user->Phone,
-//             'username'  => $user->Username ?? '',
-//             'role'      => $user->roles->first()->RoleName ?? 'user',
-//             'is_active' => $user->IsActive ? true : false,
-//         ];
-
-//         if ($solrService->indexDocument($doc)) {
-//             $indexed++;
-//         }
-//     }
-
-//     return response()->json([
-//         'success' => true,
-//         'indexed' => $indexed,
-//         'message' => 'ĐÃ FIX TIẾNG VIỆT – BÂY GIỜ CHẠY URL DƯỚI ĐÂY NGAY:',
-//         'TEST_NGAY' => 'http://localhost:8000/api/search?q=Nguyễn&type=user&per_page=10',
-//         'TEST_TẤT_CẢ' => 'http://localhost:8000/api/search?q=*:*&fq=type:user'
-//     ]);
-// });

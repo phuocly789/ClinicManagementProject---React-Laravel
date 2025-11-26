@@ -5,8 +5,11 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Services\SolrService;
+use App\Models\User;
+use App\Models\Service;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class SearchController extends Controller
 {
@@ -17,9 +20,7 @@ class SearchController extends Controller
         $this->solrService = $solrService;
     }
 
-    /**
-     * Tìm kiếm tổng quát - tìm tất cả mọi thứ
-     */
+    /* Tìm kiếm tổng quát - tìm tất cả mọi thứ */
     public function search(Request $request)
     {
         try {
@@ -27,9 +28,8 @@ class SearchController extends Controller
                 'q' => 'nullable|string|max:255',
                 'page' => 'nullable|integer|min:1',
                 'per_page' => 'nullable|integer|min:1|max:100',
-                'type' => 'nullable|string|in:all,patient,medicine,appointment,service,staff,user,supplier,invoice,test_result',
-                'status' => 'nullable|string',
-                'role' => 'nullable|string',
+                'type' => 'nullable|string|in:user,service',
+                'sort' => 'nullable|string',
             ]);
 
             if ($validator->fails()) {
@@ -43,24 +43,15 @@ class SearchController extends Controller
             $query = $request->get('q', '');
             $page = $request->get('page', 1);
             $perPage = $request->get('per_page', 10);
-            $type = $request->get('type', 'all');
+            $type = $request->get('type', 'user');
+            $sort = $request->get('sort', 'score desc, id asc');
 
             $filters = [];
-            if ($type !== 'all') {
+            if ($type) {
                 $filters['type'] = $type;
             }
 
-            // Thêm filter theo status nếu có
-            if ($request->has('status') && $request->get('status')) {
-                $filters['status'] = $request->get('status');
-            }
-
-            // Thêm filter theo role nếu có
-            if ($request->has('role') && $request->get('role')) {
-                $filters['role'] = $request->get('role');
-            }
-
-            $results = $this->solrService->search($query, $filters, $page, $perPage);
+            $results = $this->solrService->search($query, $filters, $page, $perPage, $sort);
 
             return response()->json($results);
 
@@ -78,22 +69,23 @@ class SearchController extends Controller
                 'results' => [],
                 'total' => 0,
                 'pages' => 0,
-                'facets' => []
+                'facets' => [],
+                'fallback' => true
             ], 500);
         }
     }
 
-    /**
-     * Tìm kiếm bệnh nhân (cho Receptionist)
-     */
-    public function searchPatients(Request $request)
+    //Tìm kiếm user
+    public function searchUsers(Request $request)
     {
         try {
             $validator = Validator::make($request->all(), [
                 'q' => 'nullable|string|max:255',
                 'page' => 'nullable|integer|min:1',
                 'per_page' => 'nullable|integer|min:1|max:50',
-                'status' => 'nullable|string|in:active,inactive',
+                'user_role' => 'nullable|string',
+                'gender' => 'nullable|string|in:Nam,Nữ,Khác',
+                'is_active' => 'nullable|string|in:true,false',
             ]);
 
             if ($validator->fails()) {
@@ -108,111 +100,28 @@ class SearchController extends Controller
             $page = $request->get('page', 1);
             $perPage = $request->get('per_page', 15);
 
-            $filters = ['type' => 'patient'];
-
-            if ($request->has('status') && $request->get('status')) {
-                $filters['status'] = $request->get('status');
+            $filters = [];
+            if ($request->has('user_role') && $request->get('user_role')) {
+                $filters['user_role'] = $request->get('user_role');
             }
 
-            $results = $this->solrService->search($query, $filters, $page, $perPage);
+            if ($request->has('gender') && $request->get('gender')) {
+                $filters['gender'] = $request->get('gender');
+            }
+
+            if ($request->has('is_active') && $request->get('is_active')) {
+                $filters['is_active'] = $request->get('is_active');
+            }
+
+            $results = $this->solrService->searchUsers($query, $filters, $page, $perPage);
 
             return response()->json($results);
 
         } catch (\Exception $e) {
-            Log::error('Patient search error: ' . $e->getMessage());
-            return $this->fallbackResponse('patients');
-        }
-    }
-
-    /**
-     * Tìm kiếm thuốc (cho Doctor và Quản lý kho)
-     */
-    public function searchMedicines(Request $request)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'q' => 'nullable|string|max:255',
-                'page' => 'nullable|integer|min:1',
-                'per_page' => 'nullable|integer|min:1|max:50',
-                'category' => 'nullable|string',
-                'in_stock' => 'nullable|boolean',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Dữ liệu không hợp lệ',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $query = $request->get('q', '');
-            $page = $request->get('page', 1);
-            $perPage = $request->get('per_page', 20);
-
-            $filters = ['type' => 'medicine'];
-
-            if ($request->has('category') && $request->get('category')) {
-                $filters['category'] = $request->get('category');
-            }
-
-            if ($request->has('in_stock')) {
-                $filters['in_stock'] = $request->get('in_stock') ? 'true' : 'false';
-            }
-
-            $results = $this->solrService->search($query, $filters, $page, $perPage);
-
-            return response()->json($results);
-
-        } catch (\Exception $e) {
-            Log::error('Medicine search error: ' . $e->getMessage());
-            return $this->fallbackResponse('medicines');
-        }
-    }
-
-    /**
-     * Tìm kiếm lịch hẹn (cho Receptionist và Doctor)
-     */
-    public function searchAppointments(Request $request)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'q' => 'nullable|string|max:255',
-                'page' => 'nullable|integer|min:1',
-                'per_page' => 'nullable|integer|min:1|max:50',
-                'status' => 'nullable|string',
-                'date' => 'nullable|date',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Dữ liệu không hợp lệ',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $query = $request->get('q', '');
-            $page = $request->get('page', 1);
-            $perPage = $request->get('per_page', 10);
-
-            $filters = ['type' => 'appointment'];
-
-            if ($request->has('status') && $request->get('status')) {
-                $filters['status'] = $request->get('status');
-            }
-
-            if ($request->has('date') && $request->get('date')) {
-                $filters['date'] = $request->get('date');
-            }
-
-            $results = $this->solrService->search($query, $filters, $page, $perPage);
-
-            return response()->json($results);
-
-        } catch (\Exception $e) {
-            Log::error('Appointment search error: ' . $e->getMessage());
-            return $this->fallbackResponse('appointments');
+            Log::error('User search error: ' . $e->getMessage());
+            
+            // Fallback to database search
+            return $this->fallbackUserSearch($request);
         }
     }
 
@@ -227,6 +136,8 @@ class SearchController extends Controller
                 'page' => 'nullable|integer|min:1',
                 'per_page' => 'nullable|integer|min:1|max:50',
                 'service_type' => 'nullable|string',
+                'min_price' => 'nullable|numeric|min:0',
+                'max_price' => 'nullable|numeric|min:0',
             ]);
 
             if ($validator->fails()) {
@@ -241,259 +152,20 @@ class SearchController extends Controller
             $page = $request->get('page', 1);
             $perPage = $request->get('per_page', 15);
 
-            $filters = ['type' => 'service'];
-
+            $filters = [];
             if ($request->has('service_type') && $request->get('service_type')) {
                 $filters['service_type'] = $request->get('service_type');
             }
 
-            $results = $this->solrService->search($query, $filters, $page, $perPage);
+            $results = $this->solrService->searchServices($query, $filters, $page, $perPage);
 
             return response()->json($results);
 
         } catch (\Exception $e) {
             Log::error('Service search error: ' . $e->getMessage());
-            return $this->fallbackResponse('services');
-        }
-    }
-
-    /**
-     * Tìm kiếm nhân viên (cho Admin)
-     */
-    public function searchStaff(Request $request)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'q' => 'nullable|string|max:255',
-                'page' => 'nullable|integer|min:1',
-                'per_page' => 'nullable|integer|min:1|max:50',
-                'role' => 'nullable|string',
-                'department' => 'nullable|string',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Dữ liệu không hợp lệ',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $query = $request->get('q', '');
-            $page = $request->get('page', 1);
-            $perPage = $request->get('per_page', 15);
-
-            $filters = ['type' => 'staff'];
-
-            if ($request->has('role') && $request->get('role')) {
-                $filters['role'] = $request->get('role');
-            }
-
-            if ($request->has('department') && $request->get('department')) {
-                $filters['department'] = $request->get('department');
-            }
-
-            $results = $this->solrService->search($query, $filters, $page, $perPage);
-
-            return response()->json($results);
-
-        } catch (\Exception $e) {
-            Log::error('Staff search error: ' . $e->getMessage());
-            return $this->fallbackResponse('staff');
-        }
-    }
-
-    /**
-     * Tìm kiếm User (cho Admin - quản lý tài khoản)
-     */
-    public function searchUsers(Request $request)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'q' => 'nullable|string|max:255',
-                'page' => 'nullable|integer|min:1',
-                'per_page' => 'nullable|integer|min:1|max:50',
-                'user_role' => 'nullable|string',
-                'is_active' => 'nullable|boolean',
-                'email_verified' => 'nullable|boolean',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Dữ liệu không hợp lệ',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $query = $request->get('q', '');
-            $page = $request->get('page', 1);
-            $perPage = $request->get('per_page', 15);
-
-            $filters = ['type' => 'user'];
-
-            if ($request->has('user_role') && $request->get('user_role')) {
-                $filters['user_role'] = $request->get('user_role');
-            }
-
-            if ($request->has('is_active')) {
-                $filters['is_active'] = $request->get('is_active') ? 'true' : 'false';
-            }
-
-            if ($request->has('email_verified')) {
-                $filters['email_verified'] = $request->get('email_verified') ? 'true' : 'false';
-            }
-
-            $results = $this->solrService->search($query, $filters, $page, $perPage);
-
-            return response()->json($results);
-
-        } catch (\Exception $e) {
-            Log::error('User search error: ' . $e->getMessage());
-            return $this->fallbackResponse('users');
-        }
-    }
-
-    /**
-     * Tìm kiếm nhà cung cấp (Suppliers)
-     */
-    public function searchSuppliers(Request $request)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'q' => 'nullable|string|max:255',
-                'page' => 'nullable|integer|min:1',
-                'per_page' => 'nullable|integer|min:1|max:50',
-                'status' => 'nullable|string|in:active,inactive',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Dữ liệu không hợp lệ',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $query = $request->get('q', '');
-            $page = $request->get('page', 1);
-            $perPage = $request->get('per_page', 15);
-
-            $filters = ['type' => 'supplier'];
-
-            if ($request->has('status') && $request->get('status')) {
-                $filters['status'] = $request->get('status');
-            }
-
-            $results = $this->solrService->search($query, $filters, $page, $perPage);
-
-            return response()->json($results);
-
-        } catch (\Exception $e) {
-            Log::error('Supplier search error: ' . $e->getMessage());
-            return $this->fallbackResponse('suppliers');
-        }
-    }
-
-    /**
-     * Tìm kiếm hóa đơn (Invoices)
-     */
-    public function searchInvoices(Request $request)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'q' => 'nullable|string|max:255',
-                'page' => 'nullable|integer|min:1',
-                'per_page' => 'nullable|integer|min:1|max:50',
-                'status' => 'nullable|string',
-                'payment_status' => 'nullable|string',
-                'date_from' => 'nullable|date',
-                'date_to' => 'nullable|date|after_or_equal:date_from',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Dữ liệu không hợp lệ',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $query = $request->get('q', '');
-            $page = $request->get('page', 1);
-            $perPage = $request->get('per_page', 10);
-
-            $filters = ['type' => 'invoice'];
-
-            if ($request->has('status') && $request->get('status')) {
-                $filters['status'] = $request->get('status');
-            }
-
-            if ($request->has('payment_status') && $request->get('payment_status')) {
-                $filters['payment_status'] = $request->get('payment_status');
-            }
-
-            if ($request->has('date_from') && $request->get('date_from')) {
-                $filters['date_from'] = $request->get('date_from');
-            }
             
-            if ($request->has('date_to') && $request->get('date_to')) {
-                $filters['date_to'] = $request->get('date_to');
-            }
-
-            $results = $this->solrService->search($query, $filters, $page, $perPage);
-
-            return response()->json($results);
-
-        } catch (\Exception $e) {
-            Log::error('Invoice search error: ' . $e->getMessage());
-            return $this->fallbackResponse('invoices');
-        }
-    }
-
-    /**
-     * Tìm kiếm kết quả xét nghiệm (Test Results)
-     */
-    public function searchTestResults(Request $request)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'q' => 'nullable|string|max:255',
-                'page' => 'nullable|integer|min:1',
-                'per_page' => 'nullable|integer|min:1|max:50',
-                'status' => 'nullable|string',
-                'patient_id' => 'nullable|integer',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Dữ liệu không hợp lệ',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $query = $request->get('q', '');
-            $page = $request->get('page', 1);
-            $perPage = $request->get('per_page', 10);
-
-            $filters = ['type' => 'test_result'];
-
-            if ($request->has('status') && $request->get('status')) {
-                $filters['status'] = $request->get('status');
-            }
-
-            if ($request->has('patient_id') && $request->get('patient_id')) {
-                $filters['patient_id'] = $request->get('patient_id');
-            }
-
-            $results = $this->solrService->search($query, $filters, $page, $perPage);
-
-            return response()->json($results);
-
-        } catch (\Exception $e) {
-            Log::error('Test result search error: ' . $e->getMessage());
-            return $this->fallbackResponse('test_results');
+            // Fallback to database search
+            return $this->fallbackServiceSearch($request);
         }
     }
 
@@ -504,12 +176,19 @@ class SearchController extends Controller
     {
         try {
             $isHealthy = $this->solrService->healthCheck();
+            $coreExists = $this->solrService->checkCoreExists();
 
             return response()->json([
-                'status' => $isHealthy ? 'healthy' : 'unhealthy',
+                'status' => $isHealthy && $coreExists ? 'healthy' : 'unhealthy',
                 'solr_connected' => $isHealthy,
-                'timestamp' => now()->toISOString()
-            ], $isHealthy ? 200 : 503);
+                'core_exists' => $coreExists,
+                'timestamp' => now()->toISOString(),
+                'details' => [
+                    'host' => config('solr.endpoint.localhost.host', '127.0.0.1'),
+                    'port' => config('solr.endpoint.localhost.port', 8983),
+                    'core' => config('solr.endpoint.localhost.core', 'clinic_management')
+                ]
+            ], $isHealthy && $coreExists ? 200 : 503);
 
         } catch (\Exception $e) {
             Log::error('Solr health check error: ' . $e->getMessage());
@@ -517,9 +196,180 @@ class SearchController extends Controller
             return response()->json([
                 'status' => 'unhealthy',
                 'solr_connected' => false,
+                'core_exists' => false,
                 'error' => $e->getMessage(),
                 'timestamp' => now()->toISOString()
             ], 503);
+        }
+    }
+
+    /**
+     * Index user document
+     */
+    public function indexUser(User $user)
+    {
+        try {
+            $document = [
+                'id' => 'user_' . $user->UserId,
+                'type' => 'user',
+                'full_name' => $user->FullName,
+                'username' => $user->Username,
+                'email' => $user->Email,
+                'phone' => $user->Phone,
+                'gender' => $user->Gender,
+                'address' => $user->Address,
+                'date_of_birth' => $user->DateOfBirth,
+                'is_active' => (bool)$user->IsActive,
+                'created_at' => $user->CreatedAt,
+                'updated_at' => $user->updated_at,
+            ];
+
+            // Thêm role information
+            if ($user->roles && $user->roles->isNotEmpty()) {
+                $document['user_role'] = $user->roles->first()->RoleName;
+            }
+
+            // Thêm thông tin cho bác sĩ
+            if ($user->Specialty) {
+                $document['specialty'] = $user->Specialty;
+            }
+            if ($user->LicenseNumber) {
+                $document['license_number'] = $user->LicenseNumber;
+            }
+
+            $success = $this->solrService->indexDocument($document);
+
+            return $success;
+
+        } catch (\Exception $e) {
+            Log::error('Index user error: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Index service document
+     */
+    public function indexService(Service $service)
+    {
+        try {
+            $document = [
+                'id' => 'service_' . $service->ServiceId,
+                'type' => 'service',
+                'service_name' => $service->ServiceName,
+                'service_type' => $service->ServiceType,
+                'price' => (float)$service->Price,
+                'description' => $service->Description,
+                'status' => 'active',
+                'created_at' => $service->CreatedAt ?? now(),
+                'updated_at' => $service->updated_at ?? now(),
+            ];
+
+            $success = $this->solrService->indexDocument($document);
+
+            return $success;
+
+        } catch (\Exception $e) {
+            Log::error('Index service error: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Bulk index users
+     */
+    public function bulkIndexUsers(Request $request)
+    {
+        try {
+            $users = User::with('roles')->get();
+            $documents = [];
+
+            foreach ($users as $user) {
+                $document = [
+                    'id' => 'user_' . $user->UserId,
+                    'type' => 'user',
+                    'full_name' => $user->FullName,
+                    'username' => $user->Username,
+                    'email' => $user->Email,
+                    'phone' => $user->Phone,
+                    'gender' => $user->Gender,
+                    'address' => $user->Address,
+                    'date_of_birth' => $user->DateOfBirth,
+                    'is_active' => (bool)$user->IsActive,
+                    'created_at' => $user->CreatedAt,
+                    'updated_at' => $user->updated_at,
+                ];
+
+                if ($user->roles && $user->roles->isNotEmpty()) {
+                    $document['user_role'] = $user->roles->first()->RoleName;
+                }
+
+                if ($user->Specialty) {
+                    $document['specialty'] = $user->Specialty;
+                }
+                if ($user->LicenseNumber) {
+                    $document['license_number'] = $user->LicenseNumber;
+                }
+
+                $documents[] = $document;
+            }
+
+            $success = $this->solrService->indexDocuments($documents);
+
+            return response()->json([
+                'success' => $success,
+                'message' => $success ? 'Users indexed successfully' : 'Failed to index users',
+                'count' => count($documents)
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Bulk index users error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to index users: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Bulk index services
+     */
+    public function bulkIndexServices(Request $request)
+    {
+        try {
+            $services = Service::all();
+            $documents = [];
+
+            foreach ($services as $service) {
+                $document = [
+                    'id' => 'service_' . $service->ServiceId,
+                    'type' => 'service',
+                    'service_name' => $service->ServiceName,
+                    'service_type' => $service->ServiceType,
+                    'price' => (float)$service->Price,
+                    'description' => $service->Description,
+                    'status' => 'active',
+                    'created_at' => $service->CreatedAt ?? now(),
+                    'updated_at' => $service->updated_at ?? now(),
+                ];
+
+                $documents[] = $document;
+            }
+
+            $success = $this->solrService->indexDocuments($documents);
+
+            return response()->json([
+                'success' => $success,
+                'message' => $success ? 'Services indexed successfully' : 'Failed to index services',
+                'count' => count($documents)
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Bulk index services error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to index services: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -531,9 +381,9 @@ class SearchController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'id' => 'required|string',
-                'title' => 'required|string|max:255',
-                'content' => 'required|string',
-                'type' => 'required|string',
+                'type' => 'required|string|in:user,service',
+                'title' => 'nullable|string|max:255',
+                'content' => 'nullable|string',
                 'category' => 'nullable|string|max:100',
                 'status' => 'nullable|string|max:50'
             ]);
@@ -572,9 +422,7 @@ class SearchController extends Controller
             $validator = Validator::make($request->all(), [
                 'documents' => 'required|array|max:1000',
                 'documents.*.id' => 'required|string',
-                'documents.*.title' => 'required|string|max:255',
-                'documents.*.content' => 'required|string',
-                'documents.*.type' => 'required|string'
+                'documents.*.type' => 'required|string|in:user,service'
             ]);
 
             if ($validator->fails()) {
@@ -634,19 +482,162 @@ class SearchController extends Controller
     }
 
     /**
-     * Fallback response khi Solr gặp lỗi
+     * Fallback user search khi Solr gặp lỗi
+     */
+    private function fallbackUserSearch(Request $request)
+    {
+        try {
+            $query = User::with('roles');
+
+            // Search filter
+            if ($request->has('q') && !empty($request->q)) {
+                $search = $request->q;
+                $query->where(function($q) use ($search) {
+                    $q->where('FullName', 'like', "%{$search}%")
+                      ->orWhere('Username', 'like', "%{$search}%")
+                      ->orWhere('Email', 'like', "%{$search}%")
+                      ->orWhere('Phone', 'like', "%{$search}%");
+                });
+            }
+
+            // Role filter
+            if ($request->has('user_role') && !empty($request->user_role)) {
+                $query->whereHas('roles', function($q) use ($request) {
+                    $q->where('RoleName', $request->user_role);
+                });
+            }
+
+            // Gender filter
+            if ($request->has('gender') && !empty($request->gender)) {
+                $query->where('Gender', $request->gender);
+            }
+
+            // Status filter
+            if ($request->has('is_active') && !empty($request->is_active)) {
+                $isActive = $request->is_active === 'true';
+                $query->where('IsActive', $isActive);
+            }
+
+            $page = $request->get('page', 1);
+            $perPage = $request->get('per_page', 15);
+
+            $users = $query->orderBy('FullName', 'asc')->paginate($perPage, ['*'], 'page', $page);
+
+            $formattedResults = $users->map(function($user) {
+                return [
+                    'id' => 'user_' . $user->UserId,
+                    'type' => 'user',
+                    'full_name' => $user->FullName,
+                    'username' => $user->Username,
+                    'email' => $user->Email,
+                    'phone' => $user->Phone,
+                    'gender' => $user->Gender,
+                    'address' => $user->Address,
+                    'user_role' => $user->roles && $user->roles->isNotEmpty() ? $user->roles->first()->RoleName : 'Chưa có',
+                    'is_active' => (bool)$user->IsActive,
+                    'specialty' => $user->Specialty,
+                    'license_number' => $user->LicenseNumber,
+                    'date_of_birth' => $user->DateOfBirth,
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'results' => $formattedResults,
+                'total' => $users->total(),
+                'pages' => $users->lastPage(),
+                'current_page' => $users->currentPage(),
+                'per_page' => $users->perPage(),
+                'fallback' => true,
+                'solr_available' => false
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Fallback user search error: ' . $e->getMessage());
+            return $this->fallbackResponse('users');
+        }
+    }
+
+    /**
+     * Fallback service search khi Solr gặp lỗi
+     */
+    private function fallbackServiceSearch(Request $request)
+    {
+        try {
+            $query = Service::query();
+
+            // Search filter
+            if ($request->has('q') && !empty($request->q)) {
+                $search = $request->q;
+                $query->where(function($q) use ($search) {
+                    $q->where('ServiceName', 'like', "%{$search}%")
+                      ->orWhere('ServiceType', 'like', "%{$search}%")
+                      ->orWhere('Description', 'like', "%{$search}%");
+                });
+            }
+
+            // Service type filter
+            if ($request->has('service_type') && !empty($request->service_type)) {
+                $query->where('ServiceType', $request->service_type);
+            }
+
+            // Price range filter
+            if ($request->has('min_price') && !empty($request->min_price)) {
+                $query->where('Price', '>=', $request->min_price);
+            }
+
+            if ($request->has('max_price') && !empty($request->max_price)) {
+                $query->where('Price', '<=', $request->max_price);
+            }
+
+            $page = $request->get('page', 1);
+            $perPage = $request->get('per_page', 15);
+
+            $services = $query->orderBy('ServiceName', 'asc')->paginate($perPage, ['*'], 'page', $page);
+
+            $formattedResults = $services->map(function($service) {
+                return [
+                    'id' => 'service_' . $service->ServiceId,
+                    'type' => 'service',
+                    'service_name' => $service->ServiceName,
+                    'service_type' => $service->ServiceType,
+                    'price' => (float)$service->Price,
+                    'description' => $service->Description,
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'results' => $formattedResults,
+                'total' => $services->total(),
+                'pages' => $services->lastPage(),
+                'current_page' => $services->currentPage(),
+                'per_page' => $services->perPage(),
+                'fallback' => true,
+                'solr_available' => false
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Fallback service search error: ' . $e->getMessage());
+            return $this->fallbackResponse('services');
+        }
+    }
+
+    /**
+     * Fallback response khi cả Solr và database đều gặp lỗi
      */
     private function fallbackResponse($type)
     {
         return response()->json([
             'success' => false,
             'error' => 'Search service temporarily unavailable',
-            'message' => 'Please try again later or use database search',
+            'message' => 'Please try again later',
             'results' => [],
             'total' => 0,
             'pages' => 0,
             'facets' => [],
-            'fallback' => true
+            'fallback' => true,
+            'solr_available' => false
         ], 503);
     }
 }
