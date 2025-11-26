@@ -1,11 +1,12 @@
 // src/components/PaymentSection.jsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, Table, Form, Badge, Button, Container, Alert, Nav, Row, Col } from 'react-bootstrap';
+import { Card, Table, Form, Badge, Button, Container, Nav, Row, Col } from 'react-bootstrap';
 import PaymentMethod from '../Payment/PaymentMethod';
 import InvoiceDetailModal from './InvoiceDetailModal';
 import { paymentService } from '../../services/paymentService';
 import Pagination from '../../Components/Pagination/Pagination';
 import Loading from '../../Components/Loading/Loading';
+import CustomToast from '../../Components/CustomToast/CustomToast';
 import { printPdfService } from '../../services/printPdfService';
 import { AlertTriangle, CreditCard, RotateCcw, History, Eye, CheckCircle, XCircle, Printer } from "lucide-react";
 
@@ -76,8 +77,14 @@ const PaymentSection = () => {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [resetting, setResetting] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  
+  // State cho CustomToast
+  const [toast, setToast] = useState({
+    show: false,
+    type: 'success',
+    message: ''
+  });
+  
   const [activeTab, setActiveTab] = useState(TAB_KEYS.ALL);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -89,6 +96,24 @@ const PaymentSection = () => {
   const [confirmAction, setConfirmAction] = useState(null);
   const [confirmData, setConfirmData] = useState(null);
   const [pendingTab, setPendingTab] = useState(null);
+
+  // Hàm hiển thị toast
+  const showToast = (type, message) => {
+    setToast({
+      show: true,
+      type,
+      message
+    });
+  };
+
+  // Hàm đóng toast
+  const closeToast = () => {
+    setToast({
+      show: false,
+      type: 'success',
+      message: ''
+    });
+  };
 
   // Hàm lấy tên tab
   const getTabName = (tabKey) => {
@@ -171,7 +196,7 @@ const PaymentSection = () => {
     const paymentMethod = displayStatus.paymentMethod;
 
     if (displayStatus.status === INVOICE_STATUS.PROCESSING) {
-      return <Badge bg="info">🔄 Đang xử lý</Badge>;
+      return <Badge bg="info"> Đang xử lý</Badge>;
     }
 
     if (!paymentMethod) {
@@ -180,11 +205,11 @@ const PaymentSection = () => {
 
     switch (paymentMethod) {
       case PAYMENT_METHODS.MOMO:
-        return <Badge bg="primary"><i class="fas fa-mobile-alt text-danger"></i> MoMo</Badge>;
+        return <Badge bg="primary"><i className="fas fa-mobile-alt text-danger"></i> MoMo</Badge>;
       case PAYMENT_METHODS.CASH:
-        return <Badge bg="success"> <i class="fas fa-money-bill text-warning"></i> Tiền mặt</Badge>;
+        return <Badge bg="success"> <i className="fas fa-money-bill text-warning"></i> Tiền mặt</Badge>;
       case PAYMENT_METHODS.BANK_TRANSFER:
-        return <Badge bg="info"><i class="fas fa-credit-card text-primary"></i> Thẻ napas</Badge>;
+        return <Badge bg="info"><i className="fas fa-credit-card text-primary"></i> Thẻ napas</Badge>;
       case PAYMENT_METHODS.INSURANCE:
         return <Badge bg="warning"> Bảo hiểm</Badge>;
       default:
@@ -196,7 +221,6 @@ const PaymentSection = () => {
   const fetchInvoices = async () => {
     try {
       setLoading(true);
-      setError('');
 
       const filters = {
         page: currentPage,
@@ -241,16 +265,16 @@ const PaymentSection = () => {
         setTotalItems(paginationData.total || invoicesData.length || 0);
 
         if (invoicesData.length === 0 && !response.data.message) {
-          setError('Không có dữ liệu hóa đơn');
+          showToast('info', 'Không có dữ liệu hóa đơn');
         }
       } else {
-        setError('Dữ liệu trả về không hợp lệ');
+        showToast('error', 'Dữ liệu trả về không hợp lệ');
         setInvoices([]);
         setTotalItems(0);
       }
     } catch (err) {
       console.error('Fetch invoices error:', err);
-      setError(err.response?.data?.message || 'Lỗi khi tải dữ liệu');
+      showToast('error', err.response?.data?.message || 'Lỗi khi tải dữ liệu');
       setInvoices([]);
       setTotalItems(0);
     } finally {
@@ -265,15 +289,15 @@ const PaymentSection = () => {
       const response = await paymentService.resetStuckInvoices();
 
       if (response.data.success) {
-        setSuccess(`✅ ${response.data.message}`);
+        showToast('success', `✅ ${response.data.message}`);
         // Refresh danh sách
         fetchInvoices();
       } else {
-        setError('❌ Reset thất bại: ' + (response.data.message || 'Unknown error'));
+        showToast('error', '❌ Reset thất bại: ' + (response.data.message || 'Unknown error'));
       }
     } catch (error) {
       console.error('Reset stuck invoices error:', error);
-      setError('❌ Lỗi khi reset hóa đơn: ' + (error.response?.data?.message || error.message));
+      showToast('error', '❌ Lỗi khi reset hóa đơn: ' + (error.response?.data?.message || error.message));
     } finally {
       setResetting(false);
     }
@@ -286,27 +310,24 @@ const PaymentSection = () => {
       const response = await paymentService.resetPayment(invoice.id);
 
       if (response.data.success) {
-        setSuccess(`✅ Đã reset hóa đơn ${invoice.code}`);
+        showToast('success', `✅ Đã reset hóa đơn ${invoice.code}`);
         // Refresh danh sách
         fetchInvoices();
       } else {
-        setError('❌ Reset thất bại');
+        showToast('error', '❌ Reset thất bại');
       }
     } catch (error) {
       console.error('Reset single invoice error:', error);
-      setError('❌ Lỗi khi reset hóa đơn');
+      showToast('error', '❌ Lỗi khi reset hóa đơn');
     } finally {
       setResetting(false);
     }
   };
 
-  // Hàm in hóa đơn cho từng bệnh nhân đã thanh toán - GIỐNG InvoiceDetailModal
-  // ✅ Hàm in hóa đơn - THÊM ĐẦY ĐỦ PDF SETTINGS
+  // Hàm in hóa đơn cho từng bệnh nhân đã thanh toán
   const handlePrintInvoice = async (invoice) => {
     try {
       setPrinting(true);
-      setError('');
-      setSuccess('');
 
       console.log('🖨️ Calling Laravel PDF API...', invoice);
 
@@ -314,7 +335,7 @@ const PaymentSection = () => {
         throw new Error('Không có dữ liệu hóa đơn');
       }
 
-      // ✅ Lấy dữ liệu services và prescriptions ĐÚNG CẤU TRÚC
+      // Lấy dữ liệu services và prescriptions ĐÚNG CẤU TRÚC
       const { services, prescriptions } = getServicesAndMedicinesFromInvoice(invoice);
 
       console.log('📋 Processed data for PDF:', {
@@ -324,7 +345,7 @@ const PaymentSection = () => {
         hasPrescriptions: prescriptions.length > 0
       });
 
-      // ✅ THÊM ĐẦY ĐỦ PDF SETTINGS THEO VALIDATION CỦA BE
+      // THÊM ĐẦY ĐỦ PDF SETTINGS THEO VALIDATION CỦA BE
       const printData = {
         type: 'payment',
         patient_name: invoice.patient_name || 'THÔNG TIN BỆNH NHÂN',
@@ -336,7 +357,7 @@ const PaymentSection = () => {
         doctor_name: 'Hệ thống',
         paid_at: invoice.paid_at || new Date().toLocaleString('vi-VN'),
 
-        // ✅ QUAN TRỌNG: Gửi đúng cấu trúc prescriptions và services
+        // QUAN TRỌNG: Gửi đúng cấu trúc prescriptions và services
         prescriptions: prescriptions,
         services: services,
 
@@ -347,9 +368,9 @@ const PaymentSection = () => {
         invoice_code: invoice.code || `INV_${invoice.id}`,
         total_amount: invoice.total || 0,
 
-        // ✅ QUAN TRỌNG: THÊM ĐẦY ĐỦ PDF SETTINGS THEO VALIDATION
+        // QUAN TRỌNG: THÊM ĐẦY ĐỦ PDF SETTINGS THEO VALIDATION
         pdf_settings: {
-          // 🔥 CÁC TRƯỜNG BẮT BUỘC THEO VALIDATION
+          // CÁC TRƯỜNG BẮT BUỘC THEO VALIDATION
           fontFamily: 'Times New Roman',
           fontSize: '14px',
           fontColor: '#000000',
@@ -407,19 +428,18 @@ const PaymentSection = () => {
       // Gọi API
       const result = await printPdfService.printPDF(printData);
       console.log('✅ PDF Service Result:', result);
-      setSuccess(`✅ Đã tải xuống PDF hóa đơn ${invoice.code} thành công! File: ${result.fileName}`)
-       console.log('✅ PDF downloaded successfully via service');
+      showToast('success', `✅ Đã tải xuống PDF hóa đơn ${invoice.code} thành công! File: ${result.fileName}`);
+      console.log('✅ PDF downloaded successfully via service');
 
     } catch (error) {
       console.error('❌ Print invoice error:', error);
-      setError('❌ Lỗi khi in hóa đơn: ' + error.message);
+      showToast('error', '❌ Lỗi khi in hóa đơn: ' + error.message);
     } finally {
       setPrinting(false);
     }
-
   };
 
-  // ✅ Hàm lấy services và prescriptions từ invoice - SỬA ĐÚNG CẤU TRÚC
+  // Hàm lấy services và prescriptions từ invoice - SỬA ĐÚNG CẤU TRÚC
   const getServicesAndMedicinesFromInvoice = (invoice) => {
     const services = [];
     const prescriptions = []; // ĐỔI TÊN: medicines -> prescriptions
@@ -439,7 +459,7 @@ const PaymentSection = () => {
           medicineId: detail.MedicineId
         });
 
-        // ✅ SERVICE: Có ServiceId HOẶC có service object
+        // SERVICE: Có ServiceId HOẶC có service object
         if (detail.ServiceId || detail.service) {
           const serviceName = detail.service?.ServiceName || 'Dịch vụ khám';
 
@@ -453,11 +473,11 @@ const PaymentSection = () => {
           console.log(`🩺 Added service: ${serviceName}`);
 
         }
-        // ✅ PRESCRIPTION: Có MedicineId HOẶC có medicine object
+        // PRESCRIPTION: Có MedicineId HOẶC có medicine object
         else if (detail.MedicineId || detail.medicine) {
           const medicineName = detail.medicine?.MedicineName || 'Thuốc';
 
-          // ✅ SỬA: Tạo prescription object ĐÚNG CẤU TRÚC BE CẦN
+          // SỬA: Tạo prescription object ĐÚNG CẤU TRÚC BE CẦN
           prescriptions.push({
             MedicineName: medicineName,
             Price: unitPrice,
@@ -471,7 +491,7 @@ const PaymentSection = () => {
       });
     }
 
-    // ✅ Nếu không có dịch vụ chi tiết, tạo một dịch vụ tổng
+    // Nếu không có dịch vụ chi tiết, tạo một dịch vụ tổng
     if (services.length === 0 && invoice.total) {
       services.push({
         ServiceName: "Phí khám và điều trị",
@@ -490,7 +510,7 @@ const PaymentSection = () => {
     return { services, prescriptions }; // ĐỔI TÊN: medicines -> prescriptions
   };
 
-  // ✅ Hàm chuyển đổi payment method - GIỐNG InvoiceDetailModal
+  // Hàm chuyển đổi payment method
   const getPaymentMethodText = (method) => {
     switch (method) {
       case 'momo': return 'MoMo';
@@ -543,11 +563,11 @@ const PaymentSection = () => {
         setSelectedInvoiceDetail(result.data);
         setShowDetailModal(true);
       } else {
-        setError('Không thể tải chi tiết hóa đơn');
+        showToast('error', 'Không thể tải chi tiết hóa đơn');
       }
     } catch (err) {
       console.error('View detail error:', err);
-      setError('Không thể tải chi tiết hóa đơn');
+      showToast('error', 'Không thể tải chi tiết hóa đơn');
     }
   };
 
@@ -556,7 +576,7 @@ const PaymentSection = () => {
 
     // KHÔNG cho phép thanh toán nếu đang xử lý (trừ khi bị kẹt)
     if (displayStatus.status === INVOICE_STATUS.PROCESSING && !displayStatus.isStuck) {
-      setError('Hóa đơn đang trong quá trình thanh toán. Vui lòng chờ hoặc reset nếu bị kẹt.');
+      showToast('warning', 'Hóa đơn đang trong quá trình thanh toán. Vui lòng chờ hoặc reset nếu bị kẹt.');
       return;
     }
 
@@ -628,7 +648,7 @@ const PaymentSection = () => {
         setPendingTab(null);
         break;
       case 'print_invoice':
-        await handlePrintInvoice(confirmData); // ✅ GỌI HÀM IN MỚI
+        await handlePrintInvoice(confirmData);
         break;
       default:
         break;
@@ -697,17 +717,6 @@ const PaymentSection = () => {
     const endItem = Math.min(currentPage * ITEMS_PER_PAGE, totalItems);
     return `Hiển thị ${startItem}-${endItem} của ${totalItems} hóa đơn`;
   };
-
-  // Clear messages after 5 seconds
-  useEffect(() => {
-    if (error || success) {
-      const timer = setTimeout(() => {
-        setError('');
-        setSuccess('');
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [error, success]);
 
   // Config cho confirm dialog
   const getConfirmConfig = () => {
@@ -809,33 +818,7 @@ const PaymentSection = () => {
         </Card.Header>
 
         <Card.Body className="p-4">
-          {/* Success Alert */}
-          {success && (
-            <Alert variant="success" className="d-flex justify-content-between align-items-center mb-4">
-              <div className="d-flex align-items-center">
-                <i className="fas fa-check-circle me-2"></i>
-                <span>{success}</span>
-              </div>
-              <Button variant="outline-success" size="sm" onClick={() => setSuccess('')}>
-                <i className="fas fa-times me-1"></i>
-                Đóng
-              </Button>
-            </Alert>
-          )}
-
-          {/* Error Alert */}
-          {error && (
-            <Alert variant="danger" className="d-flex justify-content-between align-items-center mb-4">
-              <div className="d-flex align-items-center">
-                <i className="fas fa-exclamation-triangle me-2"></i>
-                <span>{error}</span>
-              </div>
-              <Button variant="outline-danger" size="sm" onClick={() => setError('')}>
-                <i className="fas fa-times me-1"></i>
-                Đóng
-              </Button>
-            </Alert>
-          )}
+          {/* ĐÃ XÓA CÁC ALERT COMPONENT CŨ */}
 
           {/* TAB BAR */}
           <Nav variant="tabs" className="mb-4 border-bottom-0" activeKey={activeTab} onSelect={handleTabChange}>
@@ -1162,6 +1145,15 @@ const PaymentSection = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Custom Toast */}
+      {toast.show && (
+        <CustomToast
+          type={toast.type}
+          message={toast.message}
+          onClose={closeToast}
+        />
       )}
     </Container>
   );

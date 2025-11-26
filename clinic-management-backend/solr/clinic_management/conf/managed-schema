@@ -14,7 +14,6 @@
 
         <!-- Patient fields -->
         <field name="patient_code" type="string" indexed="true" stored="true" />
-        <field name="full_name" type="text_vietnamese" indexed="true" stored="true" />
         <field name="phone" type="string" indexed="true" stored="true" />
         <field name="email" type="string" indexed="true" stored="true" />
         <field name="address" type="text_vietnamese" indexed="true" stored="true" />
@@ -36,8 +35,18 @@
         <field name="diagnosis" type="text_vietnamese" indexed="true" stored="true" />
 
         <!-- User fields -->
-        <field name="username" type="string" indexed="true" stored="true" />
-        <field name="role" type="string" indexed="true" stored="true" />
+        <field name="user_id" type="string" indexed="true" stored="true" />
+        <field name="username" type="text_vietnamese" indexed="true" stored="true" />
+        <field name="full_name" type="text_vietnamese" indexed="true" stored="true" />
+        <field name="email" type="string" indexed="true" stored="true" />
+        <field name="phone" type="string" indexed="true" stored="true" />
+        <field name="gender" type="string" indexed="true" stored="true" />
+        <field name="address" type="text_vietnamese" indexed="true" stored="true" />
+        <field name="date_of_birth" type="pdate" indexed="true" stored="true" />
+        <field name="user_role" type="string" indexed="true" stored="true" multiValued="false" />
+        <field name="is_active" type="boolean" indexed="true" stored="true" />
+        <field name="specialty" type="text_vietnamese" indexed="true" stored="true" />
+        <field name="license_number" type="string" indexed="true" stored="true" />
 
         <!-- Copy fields for search -->
         <field name="text" type="text_vietnamese" indexed="true" stored="false" multiValued="true" />
@@ -68,7 +77,8 @@
     <copyField source="symptoms" dest="text"/>
     <copyField source="diagnosis" dest="text"/>
     <copyField source="username" dest="text"/>
-    <copyField source="role" dest="text"/>
+    <copyField source="user_role" dest="text"/>
+    <copyField source="specialty" dest="text"/>
 
     <uniqueKey>id</uniqueKey>
 
@@ -83,18 +93,21 @@
 
         <!-- Field type cho tiếng Việt - Đơn giản hóa -->
         <fieldType name="text_vietnamese" class="solr.TextField" positionIncrementGap="100">
-            <analyzer type="index">
-                <tokenizer class="solr.StandardTokenizerFactory"/>
-                <filter class="solr.LowerCaseFilterFactory"/>
-                <!-- Bỏ SnowballPorterFilter vì không phù hợp tiếng Việt -->
-                <filter class="solr.ASCIIFoldingFilterFactory"/> <!-- Chuyển đổi ký tự có dấu -->
-            </analyzer>
-            <analyzer type="query">
-                <tokenizer class="solr.StandardTokenizerFactory"/>
-                <filter class="solr.LowerCaseFilterFactory"/>
-                <filter class="solr.ASCIIFoldingFilterFactory"/>
-            </analyzer>
+        <analyzer type="index">
+            <tokenizer class="solr.StandardTokenizerFactory"/>
+            <filter class="solr.LowerCaseFilterFactory"/>
+            <filter class="solr.VietnameseAccentFilterFactory"/>
+            <filter class="solr.ICUFoldingFilterFactory"/> <!-- BẮT BUỘC -->
+        </analyzer>
+
+        <analyzer type="query">
+            <tokenizer class="solr.StandardTokenizerFactory"/>
+            <filter class="solr.LowerCaseFilterFactory"/>
+            <filter class="solr.VietnameseAccentFilterFactory"/>
+            <filter class="solr.ICUFoldingFilterFactory"/> <!-- BẮT BUỘC -->
+        </analyzer>
         </fieldType>
+
 
         <!-- Giữ text_general cũ cho tương thích -->
         <fieldType name="text_general" class="solr.TextField" positionIncrementGap="100">
