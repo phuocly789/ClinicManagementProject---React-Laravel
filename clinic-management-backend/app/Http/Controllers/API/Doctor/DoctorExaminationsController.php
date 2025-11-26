@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\API\Doctor;
 
+use App\Events\QueueStatusUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\Queue;
@@ -128,7 +129,6 @@ class DoctorExaminationsController extends Controller
                     ]
                 ]
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('❌ Lỗi bắt đầu khám: ' . $e->getMessage());
@@ -145,14 +145,17 @@ class DoctorExaminationsController extends Controller
     public function complete(Request $request, $queueId)
     {
         try {
-            // ✅ FIX: Chuyển đổi services sang integer trước khi validate
             if ($request->has('services') && is_array($request->services)) {
-                $fixedServices = [];
-                foreach ($request->services as $service) {
-                    $fixedServices[] = (int)$service;
-                }
-                $request->merge(['services' => $fixedServices]);
+                $request->merge(['services' => array_keys($request->services)]);
             }
+            // ✅ FIX: Chuyển đổi services sang integer trước khi validate
+            // if ($request->has('services') && is_array($request->services)) {
+            //     $fixedServices = [];
+            //     foreach ($request->services as $service) {
+            //         $fixedServices[] = (int)$service;
+            //     }
+            //     $request->merge(['services' => $fixedServices]);
+            // }
 
             // ✅ RÀNG BUỘC DỮ LIỆU ĐẦU VÀO
             $validator = Validator::make($request->all(), [
@@ -218,22 +221,75 @@ class DoctorExaminationsController extends Controller
             Log::info('🩺 Hoàn thành khám bệnh nhân', [
                 'doctor_id' => $doctorId,
                 'doctor_name' => $doctor->user->FullName ?? 'N/A',
-                'queue_id' => $queueId
+                'queue_id' => $request['queue_id']
             ]);
 
             // Tìm queue và các relationship cần thiết
             $queue = Queue::with([
                 'appointment.patient.user',
                 'appointment.service_orders.service'
-            ])->findOrFail($queueId);
+            ])->findOrFail($request['queue_id']);
 
             // Kiểm tra xem queue này có đang ở trạng thái khám không
-            if ($queue->Status !== 'Đang khám') {
+            if (!in_array($queue->Status, ['Đang khám'])) {
                 return response()->json([
                     'success' => false,
                     'error' => 'Chỉ có thể hoàn thành khám cho bệnh nhân đang trong trạng thái khám'
                 ], 400);
             }
+
+            if ($request['status'] === 'done') {
+
+                // ✅ Cập nhật Status trong Queue
+                DB::table('Queues')
+                    ->where('AppointmentId', $queue->AppointmentId)
+                    ->update(['Status' => 'Đã khám']);
+
+                // ✅ SỬA: Lấy đúng queue vừa update (không dùng whereNull)
+                $queueData = DB::table('Queues')
+                    ->join('Rooms', 'Queues.RoomId', '=', 'Rooms.RoomId')
+                    ->join('Patients', 'Queues.PatientId', '=', 'Patients.PatientId')
+                    ->join('Users as PatientUser', 'Patients.PatientId', '=', 'PatientUser.UserId')
+                    ->leftJoin('StaffSchedules', function ($join) {
+                        $join->on('Queues.RoomId', '=', 'StaffSchedules.RoomId')
+                            ->whereDate('StaffSchedules.WorkDate', now()->toDateString());
+                    })
+                    ->leftJoin('MedicalStaff', 'StaffSchedules.StaffId', '=', 'MedicalStaff.StaffId')
+                    ->leftJoin('Users as DoctorUser', 'MedicalStaff.StaffId', '=', 'DoctorUser.UserId')
+                    ->where('Queues.AppointmentId', $queue->AppointmentId)
+                    ->select(
+                        'Queues.QueueId',
+                        'Queues.PatientId',
+                        'PatientUser.FullName as PatientName',
+                        'Queues.AppointmentId',
+                        'Queues.RecordId',
+                        'Queues.QueueDate',
+                        'Queues.QueueTime',
+                        'Queues.QueuePosition',
+                        'Queues.RoomId',
+                        'Rooms.RoomName',
+                        'Queues.Status',
+                        'Queues.TicketNumber',
+                        'DoctorUser.FullName as DoctorName'
+                    )
+                    ->first();
+
+                // ✅ Broadcast nếu có data
+                if ($queueData) {
+                    // Log::info('Broadcasting completed examination', [
+                    //     'queueData' => $queueData,
+                    //     'appointmentId' => $appointmentId
+                    // ]);
+
+                    broadcast(new QueueStatusUpdated(
+                        doctor: null,
+                        receptionist: (array) $queueData,
+                        roomId: $queueData->RoomId,
+                        action: 'completed'
+                    ))->toOthers();
+                }
+            }
+
 
             $appointment = $queue->appointment;
             if (!$appointment) {
@@ -282,7 +338,7 @@ class DoctorExaminationsController extends Controller
             if ($request->services && is_array($request->services)) {
                 foreach ($request->services as $serviceId) {
                     $serviceId = (int)$serviceId; // ✅ Đảm bảo là integer
-                    
+
                     if (!$serviceId || $serviceId == 0) {
                         continue;
                     }
@@ -365,7 +421,6 @@ class DoctorExaminationsController extends Controller
                     ]
                 ]
             ]);
-
         } catch (\Exception $e) {
             DB::rollback();
             Log::error('❌ Lỗi hoàn thành khám: ' . $e->getMessage());
@@ -379,6 +434,87 @@ class DoctorExaminationsController extends Controller
     /**
      * Tạo invoice cho cuộc hẹn - ĐÃ SỬA LỖI CHECK CONSTRAINT
      */
+    // private function createInvoice($appointment, $doctorId, $request){
+
+    // }
+    public function checkExaminingStatus()
+    {
+        try {
+            $currentExamining = $this->getCurrentExaminingPatient();
+
+            if ($currentExamining) {
+                $patientInfo = [
+                    'queue_id' => $currentExamining->QueueId,
+                    'patient_name' => $currentExamining->patient->user->FullName ?? 'Bệnh nhân',
+                    'started_at' => $currentExamining->updated_at->format('H:i:s'),
+                    'queue_position' => $currentExamining->QueuePosition,
+                    'ticket_number' => $currentExamining->TicketNumber,
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'is_examining' => !empty($currentExamining),
+                    'current_patient' => $currentExamining ? $patientInfo : null,
+                    'can_start_new' => empty($currentExamining),
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Lỗi kiểm tra trạng thái: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Lấy danh sách bệnh nhân có thể khám tiếp theo
+     */
+    public function getNextAvailablePatients()
+    {
+        try {
+            $currentExamining = $this->getCurrentExaminingPatient();
+
+            // Lấy danh sách bệnh nhân đang chờ, sắp xếp theo thứ tự ưu tiên
+            $waitingPatients = Queue::with('patient.user')
+                ->where('Status', 'Đang chờ')
+                ->whereDate('QueueDate', today())
+                ->orderBy('QueuePosition')
+                ->orderBy('QueueTime')
+                ->get()
+                ->map(function ($queue) {
+                    return [
+                        'queue_id' => $queue->QueueId,
+                        'patient_name' => $queue->patient->user->FullName ?? 'N/A',
+                        'queue_position' => $queue->QueuePosition,
+                        'ticket_number' => $queue->TicketNumber,
+                        'queue_time' => $queue->QueueTime,
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'current_examining' => $currentExamining ? [
+                        'queue_id' => $currentExamining->QueueId,
+                        'patient_name' => $currentExamining->patient->user->FullName ?? 'Bệnh nhân',
+                    ] : null,
+                    'waiting_patients' => $waitingPatients,
+                    'can_start_new' => empty($currentExamining),
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Lỗi lấy danh sách bệnh nhân: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Tạo invoice cho cuộc hẹn
+     */
     private function createInvoice($appointment, $doctorId, $request)
     {
         // Tính tổng tiền
@@ -389,7 +525,7 @@ class DoctorExaminationsController extends Controller
         if ($request->services && is_array($request->services)) {
             foreach ($request->services as $serviceId) {
                 $serviceId = (int)$serviceId; // ✅ Đảm bảo là integer
-                
+
                 if (!$serviceId || $serviceId == 0) {
                     continue;
                 }
@@ -459,7 +595,7 @@ class DoctorExaminationsController extends Controller
                     'UnitPrice' => $totalAmount,
                     'Description' => $defaultService->ServiceName,
                 ];
-                
+
                 Log::info('✅ Sử dụng dịch vụ khám mặc định:', [
                     'service_id' => $defaultService->ServiceId,
                     'service_name' => $defaultService->ServiceName
@@ -475,7 +611,7 @@ class DoctorExaminationsController extends Controller
                         'UnitPrice' => $totalAmount,
                         'Description' => 'Phí khám bệnh',
                     ];
-                    
+
                     Log::info('✅ Sử dụng dịch vụ fallback:', [
                         'service_id' => $fallbackService->ServiceId,
                         'service_name' => $fallbackService->ServiceName
@@ -513,7 +649,7 @@ class DoctorExaminationsController extends Controller
 
             InvoiceDetail::create(array_merge($detail, ['InvoiceId' => $invoice->InvoiceId]));
             $createdDetails++;
-            
+
             Log::info('✅ Đã tạo invoice detail:', [
                 'service_id' => $detail['ServiceId'],
                 'medicine_id' => $detail['MedicineId'],
@@ -537,84 +673,84 @@ class DoctorExaminationsController extends Controller
     /**
      * Kiểm tra trạng thái khám hiện tại
      */
-    public function checkExaminingStatus()
-    {
-        try {
-            $currentExamining = $this->getCurrentExaminingPatient();
+    // public function checkExaminingStatus()
+    // {
+    //     try {
+    //         $currentExamining = $this->getCurrentExaminingPatient();
 
-            if ($currentExamining) {
-                $patientInfo = [
-                    'queue_id' => $currentExamining->QueueId,
-                    'patient_name' => $currentExamining->patient->user->FullName ?? 'Bệnh nhân',
-                    'started_at' => $currentExamining->updated_at->format('H:i:s'),
-                    'queue_position' => $currentExamining->QueuePosition,
-                    'ticket_number' => $currentExamining->TicketNumber,
-                ];
-            }
+    //         if ($currentExamining) {
+    //             $patientInfo = [
+    //                 'queue_id' => $currentExamining->QueueId,
+    //                 'patient_name' => $currentExamining->patient->user->FullName ?? 'Bệnh nhân',
+    //                 'started_at' => $currentExamining->updated_at->format('H:i:s'),
+    //                 'queue_position' => $currentExamining->QueuePosition,
+    //                 'ticket_number' => $currentExamining->TicketNumber,
+    //             ];
+    //         }
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'is_examining' => !empty($currentExamining),
-                    'current_patient' => $currentExamining ? $patientInfo : null,
-                    'can_start_new' => empty($currentExamining),
-                ]
-            ]);
+    //         return response()->json([
+    //             'success' => true,
+    //             'data' => [
+    //                 'is_examining' => !empty($currentExamining),
+    //                 'current_patient' => $currentExamining ? $patientInfo : null,
+    //                 'can_start_new' => empty($currentExamining),
+    //             ]
+    //         ]);
 
-        } catch (\Exception $e) {
-            Log::error('❌ Lỗi kiểm tra trạng thái khám: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'error' => 'Lỗi kiểm tra trạng thái: ' . $e->getMessage()
-            ], 500);
-        }
-    }
+    //     } catch (\Exception $e) {
+    //         Log::error('❌ Lỗi kiểm tra trạng thái khám: ' . $e->getMessage());
+    //         return response()->json([
+    //             'success' => false,
+    //             'error' => 'Lỗi kiểm tra trạng thái: ' . $e->getMessage()
+    //         ], 500);
+    //     }
+    // }
 
     /**
      * Lấy danh sách bệnh nhân có thể khám tiếp theo
      */
-    public function getNextAvailablePatients()
-    {
-        try {
-            $currentExamining = $this->getCurrentExaminingPatient();
+    // public function getNextAvailablePatients()
+    // {
+    //     try {
+    //         $currentExamining = $this->getCurrentExaminingPatient();
 
-            // Lấy danh sách bệnh nhân đang chờ, sắp xếp theo thứ tự ưu tiên
-            $waitingPatients = Queue::with('patient.user')
-                ->where('Status', 'Đang chờ')
-                ->whereDate('QueueDate', today())
-                ->orderBy('QueuePosition')
-                ->orderBy('QueueTime')
-                ->get()
-                ->map(function ($queue) {
-                    return [
-                        'queue_id' => $queue->QueueId,
-                        'patient_name' => $queue->patient->user->FullName ?? 'N/A',
-                        'queue_position' => $queue->QueuePosition,
-                        'ticket_number' => $queue->TicketNumber,
-                        'queue_time' => $queue->QueueTime,
-                    ];
-                });
+    //         // Lấy danh sách bệnh nhân đang chờ, sắp xếp theo thứ tự ưu tiên
+    //         $waitingPatients = Queue::with('patient.user')
+    //             ->where('Status', 'Đang chờ')
+    //             ->whereDate('QueueDate', today())
+    //             ->orderBy('QueuePosition')
+    //             ->orderBy('QueueTime')
+    //             ->get()
+    //             ->map(function ($queue) {
+    //                 return [
+    //                     'queue_id' => $queue->QueueId,
+    //                     'patient_name' => $queue->patient->user->FullName ?? 'N/A',
+    //                     'queue_position' => $queue->QueuePosition,
+    //                     'ticket_number' => $queue->TicketNumber,
+    //                     'queue_time' => $queue->QueueTime,
+    //                 ];
+    //             });
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'current_examining' => $currentExamining ? [
-                        'queue_id' => $currentExamining->QueueId,
-                        'patient_name' => $currentExamining->patient->user->FullName ?? 'Bệnh nhân',
-                    ] : null,
-                    'waiting_patients' => $waitingPatients,
-                    'can_start_new' => empty($currentExamining),
-                ]
-            ]);
+    //         return response()->json([
+    //             'success' => true,
+    //             'data' => [
+    //                 'current_examining' => $currentExamining ? [
+    //                     'queue_id' => $currentExamining->QueueId,
+    //                     'patient_name' => $currentExamining->patient->user->FullName ?? 'Bệnh nhân',
+    //                 ] : null,
+    //                 'waiting_patients' => $waitingPatients,
+    //                 'can_start_new' => empty($currentExamining),
+    //             ]
+    //         ]);
 
-        } catch (\Exception $e) {
-            Log::error('❌ Lỗi lấy danh sách bệnh nhân: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'error' => 'Lỗi lấy danh sách bệnh nhân: ' . $e->getMessage()
-            ], 500);
-        }
-    }
+    //     } catch (\Exception $e) {
+    //         Log::error('❌ Lỗi lấy danh sách bệnh nhân: ' . $e->getMessage());
+    //         return response()->json([
+    //             'success' => false,
+    //             'error' => 'Lỗi lấy danh sách bệnh nhân: ' . $e->getMessage()
+    //         ], 500);
+    //     }
+    // }
 
     /**
      * Hủy khám
@@ -672,7 +808,6 @@ class DoctorExaminationsController extends Controller
                 'success' => true,
                 'message' => 'Đã hủy khám thành công'
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('❌ Lỗi hủy khám: ' . $e->getMessage());
@@ -746,7 +881,6 @@ class DoctorExaminationsController extends Controller
                 'success' => true,
                 'data' => $data
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -797,7 +931,6 @@ class DoctorExaminationsController extends Controller
                 'success' => true,
                 'message' => 'Đã cập nhật thông tin chẩn đoán'
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
@@ -824,7 +957,6 @@ class DoctorExaminationsController extends Controller
                 'success' => true,
                 'message' => 'Đã lưu tạm thông tin khám'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,

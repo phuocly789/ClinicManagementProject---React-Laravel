@@ -19,7 +19,7 @@ import {
     BiCapsule,
     BiUserVoice
 } from 'react-icons/bi';
-import echo from '../../config/echo';
+// import echo from '../../config/echo';
 import '../../App.css';
 
 // Component con cho thẻ thống kê
@@ -578,6 +578,17 @@ const AdminDashboard = () => {
         };
         loadInitial();
 
+        // // Chỉ lắng nghe broadcast - không cần interval nữa
+        // const channel = echo.channel('dashboard-stats')
+        //     .listen('DashboardStatsUpdated', (e) => {
+        //         console.log('Realtime Dashboard Updated!', e.stats);
+        //         setRealtimeData(e.stats);
+        //     });
+
+        // return () => {
+        //     channel.stopListening('DashboardStatsUpdated');
+        //     echo.leaveChannel('dashboard-stats');
+        // };
     }, []);
     //validate date range
     useEffect(() => {
