@@ -288,7 +288,7 @@ const ServicesSection = ({
     const previewData = {
       type: 'service',
       patient_name: selectedTodayPatient.name || 'N/A',
-      age: String(selectedTodayPatient.age || 'N/A'),
+      age: String(selectedTodayPatient?.age ?? 'N/A'),
       gender: selectedTodayPatient.gender || 'N/A',
       phone: selectedTodayPatient.phone || 'N/A',
       address: selectedTodayPatient.address || 'N/A',
@@ -328,9 +328,13 @@ const ServicesSection = ({
 
     console.log('📤 Data preview DỊCH VỤ gửi đến PDF Editor:', {
       patient: previewData.patient_name,
+      patient: previewData.age,
       doctor: previewData.doctor_name,
       services_count: previewData.services.length,
       services: previewData.services
+    });
+    console.log('tất cae Data preview DỊCH VỤ gửi đến PDF Editor:', {
+      all: selectedTodayPatient,
     });
 
     try {
@@ -373,7 +377,7 @@ const ServicesSection = ({
             phone: previewData.phone,
             address: previewData.address
           },
-           doctorInfo: doctorInfo
+          doctorInfo: doctorInfo
         }
       });
 
@@ -432,7 +436,7 @@ const ServicesSection = ({
       phone: selectedTodayPatient.phone,
       appointment_date: selectedTodayPatient.date || new Date().toLocaleDateString('vi-VN'),
       appointment_time: selectedTodayPatient.time,
-       doctor_name: doctorInfo?.doctor_Name || 'Bác sĩ điều trị',
+      doctor_name: doctorInfo?.doctor_Name || 'Bác sĩ điều trị',
       diagnoses: diagnoses.length > 0 ? diagnoses : [{ Symptoms: symptoms, Diagnosis: diagnosis }],
       services: selectedServices,
       // THÊM PDF SETTINGS VÀO ĐÂY
@@ -442,6 +446,7 @@ const ServicesSection = ({
     try {
       const response = await printPdfService.printPDF(requestData);
       console.log('✅ PDF Service Result:', response)
+      console.log(' PDF Service Result:', requestData)
       console.log('📥 API Response status:', response.status);
 
       showSuccessAlert('Đã xuất phiếu chỉ định dịch vụ thành công!');
