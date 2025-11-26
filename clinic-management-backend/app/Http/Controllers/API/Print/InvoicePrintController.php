@@ -305,13 +305,25 @@ class InvoicePrintController extends Controller
         try {
             $data = $request->all();
 
-            // 🔥 VALIDATION CHO REAL-TIME SETTINGS
+            // 🔥 VALIDATION FIXED - PHÙ HỢP VỚI JSON THỰC TẾ
             $validated = $request->validate([
                 'type' => 'required|string|in:prescription,service,payment,test_result',
                 'patient_name' => 'required|string',
 
+                // 🔥 FIX: THÊM CÁC TRƯỜNG THIẾU TỪ JSON
+                'patient_age' => 'nullable|integer',
+                'patient_gender' => 'nullable|string',
+                'patient_phone' => 'nullable|string',
+                'patient_address' => 'nullable|string',
+                'lab_number' => 'nullable|string', // Thêm cho test_result
+                'department' => 'nullable|string', // Thêm cho test_result
+                'technician_name' => 'nullable|string', // Thêm cho test_result
+                'doctor_name' => 'nullable|string', // Có trong JSON
+                'appointment_date' => 'nullable|string', // Có trong JSON
+                'appointment_time' => 'nullable|string', // Có trong JSON
+
                 // 🔥 QUAN TRỌNG: VALIDATE PDF SETTINGS TỪ FE
-                'pdf_settings' => 'nullable|array',
+                'pdf_settings' => 'required|array',
                 'pdf_settings.fontFamily' => 'nullable|string',
                 'pdf_settings.fontSize' => 'nullable|string',
                 'pdf_settings.fontColor' => 'nullable|string',
@@ -353,10 +365,10 @@ class InvoicePrintController extends Controller
                 'pdf_settings.marginLeft' => 'required|string',
                 'pdf_settings.marginRight' => 'required|string',
 
-                // Các trường dữ liệu khác
+                // Các trường dữ liệu khác - FIX TÊN CHO ĐÚNG
                 'prescriptions' => 'nullable|array',
                 'services' => 'nullable|array',
-                'test_results' => 'nullable|array',
+                'test_results' => 'nullable|array', // Có trong JSON
             ]);
 
             Log::info('✅ Validation passed for real-time settings');
@@ -399,7 +411,6 @@ class InvoicePrintController extends Controller
                 'safe_css' => $safeFontCSS
             ]);
 
-
             // 🔥 XỬ LÝ LOGO & WATERMARK REAL-TIME
             $logoData = $this->processLogo($pdfSettings['logo'] ?? []);
             $watermarkData = $this->processWatermark($pdfSettings['watermark'] ?? []);
@@ -411,7 +422,7 @@ class InvoicePrintController extends Controller
                 'watermark_enabled' => $pdfSettings['watermark']['enabled'] ?? false
             ]);
 
-            // 🔥 CHUẨN BỊ DATA CHO TEMPLATE VỚI REAL-TIME SETTINGS
+            // 🔥 CHUẨN BỊ DATA CHO TEMPLATE VỚI REAL-TIME SETTINGS - FIX MAPPING
             $pdfData = [
                 // Thông tin cơ bản
                 'title' => $pdfSettings['customTitle'],
@@ -423,15 +434,15 @@ class InvoicePrintController extends Controller
                 'clinic_phone' => $pdfSettings['clinicPhone'],
                 'doctor_name' => $pdfSettings['doctorName'],
 
-                // Thông tin bệnh nhân
+                // 🔥 FIX: ÁNH XẠ ĐÚNG TÊN TRƯỜNG TỪ JSON
                 'patient_name' => $data['patient_name'],
-                'age' => $data['age'] ?? 'N/A',
-                'gender' => $data['gender'] ?? 'N/A',
-                'phone' => $data['phone'] ?? 'N/A',
-                'address' => $data['address'] ?? '',
+                'age' => $data['patient_age'] ?? $data['age'] ?? 'N/A', // Map cả 2 tên
+                'gender' => $data['patient_gender'] ?? $data['gender'] ?? 'N/A',
+                'phone' => $data['patient_phone'] ?? $data['phone'] ?? 'N/A',
+                'address' => $data['patient_address'] ?? $data['address'] ?? '',
 
-                // Thông tin hẹn
-                'medical_record_code' => $data['code'] ?? match ($data['type']) {
+                // Thông tin hẹn - FIX MAPPING
+                'medical_record_code' => $data['lab_number'] ?? $data['code'] ?? match ($data['type']) {
                     'prescription' => 'TT' . date('YmdHis'),
                     'service' => 'DV' . date('YmdHis'),
                     'payment' => 'HD' . date('YmdHis'),
@@ -441,6 +452,11 @@ class InvoicePrintController extends Controller
                 'appointment_date' => $data['appointment_date'] ?? now()->format('d/m/Y'),
                 'appointment_time' => $data['appointment_time'] ?? now()->format('H:i'),
                 'patient_code' => $data['patient_code'] ?? 'N/A',
+
+                // 🔥 THÊM CÁC TRƯỜNG MỚI CHO TEST_RESULT
+                'lab_number' => $data['lab_number'] ?? '',
+                'department' => $data['department'] ?? '',
+                'technician_name' => $data['technician_name'] ?? '',
 
                 // Thông tin y tế
                 'symptoms' => $data['symptoms'] ?? '',
@@ -480,9 +496,15 @@ class InvoicePrintController extends Controller
 
             } else if ($data['type'] === 'test_result') {
                 Log::info('🔬 Processing TEST_RESULT with real-time settings');
+                // 🔥 FIX: SỬ DỤNG ĐÚNG TÊN TRƯỜNG 'test_results' từ JSON
                 $pdfData['test_results'] = $this->processTestResultData($data['test_results'] ?? []);
                 $pdfData['prescriptions'] = [];
                 $pdfData['services'] = [];
+
+                Log::info('🔬 Test results data:', [
+                    'count' => count($pdfData['test_results']),
+                    'data' => $pdfData['test_results']
+                ]);
             }
 
             // 🔥 DEBUG: LOG TẤT CẢ REAL-TIME SETTINGS ĐƯỢC ÁP DỤNG
@@ -505,6 +527,16 @@ class InvoicePrintController extends Controller
                 ]
             ]);
 
+            // 🔥 LOG DATA TRƯỚC KHI TẠO PDF ĐỂ DEBUG
+            Log::info('📊 FINAL PDF DATA STRUCTURE:', [
+                'type' => $pdfData['type'],
+                'patient_name' => $pdfData['patient_name'],
+                'patient_age' => $pdfData['age'],
+                'patient_gender' => $pdfData['gender'],
+                'test_results_count' => isset($pdfData['test_results']) ? count($pdfData['test_results']) : 0,
+                'has_pdf_settings' => !empty($pdfData['pdf_settings'])
+            ]);
+
             // 🔥 KIỂM TRA TEMPLATE
             if (!view()->exists($config['template'])) {
                 throw new \Exception("Không tìm thấy template {$config['template']}");
@@ -522,7 +554,7 @@ class InvoicePrintController extends Controller
                     'isPhpEnabled' => true,
                     'chroot' => public_path(),
                     'dpi' => 96,
-                    'fontHeightRatio' => 1.1, // Giúp hiển thị tiếng Việt tốt hơn
+                    'fontHeightRatio' => 1.1,
                     // Áp dụng margins từ real-time settings
                     'margin-top' => $pdfSettings['marginTop'] ?? '15mm',
                     'margin-bottom' => $pdfSettings['marginBottom'] ?? '15mm',
@@ -548,7 +580,7 @@ class InvoicePrintController extends Controller
                 'Content-Disposition' => 'attachment; filename="' . $config['filename'] . '"',
                 'X-Filename' => $config['filename'],
                 'X-Generated-At' => now()->toISOString(),
-                'X-Real-Time-Settings' => 'applied', // 🔥 FLAG NHẬN DIỆN REAL-TIME
+                'X-Real-Time-Settings' => 'applied',
             ]);
 
         } catch (\Illuminate\Validation\ValidationException $e) {

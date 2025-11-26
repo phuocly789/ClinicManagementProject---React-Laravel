@@ -65,7 +65,7 @@ const AdminRevenueReport = () => {
   const [pageSize] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
   const [modal, setModal] = useState({ show: false, detail: null });
-
+  const [isDateRangeValid, setIsDateRangeValid] = useState(true);
   const [startDate, setStartDate] = useState(
     new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
@@ -92,8 +92,13 @@ const AdminRevenueReport = () => {
     fetchInvoices(currentPage);
   }, [currentPage]);
 
+  useEffect(() => {
+    const isValid = new Date(startDate) <= new Date(endDate);
+    setIsDateRangeValid(isValid);
+  }, [startDate, endDate]);
+
   const handleFilterAction = () => {
-    if (new Date(startDate) > new Date(endDate)) {
+    if (!isDateRangeValid) {
       setToast({ type: 'error', message: 'Ngày bắt đầu không được lớn hơn ngày kết thúc' });
       return;
     }
@@ -287,7 +292,7 @@ const AdminRevenueReport = () => {
               <div className="col-md-6 d-flex justify-content-end gap-2">
                 <button
                   className="btn btn-primary d-flex align-items-center gap-2"
-                  disabled={loading}
+                  disabled={loading || !isDateRangeValid}
                   onClick={handleFilterAction}
                 >
                   <BiSearch /> Lọc Dữ Liệu

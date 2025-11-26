@@ -738,8 +738,10 @@ const PDFEditorPage = () => {
           patientPhone: state.pdfData?.patient_phone || '',
           patientAddress: state.pdfData?.patient_address || '',
           code: state.pdfData?.lab_number || `XN_${Date.now()}`,
+          patient_code: state.pdfData?.patient_code||'',
           date: state.pdfData?.date || new Date().toISOString().split('T')[0],
           doctor: state.pdfData?.doctor_name || 'Kỹ thuật viên Xét nghiệm',
+          technician_name: state.pdfData?.technician_name || 'Kỹ thuật viên Xét nghiệm',
           symptoms: state.pdfData?.symptoms || '',
           diagnosis: state.pdfData?.diagnosis || '',
           instructions: state.pdfData?.instructions || 'Kết quả có giá trị tham khảo'
@@ -1049,6 +1051,7 @@ const PDFEditorPage = () => {
           code: technicianData.lab_number || `XN_${Date.now()}`,
           date: technicianData.date || new Date().toISOString().split('T')[0],
           doctor: technicianData.doctor_name || 'Kỹ thuật viên Xét nghiệm',
+          technician_name: technicianData.technician_name || 'Kỹ thuật viên Xét nghiệm',
           symptoms: technicianData.symptoms || '',
           diagnosis: technicianData.diagnosis || '',
           instructions: technicianData.instructions || 'Kết quả có giá trị tham khảo. Vui lòng liên hệ bác sĩ để được tư vấn.'
@@ -1427,7 +1430,7 @@ const PDFEditorPage = () => {
                 <p style={{ margin: 0, fontSize: '11px', color: pdfSettings.fontColor }}><strong>Kỹ thuật viên</strong></p>
                 <p style={{ margin: 0, fontSize: '11px', color: pdfSettings.fontColor }}>(Ký và ghi rõ họ tên)</p>
                 <p style={{ marginTop: '10px', fontWeight: 'bold', fontSize: '11px', color: pdfSettings.fontColor }}>
-                  Nguyễn Văn Kỹ Thuật
+                  {formData.technician_name}
                 </p>
               </div>
               <div className="footer-column" style={{
@@ -3154,7 +3157,9 @@ const PDFEditorPage = () => {
           // 🔥 THÊM CÁC TRƯỜNG BẮT BUỘC
           appointment_date: formData.date || currentDate,
           appointment_time: currentTime,
+          patient_code: formData.patient_code,
           doctor_name: formData.doctor || 'Kỹ thuật viên Xét nghiệm',
+          technician_name: formData.technician_name || 'Kỹ thuật viên Xét nghiệm',
           test_results: serviceRows.map(row => ({
             test_name: row.name,
             result: row.dosage || '',

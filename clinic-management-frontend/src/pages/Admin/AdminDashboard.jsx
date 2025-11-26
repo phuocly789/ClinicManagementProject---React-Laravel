@@ -234,7 +234,7 @@ const RevenueForecast = ({ forecastData }) => {
                 <div className="card-header bg-transparent border-0 d-flex justify-content-between align-items-center py-3">
                     <h5 className="mb-0 fw-bold text-dark">
                         <BiTrendingUp className="me-2 text-primary" />
-                        Dự Báo Doanh Thu 
+                        Dự Báo Doanh Thu
                     </h5>
                     <span className="badge bg-primary bg-opacity-10 text-primary">
                         Machine Learning
@@ -469,7 +469,7 @@ const PrescriptionAnalytics = ({ analyticsData }) => {
                                             <td>
                                                 <div className="d-flex align-items-center">
                                                     <span className={`badge ${index === 0 ? 'bg-warning' :
-                                                            index === 1 ? 'bg-secondary' : 'bg-info'
+                                                        index === 1 ? 'bg-secondary' : 'bg-info'
                                                         } me-2`}>
                                                         {index + 1}
                                                     </span>
@@ -516,7 +516,7 @@ const AdminDashboard = () => {
         new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     );
     const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
-
+    const [isDateRangeValid, setIsDateRangeValid] = useState(true);
     // State mới cho 2 chức năng mới
     const [realtimeData, setRealtimeData] = useState(null);
     const [revenueForecast, setRevenueForecast] = useState(null);
@@ -578,22 +578,16 @@ const AdminDashboard = () => {
         };
         loadInitial();
 
-        // Chỉ lắng nghe broadcast - không cần interval nữa
-        const channel = echo.channel('dashboard-stats')
-            .listen('DashboardStatsUpdated', (e) => {
-                console.log('Realtime Dashboard Updated!', e.stats);
-                setRealtimeData(e.stats);
-            });
-
-        return () => {
-            channel.stopListening('DashboardStatsUpdated');
-            echo.leaveChannel('dashboard-stats');
-        };
     }, []);
+    //validate date range
+    useEffect(() => {
+        const isValid = new Date(startDate) <= new Date(endDate);
+        setIsDateRangeValid(isValid);
+    }, [startDate, endDate]);
 
     useEffect(() => {
         fetchData(startDate, endDate);
-    }, [fetchData, startDate, endDate]);
+    }, [fetchData]);
 
     // Format data cho Recharts
     const chartData = useMemo(() => {
@@ -605,8 +599,24 @@ const AdminDashboard = () => {
     }, [totalRevenue]);
 
     const handleFilter = () => {
-        if (new Date(startDate) > new Date(endDate)) {
+        if (!isDateRangeValid) {
             setToast({ type: 'error', message: 'Ngày bắt đầu phải nhỏ hơn ngày kết thúc' });
+
+            // Sử dụng callback để đảm bảo state đã được update
+            const resetAndFetch = () => {
+                const defaultEndDate = new Date().toISOString().split('T')[0];
+                const defaultStartDate = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+                setStartDate(defaultStartDate);
+                setEndDate(defaultEndDate);
+
+                // Gọi fetchData sau khi state đã được set
+                setTimeout(() => {
+                    fetchData(defaultStartDate, defaultEndDate);
+                }, 0);
+            };
+
+            resetAndFetch();
             return;
         }
         fetchData(startDate, endDate);
@@ -653,7 +663,7 @@ const AdminDashboard = () => {
 
                     <button
                         className="btn btn-primary btn-sm px-3 d-flex align-items-center gap-2"
-                        disabled={loading}
+                        disabled={loading || !isDateRangeValid}
                         onClick={handleFilter}
                     >
                         <BiTrendingUp size={16} />
