@@ -159,18 +159,18 @@ const DoctorSchedule = () => {
 
   const getStatusVariant = (status) => {
     switch (status) {
-      case 'active': return 'success';
-      case 'upcoming': return 'warning';
-      case 'completed': return 'secondary';
+      case 'đang hoạt động': return 'success';
+      case 'sắp diễn ra': return 'warning';
+      case 'đã hoàn thành': return 'secondary';
       default: return 'primary';
     }
   };
 
   const getStatusText = (status) => {
     switch (status) {
-      case 'active': return 'Đang hoạt động';
-      case 'upcoming': return 'Sắp diễn ra';
-      case 'completed': return 'Đã hoàn thành';
+      case 'đang hoạt động': return 'Đang hoạt động';
+      case 'sắp diễn ra': return 'Sắp diễn ra';
+      case 'đã hoàn thành': return 'Đã hoàn thành';
       default: return 'Đang lên lịch';
     }
   };
