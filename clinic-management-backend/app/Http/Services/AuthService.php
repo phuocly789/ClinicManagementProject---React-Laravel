@@ -5,6 +5,7 @@ namespace App\Http\Services;
 use App\Constants\Errors\AuthMessages;
 use App\Exceptions\AppErrors;
 use App\Mail\AccountActivationMail;
+use App\Models\Patient;
 use App\Models\Role;
 use App\Models\User;
 use Carbon\Carbon;
@@ -85,6 +86,11 @@ class AuthService
             'CodeExpired' => Carbon::now('Asia/Ho_Chi_Minh')->addMinutes(5),
         ]);
         $user->roles()->attach(2);
+        // Tạo History
+        $patient = Patient::firstOrCreate(
+            ['PatientId' => $user->UserId],
+            ['MedicalHistory' => null]
+        );
         try {
             Mail::to($user->Email)->send(
                 new AccountActivationMail($user->FullName, $user->CodeId, $user->CodeExpired)
@@ -294,11 +300,6 @@ class AuthService
             ],
         ];
     }
-
-
-
-
-
     /**
      * Đăng xuất (revoke token hiện tại)
      */
