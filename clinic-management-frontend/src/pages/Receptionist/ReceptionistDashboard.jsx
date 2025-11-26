@@ -4,6 +4,7 @@ import axiosInstance from "../../axios";
 import Select from "react-select";
 import { createEchoClient } from "../../utils/echo";
 import notificationSound from "../../assets/notification.mp3";
+import Pagination from "../../Components/Pagination/Pagination";
 const ReceptionistDashboard = () => {
   const today = new Date();
   const formattedDate = today.toLocaleDateString("vi-VN", {
@@ -12,6 +13,8 @@ const ReceptionistDashboard = () => {
     month: "long",
     day: "numeric",
   });
+  const [currentPage, setCurrentPage] = useState(0);
+  const ITEMS_PER_PAGE = 10;
   const [echo, setEcho] = useState(null);
   const [rooms, setRooms] = useState([]);
   const [queue, setQueue] = useState([]);
@@ -98,7 +101,7 @@ const ReceptionistDashboard = () => {
   useEffect(() => {
     const unlockAudio = () => {
       const audio = new Audio(notificationSound);
-      audio.play().catch(() => {});
+      audio.play().catch(() => { });
       audio.pause();
       audio.currentTime = 0;
 
@@ -215,6 +218,20 @@ const ReceptionistDashboard = () => {
       setNotification({ show: false, message: "", type: "" });
     }, 3000);
   };
+  //pagination
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [searchTerm, selectedRoom]);
+
+  // 2. Tính toán dữ liệu cho trang hiện tại
+  const pageCount = Math.ceil(filteredQueue.length / ITEMS_PER_PAGE);
+  const offset = currentPage * ITEMS_PER_PAGE;
+  const currentItems = filteredQueue.slice(offset, offset + ITEMS_PER_PAGE);
+
+  // 3. Hàm xử lý khi chuyển trang
+  const handlePageChange = ({ selected }) => {
+    setCurrentPage(selected);
+  };
 
   // Handle room selection
   const handleRoomSelect = (room) => {
@@ -225,28 +242,48 @@ const ReceptionistDashboard = () => {
       fetchAllQueues();
     }
   };
-
+  // Kiểm tra xem phòng có đang bận (có người đang khám) hay không
+  const isRoomOccupied = (roomId) => {
+    return queue.some(
+      (item) => item.room === roomId && item.Status === "Đang khám"
+    );
+  };
   // Handle call patient
   const handleCallPatient = async (queueId) => {
+    const patient = queue.find((p) => p.QueueId === queueId);
+    if (!patient) return;
+
+    // Check phòng bận ở Frontend (UX)
+    if (isRoomOccupied(patient.room)) {
+      showNotification(`Phòng ${patient.roomName} đang có người khám!`, "warning");
+      return;
+    }
+
     try {
-      await axiosInstance.put(`/api/receptionist/queue/${queueId}/status`, {
-        Status: "Đang khám",
-      });
+      await axiosInstance.put(`/api/receptionist/queue/${queueId}/status`, { Status: "Đang khám" });
 
-      setQueue((prevQueue) =>
-        prevQueue.map((item) =>
-          item.QueueId === queueId ? { ...item, Status: "Đang khám" } : item
-        )
-      );
+      // Thành công -> Update UI
+      setQueue(prev => prev.map(item => item.QueueId === queueId ? { ...item, Status: "Đang khám" } : item));
+      showNotification(`Đã gọi ${patient.PatientName} vào khám`, "success");
 
-      const patient = queue.find((p) => p.QueueId === queueId);
-      showNotification(
-        `Đã gọi bệnh nhân ${patient.PatientName} vào khám`,
-        "success"
-      );
     } catch (error) {
       console.error("Error calling patient:", error);
-      showNotification("Lỗi khi gọi bệnh nhân", "warning");
+
+      const errorMsg = error.response?.data?.message || "";
+
+      if (error.response?.status === 400 &&
+        (errorMsg.includes("đang được gọi") || errorMsg.includes("đang được khám"))) {
+
+        showNotification("Bệnh nhân này vừa được người khác gọi vào khám!", "info");
+
+        // Tự động cập nhật UI sang trạng thái Đang khám để đồng bộ
+        setQueue(prev => prev.map(item => item.QueueId === queueId ? { ...item, Status: "Đang khám" } : item));
+
+      } else if (errorMsg.includes("Phòng này đang có người khám")) {
+        showNotification(errorMsg, "warning");
+      } else {
+        showNotification("Lỗi khi gọi bệnh nhân", "warning");
+      }
     }
   };
 
@@ -282,35 +319,32 @@ const ReceptionistDashboard = () => {
         );
       } catch (error) {
         console.error("Error cancelling appointment:", error);
-        showNotification("Lỗi khi hủy lịch khám", "warning");
+        // 1. Lấy message từ backend gửi về (nếu có)
+        const errorMsg = error.response?.data?.message || "Lỗi khi hủy lịch khám";
+
+        // 2. Kiểm tra nếu là lỗi 400 (Lỗi logic do mình chặn ở backend)
+        if (error.response?.status === 400) {
+
+          // Hiện đúng thông báo backend gửi (VD: "Lịch khám này đã được hủy...")
+          showNotification(errorMsg, "info");
+
+          // 3. Logic tự động cập nhật UI cho đồng bộ
+          // Nếu backend bảo là "đã hủy" hoặc "đã khám" rồi, thì ở frontend mình cũng nên xóa/cập nhật nó đi
+          // để người dùng không bấm nhầm lần nữa
+          if (errorMsg.toLowerCase().includes("hủy") || errorMsg.toLowerCase().includes("đã được hủy")) {
+            setQueue((prevQueue) =>
+              prevQueue.filter((item) => item.QueueId !== deleteModal.patient.queueId)
+            );
+          }
+        } else {
+          // Các lỗi khác (500, mạng...)
+          showNotification(errorMsg, "warning");
+        }
       }
     }
     setDeleteModal({ isOpen: false, patient: null });
   };
 
-  // Handle complete appointment
-  const handleCompleteAppointment = async (queueId) => {
-    try {
-      await axiosInstance.put(`/api/receptionist/queue/${queueId}/status`, {
-        Status: "Đã khám",
-      });
-
-      setQueue((prevQueue) =>
-        prevQueue.map((item) =>
-          item.QueueId === queueId ? { ...item, Status: "Đã khám" } : item
-        )
-      );
-
-      const patient = queue.find((p) => p.QueueId === queueId);
-      showNotification(
-        `Đã hoàn tất khám cho ${patient.PatientName}`,
-        "success"
-      );
-    } catch (error) {
-      console.error("Error completing appointment:", error);
-      showNotification("Lỗi khi hoàn tất khám", "warning");
-    }
-  };
 
   // Handle toggle priority
   const handleTogglePriority = async (queueId) => {
@@ -412,13 +446,12 @@ const ReceptionistDashboard = () => {
           <div className="d-flex justify-content-between align-items-center">
             <span>
               <i
-                className={`bi ${
-                  notification.type === "success"
-                    ? "bi-check-circle"
-                    : notification.type === "warning"
+                className={`bi ${notification.type === "success"
+                  ? "bi-check-circle"
+                  : notification.type === "warning"
                     ? "bi-exclamation-triangle"
                     : "bi-info-circle"
-                } me-2`}
+                  } me-2`}
               ></i>
               {notification.message}
             </span>
@@ -527,9 +560,9 @@ const ReceptionistDashboard = () => {
                 value={
                   selectedRoom
                     ? {
-                        value: selectedRoom.RoomId,
-                        label: selectedRoom.RoomName,
-                      }
+                      value: selectedRoom.RoomId,
+                      label: selectedRoom.RoomName,
+                    }
                     : { value: null, label: "Tất cả phòng" }
                 }
                 isSearchable
@@ -580,26 +613,23 @@ const ReceptionistDashboard = () => {
                 </thead>
 
                 <tbody>
-                  {filteredQueue.length > 0 ? (
-                    filteredQueue.map((item, index) => (
+                  {currentItems.length > 0 ? (
+                    currentItems.map((item, index) => (
                       <tr
                         key={item.QueueId}
-                        className={`table-row-hover ${
-                          item.Status === "Đang khám" ? "table-active" : ""
-                        } ${
-                          item.QueuePosition === 1 && item.Status === "Đang chờ"
+                        className={`table-row-hover ${item.Status === "Đang khám" ? "table-active" : ""
+                          } ${item.QueuePosition === 1 && item.Status === "Đang chờ"
                             ? "border-start border-danger border-3"
                             : ""
-                        }`}
+                          }`}
                       >
                         <td className="text-center">
                           {canPrioritize(item.Status) && (
                             <button
-                              className={`btn btn-sm p-0 ${
-                                item.QueuePosition === 1
-                                  ? "text-warning"
-                                  : "text-muted opacity-50"
-                              }`}
+                              className={`btn btn-sm p-0 ${item.QueuePosition === 1
+                                ? "text-warning"
+                                : "text-muted opacity-50"
+                                }`}
                               onClick={() => handleTogglePriority(item.QueueId)}
                               title={
                                 item.QueuePosition === 1
@@ -609,11 +639,10 @@ const ReceptionistDashboard = () => {
                               disabled={item.QueuePosition === 1}
                             >
                               <i
-                                className={`bi ${
-                                  item.QueuePosition === 1
-                                    ? "bi-star-fill"
-                                    : "bi-star"
-                                }`}
+                                className={`bi ${item.QueuePosition === 1
+                                  ? "bi-star-fill"
+                                  : "bi-star"
+                                  }`}
                                 style={{ fontSize: "1.2rem" }}
                               ></i>
                             </button>
@@ -678,35 +707,35 @@ const ReceptionistDashboard = () => {
                           <div className="d-flex gap-2 justify-content-center flex-wrap">
                             {item.Status === "Đang chờ" && (
                               <>
-                                <button
-                                  className="btn btn-sm btn-success d-flex align-items-center"
-                                  onClick={() =>
-                                    handleCallPatient(item.QueueId)
-                                  }
-                                >
-                                  <i className="bi bi-telephone me-1"></i> Gọi
-                                  khám
-                                </button>
+                                {/* Kiểm tra phòng bận ngay tại dòng render */}
+                                {(() => {
+                                  const roomBusy = isRoomOccupied(item.room);
+                                  return (
+                                    <button
+                                      className={`btn btn-sm ${roomBusy ? 'btn-secondary' : 'btn-success'} d-flex align-items-center`}
+                                      onClick={() => handleCallPatient(item.QueueId)}
+                                      disabled={roomBusy} // Disable nút nếu phòng bận
+                                      title={roomBusy ? "Phòng đang bận" : "Gọi vào khám"}
+                                    >
+                                      <i className="bi bi-telephone me-1"></i>
+                                      {roomBusy ? "Đang bận" : "Gọi khám"}
+                                    </button>
+                                  );
+                                })()}
+
                                 <button
                                   className="btn btn-sm btn-outline-danger d-flex align-items-center"
-                                  onClick={() =>
-                                    handleCancelAppointment(item.QueueId)
-                                  }
+                                  onClick={() => handleCancelAppointment(item.QueueId)}
                                 >
                                   <i className="bi bi-x-circle me-1"></i> Hủy
                                 </button>
                               </>
                             )}
                             {item.Status === "Đang khám" && (
-                              <button
-                                className="btn btn-sm btn-primary d-flex align-items-center"
-                                onClick={() =>
-                                  handleCompleteAppointment(item.QueueId)
-                                }
-                              >
-                                <i className="bi bi-check-circle me-1"></i> Hoàn
-                                tất
-                              </button>
+                              <span className="text-primary fst-italic">
+                                <i className="bi bi-hourglass-split me-1"></i>
+                                Đang đợi bác sĩ...
+                              </span>
                             )}
                             {item.Status === "Đã khám" && (
                               <button
@@ -745,6 +774,14 @@ const ReceptionistDashboard = () => {
               </table>
             </div>
           )}
+          {filteredQueue.length > 0 && (
+            <Pagination
+              pageCount={pageCount}
+              currentPage={currentPage}
+              onPageChange={handlePageChange}
+              isLoading={loading}
+            />
+          )}
         </div>
       </div>
 
@@ -782,7 +819,7 @@ const ReceptionistDashboard = () => {
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 
