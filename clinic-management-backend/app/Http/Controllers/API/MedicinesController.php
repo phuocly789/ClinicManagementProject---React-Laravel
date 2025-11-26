@@ -118,7 +118,8 @@ class MedicinesController extends Controller
             ], 422);
         }
 
-        $medicine = Medicine::create($request->only([
+        // Thêm version = 0 khi tạo mới
+        $data = $request->only([
             'MedicineName',
             'MedicineType',
             'Unit',
@@ -127,7 +128,10 @@ class MedicinesController extends Controller
             'Description',
             'ExpiryDate',
             'LowStockThreshold'
-        ]));
+        ]);
+        $data['version'] = 0;
+
+        $medicine = Medicine::create($data);
 
         return response()->json([
             'message' => 'Thêm thuốc thành công',
@@ -145,6 +149,7 @@ class MedicinesController extends Controller
             ], 404);
         }
 
+        // Validate bao gồm version
         $validator = Validator::make($request->all(), [
             'MedicineName' => 'required|string|max:100',
             'MedicineType' => 'required|string|max:50',
@@ -163,6 +168,14 @@ class MedicinesController extends Controller
             ], 422);
         }
 
+        // Check concurrency conflict
+        if ($request->version != $medicine->version) {
+            return response()->json([
+                'message' => 'Dữ liệu đã thay đổi bởi người khác. Vui lòng tải lại trang trước khi cập nhật.'
+            ], 409);  // 409 Conflict
+        }
+
+        // Update data (không update version ở đây)
         $medicine->update($request->only([
             'MedicineName',
             'MedicineType',
@@ -173,6 +186,9 @@ class MedicinesController extends Controller
             'ExpiryDate',
             'LowStockThreshold'
         ]));
+
+        // Tăng version sau update thành công
+        $medicine->increment('version');
 
         return response()->json([
             'message' => 'Cập nhật thuốc thành công',
