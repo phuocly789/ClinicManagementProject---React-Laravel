@@ -27,7 +27,6 @@ const DoctorSchedule = () => {
   const [selectedDaySchedules, setSelectedDaySchedules] = useState([]);
   const [selectedDayInfo, setSelectedDayInfo] = useState(null);
 
-  const DOCTOR_ID = JSON.parse(localStorage.getItem('user'))?.StaffId || 4;
   // Fetch lịch làm việc
   const fetchWorkSchedule = async () => {
     try {
@@ -36,7 +35,7 @@ const DoctorSchedule = () => {
 
       console.log('🔄 [DoctorSchedule] Fetching work schedule...');
 
-      const response = await doctorService.getSchedule(DOCTOR_ID);
+      const response = await doctorService.getWorkSchedule();
       console.log('📊 [DoctorSchedule] Full API response:', response);
 
       if (response.data) {
@@ -160,18 +159,18 @@ const DoctorSchedule = () => {
 
   const getStatusVariant = (status) => {
     switch (status) {
-      case 'active': return 'success';
-      case 'upcoming': return 'warning';
-      case 'completed': return 'secondary';
+      case 'đang hoạt động': return 'success';
+      case 'sắp diễn ra': return 'warning';
+      case 'đã hoàn thành': return 'secondary';
       default: return 'primary';
     }
   };
 
   const getStatusText = (status) => {
     switch (status) {
-      case 'active': return 'Đang hoạt động';
-      case 'upcoming': return 'Sắp diễn ra';
-      case 'completed': return 'Đã hoàn thành';
+      case 'đang hoạt động': return 'Đang hoạt động';
+      case 'sắp diễn ra': return 'Sắp diễn ra';
+      case 'đã hoàn thành': return 'Đã hoàn thành';
       default: return 'Đang lên lịch';
     }
   };
@@ -307,6 +306,15 @@ const DoctorSchedule = () => {
                                 <div>
                                   <small className="text-muted d-block">Loại hình</small>
                                   <strong className="text-dark">{schedule.type}</strong>
+                                </div>
+                              </div>
+                            </Col>
+                            <Col sm={6}>
+                              <div className="d-flex align-items-center">
+                                <i className="fas fa-tag text-info me-2"></i>
+                                <div>
+                                  <small className="text-muted d-block">Phòng</small>
+                                  <strong className="text-dark">{schedule.room_name}</strong>
                                 </div>
                               </div>
                             </Col>
@@ -521,7 +529,7 @@ const DoctorSchedule = () => {
                       </div>
                       <div>
                         <small className="text-muted d-block">Phòng khám</small>
-                        <strong className="text-dark fs-6">{scheduleData.doctor_info.clinic}</strong>
+                        <strong className="text-dark fs-6">{scheduleData.doctor_info.department}</strong>
                       </div>
                     </div>
                     <div className="d-flex align-items-center mb-3">
@@ -739,6 +747,9 @@ const DoctorSchedule = () => {
                                   <div className="fw-semibold text-truncate" title={schedule.time}>
                                     {schedule.time}
                                   </div>
+                                  <div className="fw-semibold text-truncate" title='Phòng:'>
+                                    {schedule.room_name}
+                                  </div>
                                   <div className="text-truncate" title={schedule.location}>
                                     {schedule.location}
                                   </div>
@@ -851,6 +862,12 @@ const DoctorSchedule = () => {
                                         <strong className="text-dark">
                                           <i className="fas fa-tag text-info me-2"></i>
                                           {item.type}
+                                        </strong>
+                                      </div>
+                                      <div>
+                                        <small className="text-muted d-block">Phòng</small>
+                                        <strong className="text-dark">
+                                          <i class="fas fa-hospital-alt text-info"></i>                                          {item.room_name}
                                         </strong>
                                       </div>
                                       {item.notes && (

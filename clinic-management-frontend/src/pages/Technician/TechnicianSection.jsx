@@ -3,10 +3,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card, Table, Button, Row, Col, Badge, Alert, Spinner, Modal, Form
 } from 'react-bootstrap';
+import Swal from 'sweetalert2';
 import technicianService from '../../services/technicianService';
 import { printPdfService } from '../../services/printPdfService';
 import Pagination from '../../Components/Pagination/Pagination';
-
 
 // ✅ Constants để tránh magic strings
 const STATUS = {
@@ -28,8 +28,6 @@ const ITEMS_PER_PAGE = 5;
 const TechnicianSection = ({ testResultsData, completedServicesData, updateStats, loading, pagination, onPageChange }) => {
   const navigate = useNavigate();
   console.log('🎯 TechnicianSection rendered');
-  console.log('📥 testResultsData từ props:', testResultsData);
-  console.log('📥 completedServicesData từ props:', completedServicesData);
 
   // ✅ STATE
   const [localData, setLocalData] = useState([]);
@@ -45,11 +43,6 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
   const [currentAssignedPage, setCurrentAssignedPage] = useState(0);
   const [currentCompletedPage, setCurrentCompletedPage] = useState(0);
 
-  // ✅ STATE CHO CONFIRM MODAL
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmAction, setConfirmAction] = useState(null);
-  const [confirmData, setConfirmData] = useState(null);
-
   // ✅ STATE CHO MODAL XEM KẾT QUẢ
   const [showViewResultModal, setShowViewResultModal] = useState(false);
   const [viewingService, setViewingService] = useState(null);
@@ -63,7 +56,6 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
   // ✅ Đồng bộ testResultsData khi props thay đổi
   useEffect(() => {
     console.log('🔄 [EFFECT] Syncing localData with testResultsData');
-    console.log('📥 [EFFECT] Raw testResultsData:', testResultsData);
 
     if (testResultsData && Array.isArray(testResultsData)) {
       console.log('✅ [EFFECT] Setting localData:', testResultsData.length, 'items');
@@ -78,7 +70,6 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
   // ✅ Đồng bộ completedServicesData khi props thay đổi
   useEffect(() => {
     console.log('🔄 [EFFECT] Syncing completedServices with completedServicesData');
-    console.log('📥 [EFFECT] Raw completedServicesData:', completedServicesData);
 
     if (completedServicesData && Array.isArray(completedServicesData)) {
       const sortedCompletedServices = [...completedServicesData].sort((a, b) => {
@@ -95,6 +86,379 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
       setCompletedServices([]);
     }
   }, [completedServicesData]);
+
+  // ✅ SWEETALERT2 CONFIRM FUNCTIONS - CHO CÁC HÀNH ĐỘNG CHÍNH
+  const showConfirmDialog = (action, data) => {
+    const { patientName, serviceName, actionType } = data;
+
+    const getConfirmConfig = () => {
+      switch (actionType) {
+        case 'start':
+          return {
+            title: 'Bắt Đầu Dịch Vụ',
+            icon: 'question',
+            iconColor: '#0d6efd',
+            confirmButtonColor: '#0d6efd',
+            confirmButtonText: 'Bắt Đầu',
+            html: `
+              <div class="text-center">
+                <i class="fas fa-play-circle fa-3x text-primary mb-3"></i>
+                <h4 class="text-primary fw-bold">Bắt Đầu Dịch Vụ</h4>
+              </div>
+              <p class="text-center fs-5">Bạn có chắc muốn <strong>BẮT ĐẦU</strong> dịch vụ <strong>"${serviceName}"</strong> cho bệnh nhân <strong>${patientName}</strong>?</p>
+              <div class="bg-light p-3 rounded mt-3">
+                <div class="row">
+                  <div class="col-6">
+                    <strong>Bệnh nhân:</strong> ${patientName}
+                  </div>
+                  <div class="col-6">
+                    <strong>Dịch vụ:</strong> ${serviceName}
+                  </div>
+                </div>
+              </div>
+            `
+          };
+        case 'complete':
+          return {
+            title: 'Hoàn Thành Dịch Vụ',
+            icon: 'success',
+            iconColor: '#198754',
+            confirmButtonColor: '#198754',
+            confirmButtonText: 'Hoàn Thành',
+            html: `
+              <div class="text-center">
+                <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                <h4 class="text-success fw-bold">Hoàn Thành Dịch Vụ</h4>
+              </div>
+              <p class="text-center fs-5">Bạn có chắc muốn <strong>HOÀN THÀNH</strong> dịch vụ <strong>"${serviceName}"</strong> cho bệnh nhân <strong>${patientName}</strong>?</p>
+              <div class="bg-light p-3 rounded mt-3">
+                <div class="row">
+                  <div class="col-6">
+                    <strong>Bệnh nhân:</strong> ${patientName}
+                  </div>
+                  <div class="col-6">
+                    <strong>Dịch vụ:</strong> ${serviceName}
+                  </div>
+                </div>
+              </div>
+            `
+          };
+        case 'cancel':
+          return {
+            title: 'Hủy Dịch Vụ',
+            icon: 'warning',
+            iconColor: '#dc3545',
+            confirmButtonColor: '#dc3545',
+            confirmButtonText: 'Hủy Dịch Vụ',
+            html: `
+              <div class="text-center">
+                <i class="fas fa-times-circle fa-3x text-danger mb-3"></i>
+                <h4 class="text-danger fw-bold">Hủy Dịch Vụ</h4>
+              </div>
+              <p class="text-center fs-5">Bạn có chắc muốn <strong>HỦY</strong> dịch vụ <strong>"${serviceName}"</strong> cho bệnh nhân <strong>${patientName}</strong>?</p>
+              <div class="alert alert-warning mt-3">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>Lưu ý:</strong> Hành động này không thể hoàn tác!
+              </div>
+              <div class="bg-light p-3 rounded mt-3">
+                <div class="row">
+                  <div class="col-6">
+                    <strong>Bệnh nhân:</strong> ${patientName}
+                  </div>
+                  <div class="col-6">
+                    <strong>Dịch vụ:</strong> ${serviceName}
+                  </div>
+                </div>
+              </div>
+            `
+          };
+        default:
+          return {
+            title: 'Xác Nhận',
+            icon: 'question',
+            confirmButtonColor: '#6c757d',
+            confirmButtonText: 'Xác Nhận',
+            html: `
+              <p class="text-center fs-5">Bạn có chắc muốn thực hiện hành động này?</p>
+            `
+          };
+      }
+    };
+
+    const config = getConfirmConfig();
+
+    Swal.fire({
+      title: config.title,
+      html: config.html,
+      icon: config.icon,
+      iconColor: config.iconColor,
+      showCancelButton: true,
+      confirmButtonText: config.confirmButtonText,
+      cancelButtonText: 'Hủy',
+      confirmButtonColor: config.confirmButtonColor,
+      cancelButtonColor: '#6c757d',
+      reverseButtons: true,
+      focusCancel: true,
+      customClass: {
+        popup: 'sweetalert-custom-popup',
+        confirmButton: 'sweetalert-confirm-btn',
+        cancelButton: 'sweetalert-cancel-btn'
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        executeAction(action, data);
+      }
+    });
+  };
+
+  // ✅ CONFIRM CHO XEM CHI TIẾT KẾT QUẢ
+  const confirmViewResultDetail = (service) => {
+    if (!service.result || service.result.trim() === '') {
+      Swal.fire({
+        title: 'Thông Báo',
+        text: 'Chưa có kết quả xét nghiệm cho dịch vụ này',
+        icon: 'info',
+        confirmButtonColor: '#0d6efd'
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: 'Xem Chi Tiết Kết Quả',
+      html: `
+        <div class="text-center">
+          <i class="fas fa-eye fa-3x text-info mb-3"></i>
+          <h4 class="text-info fw-bold">Xem Kết Quả Chi Tiết</h4>
+        </div>
+        <p class="text-center fs-5">Bạn có muốn xem chi tiết kết quả xét nghiệm?</p>
+        <div class="bg-light p-3 rounded mt-3">
+          <div class="row">
+            <div class="col-6">
+              <strong>Bệnh nhân:</strong> ${service.patient_name}
+            </div>
+            <div class="col-6">
+              <strong>Dịch vụ:</strong> ${service.service_name}
+            </div>
+            <div class="col-12 mt-2">
+              <strong>Mã dịch vụ:</strong> #${service.service_order_id}
+            </div>
+          </div>
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Xem Chi Tiết',
+      cancelButtonText: 'Hủy',
+      confirmButtonColor: '#0dcaf0',
+      cancelButtonColor: '#6c757d',
+      reverseButtons: true
+    }).then((result) => {
+      if (result.isConfirmed) {
+        executeViewResultDetail(service);
+      }
+    });
+  };
+
+  // ✅ CONFIRM CHO LƯU KẾT QUẢ
+  const confirmSaveResult = () => {
+    const trimmedResult = resultText.trim();
+    if (!trimmedResult) {
+      Swal.fire({
+        title: 'Lỗi',
+        text: 'Vui lòng nhập kết quả xét nghiệm',
+        icon: 'error',
+        confirmButtonColor: '#dc3545'
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: 'Lưu Kết Quả Xét Nghiệm',
+      html: `
+        <div class="text-center">
+          <i class="fas fa-save fa-3x text-primary mb-3"></i>
+          <h4 class="text-primary fw-bold">Lưu Kết Quả</h4>
+        </div>
+        <p class="text-center fs-5">Bạn có chắc muốn lưu kết quả xét nghiệm này?</p>
+        <div class="bg-light p-3 rounded mt-3">
+          <div class="row">
+            <div class="col-6">
+              <strong>Bệnh nhân:</strong> ${currentService.patient_name}
+            </div>
+            <div class="col-6">
+              <strong>Dịch vụ:</strong> ${currentService.service_name}
+            </div>
+            <div class="col-12 mt-2">
+              <strong>Mã dịch vụ:</strong> #${currentService.service_order_id}
+            </div>
+          </div>
+        </div>
+        <div class="alert alert-info mt-3">
+          <i class="fas fa-info-circle me-2"></i>
+          Kết quả sẽ được lưu vào hệ thống và không thể sửa đổi sau khi lưu.
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Lưu Kết Quả',
+      cancelButtonText: 'Hủy',
+      confirmButtonColor: '#0d6efd',
+      cancelButtonColor: '#6c757d',
+      reverseButtons: true
+    }).then((result) => {
+      if (result.isConfirmed) {
+        handleSaveResult();
+      }
+    });
+  };
+
+  // ✅ CONFIRM CHO IN PDF
+  const confirmPrintPDF = (service) => {
+    if (!service.result || service.result.trim() === '') {
+      Swal.fire({
+        title: 'Thông Báo',
+        text: 'Chưa có kết quả xét nghiệm để in',
+        icon: 'warning',
+        confirmButtonColor: '#0d6efd'
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: 'In Kết Quả PDF',
+      html: `
+        <div class="text-center">
+          <i class="fas fa-print fa-3x text-success mb-3"></i>
+          <h4 class="text-success fw-bold">In Kết Quả PDF</h4>
+        </div>
+        <p class="text-center fs-5">Bạn có muốn in kết quả xét nghiệm ra file PDF?</p>
+        <div class="bg-light p-3 rounded mt-3">
+          <div class="row">
+            <div class="col-6">
+              <strong>Bệnh nhân:</strong> ${service.patient_name}
+            </div>
+            <div class="col-6">
+              <strong>Dịch vụ:</strong> ${service.service_name}
+            </div>
+            <div class="col-12 mt-2">
+              <strong>Mã dịch vụ:</strong> #${service.service_order_id}
+            </div>
+          </div>
+        </div>
+        <div class="alert alert-info mt-3">
+          <i class="fas fa-info-circle me-2"></i>
+          File PDF sẽ được tải xuống tự động sau khi tạo thành công.
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'In PDF',
+      cancelButtonText: 'Hủy',
+      confirmButtonColor: '#198754',
+      cancelButtonColor: '#6c757d',
+      reverseButtons: true
+    }).then((result) => {
+      if (result.isConfirmed) {
+        printPDFResult(service);
+      }
+    });
+  };
+
+  // ✅ CONFIRM CHO CHUYỂN TRANG TÙY CHỈNH PDF
+  const confirmCustomizePDF = (service) => {
+    if (!service.result || service.result.trim() === '') {
+      Swal.fire({
+        title: 'Thông Báo',
+        text: 'Chưa có kết quả xét nghiệm để tùy chỉnh',
+        icon: 'warning',
+        confirmButtonColor: '#0d6efd'
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: 'Tùy Chỉnh PDF',
+      html: `
+        <div class="text-center">
+          <i class="fas fa-edit fa-3x text-info mb-3"></i>
+          <h4 class="text-info fw-bold">Tùy Chỉnh PDF</h4>
+        </div>
+        <p class="text-center fs-5">Bạn có muốn chuyển sang trang tùy chỉnh PDF?</p>
+        <div class="bg-light p-3 rounded mt-3">
+          <div class="row">
+            <div class="col-6">
+              <strong>Bệnh nhân:</strong> ${service.patient_name}
+            </div>
+            <div class="col-6">
+              <strong>Dịch vụ:</strong> ${service.service_name}
+            </div>
+            <div class="col-12 mt-2">
+              <strong>Mã dịch vụ:</strong> #${service.service_order_id}
+            </div>
+          </div>
+        </div>
+        <div class="alert alert-warning mt-3">
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          <strong>Lưu ý:</strong> Bạn sẽ được chuyển đến trang chỉnh sửa PDF. Mọi thay đổi chưa lưu trên trang này sẽ bị mất.
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Chuyển Trang',
+      cancelButtonText: 'Ở Lại',
+      confirmButtonColor: '#0dcaf0',
+      cancelButtonColor: '#6c757d',
+      reverseButtons: true
+    }).then((result) => {
+      if (result.isConfirmed) {
+        customizePDFResult(service);
+      }
+    });
+  };
+
+  // ✅ Thực hiện hành động sau khi confirm
+  const executeAction = (action, data) => {
+    switch (action) {
+      case 'start':
+        handleStatusChange(
+          data.serviceOrderId,
+          data.patientName,
+          data.serviceName,
+          STATUS.IN_PROGRESS
+        );
+        break;
+      case 'complete':
+        handleStatusChange(
+          data.serviceOrderId,
+          data.patientName,
+          data.serviceName,
+          STATUS.COMPLETED
+        );
+        break;
+      case 'cancel':
+        handleStatusChange(
+          data.serviceOrderId,
+          data.patientName,
+          data.serviceName,
+          STATUS.CANCELLED
+        );
+        break;
+      default:
+        console.warn('Unknown action:', action);
+    }
+  };
+
+  // ✅ Thực hiện xem chi tiết kết quả
+  const executeViewResultDetail = (service) => {
+    console.log('📋 Xem kết quả chi tiết:', {
+      patient: service.patient_name,
+      service: service.service_name,
+      result: service.result
+    });
+
+    setViewingService(service);
+    setShowViewResultModal(true);
+  };
 
   // ✅ PAGINATION FUNCTIONS
   const handleAssignedPageChange = (selectedItem) => {
@@ -122,120 +486,6 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
 
   const assignedPageCount = getPageCount(localData);
   const completedPageCount = getPageCount(completedServices);
-
-  // ✅ CONFIRM MODAL FUNCTIONS
-  const openConfirmModal = (action, data) => {
-    setConfirmAction(action);
-    setConfirmData(data);
-    setShowConfirmModal(true);
-  };
-
-  const closeConfirmModal = () => {
-    setShowConfirmModal(false);
-    setConfirmAction(null);
-    setConfirmData(null);
-  };
-
-  const executeConfirmAction = () => {
-    if (!confirmAction || !confirmData) return;
-
-    switch (confirmAction) {
-      case 'start':
-        handleStatusChange(
-          confirmData.serviceOrderId,
-          confirmData.patientName,
-          confirmData.serviceName,
-          STATUS.IN_PROGRESS
-        );
-        break;
-      case 'complete':
-        handleStatusChange(
-          confirmData.serviceOrderId,
-          confirmData.patientName,
-          confirmData.serviceName,
-          STATUS.COMPLETED
-        );
-        break;
-      case 'cancel':
-        handleStatusChange(
-          confirmData.serviceOrderId,
-          confirmData.patientName,
-          confirmData.serviceName,
-          STATUS.CANCELLED
-        );
-        break;
-      default:
-        console.warn('Unknown confirm action:', confirmAction);
-    }
-
-    closeConfirmModal();
-  };
-
-  // ✅ RENDER CONFIRM MODAL CONTENT
-  const renderConfirmContent = () => {
-    if (!confirmData) return null;
-
-    const { patientName, serviceName, actionType } = confirmData;
-
-    const getConfirmConfig = () => {
-      switch (actionType) {
-        case 'start':
-          return {
-            title: 'Bắt Đầu Dịch Vụ',
-            icon: 'play-circle',
-            variant: 'primary',
-            message: `Bạn có chắc muốn BẮT ĐẦU dịch vụ "${serviceName}" cho bệnh nhân ${patientName}?`,
-            confirmText: 'Bắt Đầu'
-          };
-        case 'complete':
-          return {
-            title: 'Hoàn Thành Dịch Vụ',
-            icon: 'check-circle',
-            variant: 'success',
-            message: `Bạn có chắc muốn HOÀN THÀNH dịch vụ "${serviceName}" cho bệnh nhân ${patientName}?`,
-            confirmText: 'Hoàn Thành'
-          };
-        case 'cancel':
-          return {
-            title: 'Hủy Dịch Vụ',
-            icon: 'times-circle',
-            variant: 'danger',
-            message: `Bạn có chắc muốn HỦY dịch vụ "${serviceName}" cho bệnh nhân ${patientName}?`,
-            confirmText: 'Hủy Dịch Vụ'
-          };
-        default:
-          return {
-            title: 'Xác Nhận',
-            icon: 'question-circle',
-            variant: 'warning',
-            message: 'Bạn có chắc muốn thực hiện hành động này?',
-            confirmText: 'Xác Nhận'
-          };
-      }
-    };
-
-    const config = getConfirmConfig();
-
-    return (
-      <>
-        <div className="text-center mb-3">
-          <i className={`fas fa-${config.icon} fa-3x text-${config.variant} mb-3`}></i>
-          <h4 className={`text-${config.variant} fw-bold`}>{config.title}</h4>
-        </div>
-        <p className="text-center fs-5">{config.message}</p>
-        <div className="bg-light p-3 rounded mt-3">
-          <div className="row">
-            <div className="col-6">
-              <strong>Bệnh nhân:</strong> {patientName}
-            </div>
-            <div className="col-6">
-              <strong>Dịch vụ:</strong> {serviceName}
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  };
 
   // ✅ Helper functions
   const getStatusVariant = useCallback((status) => {
@@ -315,6 +565,17 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
           console.log('✅ API cập nhật thành công');
           const actionMessage = getActionMessage(newStatus, patientName, serviceName);
           setLocalSuccess(`✅ ${actionMessage}`);
+          
+          // Hiển thị SweetAlert2 success
+          Swal.fire({
+            title: 'Thành Công!',
+            text: actionMessage,
+            icon: 'success',
+            confirmButtonColor: '#198754',
+            timer: 2000,
+            showConfirmButton: false
+          });
+          
           setTimeout(() => setLocalSuccess(''), 3000);
         } else {
           console.warn('⚠️ API trả về success=false, nhưng có thể đã update DB');
@@ -344,6 +605,15 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
           }
 
           setLocalError(errorMessage);
+          
+          // Hiển thị SweetAlert2 error
+          Swal.fire({
+            title: 'Lỗi!',
+            text: errorMessage,
+            icon: 'error',
+            confirmButtonColor: '#dc3545'
+          });
+          
           setTimeout(() => setLocalError(''), 5000);
         }
       }
@@ -351,13 +621,21 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
     } catch (err) {
       console.error('💥 Lỗi không mong muốn:', err);
       setLocalError('❌ Có lỗi xảy ra, vui lòng thử lại');
+      
+      Swal.fire({
+        title: 'Lỗi!',
+        text: 'Có lỗi xảy ra, vui lòng thử lại',
+        icon: 'error',
+        confirmButtonColor: '#dc3545'
+      });
+      
       setTimeout(() => setLocalError(''), 5000);
     } finally {
       setLocalLoading(false);
     }
   };
 
-  // ✅ handleSaveResult
+  // ✅ handleSaveResult với SweetAlert2
   const handleSaveResult = async () => {
     if (localLoading) return;
 
@@ -396,6 +674,16 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
         const successMessage = `✅ Đã lưu kết quả "${currentService.service_name}" cho ${currentService.patient_name}`;
         setLocalSuccess(successMessage);
 
+        // Hiển thị SweetAlert2 success
+        Swal.fire({
+          title: 'Lưu Thành Công!',
+          text: `Đã lưu kết quả xét nghiệm cho ${currentService.patient_name}`,
+          icon: 'success',
+          confirmButtonColor: '#198754',
+          timer: 2000,
+          showConfirmButton: false
+        });
+
         closeResultModal();
 
         // ✅ RELOAD DATA TRONG BACKGROUND
@@ -426,6 +714,15 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
       }
 
       setLocalError(errorMessage);
+      
+      // Hiển thị SweetAlert2 error
+      Swal.fire({
+        title: 'Lỗi Lưu Kết Quả!',
+        text: errorMessage,
+        icon: 'error',
+        confirmButtonColor: '#dc3545'
+      });
+      
       setTimeout(() => setLocalError(''), 5000);
 
     } finally {
@@ -475,27 +772,30 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
   };
 
   const closeResultModal = () => {
-    setShowResultModal(false);
-    setCurrentService(null);
-    setResultText('');
-  };
-
-  // ✅ Hàm xem kết quả chi tiết
-  const viewResultDetail = (service) => {
-    if (!service.result || service.result.trim() === '') {
-      setLocalError('Chưa có kết quả xét nghiệm cho dịch vụ này');
-      setTimeout(() => setLocalError(''), 3000);
-      return;
+    // Confirm khi đóng modal nếu có thay đổi
+    if (resultText !== (currentService?.result || '')) {
+      Swal.fire({
+        title: 'Thoát mà không lưu?',
+        text: 'Bạn có thay đổi chưa lưu. Bạn có chắc muốn thoát?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Thoát',
+        cancelButtonText: 'Ở lại',
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        reverseButtons: true
+      }).then((result) => {
+        if (result.isConfirmed) {
+          setShowResultModal(false);
+          setCurrentService(null);
+          setResultText('');
+        }
+      });
+    } else {
+      setShowResultModal(false);
+      setCurrentService(null);
+      setResultText('');
     }
-
-    console.log('📋 Xem kết quả chi tiết:', {
-      patient: service.patient_name,
-      service: service.service_name,
-      result: service.result
-    });
-
-    setViewingService(service);
-    setShowViewResultModal(true);
   };
 
   // ✅ Hàm đóng modal xem kết quả
@@ -504,14 +804,8 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
     setViewingService(null);
   };
 
-  // ✅ Hàm in PDF kết quả xét nghiệm - SỬ DỤNG printPdfService
+  // ✅ Hàm in PDF kết quả xét nghiệm với SweetAlert2
   const printPDFResult = async (service) => {
-    if (!service.result || service.result.trim() === '') {
-      setLocalError('Chưa có kết quả xét nghiệm để in');
-      setTimeout(() => setLocalError(''), 3000);
-      return;
-    }
-
     try {
       setPrintingPdf(true);
       setLocalError('');
@@ -520,6 +814,16 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
       console.log('🔄 Đang tạo PDF kết quả xét nghiệm...', {
         serviceId: service.service_order_id,
         patient: service.patient_name
+      });
+
+      // Hiển thị loading SweetAlert2
+      Swal.fire({
+        title: 'Đang tạo PDF...',
+        text: 'Vui lòng chờ trong giây lát',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
       });
 
       // ✅ CHUẨN BỊ DỮ LIỆU CHO PDF
@@ -550,7 +854,6 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
 
         // ✅ PDF SETTINGS
         pdf_settings: {
-          // 🔥 CÁC TRƯỜNG BẮT BUỘC THEO VALIDATION
           fontFamily: 'Times New Roman',
           fontSize: '14px',
           fontColor: '#000000',
@@ -605,6 +908,16 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
       // ✅ SỬA LẠI TÊN HÀM: printPDF thay vì printPaymentInvoice
       await printPdfService.printPDF(pdfData);
 
+      // Đóng loading và hiển thị success
+      Swal.fire({
+        title: 'Thành Công!',
+        text: `Đã xuất PDF kết quả xét nghiệm cho ${service.patient_name}`,
+        icon: 'success',
+        confirmButtonColor: '#198754',
+        timer: 3000,
+        showConfirmButton: false
+      });
+
       setLocalSuccess(`✅ Đã xuất PDF kết quả xét nghiệm cho ${service.patient_name}`);
       setTimeout(() => setLocalSuccess(''), 5000);
 
@@ -622,6 +935,14 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
         errorMessage = '❌ Timeout khi tạo PDF. Vui lòng thử lại.';
       }
 
+      // Đóng loading và hiển thị error
+      Swal.fire({
+        title: 'Lỗi!',
+        text: errorMessage,
+        icon: 'error',
+        confirmButtonColor: '#dc3545'
+      });
+
       setLocalError(errorMessage);
       setTimeout(() => setLocalError(''), 5000);
     } finally {
@@ -629,14 +950,8 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
     }
   };
 
-  // ✅ Hàm tùy chỉnh PDF kết quả xét nghiệm
+  // ✅ Hàm tùy chỉnh PDF kết quả xét nghiệm với SweetAlert2
   const customizePDFResult = async (service) => {
-    if (!service.result || service.result.trim() === '') {
-      setLocalError('Chưa có kết quả xét nghiệm để tùy chỉnh');
-      setTimeout(() => setLocalError(''), 3000);
-      return;
-    }
-
     try {
       setCustomizingPdf(true);
       setLocalError('');
@@ -647,10 +962,20 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
         patient: service.patient_name
       });
 
+      // Hiển thị loading SweetAlert2
+      Swal.fire({
+        title: 'Đang chuẩn bị...',
+        text: 'Đang mở trình chỉnh sửa PDF',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+
       // ✅ CHUẨN BỊ DỮ LIỆU CHO PDF EDITOR
       const pdfEditorData = {
         type: 'test_result',
-        source: 'technician', // Đánh dấu nguồn từ technician
+        source: 'technician',
 
         // Thông tin bệnh nhân
         patient_name: service.patient_name,
@@ -681,7 +1006,6 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
 
         // PDF Settings mặc định
         pdf_settings: {
-          // 🔥 CÁC TRƯỜNG BẮT BUỘC THEO VALIDATION
           fontFamily: 'Times New Roman',
           fontSize: '14px',
           fontColor: '#000000',
@@ -693,14 +1017,12 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
           fontStyle: 'normal',
           fontWeight: 'normal',
 
-          // Clinic info
           clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
           clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
           clinicPhone: '028 1234 5678',
           doctorName: 'Hệ thống',
           customTitle: 'Phiếu KQ Xét Nghiệm',
 
-          // Page settings
           pageOrientation: 'portrait',
           pageSize: 'A4',
           marginTop: '15mm',
@@ -708,45 +1030,26 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
           marginLeft: '10mm',
           marginRight: '10mm',
 
-          // Logo settings (disabled)
-          logo: {
-            enabled: false,
-            url: '',
-            width: '80px',
-            height: '80px',
-            position: 'left',
-            opacity: 0.8
-          },
-
-          // Watermark settings (disabled)
-          watermark: {
-            enabled: false,
-            text: 'MẪU BẢN QUYỀN',
-            url: '',
-            opacity: 0.1,
-            fontSize: 48,
-            color: '#cccccc',
-            rotation: -45
-          }
+          logo: { enabled: false },
+          watermark: { enabled: false }
         },
 
-        // Thông tin bổ sung để nhận diện
         service_order_id: service.service_order_id,
         appointment_id: service.appointment_id,
         timestamp: Date.now()
       };
-
-      console.log('📤 PDF Editor Data:', pdfEditorData);
 
       // ✅ LƯU DỮ LIỆU VÀO SESSION STORAGE
       sessionStorage.setItem('pdfEditorData', JSON.stringify(pdfEditorData));
       sessionStorage.setItem('editorSource', 'technician');
       sessionStorage.setItem('shouldRefreshOnReturn', 'true');
 
+      // Đóng loading
+      Swal.close();
+
       // ✅ CHUYỂN HƯỚNG ĐẾN TRANG EDITOR
       const editorUrl = '/technician/technician-print-pdf-editor';
 
-      // Sử dụng navigate nếu có, hoặc window.location
       if (typeof navigate === 'function') {
         navigate(editorUrl, {
           state: {
@@ -760,7 +1063,6 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
           }
         });
       } else {
-        // Fallback: lưu state vào sessionStorage và chuyển trang
         sessionStorage.setItem('navigationState', JSON.stringify({
           source: 'technician',
           pdfData: pdfEditorData,
@@ -784,6 +1086,13 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
         errorMessage = '❌ Lỗi kết nối. Vui lòng kiểm tra đường dẫn.';
       }
 
+      Swal.fire({
+        title: 'Lỗi!',
+        text: errorMessage,
+        icon: 'error',
+        confirmButtonColor: '#dc3545'
+      });
+
       setLocalError(errorMessage);
       setTimeout(() => setLocalError(''), 5000);
     } finally {
@@ -804,8 +1113,6 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
 
   // ✅ Tính toán statistics
   const statistics = React.useMemo(() => {
-    console.log('📊 Calculating statistics from localData and completedServices');
-
     const totalAssignedServices = localData.length;
     const completedServicesCount = completedServices.length;
     const inProgressServices = localData.filter(s =>
@@ -950,7 +1257,7 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
                 variant="primary"
                 size="sm"
                 className="px-3"
-                onClick={() => openConfirmModal('start', {
+                onClick={() => showConfirmDialog('start', {
                   serviceOrderId: service.service_order_id,
                   patientName: service.patient_name,
                   serviceName: service.service_name,
@@ -983,7 +1290,7 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
                 variant="success"
                 size="sm"
                 className="px-3"
-                onClick={() => openConfirmModal('complete', {
+                onClick={() => showConfirmDialog('complete', {
                   serviceOrderId: service.service_order_id,
                   patientName: service.patient_name,
                   serviceName: service.service_name,
@@ -1002,7 +1309,7 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
                 variant="outline-danger"
                 size="sm"
                 className="px-3"
-                onClick={() => openConfirmModal('cancel', {
+                onClick={() => showConfirmDialog('cancel', {
                   serviceOrderId: service.service_order_id,
                   patientName: service.patient_name,
                   serviceName: service.service_name,
@@ -1027,7 +1334,7 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
         variant="outline-primary"
         size="sm"
         className="px-3"
-        onClick={() => viewResultDetail(service)}
+        onClick={() => confirmViewResultDetail(service)}
         disabled={!service.result || service.result.trim() === ''}
         title={service.result ? "Xem kết quả chi tiết" : "Chưa có kết quả"}
       >
@@ -1038,7 +1345,7 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
         variant="outline-success"
         size="sm"
         className="px-3"
-        onClick={() => printPDFResult(service)}
+        onClick={() => confirmPrintPDF(service)}
         disabled={!service.result || service.result.trim() === '' || printingPdf}
         title="In PDF kết quả"
       >
@@ -1053,7 +1360,7 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
         variant="outline-info"
         size="sm"
         className="px-3"
-        onClick={() => customizePDFResult(service)}
+        onClick={() => confirmCustomizePDF(service)}
         disabled={!service.result || service.result.trim() === '' || customizingPdf}
         title="Tùy chỉnh PDF"
       >
@@ -1356,7 +1663,7 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
           </Button>
           <Button
             variant="primary"
-            onClick={handleSaveResult}
+            onClick={confirmSaveResult}
             disabled={localLoading || !resultText.trim()}
           >
             {localLoading ? (
@@ -1428,7 +1735,7 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
           {viewingService && (
             <Button
               variant="primary"
-              onClick={() => printPDFResult(viewingService)}
+              onClick={() => confirmPrintPDF(viewingService)}
               disabled={printingPdf}
             >
               {printingPdf ? (
@@ -1444,44 +1751,6 @@ const TechnicianSection = ({ testResultsData, completedServicesData, updateStats
               )}
             </Button>
           )}
-        </Modal.Footer>
-      </Modal>
-
-      {/* Confirm Action Modal */}
-      <Modal show={showConfirmModal} onHide={closeConfirmModal} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Xác Nhận Hành Động</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {renderConfirmContent()}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={closeConfirmModal} disabled={localLoading}>
-            <i className="fas fa-times me-1"></i>
-            Hủy
-          </Button>
-          <Button
-            variant={confirmAction === 'cancel' ? 'danger' : confirmAction === 'start' ? 'primary' : 'success'}
-            onClick={executeConfirmAction}
-            disabled={localLoading}
-          >
-            {localLoading ? (
-              <>
-                <Spinner animation="border" size="sm" className="me-2" />
-                Đang xử lý...
-              </>
-            ) : (
-              <>
-                <i className={`fas fa-${confirmAction === 'start' ? 'play' :
-                  confirmAction === 'complete' ? 'check' :
-                    'times'
-                  } me-1`}></i>
-                {confirmAction === 'start' ? 'Bắt Đầu' :
-                  confirmAction === 'complete' ? 'Hoàn Thành' :
-                    'Hủy Dịch Vụ'}
-              </>
-            )}
-          </Button>
         </Modal.Footer>
       </Modal>
     </div>

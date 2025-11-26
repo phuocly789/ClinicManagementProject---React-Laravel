@@ -4,7 +4,7 @@ import CustomToast from '../../Components/CustomToast/CustomToast';
 import Loading from '../../Components/Loading/Loading';
 import instance from '../../axios';
 import dayjs from 'dayjs';
-import { BiUserPlus, BiShow, BiPencil, BiTrash, BiLockOpen, BiLock, BiKey } from 'react-icons/bi'; // THÊM BiKey
+import { BiUserPlus, BiShow, BiPencil, BiTrash, BiLockOpen, BiLock, BiKey, BiSearch } from 'react-icons/bi';
 import { useDebounce } from 'use-debounce';
 import Pagination from '../../Components/Pagination/Pagination';
 
@@ -16,15 +16,15 @@ const initialFormState = {
 };
 
 // Tách FormField component ra ngoài để tránh re-render
-const FormField = React.memo(({ 
-  label, 
-  name, 
-  type = "text", 
-  required = false, 
+const FormField = React.memo(({
+  label,
+  name,
+  type = "text",
+  required = false,
   value,
   onChange,
   error,
-  ...props 
+  ...props
 }) => (
   <div className="mb-3">
     <label className="form-label">
@@ -54,6 +54,7 @@ const AdminUserManagement = () => {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [formErrors, setFormErrors] = useState({});
+  const [solrAvailable, setSolrAvailable] = useState(true);
 
   const apiFilters = useMemo(() => ({
     search: debouncedSearchTerm,
@@ -62,28 +63,72 @@ const AdminUserManagement = () => {
     status: filters.status,
   }), [debouncedSearchTerm, filters.gender, filters.role, filters.status]);
 
-  // Lấy danh sách người dùng
-  const fetchUsers = useCallback(async (page = 1) => {
+  // Kiểm tra kết nối Solr - Xử lý lỗi 404 và các lỗi khác
+  const checkSolrHealth = useCallback(async () => {
+    try {
+      // Thử gọi endpoint search với query đơn giản
+      const response = await instance.get('/api/search?q=*:*&type=user&per_page=1');
+      // Kiểm tra response structure để xác định Solr có hoạt động không
+      if (response.data && response.data.success !== false && !response.data.fallback) {
+        setSolrAvailable(true);
+        localStorage.setItem('solr_available', 'true');
+        return true;
+      } else {
+        setSolrAvailable(false);
+        return false;
+      }
+    } catch (error) {
+      // Xử lý tất cả các lỗi (404, 500, network error, etc.)
+      console.warn('❌ Solr connection failed:', error.response?.status || error.message);
+      setSolrAvailable(false);
+      return false;
+    }
+  }, []);
+
+  // Tự động thử lại Solr sau 30 giây nếu lỗi
+  useEffect(() => {
+    let retryInterval;
+
+    const setupRetry = () => {
+      if (!solrAvailable) {
+        retryInterval = setInterval(async () => {
+          console.log('🔄 Tự động thử lại kết nối Solr...');
+          await checkSolrHealth();
+        }, 30000); // 30 giây
+      }
+    };
+
+    setupRetry();
+
+    return () => {
+      if (retryInterval) {
+        clearInterval(retryInterval);
+      }
+    };
+  }, [solrAvailable, checkSolrHealth]);
+
+  // Lấy danh sách người dùng từ database (fallback)
+  const fetchUsersFromDatabase = useCallback(async (page = 1) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ 
-        page, 
-        per_page: 10, 
-        ...apiFilters 
+      const params = new URLSearchParams({
+        page,
+        per_page: 10,
+        ...apiFilters
       });
-      
+
       const response = await instance.get(`/api/users?${params.toString()}`);
-      
+
       if (!response.data) {
         throw new Error('Dữ liệu trả về không hợp lệ');
       }
-      
+
       const formattedUsers = (response.data.data || response.data || []).map(user => ({
         ...user,
         BirthDate: user.DateOfBirth ? dayjs(user.DateOfBirth).format('DD/MM/YYYY') : 'Chưa có',
         Role: user.roles && user.roles.length > 0 ? user.roles[0].RoleName : 'Chưa có',
       }));
-      
+
       setUsers(formattedUsers);
       setPagination({
         currentPage: response.data.current_page || response.current_page || 1,
@@ -91,9 +136,9 @@ const AdminUserManagement = () => {
       });
     } catch (err) {
       console.error('Lỗi khi tải danh sách người dùng:', err);
-      setToast({ 
-        type: 'error', 
-        message: err.response?.data?.message || 'Lỗi khi tải danh sách người dùng.' 
+      setToast({
+        type: 'error',
+        message: err.response?.data?.message || 'Lỗi khi tải danh sách người dùng.'
       });
       setUsers([]);
     } finally {
@@ -101,6 +146,124 @@ const AdminUserManagement = () => {
     }
   }, [apiFilters]);
 
+  // Tìm kiếm người dùng từ Solr 
+  const searchUsersFromSolr = useCallback(async (page = 1) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+
+      // Query tìm kiếm chính xác trên các field quan trọng
+      if (debouncedSearchTerm && debouncedSearchTerm.trim()) {
+        const keyword = debouncedSearchTerm.trim();
+        params.append('q', `(full_name:*${keyword}* OR username:*${keyword}* OR email:*${keyword}* OR phone:*${keyword}* OR user_role:*${keyword}* OR specialty:*${keyword}* OR license_number:*${keyword}*)`);
+      } else {
+        params.append('q', '*:*');
+      }
+
+      params.append('fq', 'type:user');           // Dùng filter query thay vì type trong q
+      params.append('page', page.toString());
+      params.append('per_page', 10);              // số, không cần dấu nháy
+      params.append('sort', 'score desc, id asc');
+
+      if (filters.gender) {
+        params.append('gender', filters.gender);
+      }
+      if (filters.role) {
+        params.append('user_role', filters.role);
+      }
+      if (filters.status) {
+        params.append('is_active', filters.status === '1' ? 'true' : 'false');
+      }
+
+      const response = await instance.get(`/api/users/search?${params.toString()}`);
+      if (!response.data) {
+        throw new Error('Dữ liệu trả về không hợp lệ');
+      }
+
+      const solrData = response.data;
+
+      // Kiểm tra nếu Solr trả về lỗi (success: false) hoặc fallback
+      if (solrData.success === false || solrData.fallback) {
+        console.warn(' Solr unavailable, using database fallback');
+        setSolrAvailable(false);
+        await fetchUsersFromDatabase(page);
+        return;
+      }
+
+      // Xử lý kết quả thành công từ Solr
+      let results = [];
+      if (solrData.results && Array.isArray(solrData.results)) {
+        results = solrData.results;
+      } else if (solrData.data && Array.isArray(solrData.data)) {
+        results = solrData.data;
+      }
+
+      const formattedUsers = results.map((item, index) => {
+        // Helper lấy giá trị đầu nếu là mảng (vì Solr trả về mảng)
+        const get = (field, fallback = 'Chưa có') => {
+          const val = item[field];
+          if (Array.isArray(val)) return val[0] || fallback;
+          return val !== undefined && val !== null ? val : fallback;
+        };
+
+        const fullName = get('full_name', 'Chưa có tên');
+        const role = get('user_role', 'Chưa có');
+
+        return {
+          UserId: item.id?.replace('user_', '') || index + 1,
+          Username: get('username', 'N/A'),
+          FullName: fullName,
+          Email: get('email', 'N/A'),
+          Phone: get('phone', 'N/A'),
+          Gender: get('gender', 'Chưa có'),
+          Address: get('address', 'Chưa có'),
+          Role: role,
+          IsActive: item.is_active !== undefined ? Boolean(item.is_active) : true,
+          Specialty: get('specialty', ''),
+          LicenseNumber: get('license_number', ''),
+          BirthDate: item.date_of_birth ? dayjs(item.date_of_birth).format('DD/MM/YYYY') : 'Chưa có',
+        };
+      });
+      setUsers(formattedUsers);
+
+      const totalResults = solrData.total || results.length;
+      setPagination({
+        currentPage: page,
+        totalPages: Math.max(1, Math.ceil(totalResults / 10)),
+      });
+
+    } catch (err) {
+      // Xử lý tất cả lỗi từ Solr (404, 500, network, etc.)
+      console.error('Solr search error:', err.response?.status || err.message);
+      setSolrAvailable(false);
+      // Tự động fallback về database
+      await fetchUsersFromDatabase(page);
+    } finally {
+      setLoading(false);
+    }
+  }, [debouncedSearchTerm, filters.gender, filters.role, filters.status, fetchUsersFromDatabase]);
+
+  // Hàm chung để fetch users - Tự động chọn Solr hoặc Database
+  const fetchUsers = useCallback(async (page = 1) => {
+    const shouldUseSolr = debouncedSearchTerm?.trim() && solrAvailable;
+
+    if (shouldUseSolr) {
+      await searchUsersFromSolr(page);
+    } else {
+      await fetchUsersFromDatabase(page);
+    }
+  }, [debouncedSearchTerm, solrAvailable, searchUsersFromSolr, fetchUsersFromDatabase]);
+
+  // Khởi tạo kết nối Solr khi component mount
+  useEffect(() => {
+    const initializeSolr = async () => {
+      await checkSolrHealth();
+    };
+
+    initializeSolr();
+  }, [checkSolrHealth]);
+
+  // Fetch users khi filters thay đổi
   useEffect(() => {
     fetchUsers(1);
   }, [apiFilters, fetchUsers]);
@@ -113,11 +276,11 @@ const AdminUserManagement = () => {
         const rolesData = response.data || response;
         const rolesArray = Array.isArray(rolesData) ? rolesData : (rolesData.data || []);
         setRoles(rolesArray);
-      } catch (err) { 
+      } catch (err) {
         console.error('Lỗi tải vai trò:', err);
-        setToast({ 
-          type: 'error', 
-          message: err.response?.data?.message || 'Lỗi khi tải danh sách vai trò.' 
+        setToast({
+          type: 'error',
+          message: err.response?.data?.message || 'Lỗi khi tải danh sách vai trò.'
         });
         setRoles([]);
       }
@@ -141,10 +304,10 @@ const AdminUserManagement = () => {
       setToast({ type: 'error', message: 'Không thể xóa tài khoản Admin!' });
       return;
     }
-    
+
     setModal({ type, user });
     setFormErrors({});
-    
+
     if (type === 'add') {
       setFormData(initialFormState);
     } else if (type === 'edit' && user) {
@@ -152,6 +315,7 @@ const AdminUserManagement = () => {
         ...user,
         DateOfBirth: user.DateOfBirth ? dayjs(user.DateOfBirth).format('YYYY-MM-DD') : '',
         Role: user.roles && user.roles.length > 0 ? user.roles[0].RoleName : user.Role,
+        updated_at: user.updated_at
       });
     } else {
       setFormData(initialFormState);
@@ -169,7 +333,7 @@ const AdminUserManagement = () => {
   // Kiểm tra tính hợp lệ của form
   const validateForm = () => {
     const errors = {};
-    
+
     if (!formData.Username?.trim()) errors.Username = 'Tên đăng nhập là bắt buộc';
     if (!formData.FullName?.trim()) errors.FullName = 'Họ tên là bắt buộc';
     if (!formData.Email?.trim()) errors.Email = 'Email là bắt buộc';
@@ -177,30 +341,30 @@ const AdminUserManagement = () => {
     if (!formData.Phone?.trim()) errors.Phone = 'Số điện thoại là bắt buộc';
     if (!formData.Gender) errors.Gender = 'Giới tính là bắt buộc';
     if (!formData.Role) errors.Role = 'Vai trò là bắt buộc';
-    
+
     if (modal.type === 'add' && !formData.Password) {
       errors.Password = 'Mật khẩu là bắt buộc';
     } else if (modal.type === 'add' && formData.Password.length < 6) {
       errors.Password = 'Mật khẩu phải có ít nhất 6 ký tự';
     }
-    
+
     if (formData.Role === 'Bác sĩ') {
       if (!formData.Specialty?.trim()) errors.Specialty = 'Chuyên khoa là bắt buộc';
       if (!formData.LicenseNumber?.trim()) errors.LicenseNumber = 'Số giấy phép hành nghề là bắt buộc';
     }
-    
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       setToast({ type: 'error', message: 'Vui lòng kiểm tra lại thông tin nhập vào.' });
       return;
     }
-    
+
     setLoading(true);
     const { type, user } = modal;
     const isEditing = type === 'edit';
@@ -208,22 +372,31 @@ const AdminUserManagement = () => {
     const method = isEditing ? 'put' : 'post';
 
     try {
-      const payload = { ...formData };
+      const payload = { ...formData,updated_at: modal.user?.updated_at };
       if (isEditing && !payload.Password) {
         delete payload.Password;
       }
-      
+
       const response = await instance[method](url, payload);
       const responseData = response.data || response;
-      
-      setToast({ 
-        type: 'success', 
-        message: responseData.message || responseData.data?.message || `Người dùng đã được ${isEditing ? 'cập nhật' : 'thêm mới'} thành công!` 
+
+      setToast({
+        type: 'success',
+        message: responseData.message || responseData.data?.message || `Người dùng đã được ${isEditing ? 'cập nhật' : 'thêm mới'} thành công!`
       });
       handleCloseModal();
       fetchUsers(pagination.currentPage);
     } catch (err) {
       console.error('Lỗi khi gửi form:', err);
+      if (err.response?.status === 409 && err.response?.data?.requires_reload) {
+      setToast({ 
+        type: 'error', 
+        message: 'Dữ liệu đã được cập nhật bởi người khác. Vui lòng tải lại trang!' 
+      });
+      handleCloseModal();
+      fetchUsers(pagination.currentPage); // Reload dữ liệu
+      return;
+    }
       const errorMessage = err.response?.data?.errors
         ? Object.values(err.response.data.errors).flat().join(' ')
         : (err.response?.data?.message || err.message || 'Có lỗi xảy ra.');
@@ -238,18 +411,18 @@ const AdminUserManagement = () => {
     try {
       const response = await instance.delete(`/api/users/${modal.user.UserId}`);
       const responseData = response.data || response;
-      setToast({ 
-        type: 'success', 
-        message: responseData.message || responseData.data?.message || 'Xóa người dùng thành công!' 
+      setToast({
+        type: 'success',
+        message: responseData.message || responseData.data?.message || 'Xóa người dùng thành công!'
       });
       handleCloseModal();
       const newPage = users.length === 1 && pagination.currentPage > 1 ? pagination.currentPage - 1 : pagination.currentPage;
       fetchUsers(newPage);
     } catch (err) {
       console.error('Lỗi khi xóa người dùng:', err);
-      setToast({ 
-        type: 'error', 
-        message: err.response?.data?.error || err.response?.data?.message || err.message || 'Lỗi khi xóa người dùng.' 
+      setToast({
+        type: 'error',
+        message: err.response?.data?.error || err.response?.data?.message || err.message || 'Lỗi khi xóa người dùng.'
       });
     } finally {
       setLoading(false);
@@ -262,24 +435,23 @@ const AdminUserManagement = () => {
     try {
       const response = await instance.put(`/api/users/toggle-status/${user.UserId}`);
       const responseData = response.data || response;
-      setToast({ 
-        type: 'success', 
-        message: responseData.message || responseData.data?.message || 'Thay đổi trạng thái thành công!' 
+      setToast({
+        type: 'success',
+        message: responseData.message || responseData.data?.message || 'Thay đổi trạng thái thành công!'
       });
       handleCloseModal();
       fetchUsers(pagination.currentPage);
     } catch (err) {
       console.error('Lỗi khi thay đổi trạng thái:', err);
-      setToast({ 
-        type: 'error', 
-        message: err.response?.data?.message || err.message || 'Lỗi khi thay đổi trạng thái.' 
+      setToast({
+        type: 'error',
+        message: err.response?.data?.message || err.message || 'Lỗi khi thay đổi trạng thái.'
       });
     } finally {
       setLoading(false);
     }
   };
 
-  // THÊM HÀM RESET MẬT KHẨU
   const handleResetPassword = async () => {
     setLoading(true);
     const { user } = modal;
@@ -288,18 +460,18 @@ const AdminUserManagement = () => {
         password: '123456'
       });
       const responseData = response.data || response;
-      
-      setToast({ 
-        type: 'success', 
-        message: responseData.message || responseData.data?.message || 'Reset mật khẩu thành công! Mật khẩu mới là: 123456' 
+
+      setToast({
+        type: 'success',
+        message: responseData.message || responseData.data?.message || 'Reset mật khẩu thành công! Mật khẩu mới là: 123456'
       });
       handleCloseModal();
       fetchUsers(pagination.currentPage);
     } catch (err) {
       console.error('Lỗi khi reset mật khẩu:', err);
-      setToast({ 
-        type: 'error', 
-        message: err.response?.data?.message || err.message || 'Lỗi khi reset mật khẩu.' 
+      setToast({
+        type: 'error',
+        message: err.response?.data?.message || err.message || 'Lỗi khi reset mật khẩu.'
       });
     } finally {
       setLoading(false);
@@ -344,10 +516,10 @@ const AdminUserManagement = () => {
           <form onSubmit={handleFormSubmit}>
             <div className="row g-3">
               <div className="col-md-6">
-                <FormField 
-                  label="Tên đăng nhập" 
-                  name="Username" 
-                  required 
+                <FormField
+                  label="Tên đăng nhập"
+                  name="Username"
+                  required
                   disabled={isEditing}
                   value={formData.Username}
                   onChange={handleFormChange}
@@ -355,23 +527,23 @@ const AdminUserManagement = () => {
                 />
               </div>
               <div className="col-md-6">
-                <FormField 
-                  label="Họ tên" 
-                  name="FullName" 
-                  required 
+                <FormField
+                  label="Họ tên"
+                  name="FullName"
+                  required
                   value={formData.FullName}
                   onChange={handleFormChange}
                   error={formErrors.FullName}
                 />
               </div>
-              
+
               {!isEditing && (
                 <div className="col-12">
-                  <FormField 
-                    label="Mật khẩu" 
-                    name="Password" 
-                    type="password" 
-                    required 
+                  <FormField
+                    label="Mật khẩu"
+                    name="Password"
+                    type="password"
+                    required
                     minLength={6}
                     value={formData.Password}
                     onChange={handleFormChange}
@@ -379,50 +551,50 @@ const AdminUserManagement = () => {
                   />
                 </div>
               )}
-              
+
               <div className="col-md-6">
-                <FormField 
-                  label="Email" 
-                  name="Email" 
-                  type="email" 
-                  required 
+                <FormField
+                  label="Email"
+                  name="Email"
+                  type="email"
+                  required
                   value={formData.Email}
                   onChange={handleFormChange}
                   error={formErrors.Email}
                 />
               </div>
               <div className="col-md-6">
-                <FormField 
-                  label="Số điện thoại" 
-                  name="Phone" 
-                  type="tel" 
-                  required 
+                <FormField
+                  label="Số điện thoại"
+                  name="Phone"
+                  type="tel"
+                  required
                   value={formData.Phone}
                   onChange={handleFormChange}
                   error={formErrors.Phone}
                 />
               </div>
-              
+
               <div className="col-md-6">
-                <FormField 
-                  label="Ngày sinh" 
-                  name="DateOfBirth" 
+                <FormField
+                  label="Ngày sinh"
+                  name="DateOfBirth"
                   type="date"
                   max={dayjs().format('YYYY-MM-DD')}
                   value={formData.DateOfBirth}
                   onChange={handleFormChange}
                 />
               </div>
-              
+
               <div className="col-md-6">
                 <div className="mb-3">
                   <label className="form-label">
                     Giới tính <span className="text-danger">*</span>
                   </label>
-                  <select 
-                    name="Gender" 
-                    value={formData.Gender || ''} 
-                    onChange={handleFormChange} 
+                  <select
+                    name="Gender"
+                    value={formData.Gender || ''}
+                    onChange={handleFormChange}
                     className={`form-select ${formErrors.Gender ? 'is-invalid' : ''}`}
                     required
                   >
@@ -433,25 +605,25 @@ const AdminUserManagement = () => {
                   {formErrors.Gender && <div className="invalid-feedback">{formErrors.Gender}</div>}
                 </div>
               </div>
-              
+
               <div className="col-12">
-                <FormField 
-                  label="Địa chỉ" 
-                  name="Address" 
+                <FormField
+                  label="Địa chỉ"
+                  name="Address"
                   value={formData.Address}
                   onChange={handleFormChange}
                 />
               </div>
-              
+
               <div className="col-12">
                 <div className="mb-3">
                   <label className="form-label">
                     Vai trò <span className="text-danger">*</span>
                   </label>
-                  <select 
-                    name="Role" 
-                    value={formData.Role || ''} 
-                    onChange={handleFormChange} 
+                  <select
+                    name="Role"
+                    value={formData.Role || ''}
+                    onChange={handleFormChange}
                     className={`form-select ${formErrors.Role ? 'is-invalid' : ''}`}
                     required
                     disabled={formData.Role === 'Admin' && isEditing}
@@ -464,14 +636,14 @@ const AdminUserManagement = () => {
                   {formErrors.Role && <div className="invalid-feedback">{formErrors.Role}</div>}
                 </div>
               </div>
-              
+
               {formData.Role === 'Bác sĩ' && (
                 <>
                   <div className="col-md-6">
-                    <FormField 
-                      label="Chuyên khoa" 
-                      name="Specialty" 
-                      required 
+                    <FormField
+                      label="Chuyên khoa"
+                      name="Specialty"
+                      required
                       placeholder="Nhập chuyên khoa"
                       value={formData.Specialty}
                       onChange={handleFormChange}
@@ -479,10 +651,10 @@ const AdminUserManagement = () => {
                     />
                   </div>
                   <div className="col-md-6">
-                    <FormField 
-                      label="Số giấy phép hành nghề" 
-                      name="LicenseNumber" 
-                      required 
+                    <FormField
+                      label="Số giấy phép hành nghề"
+                      name="LicenseNumber"
+                      required
                       placeholder="Nhập số giấy phép hành nghề"
                       value={formData.LicenseNumber}
                       onChange={handleFormChange}
@@ -531,7 +703,6 @@ const AdminUserManagement = () => {
           '450px'
         );
 
-      // THÊM MODAL RESET PASSWORD
       case 'reset-password':
         return modalLayout(
           'Xác Nhận Reset Mật Khẩu',
@@ -586,73 +757,94 @@ const AdminUserManagement = () => {
     <div className="d-flex">
       <main className="main-content flex-grow-1 p-4 d-flex flex-column gap-4">
         {toast && (
-          <CustomToast 
-            type={toast.type} 
-            message={toast.message} 
-            onClose={() => setToast(null)} 
+          <CustomToast
+            type={toast.type}
+            message={toast.message}
+            onClose={() => setToast(null)}
           />
         )}
 
+        {/* Header sạch sẽ, không có thông tin Solr */}
         <header className="d-flex justify-content-between align-items-center flex-shrink-0">
-          <h1 className="h4 mb-0">Quản Lý Người Dùng</h1>
-          <button 
-            className="btn btn-primary d-flex align-items-center gap-2" 
+          <div>
+            <h1 className="h4 mb-0">Quản Lý Người Dùng</h1>
+          </div>
+          <button
+            className="btn btn-primary d-flex align-items-center gap-2"
             onClick={() => handleOpenModal('add')}
           >
             <BiUserPlus size={20} /> Thêm Người Dùng
           </button>
         </header>
 
-        {/* Bộ lọc */}
+        {/* Bộ lọc sạch sẽ */}
         <div className="card shadow-sm border-0 flex-shrink-0">
           <div className="card-body p-4">
-            <div className="row g-3">
-              <div className="col-md-6">
-                <input 
-                  type="text" 
-                  name="search" 
-                  className="form-control" 
-                  placeholder="Tìm theo tên, email, SĐT..."
-                  value={filters.search} 
-                  onChange={handleFilterChange} 
+            <div className="row g-3 align-items-end">
+              <div className="col-md-5">
+                <label className="form-label fw-semibold">
+                  <BiSearch className="me-2" />
+                  Tìm kiếm
+                </label>
+                <input
+                  type="text"
+                  name="search"
+                  className="form-control"
+                  placeholder="Tìm theo tên, email, SĐT, địa chỉ..."
+                  value={filters.search}
+                  onChange={handleFilterChange}
                 />
               </div>
               <div className="col-md-2">
-                <select 
-                  name="gender" 
-                  className="form-select" 
-                  value={filters.gender} 
+                <label className="form-label">Giới tính</label>
+                <select
+                  name="gender"
+                  className="form-select"
+                  value={filters.gender}
                   onChange={handleFilterChange}
                 >
-                  <option value="">Giới tính</option>
+                  <option value="">Tất cả</option>
                   <option value="Nam">Nam</option>
                   <option value="Nữ">Nữ</option>
                 </select>
               </div>
               <div className="col-md-2">
-                <select 
-                  name="role" 
-                  className="form-select" 
-                  value={filters.role} 
+                <label className="form-label">Vai trò</label>
+                <select
+                  name="role"
+                  className="form-select"
+                  value={filters.role}
                   onChange={handleFilterChange}
                 >
-                  <option value="">Vai trò</option>
+                  <option value="">Tất cả</option>
                   {roles.map(r => (
                     <option key={r.RoleId} value={r.RoleName}>{r.RoleName}</option>
                   ))}
                 </select>
               </div>
               <div className="col-md-2">
-                <select 
-                  name="status" 
-                  className="form-select" 
-                  value={filters.status} 
+                <label className="form-label">Trạng thái</label>
+                <select
+                  name="status"
+                  className="form-select"
+                  value={filters.status}
                   onChange={handleFilterChange}
                 >
-                  <option value="">Trạng thái</option>
+                  <option value="">Tất cả</option>
                   <option value="1">Hoạt động</option>
                   <option value="0">Vô hiệu hóa</option>
                 </select>
+              </div>
+              <div className="col-md-1">
+                <button
+                  className="btn btn-outline-secondary w-100"
+                  onClick={() => {
+                    setFilters({ search: '', gender: '', role: '', status: '' });
+                  }}
+                  title="Làm mới bộ lọc"
+                >
+                  ⟳
+                </button>
               </div>
             </div>
           </div>
@@ -696,38 +888,37 @@ const AdminUserManagement = () => {
                         </td>
                         <td className="text-center px-4">
                           <div className="d-flex gap-2 justify-content-center">
-                            <button 
-                              className="btn btn-lg btn-light" 
-                              title="Chi tiết" 
+                            <button
+                              className="btn btn-lg btn-light"
+                              title="Chi tiết"
                               onClick={() => handleOpenModal('detail', user)}
                             >
                               <BiShow />
                             </button>
-                            <button 
-                              className="btn btn-lg btn-light" 
-                              title="Sửa" 
+                            <button
+                              className="btn btn-lg btn-light"
+                              title="Sửa"
                               onClick={() => handleOpenModal('edit', user)}
                             >
                               <BiPencil />
                             </button>
-                            {/* THÊM NÚT RESET PASSWORD */}
-                            <button 
-                              className="btn btn-lg btn-light text-info" 
-                              title="Reset mật khẩu" 
+                            <button
+                              className="btn btn-lg btn-light text-info"
+                              title="Reset mật khẩu"
                               onClick={() => handleOpenModal('reset-password', user)}
                             >
                               <BiKey />
                             </button>
-                            <button 
-                              className={`btn btn-lg btn-light text-${user.IsActive ? 'warning' : 'success'}`} 
-                              title={user.IsActive ? 'Vô hiệu hóa' : 'Kích hoạt'} 
+                            <button
+                              className={`btn btn-lg btn-light text-${user.IsActive ? 'warning' : 'success'}`}
+                              title={user.IsActive ? 'Vô hiệu hóa' : 'Kích hoạt'}
                               onClick={() => handleOpenModal('status', user)}
                             >
                               {user.IsActive ? <BiLock /> : <BiLockOpen />}
                             </button>
-                            <button 
-                              className="btn btn-lg btn-light text-danger" 
-                              title="Xóa" 
+                            <button
+                              className="btn btn-lg btn-light text-danger"
+                              title="Xóa"
                               onClick={() => handleOpenModal('delete', user)}
                               disabled={user.Role === 'Admin'}
                             >
@@ -739,7 +930,7 @@ const AdminUserManagement = () => {
                     )) : (
                       <tr>
                         <td colSpan="8" className="text-center p-5 text-muted">
-                          Không tìm thấy người dùng.
+                          {filters.search ? 'Không tìm thấy người dùng phù hợp với từ khóa tìm kiếm.' : 'Không tìm thấy người dùng.'}
                         </td>
                       </tr>
                     )}
@@ -750,11 +941,11 @@ const AdminUserManagement = () => {
               {/* Phân trang */}
               {pagination.totalPages > 1 && (
                 <div className="card-footer p-3 border-0 flex-shrink-0">
-                  <Pagination 
-                    pageCount={pagination.totalPages} 
-                    onPageChange={({ selected }) => fetchUsers(selected + 1)} 
-                    currentPage={pagination.currentPage - 1} 
-                    isLoading ={loading}
+                  <Pagination
+                    pageCount={pagination.totalPages}
+                    onPageChange={({ selected }) => fetchUsers(selected + 1)}
+                    currentPage={pagination.currentPage - 1}
+                    isLoading={loading}
                   />
                 </div>
               )}

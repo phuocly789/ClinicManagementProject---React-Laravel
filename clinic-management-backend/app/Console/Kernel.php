@@ -13,6 +13,7 @@ class Kernel extends ConsoleKernel
     protected $commands = [
         // Đăng ký command gửi mail
         \App\Console\Commands\SendAppointmentReminder::class,
+        \App\Console\Commands\CheckMedicineAlerts::class,
     ];
 
     /**
@@ -24,6 +25,12 @@ class Kernel extends ConsoleKernel
         $schedule->command('appointment:reminder')
             ->dailyAt('07:00')
             ->timezone('Asia/Ho_Chi_Minh');
+
+        $schedule->command('medicine:check-alerts')
+            ->dailyAt('08:00')
+            ->timezone('Asia/Ho_Chi_Minh');
+
+        $schedule->command('inspire')->hourly();
     }
 
     /**

@@ -46,8 +46,10 @@ class PatientsController extends Controller
             $history = $appointments->map(function ($appt) {
                 $diagnosis = $appt->diagnoses->first();
 
+
                 return [
                     'appointment_id' => $appt->AppointmentId,
+                    'doctorName' => $appt->medical_staff->user->FullName ?? 'Chưa có bác sĩ',
                     'visit_date' => $appt->AppointmentDate->format('d/m/Y'),
                     'visit_datetime' => $appt->AppointmentDate->format('Y-m-d') . ($appt->AppointmentTime ? ' ' . substr($appt->AppointmentTime, 0, 5) : ''),
                     'time' => $appt->AppointmentTime ? substr($appt->AppointmentTime, 0, 5) : 'N/A',

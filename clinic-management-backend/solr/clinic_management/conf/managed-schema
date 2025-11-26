@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<schema name="clinic_management" version="1.6">
+    <fields>
+        <!-- Core fields -->
+        <field name="id" type="string" indexed="true" stored="true" required="true" multiValued="false" />
+        <field name="type" type="string" indexed="true" stored="true" multiValued="false" />
+        <field name="title" type="text_vietnamese" indexed="true" stored="true" multiValued="false" />
+        <field name="content" type="text_vietnamese" indexed="true" stored="true" multiValued="false" />
+        <field name="category" type="string" indexed="true" stored="true" multiValued="true" />
+        <field name="status" type="string" indexed="true" stored="true" multiValued="false" />
+        <field name="created_at" type="pdate" indexed="true" stored="true" multiValued="false" />
+        <field name="updated_at" type="pdate" indexed="true" stored="true" multiValued="false" />
+        <field name="score" type="pfloat" indexed="true" stored="true" multiValued="false" />
+
+        <!-- Patient fields -->
+        <field name="patient_code" type="string" indexed="true" stored="true" />
+        <field name="phone" type="string" indexed="true" stored="true" />
+        <field name="email" type="string" indexed="true" stored="true" />
+        <field name="address" type="text_vietnamese" indexed="true" stored="true" />
+        <field name="date_of_birth" type="pdate" indexed="true" stored="true" />
+
+        <!-- Medicine fields -->
+        <field name="medicine_name" type="text_vietnamese" indexed="true" stored="true" />
+        <field name="price" type="pfloat" indexed="true" stored="true" />
+        <field name="stock_quantity" type="pint" indexed="true" stored="true" />
+        <field name="supplier" type="text_vietnamese" indexed="true" stored="true" />
+        <field name="description" type="text_vietnamese" indexed="true" stored="true" />
+
+        <!-- Appointment fields -->
+        <field name="appointment_code" type="string" indexed="true" stored="true" />
+        <field name="patient_name" type="text_vietnamese" indexed="true" stored="true" />
+        <field name="doctor_name" type="text_vietnamese" indexed="true" stored="true" />
+        <field name="appointment_date" type="pdate" indexed="true" stored="true" />
+        <field name="symptoms" type="text_vietnamese" indexed="true" stored="true" />
+        <field name="diagnosis" type="text_vietnamese" indexed="true" stored="true" />
+
+        <!-- User fields -->
+        <field name="user_id" type="string" indexed="true" stored="true" />
+        <field name="username" type="text_vietnamese" indexed="true" stored="true" />
+        <field name="full_name" type="text_vietnamese" indexed="true" stored="true" />
+        <field name="email" type="string" indexed="true" stored="true" />
+        <field name="phone" type="string" indexed="true" stored="true" />
+        <field name="gender" type="string" indexed="true" stored="true" />
+        <field name="address" type="text_vietnamese" indexed="true" stored="true" />
+        <field name="date_of_birth" type="pdate" indexed="true" stored="true" />
+        <field name="user_role" type="string" indexed="true" stored="true" multiValued="false" />
+        <field name="is_active" type="boolean" indexed="true" stored="true" />
+        <field name="specialty" type="text_vietnamese" indexed="true" stored="true" />
+        <field name="license_number" type="string" indexed="true" stored="true" />
+
+        <!-- Copy fields for search -->
+        <field name="text" type="text_vietnamese" indexed="true" stored="false" multiValued="true" />
+
+        <!-- Dynamic fields -->
+        <dynamicField name="*_i" type="pint" indexed="true" stored="true" />
+        <dynamicField name="*_s" type="string" indexed="true" stored="true" />
+        <dynamicField name="*_l" type="plong" indexed="true" stored="true" />
+        <dynamicField name="*_t" type="text_vietnamese" indexed="true" stored="true" />
+        <dynamicField name="*_b" type="boolean" indexed="true" stored="true" />
+        <dynamicField name="*_f" type="pfloat" indexed="true" stored="true" />
+        <dynamicField name="*_d" type="pdouble" indexed="true" stored="true" />
+        <dynamicField name="*_dt" type="pdate" indexed="true" stored="true" />
+
+    </fields>
+
+    <!-- Copy field definitions -->
+    <copyField source="title" dest="text"/>
+    <copyField source="content" dest="text"/>
+    <copyField source="full_name" dest="text"/>
+    <copyField source="phone" dest="text"/>
+    <copyField source="email" dest="text"/>
+    <copyField source="address" dest="text"/>
+    <copyField source="medicine_name" dest="text"/>
+    <copyField source="description" dest="text"/>
+    <copyField source="patient_name" dest="text"/>
+    <copyField source="doctor_name" dest="text"/>
+    <copyField source="symptoms" dest="text"/>
+    <copyField source="diagnosis" dest="text"/>
+    <copyField source="username" dest="text"/>
+    <copyField source="user_role" dest="text"/>
+    <copyField source="specialty" dest="text"/>
+
+    <uniqueKey>id</uniqueKey>
+
+    <types>
+        <fieldType name="string" class="solr.StrField" sortMissingLast="true" />
+        <fieldType name="boolean" class="solr.BoolField" sortMissingLast="true" />
+        <fieldType name="pint" class="solr.IntPointField" />
+        <fieldType name="pfloat" class="solr.FloatPointField" />
+        <fieldType name="plong" class="solr.LongPointField" />
+        <fieldType name="pdouble" class="solr.DoublePointField" />
+        <fieldType name="pdate" class="solr.DatePointField" sortMissingLast="true" />
+
+        <!-- Field type cho tiếng Việt - Đơn giản hóa -->
+        <fieldType name="text_vietnamese" class="solr.TextField" positionIncrementGap="100">
+        <analyzer type="index">
+            <tokenizer class="solr.StandardTokenizerFactory"/>
+            <filter class="solr.LowerCaseFilterFactory"/>
+            <filter class="solr.VietnameseAccentFilterFactory"/>
+            <filter class="solr.ICUFoldingFilterFactory"/> <!-- BẮT BUỘC -->
+        </analyzer>
+
+        <analyzer type="query">
+            <tokenizer class="solr.StandardTokenizerFactory"/>
+            <filter class="solr.LowerCaseFilterFactory"/>
+            <filter class="solr.VietnameseAccentFilterFactory"/>
+            <filter class="solr.ICUFoldingFilterFactory"/> <!-- BẮT BUỘC -->
+        </analyzer>
+        </fieldType>
+
+
+        <!-- Giữ text_general cũ cho tương thích -->
+        <fieldType name="text_general" class="solr.TextField" positionIncrementGap="100">
+            <analyzer type="index">
+                <tokenizer class="solr.StandardTokenizerFactory" />
+                <filter class="solr.LowerCaseFilterFactory" />
+            </analyzer>
+            <analyzer type="query">
+                <tokenizer class="solr.StandardTokenizerFactory" />
+                <filter class="solr.LowerCaseFilterFactory" />
+            </analyzer>
+        </fieldType>
+    </types>
+</schema>
