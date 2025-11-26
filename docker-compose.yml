@@ -18,29 +18,21 @@ services:
     environment:
       # Database Configuration
       - DB_CONNECTION=pgsql
-      - DB_HOST=103.75.183.156
+      - DB_HOST=125.212.218.44
       - DB_PORT=5432
       - DB_DATABASE=clinicdb
-      - DB_USERNAME=phuoc
-      - DB_PASSWORD=Phuoccao@123
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=lmp123
       - DB_SSLMODE=disable 
       
       # App Configuration
       - APP_ENV=local
       - APP_DEBUG=true
 
-      # Reverb Configuration
-      - BROADCAST_DRIVER=reverb
-      - REVERB_APP_ID=clinic_app
-      - REVERB_APP_KEY=local_key
-      - REVERB_APP_SECRET=local_secret
-      - REVERB_HOST=0.0.0.0
-      - REVERB_PORT=8080
-
       # Solr Configuration
       - SOLR_HOST=solr
       - SOLR_PORT=8983
-      - SOLR_PATH=/solr/
+      - SOLR_PATH=/
       - SOLR_CORE=clinic_management
       - SOLR_SCHEME=http
       - SOLR_TIMEOUT=30
@@ -152,7 +144,7 @@ services:
   # ========================================
   solr:
     image: solr:8.11
-    container_name: solr-app
+    container_name: solr
     restart: unless-stopped
     ports:
       - "8983:8983"
@@ -163,11 +155,11 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8983/solr/clinic_management/admin/ping || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+      test: ["CMD", "curl", "-f", "http://localhost:8983/solr/admin/cores?action=STATUS"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
     command:
       - solr-precreate
       - clinic_management

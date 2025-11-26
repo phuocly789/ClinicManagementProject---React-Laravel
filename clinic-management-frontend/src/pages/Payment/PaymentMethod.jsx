@@ -27,13 +27,13 @@ const PaymentMethod = ({ show, onHide, invoice, onPaymentSuccess }) => {
       value: 'momo',
       label: 'Ví MoMo',
       description: 'Quét QR code qua ứng dụng MoMo',
-      icon: '📱'
+      icon: <i class="fas fa-mobile-alt text-danger"></i>
     },
     {
       value: 'napas',
       label: 'Thẻ ATM/Napas',
       description: 'Thanh toán qua thẻ ngân hàng nội địa',
-      icon: '💳'
+      icon: <i class="fas fa-credit-card text-primary"></i>
     }
   ];
 

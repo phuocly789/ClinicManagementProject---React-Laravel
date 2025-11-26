@@ -26,7 +26,7 @@ const PaymentResult = () => {
     const { status, message, invoiceId, orderId, transId, amount, redirectUrl } = getQueryParams();
 
     useEffect(() => {
-        console.log('💰 Payment Result Params:', {
+        console.log(' Payment Result Params:', {
             status,
             message,
             invoiceId,
@@ -120,7 +120,7 @@ const PaymentResult = () => {
                         {(invoiceId || orderId || transId || amount) && (
                             <Card className="bg-light border-0 mb-4">
                                 <Card.Body className="text-start">
-                                    <h6 className="fw-bold mb-3">📋 Thông tin giao dịch:</h6>
+                                    <h6 className="fw-bold mb-3"> Thông tin giao dịch:</h6>
                                     <div className="row">
                                         {invoiceId && (
                                             <div className="col-6 mb-3">
@@ -182,24 +182,6 @@ const PaymentResult = () => {
                                 Quay lại trang thanh toán
                             </Button>
                             
-                            {status === 'success' && (
-                                <div className="d-flex gap-2">
-                                    <Button 
-                                        variant="outline-primary"
-                                        onClick={() => window.print()}
-                                        className="flex-fill"
-                                    >
-                                        🖨️ In hóa đơn
-                                    </Button>
-                                    <Button 
-                                        variant="outline-success"
-                                        onClick={() => navigate('/receptionist/dashboard')}
-                                        className="flex-fill"
-                                    >
-                                        📊 Về trang chủ
-                                    </Button>
-                                </div>
-                            )}
                         </div>
                     </Card.Body>
                 </Card>

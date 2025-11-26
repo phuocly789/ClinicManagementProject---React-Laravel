@@ -30,6 +30,7 @@ const DoctorDashboard = () => {
   const [diagnosis, setDiagnosis] = useState("");
   const [services, setServices] = useState({});
   const [requestedServices, setRequestedServices] = useState({});
+  const [doctorInfo, setDoctorInfo] = useState(null);
 
   // Confirm và toast states
   const [showConfirm, setShowConfirm] = useState(false);
@@ -42,6 +43,7 @@ const DoctorDashboard = () => {
   const [echo, setEcho] = useState(null);
   const [roomId, setRoomId] = useState(null);
   const doctorId = 1;
+
 
   // Fetch helper
   const fetchWithAuth = useCallback(async (url, options = {}) => {
@@ -135,7 +137,7 @@ const DoctorDashboard = () => {
   useEffect(() => {
     const unlockAudio = () => {
       const audio = new Audio(notificationSound);
-      audio.play().catch(() => {});
+      audio.play().catch(() => { });
       audio.pause();
       audio.currentTime = 0;
 
@@ -179,6 +181,9 @@ const DoctorDashboard = () => {
           const todayData = await fetchWithAuth("/doctor/today-patients");
           console.log("DEBUG - Today patients loaded:", todayData);
           setTodayPatients(todayData.data || todayData || []);
+          if (todayData.doctor_info) {
+            setDoctorInfo(todayData.doctor_info);
+          }
           break;
         case "schedule":
           const eventsData = await fetchWithAuth(
@@ -322,7 +327,7 @@ const DoctorDashboard = () => {
   };
 
   const processConfirm = () =>
-    handleExaminationSubmit({ preventDefault: () => {} });
+    handleExaminationSubmit({ preventDefault: () => { } });
 
   const prevMonth = () =>
     setCurrentDate(
@@ -363,7 +368,8 @@ const DoctorDashboard = () => {
               selectedTodayPatient={selectedTodayPatient}
               setSelectedTodayPatient={setSelectedTodayPatient}
               todayPatients={todayPatients}
-              setTodayPatients={setTodayPatients} // THÊM DÒNG NÀY
+              setTodayPatients={setTodayPatients}
+              doctorInfo={doctorInfo}  // THÊM DÒNG NÀY
               setToast={setToast}
             />
           )}
