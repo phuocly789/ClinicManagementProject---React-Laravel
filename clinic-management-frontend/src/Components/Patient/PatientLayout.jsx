@@ -11,7 +11,7 @@ const PatientLayout = () => {
 
   const menuItems = [
     { path: path.PATIENT.APPOINTMENT.MANAGEMENT, label: "Đặt Lịch Khám" },
-    { path: "/patient/history", label: "Lịch Sử Khám Bệnh" },
+    // { path: "/patient/history", label: "Lịch Sử Khám Bệnh" },
     { path: "/patient/results", label: "Kết Quả Xét Nghiệm" },
     { path: "/patient/prescriptions", label: "Đơn Thuốc Của Tôi" },
     { path: path.PATIENT.PROFILE.MANAGEMENT, label: "Hồ sơ cá nhân" },
