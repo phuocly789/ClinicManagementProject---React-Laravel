@@ -36,7 +36,7 @@ const TodaySection = ({
   setSelectedTodayPatient = () => { },
   todayPatients = [],
   setTodayPatients = () => { },
-   doctorInfo = null,
+  doctorInfo = null,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isExamining, setIsExamining] = useState(false);
@@ -73,59 +73,107 @@ const TodaySection = ({
     });
   }, []);
 
-  // HÀM CHUYỂN DỊCH LỖI BE SANG FE - FIX: DÙNG useCallback
+  // HÀM CHUYỂN DỊCH LỖI BE SANG FE - PHIÊN BẢN HOÀN CHỈNH
   const translateError = useCallback((error) => {
-    console.error('🔴 Backend Error:', error);
+    console.error('🔴 Backend Error Details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.status
+    });
 
-    const backendMessage = error.response?.data?.message || error.message || '';
+    // ✅ ƯU TIÊN LẤY THÔNG BÁO LỖI TỪ BACKEND
+    const backendError = error.message ||
+      error.response?.data?.error ||
+      error.response?.data?.message ||
+      '';
 
-    // Map các lỗi phổ biến từ BE sang thông báo tiếng Việt thân thiện
-    const errorMap = {
-      'Patient not found': 'Không tìm thấy thông tin bệnh nhân',
-      'No patients found': 'Không có bệnh nhân nào hôm nay',
-      'Examination not found': 'Không tìm thấy thông tin khám bệnh',
-      'Examination already completed': 'Đã hoàn tất khám bệnh trước đó',
-      'Cannot start examination': 'Không thể bắt đầu khám bệnh',
-      'Network Error': 'Lỗi kết nối mạng. Vui lòng kiểm tra kết nối internet',
-      'Request failed with status code 404': 'Không tìm thấy dữ liệu',
-      'Request failed with status code 500': 'Lỗi máy chủ. Vui lòng thử lại sau',
-      'timeout of 5000ms exceeded': 'Quá thời gian chờ phản hồi',
-      'No data to save': 'Không có dữ liệu để lưu',
-      'Appointment not found': 'Không tìm thấy thông tin cuộc hẹn'
+    console.log('🔍 Backend error message extracted:', backendError);
+
+    // ✅ NẾU BACKEND ĐÃ TRẢ VỀ MESSAGE THÂN THIỆN THÌ DÙNG LUÔN
+    if (backendError &&
+      (backendError.includes('Không tìm thấy') ||
+        backendError.includes('Vui lòng') ||
+        backendError.includes('Lỗi') ||
+        backendError.includes('thiếu') ||
+        backendError.includes('không hợp lệ') ||
+        backendError.includes('thuốc') ||
+        backendError.includes('hệ thống'))) {
+      return backendError;
+    }
+
+    // Map các lỗi HTTP status
+    const statusMap = {
+      400: 'Yêu cầu không hợp lệ',
+      401: 'Không có quyền truy cập',
+      403: 'Truy cập bị từ chối',
+      404: 'Không tìm thấy dữ liệu',
+      422: 'Dữ liệu không hợp lệ',
+      500: 'Lỗi máy chủ',
+      502: 'Lỗi kết nối',
+      503: 'Dịch vụ không khả dụng'
     };
 
-    // Tìm thông báo tương ứng hoặc trả về mặc định
+    if (error.status && statusMap[error.status]) {
+      return statusMap[error.status];
+    }
+
+    // Map các lỗi network
+    const errorMap = {
+      'Network Error': 'Lỗi kết nối mạng. Vui lòng kiểm tra internet',
+      'timeout': 'Quá thời gian chờ phản hồi',
+      'Request failed': 'Yêu cầu thất bại'
+    };
+
     for (const [key, value] of Object.entries(errorMap)) {
-      if (backendMessage.includes(key) || error.message.includes(key)) {
+      if (backendError.includes(key) || error.message.includes(key)) {
         return value;
       }
     }
 
-    // Fallback cho các lỗi khác
-    if (backendMessage) {
-      return `Lỗi: ${backendMessage}`;
-    }
-
-    return 'Đã xảy ra lỗi không xác định. Vui lòng thử lại sau.';
+    // Fallback
+    return backendError || 'Đã xảy ra lỗi. Vui lòng thử lại sau.';
   }, []);
 
-  // HÀM HIỂN THỊ CONFIRMATION VỚI SWEETALERT2 - FIX: DÙNG useCallback
-  const showConfirmation = useCallback(async (options) => {
-    const result = await Swal.fire({
-      title: options.title || 'Xác nhận hành động',
-      text: options.message || 'Bạn có chắc muốn thực hiện hành động này?',
-      icon: options.icon || 'question',
-      showCancelButton: true,
-      confirmButtonColor: options.confirmColor || '#3085d6',
-      cancelButtonColor: options.cancelColor || '#d33',
-      confirmButtonText: options.confirmText || 'Xác nhận',
-      cancelButtonText: options.cancelText || 'Hủy',
-      showLoaderOnConfirm: options.showLoader || false,
-      preConfirm: options.preConfirm || undefined,
-      allowOutsideClick: () => !Swal.isLoading()
+  // HÀM XỬ LÝ LỖI VÀ HIỂN THỊ THÔNG BÁO - ĐÃ SỬA
+  const handleError = useCallback((error, customMessage = '') => {
+    console.error('❌ Error Details:', {
+      error,
+      response: error.response,
+      data: error.response?.data
     });
 
-    return result;
+    const translatedError = translateError(error);
+
+    console.log('📢 Error message to display:', translatedError);
+
+    // ✅ SỬ DỤNG CUSTOM TOAST THAY VÌ SWAL
+    showToast('error', customMessage || translatedError);
+  }, [translateError, showToast]);
+
+  // HÀM HIỂN THỊ CONFIRMATION VỚI XỬ LÝ LỖI TỐT HƠN
+  const showConfirmation = useCallback(async (options) => {
+    try {
+      const result = await Swal.fire({
+        title: options.title || 'Xác nhận hành động',
+        text: options.message || 'Bạn có chắc muốn thực hiện hành động này?',
+        icon: options.icon || 'question',
+        showCancelButton: true,
+        confirmButtonColor: options.confirmColor || '#3085d6',
+        cancelButtonColor: options.cancelColor || '#d33',
+        confirmButtonText: options.confirmText || 'Xác nhận',
+        cancelButtonText: options.cancelText || 'Hủy',
+        showLoaderOnConfirm: options.showLoader || false,
+        preConfirm: options.preConfirm || undefined,
+        allowOutsideClick: () => !Swal.isLoading()
+      });
+
+      return result;
+    } catch (error) {
+      // ✅ ĐẢM BẢO SWAL LUÔN ĐÓNG KHI CÓ LỖI
+      Swal.close();
+      console.error('❌ Lỗi trong showConfirmation:', error);
+      throw error;
+    }
   }, []);
 
   // HÀM HIỂN THỊ THÔNG BÁO THÀNH CÔNG - FIX: DÙNG useCallback
@@ -139,14 +187,6 @@ const TodaySection = ({
     });
   }, []);
 
-  // HÀM XỬ LÝ LỖI VÀ HIỂN THỊ THÔNG BÁO - FIX: DÙNG useCallback
-  const handleError = useCallback((error, customMessage = '') => {
-    const translatedError = translateError(error);
-    console.error('❌ Error:', error);
-
-    // SỬ DỤNG CUSTOM TOAST THAY VÌ SWAL
-    showToast('error', customMessage || translatedError);
-  }, [translateError, showToast]);
 
   const getStatusVariant = useCallback((status) => {
     if (!status) return "secondary";
@@ -464,7 +504,7 @@ const TodaySection = ({
     return waitingPatients[0] || null;
   }, [getStatusText]);
 
-  // HANDLE EXAMINATION SUBMIT - FIX: TÁCH RIÊNG
+  // HANDLE EXAMINATION SUBMIT - ĐÃ SỬA LỖI LOADING
   const handleExaminationSubmit = async (e) => {
     e.preventDefault();
     if (!selectedTodayPatient) {
@@ -477,77 +517,92 @@ const TodaySection = ({
       return;
     }
 
-    const result = await showConfirmation({
-      title: 'Hoàn tất khám bệnh',
-      text: `Bạn có chắc muốn hoàn tất khám cho bệnh nhân ${selectedTodayPatient.name}? Hồ sơ sẽ được lưu vào cơ sở dữ liệu.`,
-      confirmText: 'Hoàn tất khám',
-      cancelText: 'Hủy',
-      icon: 'question',
-      showLoader: true,
-      preConfirm: async () => {
-        try {
-          setIsLoading(true);
-          const submitData = {
-            symptoms,
-            diagnosis,
-            services,
-            prescriptions: prescriptionRows,
-            diagnoses: diagnoses.length > 0 ? diagnoses : [{ Symptoms: symptoms, Diagnosis: diagnosis }],
-            status: 'done',
-          };
-          console.log('DEBUG - Submit data:', submitData);
+    // ✅ TẠO SWAL INSTANCE ĐỂ CÓ THỂ ĐÓNG KHI CÓ LỖI
+    let swalInstance = null;
 
-          const saveResult = await doctorService.completeExamination(selectedTodayPatient.id, submitData);
+    try {
+      const result = await Swal.fire({
+        title: 'Hoàn tất khám bệnh',
+        text: `Bạn có chắc muốn hoàn tất khám cho bệnh nhân ${selectedTodayPatient.name}? Hồ sơ sẽ được lưu vào cơ sở dữ liệu.`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Hoàn tất khám',
+        cancelButtonText: 'Hủy',
+        showLoaderOnConfirm: true,
+        preConfirm: async () => {
+          try {
+            setIsLoading(true);
+            const submitData = {
+              symptoms,
+              diagnosis,
+              services,
+              prescriptions: prescriptionRows,
+              diagnoses: diagnoses.length > 0 ? diagnoses : [{ Symptoms: symptoms, Diagnosis: diagnosis }],
+              status: 'done',
+            };
+            console.log('DEBUG - Submit data:', submitData);
 
-          const result = saveResult.data;
+            const saveResult = await doctorService.completeExamination(selectedTodayPatient.id, submitData);
 
-          await fetchTodayPatients();
-          setRefreshTrigger(prev => prev + 1);
+            const result = saveResult.data;
 
-          // Reset form data
-          setSymptoms('');
-          setDiagnosis('');
-          setServices({});
-          setRequestedServices({});
-          setPrescriptionRows([]);
-          setDiagnoses([]);
+            await fetchTodayPatients();
+            setRefreshTrigger(prev => prev + 1);
 
-          // TÌM BỆNH NHÂN TIẾP THEO
-          const nextPatient = findNextPatient(selectedTodayPatient.id, todayPatients);
+            // Reset form data
+            setSymptoms('');
+            setDiagnosis('');
+            setServices({});
+            setRequestedServices({});
+            setPrescriptionRows([]);
+            setDiagnoses([]);
 
-          let successMessage = `Đã hoàn tất khám cho ${selectedTodayPatient.name}`;
+            // TÌM BỆNH NHÂN TIẾP THEO
+            const nextPatient = findNextPatient(selectedTodayPatient.id, todayPatients);
 
-          if (nextPatient) {
-            setSelectedTodayPatient(nextPatient);
+            let successMessage = `Đã hoàn tất khám cho ${selectedTodayPatient.name}`;
 
-            if (getStatusText(nextPatient.status) === 'Đang chờ') {
-              await startExamination(nextPatient.id || nextPatient.AppointmentId, nextPatient.name);
-              successMessage += `. Đã tự động chuyển sang bệnh nhân tiếp theo: ${nextPatient.name}`;
-            } else if (getStatusText(nextPatient.status) === 'Đang khám') {
-              setIsExamining(true);
+            if (nextPatient) {
+              setSelectedTodayPatient(nextPatient);
+
+              if (getStatusText(nextPatient.status) === 'Đang chờ') {
+                await startExamination(nextPatient.id || nextPatient.AppointmentId, nextPatient.name);
+                successMessage += `. Đã tự động chuyển sang bệnh nhân tiếp theo: ${nextPatient.name}`;
+              } else if (getStatusText(nextPatient.status) === 'Đang khám') {
+                setIsExamining(true);
+                setViewMode(false);
+                successMessage += `. Đã chuyển sang bệnh nhân đang khám: ${nextPatient.name}`;
+              }
+            } else {
+              setSelectedTodayPatient(null);
+              setIsExamining(false);
               setViewMode(false);
-              successMessage += `. Đã chuyển sang bệnh nhân đang khám: ${nextPatient.name}`;
+              successMessage += '. Đã lưu vào DB. Không còn bệnh nhân chờ khám hôm nay.';
             }
-          } else {
-            setSelectedTodayPatient(null);
+
+            return successMessage;
+          } catch (error) {
+            // ✅ QUAN TRỌNG: ĐÓNG SWAL LOADING KHI CÓ LỖI
+            Swal.close();
+            const translatedError = translateError(error);
+            throw new Error(translatedError);
+          } finally {
+            setIsLoading(false);
             setIsExamining(false);
-            setViewMode(false);
-            successMessage += '. Đã lưu vào DB. Không còn bệnh nhân chờ khám hôm nay.';
           }
+        },
+        allowOutsideClick: () => !Swal.isLoading()
+      });
 
-          return successMessage;
-        } catch (error) {
-          const translatedError = translateError(error);
-          throw new Error(translatedError);
-        } finally {
-          setIsLoading(false);
-          setIsExamining(false);
-        }
+      if (result.isConfirmed) {
+        showToast('success', result.value);
       }
-    });
-
-    if (result.isConfirmed) {
-      showToast('success', result.value);
+    } catch (error) {
+      // ✅ XỬ LÝ LỖI NGOẠI LỆ Ở ĐÂY
+      console.error('❌ Lỗi trong handleExaminationSubmit:', error);
+      showToast('error', error.message || 'Đã xảy ra lỗi khi hoàn tất khám');
     }
   };
 
@@ -777,7 +832,7 @@ const TodaySection = ({
                       selectedTodayPatient={selectedTodayPatient}
                       symptoms={symptoms}
                       diagnoses={diagnoses}
-                       doctorInfo={doctorInfo}
+                      doctorInfo={doctorInfo}
                     />
 
                     <PrescriptionSection
@@ -792,7 +847,7 @@ const TodaySection = ({
                       services={services}
                       setToast={showToast}
                       diagnoses={diagnoses}
-                       doctorInfo={doctorInfo}
+                      doctorInfo={doctorInfo}
                     />
                   </Row>
 
