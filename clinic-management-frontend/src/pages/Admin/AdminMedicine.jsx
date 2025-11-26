@@ -295,7 +295,8 @@ const AdminMedicine = () => {
         StockQuantity: medicine.StockQuantity?.toString() || '',
         ExpiryDate: medicine.ExpiryDate ? medicine.ExpiryDate.split('T')[0] : '',
         LowStockThreshold: medicine.LowStockThreshold?.toString() || '10',
-        Description: medicine.Description || ''
+        Description: medicine.Description || '',
+        version: medicine.version || 0,  // Thêm version từ data API
       });
     }
   };
@@ -395,7 +396,12 @@ const AdminMedicine = () => {
       fetchMedicines(1, filterParams);
     } catch (error) {
       console.error(`Lỗi khi ${isEditing ? 'cập nhật' : 'thêm'} thuốc:`, error);
-      const errorMessage = error.response?.data?.message || `Lỗi khi ${isEditing ? 'cập nhật' : 'thêm'} thuốc`;
+      let errorMessage = error.response?.data?.message || `Lỗi khi ${isEditing ? 'cập nhật' : 'thêm'} thuốc`;
+      if (error.response?.status === 409) {
+        errorMessage = 'Dữ liệu đã thay đổi. Vui lòng tải lại trang trước khi cập nhật.';
+        // Optional: Tự động reload list
+        fetchMedicines(1, filterParams);
+      }
       showToast('error', errorMessage);
     } finally {
       setIsLoading(false);
