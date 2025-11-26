@@ -876,7 +876,7 @@ const AdminUserManagement = () => {
           'Xác Nhận Reset Mật Khẩu',
           <>
             <p>Bạn có chắc muốn reset mật khẩu cho người dùng <strong>{modal.user.FullName}</strong>?</p>
-            <p className="text-warning fw-semibold">
+            <p className="text-success fw-semibold">
               Mật khẩu sẽ được đặt lại thành: <strong>123456</strong>
             </p>
             <p className="text-muted small">
@@ -885,7 +885,7 @@ const AdminUserManagement = () => {
           </>,
           <>
             <button className="btn btn-secondary" onClick={handleCloseModal}>Hủy</button>
-            <button className="btn btn-warning" onClick={handleResetPassword} disabled={loading}>
+            <button className="btn btn-success" onClick={handleResetPassword} disabled={loading}>
               {loading ? 'Đang xử lý...' : 'Reset Mật Khẩu'}
             </button>
           </>,
