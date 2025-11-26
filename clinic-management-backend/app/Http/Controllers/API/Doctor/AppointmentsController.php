@@ -115,7 +115,7 @@ class AppointmentsController extends Controller
             $queues = Queue::with(['patient.user', 'appointment'])
                 ->whereDate('QueueDate', $today)
                 ->whereIn('AppointmentId', $appointmentIds)
-                ->whereIn('Status', ['waiting', 'in-progress', 'done', 'Đang chờ', 'Đang khám', 'Đã khám'])
+                ->whereIn('Status', ['Đang khám'])
                 ->orderByRaw("
                 CASE
                     WHEN \"Status\" IN ('Đang khám', 'in-progress') THEN 1

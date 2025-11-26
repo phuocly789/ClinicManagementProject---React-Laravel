@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\API\Doctor;
 
+use App\Events\QueueStatusUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\Queue;
@@ -26,8 +27,8 @@ class DoctorExaminationsController extends Controller
     private function getCurrentExaminingPatient()
     {
         return Queue::where('Status', 'Đang khám')
-                   ->whereDate('QueueDate', today())
-                   ->first();
+            ->whereDate('QueueDate', today())
+            ->first();
     }
 
     /**
@@ -82,7 +83,6 @@ class DoctorExaminationsController extends Controller
                     'appointment_id' => $queue->AppointmentId,
                 ]
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
@@ -110,7 +110,7 @@ class DoctorExaminationsController extends Controller
 
             // Tìm queue và các relationship cần thiết
             $queue = Queue::with([
-                'appointment.patient.user', 
+                'appointment.patient.user',
                 'appointment.service_orders.service'
             ])->findOrFail($queueId);
 
@@ -121,6 +121,59 @@ class DoctorExaminationsController extends Controller
                     'error' => 'Chỉ có thể hoàn thành khám cho bệnh nhân đang trong trạng thái khám'
                 ], 400);
             }
+
+            if ($request['status'] === 'done') {
+
+                // ✅ Cập nhật Status trong Queue
+                DB::table('Queues')
+                    ->where('AppointmentId', $queue->AppointmentId)
+                    ->update(['Status' => 'Đã khám']);
+
+                // ✅ SỬA: Lấy đúng queue vừa update (không dùng whereNull)
+                $queueData = DB::table('Queues')
+                    ->join('Rooms', 'Queues.RoomId', '=', 'Rooms.RoomId')
+                    ->join('Patients', 'Queues.PatientId', '=', 'Patients.PatientId')
+                    ->join('Users as PatientUser', 'Patients.PatientId', '=', 'PatientUser.UserId')
+                    ->leftJoin('StaffSchedules', function ($join) {
+                        $join->on('Queues.RoomId', '=', 'StaffSchedules.RoomId')
+                            ->whereDate('StaffSchedules.WorkDate', now()->toDateString());
+                    })
+                    ->leftJoin('MedicalStaff', 'StaffSchedules.StaffId', '=', 'MedicalStaff.StaffId')
+                    ->leftJoin('Users as DoctorUser', 'MedicalStaff.StaffId', '=', 'DoctorUser.UserId')
+                    ->where('Queues.AppointmentId', $queue->AppointmentId)
+                    ->select(
+                        'Queues.QueueId',
+                        'Queues.PatientId',
+                        'PatientUser.FullName as PatientName',
+                        'Queues.AppointmentId',
+                        'Queues.RecordId',
+                        'Queues.QueueDate',
+                        'Queues.QueueTime',
+                        'Queues.QueuePosition',
+                        'Queues.RoomId',
+                        'Rooms.RoomName',
+                        'Queues.Status',
+                        'Queues.TicketNumber',
+                        'DoctorUser.FullName as DoctorName'
+                    )
+                    ->first();
+
+                // ✅ Broadcast nếu có data
+                if ($queueData) {
+                    // Log::info('Broadcasting completed examination', [
+                    //     'queueData' => $queueData,
+                    //     'appointmentId' => $appointmentId
+                    // ]);
+
+                    broadcast(new QueueStatusUpdated(
+                        doctor: null,
+                        receptionist: (array) $queueData,
+                        roomId: $queueData->RoomId,
+                        action: 'completed'
+                    ))->toOthers();
+                }
+            }
+
 
             $appointment = $queue->appointment;
             if (!$appointment) {
@@ -249,7 +302,6 @@ class DoctorExaminationsController extends Controller
                     'has_invoice' => true
                 ]
             ]);
-
         } catch (\Exception $e) {
             DB::rollback();
             return response()->json([
@@ -266,7 +318,7 @@ class DoctorExaminationsController extends Controller
     {
         try {
             $currentExamining = $this->getCurrentExaminingPatient();
-            
+
             if ($currentExamining) {
                 $patientInfo = [
                     'queue_id' => $currentExamining->QueueId,
@@ -285,7 +337,6 @@ class DoctorExaminationsController extends Controller
                     'can_start_new' => empty($currentExamining),
                 ]
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -301,7 +352,7 @@ class DoctorExaminationsController extends Controller
     {
         try {
             $currentExamining = $this->getCurrentExaminingPatient();
-            
+
             // Lấy danh sách bệnh nhân đang chờ, sắp xếp theo thứ tự ưu tiên
             $waitingPatients = Queue::with('patient.user')
                 ->where('Status', 'Đang chờ')
@@ -330,7 +381,6 @@ class DoctorExaminationsController extends Controller
                     'can_start_new' => empty($currentExamining),
                 ]
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -459,7 +509,6 @@ class DoctorExaminationsController extends Controller
                 'success' => true,
                 'message' => 'Đã hủy khám thành công'
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
@@ -499,7 +548,7 @@ class DoctorExaminationsController extends Controller
                 'patient_info' => [
                     'name' => $queue->patient->user->FullName ?? 'N/A',
                     'gender' => $queue->patient->user->Gender ?? 'N/A',
-                    'age' => $queue->patient->user->DateOfBirth ? 
+                    'age' => $queue->patient->user->DateOfBirth ?
                         \Carbon\Carbon::parse($queue->patient->user->DateOfBirth)->age : 'N/A',
                     'phone' => $queue->patient->user->Phone ?? 'N/A',
                     'address' => $queue->patient->user->Address ?? 'N/A',
@@ -532,7 +581,6 @@ class DoctorExaminationsController extends Controller
                 'success' => true,
                 'data' => $data
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -560,7 +608,7 @@ class DoctorExaminationsController extends Controller
             }
 
             $diagnosis = Diagnosis::where('AppointmentId', $appointment->AppointmentId)->first();
-            
+
             if ($diagnosis) {
                 $diagnosis->update([
                     'Symptoms' => $request->input('symptoms', $diagnosis->Symptoms),
@@ -583,7 +631,6 @@ class DoctorExaminationsController extends Controller
                 'success' => true,
                 'message' => 'Đã cập nhật thông tin chẩn đoán'
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
@@ -600,7 +647,7 @@ class DoctorExaminationsController extends Controller
     {
         try {
             $queue = Queue::with('appointment')->findOrFail($queueId);
-            
+
             // Lưu tạm thông tin chẩn đoán mà không thay đổi trạng thái
             if ($queue->appointment && ($request->filled('symptoms') || $request->filled('diagnosis'))) {
                 $this->updateDiagnosis($request, $queueId);
@@ -610,7 +657,6 @@ class DoctorExaminationsController extends Controller
                 'success' => true,
                 'message' => 'Đã lưu tạm thông tin khám'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,

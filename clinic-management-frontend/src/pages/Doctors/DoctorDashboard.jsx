@@ -44,7 +44,6 @@ const DoctorDashboard = () => {
   const [roomId, setRoomId] = useState(null);
   const doctorId = 1;
 
-
   // Fetch helper
   const fetchWithAuth = useCallback(async (url, options = {}) => {
     try {
@@ -79,32 +78,25 @@ const DoctorDashboard = () => {
 
     if (!doctor || action !== "updated") return;
 
-    // Check if patient already exists
-    setTodayPatients((prevPatients) => {
-      const existingIndex = prevPatients.findIndex((p) => p.id === doctor.id);
+    setTodayPatients((prev) => {
+      const exists = prev.find((p) => p.id === doctor.id);
 
-      if (existingIndex !== -1) {
-        // Update existing patient
-        const updated = [...prevPatients];
-        updated[existingIndex] = {
-          ...updated[existingIndex],
-          ...doctor,
-        };
-        return updated;
-      } else {
-        // Add new patient to the list
-        return [...prevPatients, doctor];
+      if (exists) {
+        // Update bệnh nhân đã có trong danh sách
+        return prev.map((p) => (p.id === doctor.id ? { ...p, ...doctor } : p));
       }
+
+      // Nếu là bệnh nhân mới => thêm vào hàng chờ
+      return [...prev, doctor];
     });
 
-    // Show toast notification
+    // 🔔 Hiện thông báo realtime
     setToast({
       show: true,
-      message: `Bệnh nhân ${doctor.name} đã được gọi vào khám`,
+      message: `Trạng thái của ${doctor.name} đã thay đổi: ${doctor.status}`,
       variant: "info",
     });
 
-    // Play notification sound (optional)
     playNotificationSound();
   };
 
@@ -137,7 +129,7 @@ const DoctorDashboard = () => {
   useEffect(() => {
     const unlockAudio = () => {
       const audio = new Audio(notificationSound);
-      audio.play().catch(() => { });
+      audio.play().catch(() => {});
       audio.pause();
       audio.currentTime = 0;
 
@@ -153,21 +145,31 @@ const DoctorDashboard = () => {
   }, []);
 
   // Initialize WebSocket for doctor's room
+  // Initialize WebSocket for doctor's room
   useEffect(() => {
-    if (!roomId) return;
+    if (!roomId) {
+      console.warn("⚠️ Room ID not available yet");
+      return;
+    }
 
     const echoClient = createEchoClient();
     setEcho(echoClient);
+
+    console.log(`📡 Subscribing to channel: room.${roomId}`);
 
     // Listen to doctor's room channel
     echoClient
       .channel(`room.${roomId}`)
       .listen(".queue.status.updated", (event) => {
-        console.log("Doctor received update:", event);
+        console.log("✅ Doctor received update:", event);
         handleDoctorQueueUpdate(event);
+      })
+      .error((error) => {
+        console.error("❌ Channel subscription error:", error);
       });
 
     return () => {
+      console.log("🔌 Disconnecting WebSocket");
       echoClient.disconnect();
     };
   }, [roomId]);
@@ -327,7 +329,7 @@ const DoctorDashboard = () => {
   };
 
   const processConfirm = () =>
-    handleExaminationSubmit({ preventDefault: () => { } });
+    handleExaminationSubmit({ preventDefault: () => {} });
 
   const prevMonth = () =>
     setCurrentDate(
@@ -369,7 +371,8 @@ const DoctorDashboard = () => {
               setSelectedTodayPatient={setSelectedTodayPatient}
               todayPatients={todayPatients}
               setTodayPatients={setTodayPatients}
-              doctorInfo={doctorInfo}  // THÊM DÒNG NÀY
+              onQueueUpdate={handleDoctorQueueUpdate} // Truyền prop cho realtime
+              doctorInfo={doctorInfo} // THÊM DÒNG NÀY
               setToast={setToast}
             />
           )}
