@@ -474,7 +474,7 @@ class InvoicePrintController extends Controller
 
                 // Các biến dự phòng
                 'code' => $data['code'] ?? 'AUTO',
-                'date' => $data['date'] ?? now()->format('d/m/Y'),
+                'date' => $data['date'] ?? now('Asia/Ho_Chi_Minh')->format('d/m/Y'),
             ];
 
             // 🔥 XỬ LÝ DỮ LIỆU THEO TYPE VỚI REAL-TIME SETTINGS

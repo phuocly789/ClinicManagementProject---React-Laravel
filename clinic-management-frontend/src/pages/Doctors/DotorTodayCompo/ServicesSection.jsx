@@ -434,7 +434,8 @@ const ServicesSection = ({
       age: selectedTodayPatient.age,
       gender: selectedTodayPatient.gender,
       phone: selectedTodayPatient.phone,
-      appointment_date: selectedTodayPatient.date || new Date().toLocaleDateString('vi-VN'),
+      appointment_date: selectedTodayPatient.date ||
+        new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }), // Format: YYYY-MM-DD
       appointment_time: selectedTodayPatient.time,
       doctor_name: doctorInfo?.doctor_Name || 'Bác sĩ điều trị',
       diagnoses: diagnoses.length > 0 ? diagnoses : [{ Symptoms: symptoms, Diagnosis: diagnosis }],
