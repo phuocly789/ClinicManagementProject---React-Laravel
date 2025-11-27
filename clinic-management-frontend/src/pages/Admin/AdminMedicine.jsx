@@ -1191,28 +1191,7 @@ const AdminMedicine = () => {
   useEffect(() => {
     fetchMedicines(1, filterParams);
   }, [fetchMedicines, filterParams]);
-  useEffect(() => {
-    // Lắng nghe real-time medicine alerts
-    window.Echo.private('admin-alerts')
-      .listen('MedicineAlertTriggered', (e) => {
-        console.log('🚨 Nhận cảnh báo thuốc:', e);
-
-        // Hiển thị notification
-        toast.error(`🚨 ${e.alert.message}`, {
-          position: "top-right",
-          autoClose: 10000, // 10 giây
-          closeOnClick: false,
-        });
-
-        // Cập nhật badge cảnh báo
-        setAlertCount(prev => prev + 1);
-        setRecentAlerts(prev => [e, ...prev.slice(0, 4)]); // Giữ 5 alerts gần nhất
-      });
-
-    return () => {
-      window.Echo.leave('admin-alerts');
-    };
-  }, []);
+ 
   return (
     <div className="d-flex vh-100">
       <main className="main-content flex-grow-1 p-4 d-flex flex-column gap-4 overflow-hidden">

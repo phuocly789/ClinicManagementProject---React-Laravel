@@ -325,7 +325,7 @@ const RevenueForecast = ({ forecastData }) => {
                 {/* Thông tin dự báo */}
                 <div className="mt-3 p-3 bg-light rounded">
                     <div className="row text-center">
-                        <div className="col-6">
+                        <div className="col">
                             <small className="text-muted d-block">Doanh thu dự báo</small>
                             <strong className="text-success">
                                 {new Intl.NumberFormat('vi-VN', {
@@ -334,12 +334,7 @@ const RevenueForecast = ({ forecastData }) => {
                                 }).format(forecastData.forecast.predicted_revenue)}
                             </strong>
                         </div>
-                        <div className="col-6">
-                            <small className="text-muted d-block">Độ tin cậy</small>
-                            <strong className="text-info">
-                                {(forecastData.forecast.confidence * 100).toFixed(1)}%
-                            </strong>
-                        </div>
+                        
                     </div>
                 </div>
             </div>
