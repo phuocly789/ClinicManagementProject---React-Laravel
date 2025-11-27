@@ -58,7 +58,6 @@ class RevenueForecastController extends Controller
                 'historical' => $revenues,
                 'forecast' => [
                     'predicted_revenue' => round(max(0, $prediction)),
-                    'confidence' => 0.85
                 ]
             ]);
         } catch (\Exception $e) {
