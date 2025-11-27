@@ -12,22 +12,22 @@ import CustomToast from "../../Components/CustomToast/CustomToast";
 const TodaySection = ({
   currentSection = "today",
   prescriptionRows = [],
-  setPrescriptionRows = () => {},
-  removePrescription = () => {},
-  editPrescription = () => {},
+  setPrescriptionRows = () => { },
+  removePrescription = () => { },
+  editPrescription = () => { },
   symptoms = "",
-  setSymptoms = () => {},
+  setSymptoms = () => { },
   diagnosis = "",
-  setDiagnosis = () => {},
+  setDiagnosis = () => { },
   services = {},
-  setServices = () => {},
+  setServices = () => { },
   requestedServices = {},
-  setRequestedServices = () => {},
-  openPrescriptionModal = () => {},
+  setRequestedServices = () => { },
+  openPrescriptionModal = () => { },
   selectedTodayPatient = null,
   setSelectedTodayPatient,
   todayPatients = [],
-  setTodayPatients = () => {},
+  setTodayPatients = () => { },
   doctorInfo = null,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -36,7 +36,7 @@ const TodaySection = ({
   const [diagnoses, setDiagnoses] = useState([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // THÊM STATE CHO CUSTOM TOAST
+  // STATE CHO CUSTOM TOAST
   const [toast, setToastState] = useState({
     show: false,
     type: "success",
@@ -50,7 +50,7 @@ const TodaySection = ({
     !selectedTodayPatient ||
     selectedTodayPatient?.status !== "Đang khám";
 
-  // HÀM HIỂN THỊ TOAST - THÊM MỚI
+  // HÀM HIỂN THỊ TOAST
   const showToast = useCallback((type, message) => {
     setToastState({
       show: true,
@@ -59,7 +59,7 @@ const TodaySection = ({
     });
   }, []);
 
-  // HÀM ĐÓNG TOAST - THÊM MỚI
+  // HÀM ĐÓNG TOAST
   const closeToast = useCallback(() => {
     setToastState({
       show: false,
@@ -68,7 +68,7 @@ const TodaySection = ({
     });
   }, []);
 
-  // HÀM CHUYỂN DỊCH LỖI BE SANG FE - PHIÊN BẢN HOÀN CHỈNH
+  // HÀM CHUYỂN DỊCH LỖI BE SANG FE
   const translateError = useCallback((error) => {
     console.error("🔴 Backend Error Details:", {
       message: error.message,
@@ -78,24 +78,15 @@ const TodaySection = ({
 
     // ✅ ƯU TIÊN LẤY THÔNG BÁO LỖI TỪ BACKEND
     const backendError =
-      error.message ||
       error.response?.data?.error ||
       error.response?.data?.message ||
+      error.message ||
       "";
 
     console.log("🔍 Backend error message extracted:", backendError);
 
     // ✅ NẾU BACKEND ĐÃ TRẢ VỀ MESSAGE THÂN THIỆN THÌ DÙNG LUÔN
-    if (
-      backendError &&
-      (backendError.includes("Không tìm thấy") ||
-        backendError.includes("Vui lòng") ||
-        backendError.includes("Lỗi") ||
-        backendError.includes("thiếu") ||
-        backendError.includes("không hợp lệ") ||
-        backendError.includes("thuốc") ||
-        backendError.includes("hệ thống"))
-    ) {
+    if (backendError) {
       return backendError;
     }
 
@@ -111,8 +102,8 @@ const TodaySection = ({
       503: "Dịch vụ không khả dụng",
     };
 
-    if (error.status && statusMap[error.status]) {
-      return statusMap[error.status];
+    if (error.response?.status && statusMap[error.response.status]) {
+      return statusMap[error.response.status];
     }
 
     // Map các lỗi network
@@ -123,7 +114,7 @@ const TodaySection = ({
     };
 
     for (const [key, value] of Object.entries(errorMap)) {
-      if (backendError.includes(key) || error.message.includes(key)) {
+      if (backendError?.includes(key) || error.message?.includes(key)) {
         return value;
       }
     }
@@ -132,7 +123,7 @@ const TodaySection = ({
     return backendError || "Đã xảy ra lỗi. Vui lòng thử lại sau.";
   }, []);
 
-  // HÀM XỬ LÝ LỖI VÀ HIỂN THỊ THÔNG BÁO - ĐÃ SỬA
+  // HÀM XỬ LÝ LỖI VÀ HIỂN THỊ THÔNG BÁO
   const handleError = useCallback(
     (error, customMessage = "") => {
       console.error("❌ Error Details:", {
@@ -142,51 +133,130 @@ const TodaySection = ({
       });
 
       const translatedError = translateError(error);
-
       console.log("📢 Error message to display:", translatedError);
 
-      // ✅ SỬ DỤNG CUSTOM TOAST THAY VÌ SWAL
       showToast("error", customMessage || translatedError);
     },
     [translateError, showToast]
   );
 
-  // HÀM HIỂN THỊ CONFIRMATION VỚI XỬ LÝ LỖI TỐT HƠN
-  const showConfirmation = useCallback(async (options) => {
+  // HÀM ĐÓNG SWAL AN TOÀN
+  const safeCloseSwal = useCallback(() => {
+    if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+      Swal.close();
+      console.log("✅ Đã đóng Swal an toàn");
+    }
+  }, []);
+
+  // HÀM HIỂN THỊ CONFIRMATION VỚI XỬ LÝ API - FIXED
+  const showConfirmationWithAPI = useCallback(async (options) => {
     try {
       const result = await Swal.fire({
         title: options.title || "Xác nhận hành động",
-        text: options.message || "Bạn có chắc muốn thực hiện hành động này?",
+        text: options.text || options.message || "Bạn có chắc muốn thực hiện hành động này?",
         icon: options.icon || "question",
         showCancelButton: true,
         confirmButtonColor: options.confirmColor || "#3085d6",
         cancelButtonColor: options.cancelColor || "#d33",
         confirmButtonText: options.confirmText || "Xác nhận",
         cancelButtonText: options.cancelText || "Hủy",
-        showLoaderOnConfirm: options.showLoader || false,
-        preConfirm: options.preConfirm || undefined,
+        showLoaderOnConfirm: true,
+        preConfirm: async () => {
+          try {
+            console.log("🔄 Starting API call...");
+            const apiResult = await options.apiCall();
+            console.log("✅ API call completed successfully");
+
+            // ✅ KIỂM TRA QUAN TRỌNG: Nếu API trả về success: false
+            if (apiResult && apiResult.success === false) {
+              console.log("❌ API returned success: false", apiResult);
+              // Ném lỗi để catch bên dưới xử lý
+              const errorObj = new Error(apiResult.error || "API returned false");
+              errorObj.apiResponse = apiResult;
+              throw errorObj;
+            }
+
+            return apiResult;
+          } catch (error) {
+            console.error("❌ API call failed:", error);
+
+            // ✅ ĐÓNG SWAL TRƯỚC KHI HIỂN THỊ LỖI
+            safeCloseSwal();
+
+            // ✅ XÁC ĐỊNH THÔNG BÁO LỖI - SỬA PHẦN NÀY
+            let errorMsg = "Đã có lỗi xảy ra";
+
+            // Trường hợp 1: Lỗi từ API response {success: false, error: "message"}
+            if (error.apiResponse && error.apiResponse.error) {
+              errorMsg = error.apiResponse.error;
+            }
+            // Trường hợp 2: Lỗi đã được xử lý bởi handleApiError (có message trực tiếp)
+            else if (error.message && error.message !== "Request failed with status code 500") {
+              errorMsg = error.message;
+            }
+            // Trường hợp 3: Lỗi từ response data của axios
+            else if (error.response?.data?.error) {
+              errorMsg = error.response.data.error;
+            }
+            // Trường hợp 4: errorMessage là function
+            else if (typeof options.errorMessage === 'function') {
+              errorMsg = options.errorMessage(error);
+            }
+            // Trường hợp 5: errorMessage là string
+            else if (typeof options.errorMessage === 'string') {
+              errorMsg = options.errorMessage;
+            }
+
+            console.log("📢 Error message to display:", errorMsg);
+            showToast("error", errorMsg);
+
+            return null;
+          }
+        },
         allowOutsideClick: () => !Swal.isLoading(),
       });
 
+      // Xử lý thành công
+      if (result.isConfirmed && result.value) {
+        console.log("🎯 Handling successful API result");
+
+        if (options.onSuccess) {
+          options.onSuccess(result.value);
+        }
+
+        if (options.showSuccessToast !== false) {
+          showToast("success", options.successMessage || "Thao tác thành công!");
+        }
+
+        return result.value;
+      }
+
       return result;
+
     } catch (error) {
-      // ✅ ĐẢM BẢO SWAL LUÔN ĐÓNG KHI CÓ LỖI
-      Swal.close();
-      console.error("❌ Lỗi trong showConfirmation:", error);
-      throw error;
+      console.error("❌ Lỗi trong showConfirmationWithAPI:", error);
+      safeCloseSwal();
+      showToast("error", "Đã xảy ra lỗi không mong muốn");
+      return null;
     }
+  }, [showToast, safeCloseSwal]);
+
+  // HÀM ĐƠN GIẢN CHO CÁC THAO TÁC KHÔNG CẦN API
+  const showSimpleConfirmation = useCallback(async (options) => {
+    const result = await Swal.fire({
+      title: options.title || "Xác nhận hành động",
+      text: options.text || options.message || "Bạn có chắc muốn thực hiện hành động này?",
+      icon: options.icon || "question",
+      showCancelButton: true,
+      confirmButtonColor: options.confirmColor || "#3085d6",
+      cancelButtonColor: options.cancelColor || "#d33",
+      confirmButtonText: options.confirmText || "Xác nhận",
+      cancelButtonText: options.cancelText || "Hủy",
+    });
+
+    return result;
   }, []);
 
-  // HÀM HIỂN THỊ THÔNG BÁO THÀNH CÔNG - FIX: DÙNG useCallback
-  const showSuccessAlert = useCallback((message) => {
-    Swal.fire({
-      title: "Thành công!",
-      text: message,
-      icon: "success",
-      confirmButtonColor: "#3085d6",
-      confirmButtonText: "OK",
-    });
-  }, []);
   const getStatusVariant = useCallback((status) => {
     if (!status) return "secondary";
     switch (status.toLowerCase()) {
@@ -220,7 +290,7 @@ const TodaySection = ({
     }
   }, []);
 
-  // FETCH TODAY PATIENTS - FIX: TÁCH RIÊNG VÀ DÙNG useCallback
+  // FETCH TODAY PATIENTS
   const fetchTodayPatients = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -253,68 +323,36 @@ const TodaySection = ({
   // EFFECT CHÍNH - CHỈ CHẠY KHI MOUNT
   useEffect(() => {
     fetchTodayPatients();
-  }, []); // CHỈ CHẠY 1 LẦN KHI MOUNT
+  }, []);
 
-  // EFFECT CHO REFRESH TRIGGER - FIX: CHỈ CHẠY KHI refreshTrigger THAY ĐỔI
+  // EFFECT CHO REFRESH TRIGGER
   useEffect(() => {
     if (refreshTrigger > 0) {
       fetchTodayPatients();
     }
   }, [refreshTrigger, fetchTodayPatients]);
 
-  // FIXED: LOAD COMPLETED EXAM - FIX: GIẢM DEPENDENCY
+  // LOAD COMPLETED EXAM
   const loadCompletedExam = useCallback(
     async (appointmentId) => {
-      console.log("=== 🚨 DEBUG API CALL START 🚨 ===");
-      console.log("🔍 appointmentId:", appointmentId);
+      console.log("🔍 Loading completed exam for:", appointmentId);
 
       if (!appointmentId) {
-        console.error("❌ appointmentId is null or undefined");
         showToast("error", "Không tìm thấy ID cuộc hẹn");
         return;
       }
 
       setIsLoading(true);
       try {
-        console.log("1. 📞 Calling doctorService.getExamination...");
-
-        let response;
-        try {
-          response = await doctorService.getExamination(appointmentId);
-          console.log("2. ✅ Service call SUCCESS - response:", response);
-        } catch (serviceError) {
-          console.error("❌ Service call FAILED:", serviceError);
-          throw new Error(`Service call failed: ${serviceError.message}`);
-        }
-
-        console.log("3. 📦 Response object:", response);
-
-        if (!response) {
-          throw new Error("NO RESPONSE OBJECT - API call completely failed");
-        }
-
+        const response = await doctorService.getExamination(appointmentId);
         const data = response.data || response;
-        console.log(
-          "6. 🔍 Using data from:",
-          data === response.data ? "response.data" : "response"
-        );
 
-        if (
-          !data ||
-          (typeof data === "object" && Object.keys(data).length === 0)
-        ) {
+        if (!data || (typeof data === "object" && Object.keys(data).length === 0)) {
           throw new Error("API returned empty data object");
         }
 
-        console.log("8. 🗺️ Starting data mapping...");
-
-        const symptomsValue =
-          data.symptoms || data.diagnoses?.[0]?.Symptoms || "";
-        const diagnosisValue =
-          data.diagnosis || data.diagnoses?.[0]?.Diagnosis || "";
-
-        console.log("✅ Symptoms will be set to:", symptomsValue);
-        console.log("✅ Diagnosis will be set to:", diagnosisValue);
+        const symptomsValue = data.symptoms || data.diagnoses?.[0]?.Symptoms || "";
+        const diagnosisValue = data.diagnosis || data.diagnoses?.[0]?.Diagnosis || "";
 
         setSymptoms(symptomsValue);
         setDiagnosis(diagnosisValue);
@@ -326,9 +364,7 @@ const TodaySection = ({
             return acc;
           }, {});
           setServices(servicesObj);
-          console.log("✅ Services mapped:", servicesObj);
         } else {
-          console.log("ℹ️ No services data found");
           setServices({});
         }
 
@@ -343,55 +379,44 @@ const TodaySection = ({
             totalPrice: pres.totalPrice || 0,
           }));
           setPrescriptionRows(prescriptionRows);
-          console.log("✅ Prescriptions mapped:", prescriptionRows);
         } else {
-          console.log("ℹ️ No prescriptions data found");
           setPrescriptionRows([]);
         }
 
         setRequestedServices(data.requestedServices || {});
         setDiagnoses(data.diagnoses || []);
 
-        console.log("9. 🎉 DATA MAPPING COMPLETED SUCCESSFULLY");
         showToast("success", "Đã tải hồ sơ cũ để xem.");
       } catch (error) {
-        console.error("🚨 FINAL ERROR in loadCompletedExam:", error);
+        console.error("🚨 Lỗi loadCompletedExam:", error);
         handleError(error, "Lỗi tải hồ sơ khám bệnh");
       } finally {
         setIsLoading(false);
-        console.log("=== 🚨 DEBUG API CALL END 🚨 ===");
       }
     },
-    [
-      showToast,
-      handleError,
-      setSymptoms,
-      setDiagnosis,
-      setServices,
-      setRequestedServices,
-      setPrescriptionRows,
-    ]
+    [showToast, handleError, setSymptoms, setDiagnosis, setServices, setRequestedServices, setPrescriptionRows]
   );
 
-  // START EXAMINATION - FIX: GIẢM DEPENDENCY
+  // START EXAMINATION
   const startExamination = useCallback(
     async (patientId, patientName) => {
       if (!patientId) return null;
 
-      const result = await showConfirmation({
-        title: "Bắt đầu khám bệnh",
-        text: `Bạn có chắc muốn bắt đầu khám cho bệnh nhân ${patientName}?`,
-        confirmText: "Bắt đầu khám",
-        cancelText: "Hủy",
-        icon: "question",
-        showLoader: true,
-        preConfirm: async () => {
-          try {
-            setIsLoading(true);
+      try {
+        await showConfirmationWithAPI({
+          title: "Bắt đầu khám bệnh",
+          text: `Bạn có chắc muốn bắt đầu khám cho bệnh nhân ${patientName}?`,
+          confirmText: "Bắt đầu khám",
+          cancelText: "Hủy",
+          icon: "question",
+          apiCall: async () => {
             const result = await doctorService.startExamination(patientId);
-
             console.log("DEBUG - API start response:", result.data);
-
+            return result;
+          },
+          successMessage: `Đã bắt đầu khám cho ${patientName}`,
+          errorMessage: `Lỗi khi bắt đầu khám cho ${patientName}`,
+          onSuccess: (apiResult) => {
             const updatedPatient = {
               ...selectedTodayPatient,
               status: "Đang khám",
@@ -400,42 +425,24 @@ const TodaySection = ({
             setIsExamining(true);
             setViewMode(false);
 
-            await fetchTodayPatients();
+            fetchTodayPatients();
             setRefreshTrigger((prev) => prev + 1);
-
-            return `Đã bắt đầu khám cho ${patientName}`;
-          } catch (error) {
-            const translatedError = translateError(error);
-            throw new Error(translatedError);
-          } finally {
-            setIsLoading(false);
           }
-        },
-      });
-
-      if (result.isConfirmed) {
-        showToast("success", result.value);
-        return result.value;
+        });
+      } catch (error) {
+        // Lỗi đã được xử lý trong showConfirmationWithAPI
+        return null;
       }
-      return null;
     },
-    [
-      showConfirmation,
-      selectedTodayPatient,
-      setSelectedTodayPatient,
-      fetchTodayPatients,
-      translateError,
-      showToast,
-    ]
+    [showConfirmationWithAPI, selectedTodayPatient, setSelectedTodayPatient, fetchTodayPatients]
   );
 
-  // FIXED: HANDLE SELECT PATIENT - FIX: GIẢM DEPENDENCY VÀ TÁCH LOGIC
+  // HANDLE SELECT PATIENT
   const handleSelectPatient = useCallback(
     async (patient) => {
       console.log("🔄 Chọn bệnh nhân:", patient);
 
       if (!patient) {
-        // Hiển thị confirmation khi bỏ chọn bệnh nhân
         if (
           selectedTodayPatient &&
           (symptoms ||
@@ -443,7 +450,7 @@ const TodaySection = ({
             Object.keys(services).length > 0 ||
             prescriptionRows.length > 0)
         ) {
-          const result = await showConfirmation({
+          const result = await showSimpleConfirmation({
             title: "Bỏ chọn bệnh nhân",
             text: "Bạn có chắc muốn bỏ chọn bệnh nhân hiện tại? Dữ liệu chưa lưu sẽ bị mất.",
             icon: "warning",
@@ -472,10 +479,7 @@ const TodaySection = ({
       const currentStatus = getStatusText(patient.status);
       console.log("📊 Trạng thái:", currentStatus);
 
-      // LUÔN SET SELECTED PATIENT TRƯỚC
       setSelectedTodayPatient(patient);
-
-      // RESET FORM TRƯỚC KHI LOAD DỮ LIỆU MỚI
       setSymptoms("");
       setDiagnosis("");
       setServices({});
@@ -498,7 +502,7 @@ const TodaySection = ({
         setIsExamining(false);
         setViewMode(true);
 
-        const result = await showConfirmation({
+        const result = await showSimpleConfirmation({
           title: "Xem hồ sơ đã khám",
           text: `Bạn có muốn xem hồ sơ khám bệnh của ${patient.name}?`,
           confirmText: "Xem hồ sơ",
@@ -513,19 +517,7 @@ const TodaySection = ({
         handleError(new Error(`Trạng thái không hợp lệ: ${currentStatus}`));
       }
     },
-    [
-      selectedTodayPatient,
-      symptoms,
-      diagnosis,
-      services,
-      prescriptionRows,
-      showConfirmation,
-      setSelectedTodayPatient,
-      getStatusText,
-      startExamination,
-      loadCompletedExam,
-      handleError,
-    ]
+    [selectedTodayPatient, symptoms, diagnosis, services, prescriptionRows, setSelectedTodayPatient, getStatusText, startExamination, loadCompletedExam, handleError, showSimpleConfirmation]
   );
 
   const findNextPatient = useCallback(
@@ -539,8 +531,7 @@ const TodaySection = ({
       };
 
       const inProgressPatients = patients.filter(
-        (p) =>
-          getStatusText(p.status) === "Đang khám" && p.id !== currentPatientId
+        (p) => getStatusText(p.status) === "Đang khám" && p.id !== currentPatientId
       );
 
       if (inProgressPatients.length > 0) {
@@ -556,7 +547,7 @@ const TodaySection = ({
     [getStatusText]
   );
 
-  // HANDLE EXAMINATION SUBMIT - ĐÃ SỬA LỖI LOADING
+  // HANDLE EXAMINATION SUBMIT - FIXED
   const handleExaminationSubmit = async (e) => {
     e.preventDefault();
     if (!selectedTodayPatient) {
@@ -577,111 +568,83 @@ const TodaySection = ({
       return;
     }
 
-    // ✅ TẠO SWAL INSTANCE ĐỂ CÓ THỂ ĐÓNG KHI CÓ LỖI
-    let swalInstance = null;
     try {
-      const result = await Swal.fire({
+      await showConfirmationWithAPI({
         title: "Hoàn tất khám bệnh",
         text: `Bạn có chắc muốn hoàn tất khám cho bệnh nhân ${selectedTodayPatient.name}? Hồ sơ sẽ được lưu vào cơ sở dữ liệu.`,
+        confirmText: "Hoàn tất khám",
+        cancelText: "Hủy",
         icon: "question",
-        showCancelButton: true,
-        confirmButtonColor: "#3085d6",
-        cancelButtonColor: "#d33",
-        confirmButtonText: "Hoàn tất khám",
-        cancelButtonText: "Hủy",
-        showLoaderOnConfirm: true,
-        preConfirm: async () => {
-          try {
-            setIsLoading(true);
-            const submitData = {
-              appointment_id: selectedTodayPatient.id,
-              patient_id: selectedTodayPatient.patient_id,
-              queue_id: selectedTodayPatient.queue_id,
-              symptoms,
-              diagnosis,
-              services,
-              prescriptions: prescriptionRows,
-              diagnoses:
-                diagnoses.length > 0
-                  ? diagnoses
-                  : [{ Symptoms: symptoms, Diagnosis: diagnosis }],
-              status: "done",
-            };
-            console.log("DEBUG - Submit data:", submitData);
+        apiCall: async () => {
+          const submitData = {
+            appointment_id: selectedTodayPatient.id,
+            patient_id: selectedTodayPatient.patient_id,
+            queue_id: selectedTodayPatient.queue_id,
+            symptoms,
+            diagnosis,
+            services,
+            prescriptions: prescriptionRows,
+            diagnoses: diagnoses.length > 0 ? diagnoses : [{ Symptoms: symptoms, Diagnosis: diagnosis }],
+            status: "done",
+          };
+          console.log("DEBUG - Submit data:", submitData);
 
-            const saveResult = await doctorService.completeExamination(
-              selectedTodayPatient.id,
-              submitData
-            );
+          const saveResult = await doctorService.completeExamination(
+            selectedTodayPatient.id,
+            submitData
+          );
 
-            const result = saveResult.data;
-
-            await fetchTodayPatients();
-            setRefreshTrigger((prev) => prev + 1);
-
-            // Reset form data
-            setSymptoms("");
-            setDiagnosis("");
-            setServices({});
-            setRequestedServices({});
-            setPrescriptionRows([]);
-            setDiagnoses([]);
-
-            // TÌM BỆNH NHÂN TIẾP THEO
-            const nextPatient = findNextPatient(
-              selectedTodayPatient.id,
-              todayPatients
-            );
-
-            let successMessage = `Đã hoàn tất khám cho ${selectedTodayPatient.name}`;
-
-            if (nextPatient) {
-              setSelectedTodayPatient(nextPatient);
-
-              if (getStatusText(nextPatient.status) === "Đang chờ") {
-                await startExamination(
-                  nextPatient.id || nextPatient.AppointmentId,
-                  nextPatient.name
-                );
-                successMessage += `. Đã tự động chuyển sang bệnh nhân tiếp theo: ${nextPatient.name}`;
-              } else if (getStatusText(nextPatient.status) === "Đang khám") {
-                setIsExamining(true);
-                setViewMode(false);
-                successMessage += `. Đã chuyển sang bệnh nhân đang khám: ${nextPatient.name}`;
-              }
-            } else {
-              setSelectedTodayPatient(null);
-              setIsExamining(false);
-              setViewMode(false);
-              successMessage +=
-                ". Đã lưu vào DB. Không còn bệnh nhân chờ khám hôm nay.";
-            }
-
-            return successMessage;
-          } catch (error) {
-            // ✅ QUAN TRỌNG: ĐÓNG SWAL LOADING KHI CÓ LỖI
-            Swal.close();
-            const translatedError = translateError(error);
-            throw new Error(translatedError);
-          } finally {
-            setIsLoading(false);
-            setIsExamining(false);
-          }
+          return saveResult;
         },
-        allowOutsideClick: () => !Swal.isLoading(),
+        successMessage: `Đã hoàn tất khám cho ${selectedTodayPatient.name}`,
+        // CHỈ CẦN STRING ĐƠN GIẢN - phần xử lý phức tạp đã nằm trong showConfirmationWithAPI
+        errorMessage: `Lỗi khi hoàn tất khám cho ${selectedTodayPatient.name}`,
+        onSuccess: (apiResult) => {
+          // Reset form data
+          setSymptoms("");
+          setDiagnosis("");
+          setServices({});
+          setRequestedServices({});
+          setPrescriptionRows([]);
+          setDiagnoses([]);
+
+          // TÌM BỆNH NHÂN TIẾP THEO
+          const nextPatient = findNextPatient(selectedTodayPatient.id, todayPatients);
+
+          let successMessage = `Đã hoàn tất khám cho ${selectedTodayPatient.name}`;
+
+          if (nextPatient) {
+            setSelectedTodayPatient(nextPatient);
+
+            if (getStatusText(nextPatient.status) === "Đang chờ") {
+              startExamination(nextPatient.id || nextPatient.AppointmentId, nextPatient.name);
+              successMessage += `. Đã tự động chuyển sang bệnh nhân tiếp theo: ${nextPatient.name}`;
+            } else if (getStatusText(nextPatient.status) === "Đang khám") {
+              setIsExamining(true);
+              setViewMode(false);
+              successMessage += `. Đã chuyển sang bệnh nhân đang khám: ${nextPatient.name}`;
+            }
+          } else {
+            setSelectedTodayPatient(null);
+            setIsExamining(false);
+            setViewMode(false);
+            successMessage += ". Đã lưu vào DB. Không còn bệnh nhân chờ khám hôm nay.";
+          }
+
+          fetchTodayPatients();
+          setRefreshTrigger((prev) => prev + 1);
+
+          // Hiển thị thông báo chi tiết
+          showToast("success", successMessage);
+        }
       });
 
-      if (result.isConfirmed) {
-        showToast("success", result.value);
-      }
     } catch (error) {
-      // ✅ XỬ LÝ LỖI NGOẠI LỆ Ở ĐÂY
-      console.error("❌ Lỗi trong handleExaminationSubmit:", error);
-      showToast("error", error.message || "Đã xảy ra lỗi khi hoàn tất khám");
+      console.log("✅ Swal đã tắt, lỗi đã được hiển thị");
     }
   };
 
-  // HANDLE TEMP SAVE - FIX: TÁCH RIÊNG
+  // HANDLE TEMP SAVE - FIXED
   const handleTempSave = async () => {
     if (!selectedTodayPatient) {
       showToast("warning", "Chưa chọn bệnh nhân.");
@@ -698,25 +661,20 @@ const TodaySection = ({
       return;
     }
 
-    const result = await showConfirmation({
-      title: "Tạm lưu dữ liệu",
-      text: "Bạn có chắc muốn tạm lưu dữ liệu khám hiện tại? Dữ liệu sẽ được lưu nhưng trạng thái bệnh nhân không thay đổi.",
-      confirmText: "Tạm lưu",
-      cancelText: "Hủy",
-      icon: "info",
-      showLoader: true,
-      preConfirm: async () => {
-        try {
-          setIsLoading(true);
+    try {
+      await showConfirmationWithAPI({
+        title: "Tạm lưu dữ liệu",
+        text: "Bạn có chắc muốn tạm lưu dữ liệu khám hiện tại? Dữ liệu sẽ được lưu nhưng trạng thái bệnh nhân không thay đổi.",
+        confirmText: "Tạm lưu",
+        cancelText: "Hủy",
+        icon: "info",
+        apiCall: async () => {
           const draftData = {
             symptoms,
             diagnosis,
             services,
             prescriptions: prescriptionRows,
-            diagnoses:
-              diagnoses.length > 0
-                ? diagnoses
-                : [{ Symptoms: symptoms, Diagnosis: diagnosis }],
+            diagnoses: diagnoses.length > 0 ? diagnoses : [{ Symptoms: symptoms, Diagnosis: diagnosis }],
           };
 
           console.log("DEBUG - Temp save data:", draftData);
@@ -726,26 +684,19 @@ const TodaySection = ({
             draftData
           );
 
-          const result = tempSaveResult.data;
-
-          return "Đã tạm lưu dữ liệu khám (không đổi trạng thái).";
-        } catch (error) {
-          const translatedError = translateError(error);
-          throw new Error(translatedError);
-        } finally {
-          setIsLoading(false);
-        }
-      },
-    });
-
-    if (result.isConfirmed) {
-      showToast("success", result.value);
+          return tempSaveResult;
+        },
+        successMessage: "Đã tạm lưu dữ liệu khám (không đổi trạng thái).",
+        errorMessage: "Lỗi khi tạm lưu dữ liệu khám"
+      });
+    } catch (error) {
+      // Lỗi đã được xử lý trong showConfirmationWithAPI
     }
   };
 
-  // HANDLE REFRESH PATIENTS - FIX: TÁCH RIÊNG
+  // HANDLE REFRESH PATIENTS
   const handleRefreshPatients = async () => {
-    const result = await showConfirmation({
+    const result = await showSimpleConfirmation({
       title: "Làm mới danh sách",
       text: "Bạn có muốn làm mới danh sách bệnh nhân?",
       confirmText: "Làm mới",
@@ -759,13 +710,13 @@ const TodaySection = ({
     }
   };
 
-  // HANDLE START FIRST EXAMINATION - FIX: TÁCH RIÊNG
+  // HANDLE START FIRST EXAMINATION
   const handleStartFirstExamination = async () => {
     const firstPatient =
       todayPatients.find((p) => getStatusText(p.status) === "Đang chờ") ||
       todayPatients[0];
     if (firstPatient) {
-      const result = await showConfirmation({
+      const result = await showSimpleConfirmation({
         title: "Bắt đầu khám đầu tiên",
         text: `Bạn có muốn bắt đầu khám cho bệnh nhân ${firstPatient.name}?`,
         confirmText: "Bắt đầu khám",
@@ -780,15 +731,13 @@ const TodaySection = ({
   };
 
   const handleRemoveWithConfirm = async (index) => {
-    const result = await Swal.fire({
+    const result = await showSimpleConfirmation({
       title: "Xác nhận xóa",
       text: "Bạn có chắc chắn muốn xóa thuốc này khỏi đơn?",
       icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#d33",
-      cancelButtonColor: "#3085d6",
-      confirmButtonText: "Có, xóa!",
-      cancelButtonText: "Hủy",
+      confirmText: "Có, xóa!",
+      cancelText: "Hủy",
+      confirmColor: "#d33",
     });
 
     if (result.isConfirmed) {
@@ -803,7 +752,7 @@ const TodaySection = ({
         @media print {
           body * { visibility: hidden; }
           #print-content, #print-content * { visibility: visible; }
-#print-content { position: absolute; left: 0; top: 0; width: 100%; display: block !important; }
+          #print-content { position: absolute; left: 0; top: 0; width: 100%; display: block !important; }
           .no-print { display: none !important; }
         }
         .form-check-input:checked {
@@ -864,7 +813,6 @@ const TodaySection = ({
                 )}
                 {isExamining && (
                   <Badge bg="success" className="ms-2">
-                    {" "}
                     Đang khám
                   </Badge>
                 )}
@@ -969,6 +917,7 @@ const TodaySection = ({
                       symptoms={symptoms}
                       diagnoses={diagnoses}
                       doctorInfo={doctorInfo}
+                      showConfirmationWithAPI={showConfirmationWithAPI}
                     />
 
                     <PrescriptionSection
@@ -1006,8 +955,7 @@ const TodaySection = ({
                       {isLoading ? (
                         <Spinner animation="border" size="sm" />
                       ) : null}
-                      <i className="fas fa-check-circle"></i> Hoàn Tất & Lưu Hồ
-                      Sơ
+                      <i className="fas fa-check-circle"></i> Hoàn Tất & Lưu Hồ Sơ
                     </Button>
                     <Button
                       variant="secondary"
@@ -1035,7 +983,7 @@ const TodaySection = ({
 
         <div id="print-content" ref={printRef} style={{ display: "none" }} />
 
-        {/* THÊM CUSTOM TOAST COMPONENT */}
+        {/* CUSTOM TOAST COMPONENT */}
         {toast.show && (
           <CustomToast
             type={toast.type}

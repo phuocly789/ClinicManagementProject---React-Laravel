@@ -77,14 +77,15 @@ const PaymentSection = () => {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [resetting, setResetting] = useState(false);
-  
+  const [currentUser, setCurrentUser] = useState(null);
+
   // State cho CustomToast
   const [toast, setToast] = useState({
     show: false,
     type: 'success',
     message: ''
   });
-  
+
   const [activeTab, setActiveTab] = useState(TAB_KEYS.ALL);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -217,7 +218,7 @@ const PaymentSection = () => {
     }
   };
 
-  // Fetch invoices
+  // Fetch invoices - SỬA LẠI ĐỂ LẤY USER_INFO CHÍNH XÁC
   const fetchInvoices = async () => {
     try {
       setLoading(true);
@@ -245,26 +246,52 @@ const PaymentSection = () => {
         ? await paymentService.getPaymentHistory(filters)
         : await paymentService.getInvoices(filters);
 
-      if (response?.data) {
+      console.log('📡 FULL API Response structure:', {
+        hasData: !!response?.data,
+        hasUserInfo: !!response?.user_info, // Kiểm tra user_info ở response gốc
+        hasUserInfoInData: !!response?.data?.user_info, // Kiểm tra trong data
+        dataKeys: response?.data ? Object.keys(response.data) : [],
+        responseKeys: response ? Object.keys(response) : []
+      });
+
+      if (response) {
         let invoicesData = [];
         let paginationData = {};
 
-        if (response.data.success) {
-          invoicesData = response.data.data?.invoices || response.data.data || [];
-          paginationData = response.data.data?.pagination || {};
-        } else if (Array.isArray(response.data)) {
-          invoicesData = response.data;
-        } else if (response.data.invoices) {
-          invoicesData = response.data.invoices;
-          paginationData = response.data.pagination || {};
-        } else {
-          invoicesData = response.data;
+        // ✅ QUAN TRỌNG: Lấy user_info từ ĐÚNG VỊ TRÍ - response.user_info (ngoài data)
+        if (response.user_info) {
+          setCurrentUser(response.user_info);
+          console.log('👤 User info saved from API (root level):', response.user_info);
+        }
+        // Fallback: nếu API trả về khác cấu trúc
+        else if (response.data?.user_info) {
+          setCurrentUser(response.data.user_info);
+          console.log('👤 User info saved from API (in data):', response.data.user_info);
+        }
+        else {
+          console.log('⚠️ No user_info found in API response at all');
+          console.log('🔍 Available keys in response:', Object.keys(response));
+        }
+
+        // Xử lý dữ liệu invoices
+        if (response.data) {
+          if (response.data.success) {
+            invoicesData = response.data.data?.invoices || response.data.data || [];
+            paginationData = response.data.data?.pagination || {};
+          } else if (Array.isArray(response.data)) {
+            invoicesData = response.data;
+          } else if (response.data.invoices) {
+            invoicesData = response.data.invoices;
+            paginationData = response.data.pagination || {};
+          } else {
+            invoicesData = response.data;
+          }
         }
 
         setInvoices(invoicesData);
         setTotalItems(paginationData.total || invoicesData.length || 0);
 
-        if (invoicesData.length === 0 && !response.data.message) {
+        if (invoicesData.length === 0 && !response.data?.message) {
           showToast('info', 'Không có dữ liệu hóa đơn');
         }
       } else {
@@ -335,6 +362,29 @@ const PaymentSection = () => {
         throw new Error('Không có dữ liệu hóa đơn');
       }
 
+      // ✅ FIX: Lấy doctorName với fallback tốt hơn
+      // ✅ FIX: Lấy doctorName với fallback tốt hơn
+      const getDoctorName = () => {
+        if (currentUser?.full_name) return currentUser.full_name;
+
+        const savedUser = localStorage.getItem('currentUser');
+        if (savedUser) {
+          try {
+            const user = JSON.parse(savedUser);
+            return user.full_name;
+          } catch (e) {
+            console.error('Error parsing saved user:', e);
+          }
+        }
+
+        return 'Hệ thống';
+      };
+
+      const doctorName = getDoctorName();
+
+      console.log('👤 Doctor name to use:', doctorName);
+      console.log('👤 Current user data:', currentUser);
+
       // Lấy dữ liệu services và prescriptions ĐÚNG CẤU TRÚC
       const { services, prescriptions } = getServicesAndMedicinesFromInvoice(invoice);
 
@@ -342,19 +392,20 @@ const PaymentSection = () => {
         services,
         prescriptions,
         hasServices: services.length > 0,
-        hasPrescriptions: prescriptions.length > 0
+        hasPrescriptions: prescriptions.length > 0,
+        doctorName: doctorName
       });
 
       // THÊM ĐẦY ĐỦ PDF SETTINGS THEO VALIDATION CỦA BE
       const printData = {
         type: 'payment',
         patient_name: invoice.patient_name || 'THÔNG TIN BỆNH NHÂN',
-        age: String(invoice.patient_age || 'N/A'),
+        age: String(invoice.patient_age || 0),
         gender: invoice.patient_gender || 'N/A',
         phone: invoice.patient_phone || 'N/A',
         appointment_date: invoice.date || new Date().toLocaleDateString('vi-VN'),
         appointment_time: 'Hoàn tất',
-        doctor_name: 'Hệ thống',
+        doctor_name: doctorName, // ✅ Đã có fallback
         paid_at: invoice.paid_at || new Date().toLocaleString('vi-VN'),
 
         // QUAN TRỌNG: Gửi đúng cấu trúc prescriptions và services
@@ -363,14 +414,13 @@ const PaymentSection = () => {
 
         // Payment data
         payment_method: invoice.payment_method || 'cash',
-        payment_status: 'Đã thanh toán',
+        payment_status: invoice.status ||'N/A',
         discount: 0,
         invoice_code: invoice.code || `INV_${invoice.id}`,
         total_amount: invoice.total || 0,
 
-        // QUAN TRỌNG: THÊM ĐẦY ĐỦ PDF SETTINGS THEO VALIDATION
+        // QUAN TRỜNG BẮT BUỘC THEO VALIDATION
         pdf_settings: {
-          // CÁC TRƯỜNG BẮT BUỘC THEO VALIDATION
           fontFamily: 'Times New Roman',
           fontSize: '14px',
           fontColor: '#000000',
@@ -386,7 +436,7 @@ const PaymentSection = () => {
           clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
           clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
           clinicPhone: '028 1234 5678',
-          doctorName: 'Hệ thống',
+          doctorName: doctorName, // ✅ Dùng lại doctorName
           customTitle: 'HÓA ĐƠN THANH TOÁN',
 
           // Page settings
@@ -421,6 +471,8 @@ const PaymentSection = () => {
       };
 
       console.log('📤 Sending to Laravel PDF API:', {
+        age: invoice.patient_age,
+        doctor_name: doctorName,
         ...printData,
         pdf_settings: '...' // Ẩn pdf_settings trong log để dễ đọc
       });
@@ -539,6 +591,35 @@ const PaymentSection = () => {
     setCurrentPage(1);
   }, [statusFilter]);
 
+
+  useEffect(() => {
+    if (currentUser && currentUser.full_name) {
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+      console.log('💾 Saved user to localStorage:', currentUser.full_name);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    const initializeUser = () => {
+      // Thử lấy từ localStorage trước
+      const savedUser = localStorage.getItem('currentUser');
+      if (savedUser) {
+        setCurrentUser(JSON.parse(savedUser));
+        console.log('👤 Loaded user from localStorage:', JSON.parse(savedUser).full_name);
+      } else {
+        // Fallback user - chỉ set nếu chưa có
+        if (!currentUser) {
+          setCurrentUser({
+            user_id: 0,
+            full_name: 'Hệ thống',
+            email: 'system@phongkham.com'
+          });
+        }
+      }
+    };
+
+    initializeUser();
+  }, []);
   // Auto refresh mỗi 30 giây cho các hóa đơn đang xử lý
   useEffect(() => {
     if (autoRefresh) {

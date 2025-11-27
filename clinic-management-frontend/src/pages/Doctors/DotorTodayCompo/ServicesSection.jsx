@@ -18,6 +18,7 @@ const ServicesSection = ({
   symptoms,
   diagnoses = [],
   doctorInfo,
+   showConfirmationWithAPI,
 }) => {
   const navigate = useNavigate();
   const [localServices, setLocalServices] = useState([]);
@@ -434,7 +435,8 @@ const ServicesSection = ({
       age: selectedTodayPatient.age,
       gender: selectedTodayPatient.gender,
       phone: selectedTodayPatient.phone,
-      appointment_date: selectedTodayPatient.date || new Date().toLocaleDateString('vi-VN'),
+      appointment_date: selectedTodayPatient.date ||
+        new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }), // Format: YYYY-MM-DD
       appointment_time: selectedTodayPatient.time,
       doctor_name: doctorInfo?.doctor_Name || 'Bác sĩ điều trị',
       diagnoses: diagnoses.length > 0 ? diagnoses : [{ Symptoms: symptoms, Diagnosis: diagnosis }],
@@ -724,6 +726,7 @@ const ServicesSection = ({
   }, []);
 
   // FUNCTION: Handle request service - ĐÃ THÊM CONFIRMATION VÀ XỬ LÝ LỖI
+  // FUNCTION: Handle request service - ĐÃ SỬA LỖI SWEETALERT2
   const handleRequestService = useCallback(async () => {
     console.log('🔍 DEBUG selectedTodayPatient:', selectedTodayPatient);
 
@@ -751,18 +754,17 @@ const ServicesSection = ({
       return;
     }
 
-    // ✅ Hiển thị confirmation trước khi gửi yêu cầu
-    const result = await showConfirmation({
-      title: 'Yêu cầu thực hiện dịch vụ',
-      text: `Bạn có chắc muốn gửi yêu cầu thực hiện ${selectedCount} dịch vụ cho bệnh nhân ${selectedTodayPatient.name}?`,
-      confirmText: 'Gửi yêu cầu',
-      cancelText: 'Hủy',
-      icon: 'question',
-      showLoader: true,
-      preConfirm: async () => {
-        try {
-          setServiceLoading(true);
+    try {
+      setServiceLoading(true);
 
+      // ✅ SỬ DỤNG showConfirmationWithAPI THAY VÌ showConfirmation
+      const result = await showConfirmationWithAPI({
+        title: 'Yêu cầu thực hiện dịch vụ',
+        text: `Bạn có chắc muốn gửi yêu cầu thực hiện ${selectedCount} dịch vụ cho bệnh nhân ${selectedTodayPatient.name}?`,
+        confirmText: 'Gửi yêu cầu',
+        cancelText: 'Hủy',
+        icon: 'question',
+        apiCall: async () => {
           const requestData = {
             selectedServices: selected.map(id => parseInt(id)),
             diagnosis: diagnosis || '',
@@ -792,27 +794,49 @@ const ServicesSection = ({
 
             console.log('✅ Đã cập nhật requested services:', updatedRequestedServices);
 
-            return successMessage;
+            return { success: true, message: successMessage };
           } else {
             // FIX: XỬ LÝ KHI KHÔNG THÀNH CÔNG
-            const errorMessage = response?.message || 'Lỗi không xác định từ server';
+            const errorMessage = response?.message || response?.error || 'Lỗi không xác định từ server';
             throw new Error(errorMessage);
           }
+        },
+        successMessage: `Đã gửi yêu cầu ${selectedCount} dịch vụ thành công!`,
+        errorMessage: (error) => {
+          console.log("API Error in handleRequestService:", error);
 
-        } catch (error) {
-          const translatedError = translateError(error);
-          throw new Error(translatedError);
-        } finally {
-          setServiceLoading(false);
+          // Ưu tiên lấy lỗi từ API response
+          if (error && error.error) {
+            return error.error;
+          }
+          if (error && error.message) {
+            return error.message;
+          }
+          return `Lỗi khi gửi yêu cầu dịch vụ`;
+        },
+        onSuccess: (apiResult) => {
+          // Cập nhật requested services khi thành công
+          const updatedRequestedServices = { ...requestedServices };
+          selected.forEach(serviceId => {
+            updatedRequestedServices[serviceId] = true;
+          });
+          setRequestedServices(updatedRequestedServices);
         }
-      }
-    });
+      });
 
-    if (result.isConfirmed) {
-      showSuccessAlert(result.value || `Đã gửi yêu cầu ${selectedCount} dịch vụ thành công!`);
+      // Nếu user confirm và API thành công
+      if (result && result.isConfirmed) {
+        console.log('✅ Yêu cầu dịch vụ đã được xử lý thành công');
+      }
+
+    } catch (error) {
+      // ❌ Lỗi đã được xử lý trong showConfirmationWithAPI, không cần xử lý thêm
+      console.log("✅ Swal đã tắt, lỗi đã được hiển thị");
+    } finally {
+      setServiceLoading(false);
     }
 
-  }, [servicesState, selectedTodayPatient, diagnosis, symptoms, requestedServices, setRequestedServices, setToast, showConfirmation, translateError]);
+  }, [servicesState, selectedTodayPatient, diagnosis, symptoms, requestedServices, setRequestedServices, setToast, showConfirmationWithAPI]);
 
   // RENDER DANH SÁCH DỊCH VỤ ĐỂ CHỌN (CHECKBOX)
   const renderServicesCheckbox = () => {
