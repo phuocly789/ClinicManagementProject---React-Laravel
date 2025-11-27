@@ -896,7 +896,7 @@ const ReceptionistPatent = () => {
     };
 
     const handleCreateAll = async () => {
-        if (loading) return; 
+        if (loading) return;
 
         if (!(await validateAll())) {
             return;
@@ -961,7 +961,7 @@ const ReceptionistPatent = () => {
                     }
                     return slot;
                 }));
-                
+
                 resetAllForms();
                 if (activeTab === 'online') {
                     const appointmentsResponse = await api.getOnlineAppointments("Đã đặt");
@@ -1183,23 +1183,25 @@ const ReceptionistPatent = () => {
                                         <label className="form-label small">Địa chỉ</label>
                                         <input
                                             type="text"
-                                            className="form-control form-control-sm"
+                                            className={`form-control form-control-sm ${errors.address ? 'is-invalid' : ''}`}
                                             value={patientForm.address}
                                             onChange={(e) => setPatientForm({ ...patientForm, address: e.target.value })}
                                             placeholder="Nhập địa chỉ"
                                         />
+                                        {renderInputError('address')}
                                     </div>
 
                                     {/* Medical History */}
                                     <div className="col-12">
                                         <label className="form-label small">Tiền sử bệnh</label>
                                         <textarea
-                                            className="form-control form-control-sm"
+                                                className={`form-control form-control-sm ${errors.medicalHistory ? 'is-invalid' : ''}`}
                                             rows="2"
                                             value={patientForm.medicalHistory}
                                             onChange={(e) => setPatientForm({ ...patientForm, medicalHistory: e.target.value })}
                                             placeholder="Nhập tiền sử bệnh nếu có..."
                                         />
+                                            {renderInputError('medicalHistory')}
                                     </div>
                                 </div>
                             </div>
@@ -1343,12 +1345,13 @@ const ReceptionistPatent = () => {
                             <div className="col-12">
                                 <label className="form-label small">Ghi chú</label>
                                 <textarea
-                                    className="form-control form-control-sm"
+                                    className={`form-control form-control-sm ${errors.notes ? 'is-invalid' : ''}`}
                                     rows="2"
                                     value={appointmentForm.notes}
                                     onChange={(e) => setAppointmentForm({ ...appointmentForm, notes: e.target.value })}
                                     placeholder="Ghi chú về tình trạng bệnh nhân..."
                                 />
+                                {renderInputError('notes')}
                             </div>
                         </div>
                     </div>
@@ -1407,7 +1410,7 @@ const ReceptionistPatent = () => {
         return matchesSearch && matchesStatus;
     });
 
-  
+
 
     return (
         <>
