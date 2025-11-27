@@ -31,6 +31,7 @@ class Notification extends Model
 	protected $primaryKey = 'NotificationId';
 	public $incrementing = false;
 	public $timestamps = true;
+    const CREATED_AT = 'SentAt';
     const UPDATED_AT = 'UpdatedAt';
 	protected $casts = [
 		'NotificationId' => 'int',
@@ -46,7 +47,7 @@ class Notification extends Model
 		'Type',
 		'SentAt',
 		'Status',
-        'UpdatedAt'
+        'UpdatedAt',
 	];
 
 	public function user()

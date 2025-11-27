@@ -32,6 +32,7 @@ class SendAppointmentReminder extends Command
 
             if ($user && $user->Email && $appointment) {
                 SendAppointmentReminderJob::dispatch(
+
                     $user->Email,
                     $user->FullName,
                     $appointment->AppointmentDate->format('d/m/Y'),
