@@ -112,7 +112,7 @@ class AppointmentsController extends Controller
 
             $queues = Queue::with(['patient.user', 'appointment'])
                 ->whereDate('QueueDate', now('Asia/Ho_Chi_Minh'))
-                ->whereIn('AppointmentId', $appointmentIds)
+                // ->whereIn('AppointmentId', $appointmentIds)
                 ->whereIn('Status', ['Đang khám'])
                 ->orderByRaw("
                 CASE
@@ -164,7 +164,8 @@ class AppointmentsController extends Controller
                     return [
                         'id' => $queue->QueueId,
                         'appointment_id' => $queue->AppointmentId,
-                        'date' => $queue->QueueDate,
+                        'date' => $queue->QueueDate ? Carbon::parse($queue->QueueDate)->timezone('Asia/Ho_Chi_Minh')->format('Y-m-d') : null,
+                        'date_formatted' => $queue->QueueDate ? Carbon::parse($queue->QueueDate)->timezone('Asia/Ho_Chi_Minh')->format('d/m/Y') : null,
                         'time' => $time,
                         'name' => $user?->FullName ?? 'Không có tên',
                         'status' => $status,
