@@ -917,6 +917,7 @@ const TodaySection = ({
                       symptoms={symptoms}
                       diagnoses={diagnoses}
                       doctorInfo={doctorInfo}
+                      showConfirmationWithAPI={showConfirmationWithAPI}
                     />
 
                     <PrescriptionSection
