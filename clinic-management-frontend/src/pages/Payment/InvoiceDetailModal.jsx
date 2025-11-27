@@ -1,5 +1,5 @@
 // src/components/InvoiceDetailModal.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, Button, Row, Col, Badge, Table, Card, Spinner, Alert } from 'react-bootstrap';
 import { Printer, Download, X, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -10,7 +10,21 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState('');
   const [printSuccess, setPrintSuccess] = useState('');
+  const [currentUser, setCurrentUser] = useState(null);
   const navigate = useNavigate();
+
+  // Lấy currentUser từ localStorage khi component mount
+  useEffect(() => {
+    const savedUser = localStorage.getItem('currentUser');
+    if (savedUser) {
+      try {
+        setCurrentUser(JSON.parse(savedUser));
+        console.log('👤 Loaded user from localStorage in modal:', JSON.parse(savedUser).full_name);
+      } catch (e) {
+        console.error('Error parsing saved user in modal:', e);
+      }
+    }
+  }, []);
 
   // FIXED: Xử lý nhiều cấu trúc data khác nhau
   let invoiceData = null;
@@ -27,6 +41,30 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
 
   console.log('📄 Processed invoice data:', invoiceData);
 
+  // ✅ FIXED: Lấy doctorName với fallback tốt hơn - ĐỒNG BỘ VỚI PaymentSection
+  const getDoctorName = () => {
+    if (currentUser?.full_name) {
+      console.log('👤 Using doctor name from currentUser:', currentUser.full_name);
+      return currentUser.full_name;
+    }
+
+    const savedUser = localStorage.getItem('currentUser');
+    if (savedUser) {
+      try {
+        const user = JSON.parse(savedUser);
+        if (user.full_name) {
+          console.log('👤 Using doctor name from localStorage:', user.full_name);
+          return user.full_name;
+        }
+      } catch (e) {
+        console.error('Error parsing saved user:', e);
+      }
+    }
+
+    console.log('👤 Using default doctor name: Hệ thống');
+    return 'Hệ thống';
+  };
+
   // Hàm in hóa đơn - ĐÃ SỬA ĐÚNG CẤU TRÚC CHO BE
   const handlePrintInvoice = async () => {
     try {
@@ -39,40 +77,43 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
       if (!invoiceData) {
         throw new Error('Không có dữ liệu hóa đơn');
       }
-      const { services, prescriptions } = getServicesAndMedicinesFromInvoice(invoice);
 
-      // ✅ SỬA: Gửi đúng cấu trúc data mà BE expect
+      const doctorName = getDoctorName();
+      const { services, prescriptions } = getServicesAndMedicinesFromInvoice(invoiceData);
+
+      console.log('📋 Processed data for PDF:', {
+        services,
+        prescriptions,
+        hasServices: services.length > 0,
+        hasPrescriptions: prescriptions.length > 0,
+        doctorName: doctorName
+      });
+
+      // ✅ SỬA: Gửi đúng cấu trúc data mà BE expect - ĐỒNG BỘ VỚI PaymentSection
       const printData = {
-        type: 'payment', // ✅ ĐÚNG - dùng 'payment' cho hóa đơn thanh toán
+        type: 'payment',
         patient_name: invoiceData.patient_name || 'THÔNG TIN BỆNH NHÂN',
-        age: String(invoiceData.patient_age || 'N/A'), // ✅ ĐÚNG - string
-        gender: invoiceData.patient_gender || 'N/A', // ✅ ĐÚNG
+        age: String(invoiceData.patient_age || 0),
+        gender: invoiceData.patient_gender || 'N/A',
         phone: invoiceData.patient_phone || 'N/A',
         appointment_date: invoiceData.date || new Date().toLocaleDateString('vi-VN'),
         appointment_time: 'Hoàn tất',
-        doctor_name: 'Hệ thống',
+        doctor_name: doctorName, // ✅ Dùng hàm getDoctorName
+        paid_at: invoiceData.paid_at || new Date().toLocaleString('vi-VN'),
 
-        // ✅ QUAN TRỌNG: Đúng cấu trúc services (KHÔNG CÓ prescriptions)
-        services: services,
+        // ✅ QUAN TRỌNG: Đúng cấu trúc
         prescriptions: prescriptions,
+        services: services,
 
-        // ✅ QUAN TRỌNG: Đúng cấu trúc payment data
-        payment_method: invoiceData.payment_method,
+        // ✅ Payment data
+        payment_method: invoiceData.payment_method || 'cash',
         payment_status: 'Đã thanh toán',
         discount: 0,
         invoice_code: invoiceData.code || `INV_${invoiceData.id}`,
-
-        // ✅ THÊM các trường mới cho payment
         total_amount: invoiceData.total || 0,
-        transaction_id: invoiceData.transaction_id,
-        order_id: invoiceData.order_id,
-
-        // ✅ THÊM diagnoses nếu có
-        diagnoses: ['Khám và điều trị'],
 
         // ✅ PDF SETTINGS - đúng cấu trúc
         pdf_settings: {
-          // 🔥 CÁC TRƯỜNG BẮT BUỘC THEO VALIDATION
           fontFamily: 'Times New Roman',
           fontSize: '14px',
           fontColor: '#000000',
@@ -88,7 +129,7 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
           clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
           clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
           clinicPhone: '028 1234 5678',
-          doctorName: 'Hệ thống',
+          doctorName: doctorName, // ✅ Dùng lại doctorName
           customTitle: 'HÓA ĐƠN THANH TOÁN',
 
           // Page settings
@@ -122,17 +163,21 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
         }
       };
 
-      console.log('📤 Sending to Laravel PDF API:', printData);
+      console.log('📤 Sending to Laravel PDF API:', {
+        age: invoiceData.patient_age,
+        doctor_name: doctorName,
+        ...printData,
+        pdf_settings: '...'
+      });
 
       // ✅ GỌI ĐÚNG ENDPOINT
-      const response = await printPdfService.printPDF(printData);
-      console.log('✅ PDF Service Result:', response)
-      console.log('📥 API Response status:', response.status);
-
+      const result = await printPdfService.printPDF(printData);
+      console.log('✅ PDF Service Result:', result);
+      setPrintSuccess(`✅ Đã tải xuống PDF hóa đơn ${invoiceData.code} thành công! File: ${result.fileName}`);
 
     } catch (error) {
       console.error('❌ Print invoice error:', error);
-      setPrintError('Lỗi khi in hóa đơn: ' + error.message);
+      setPrintError('❌ Lỗi khi in hóa đơn: ' + error.message);
     } finally {
       setPrinting(false);
     }
@@ -144,17 +189,19 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
       setPrintError('Không có dữ liệu hóa đơn');
       return;
     }
-    const { services, prescriptions } = getServicesAndMedicinesFromInvoice(invoice);
+
+    const doctorName = getDoctorName();
+    const { services, prescriptions } = getServicesAndMedicinesFromInvoice(invoiceData);
 
     const previewData = {
       type: 'payment',
       patient_name: invoiceData.patient_name || 'THÔNG TIN BỆNH NHÂN',
-      age: String(invoiceData.patient_age || 'N/A'),
+      age: String(invoiceData.patient_age || 0),
       gender: invoiceData.patient_gender || 'N/A',
       phone: invoiceData.patient_phone || 'N/A',
       appointment_date: invoiceData.date || new Date().toLocaleDateString('vi-VN'),
       appointment_time: 'Hoàn tất',
-      doctor_name: 'Hệ thống',
+      doctor_name: doctorName, // ✅ Dùng hàm getDoctorName
       services: services,
       prescriptions: prescriptions,
       payment_method: invoiceData.payment_method,
@@ -165,6 +212,7 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
       transaction_id: invoiceData.transaction_id,
       order_id: invoiceData.order_id,
       diagnoses: ['Khám và điều trị'],
+      
       // THÊM CÁC TRƯỜNG CẦN THIẾT CHO VIỆC CHỈNH SỬA
       appointment_id: invoiceData.appointment_id,
       patient_id: invoiceData.patient_id,
@@ -174,6 +222,7 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
         prescriptions: prescriptions
       },
       timestamp: Date.now(),
+      
       // PDF SETTINGS
       pdf_settings: {
         customTitle: 'HÓA ĐƠN THANH TOÁN',
@@ -181,7 +230,7 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
         clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
         clinicPhone: '028 1234 5678',
         fontFamily: 'Arial',
-        doctorName: 'Hệ thống'
+        doctorName: doctorName // ✅ Dùng lại doctorName
       }
     };
 
@@ -224,17 +273,19 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
       if (!invoiceData) {
         throw new Error('Không có dữ liệu hóa đơn');
       }
-      const { services, prescriptions } = getServicesAndMedicinesFromInvoice(invoice);
+
+      const doctorName = getDoctorName();
+      const { services, prescriptions } = getServicesAndMedicinesFromInvoice(invoiceData);
 
       const previewData = {
         type: 'payment',
         patient_name: invoiceData.patient_name || 'THÔNG TIN BỆNH NHÂN',
-        age: String(invoiceData.patient_age || 'N/A'),
+        age: String(invoiceData.patient_age || 0),
         gender: invoiceData.patient_gender || 'N/A',
         phone: invoiceData.patient_phone || 'N/A',
         appointment_date: invoiceData.date || new Date().toLocaleDateString('vi-VN'),
         appointment_time: 'Hoàn tất',
-        doctor_name: 'Hệ thống',
+        doctor_name: doctorName, // ✅ Dùng hàm getDoctorName
         services: services,
         prescriptions: prescriptions,
         payment_method: invoiceData.payment_method,
@@ -251,7 +302,7 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
           clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
           clinicPhone: '028 1234 5678',
           fontFamily: 'Arial',
-          doctorName: 'Hệ thống'
+          doctorName: doctorName // ✅ Dùng lại doctorName
         }
       };
 
@@ -292,10 +343,10 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
     }
   };
 
-  // ✅ Hàm lấy services và prescriptions từ invoice - SỬA ĐÚNG CẤU TRÚC
+  // ✅ Hàm lấy services và prescriptions từ invoice - SỬA ĐÚNG CẤU TRÚC (GIỐNG PaymentSection)
   const getServicesAndMedicinesFromInvoice = (invoice) => {
     const services = [];
-    const prescriptions = []; // ĐỔI TÊN: medicines -> prescriptions
+    const prescriptions = [];
 
     console.log('🔍 Raw invoice details:', invoice.invoice_details);
 
@@ -320,7 +371,6 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
             ServiceName: serviceName,
             Price: unitPrice,
             Quantity: quantity,
-            // KHÔNG gửi Amount, BE sẽ tự tính
           });
 
           console.log(`🩺 Added service: ${serviceName}`);
@@ -330,13 +380,11 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
         else if (detail.MedicineId || detail.medicine) {
           const medicineName = detail.medicine?.MedicineName || 'Thuốc';
 
-          // ✅ SỬA: Tạo prescription object ĐÚNG CẤU TRÚC BE CẦN
           prescriptions.push({
             MedicineName: medicineName,
             Price: unitPrice,
             Quantity: quantity,
             Usage: 'Theo chỉ định'
-            // KHÔNG gửi Amount, BE sẽ tự tính
           });
 
           console.log(`💊 Added prescription: ${medicineName}`);
@@ -355,12 +403,12 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
 
     console.log('🛠️ Final processed data for PDF:', {
       services,
-      prescriptions, // ĐỔI TÊN: medicines -> prescriptions
+      prescriptions,
       servicesCount: services.length,
       prescriptionsCount: prescriptions.length
     });
 
-    return { services, prescriptions }; // ĐỔI TÊN: medicines -> prescriptions
+    return { services, prescriptions };
   };
 
   const getPaymentMethodText = (method) => {
@@ -416,7 +464,7 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
   } = invoiceData;
 
   return (
-    <Modal show={show} onHide={onHide} size="lg" centered>
+    <Modal show={show} onHide={onHide} size="xl" centered> {/* ✅ Đổi size thành xl để hiển thị tốt hơn */}
       <Modal.Header closeButton className="bg-light">
         <Modal.Title>
           <i className="fas fa-receipt me-2 text-primary"></i>
@@ -424,7 +472,7 @@ const InvoiceDetailModal = ({ show, onHide, invoice }) => {
         </Modal.Title>
       </Modal.Header>
 
-      <Modal.Body>
+      <Modal.Body style={{ maxHeight: '70vh', overflowY: 'auto' }}> {/* ✅ Thêm scroll cho nội dung dài */}
         {/* Thông báo in */}
         {printError && (
           <Alert variant="danger" className="mb-3">

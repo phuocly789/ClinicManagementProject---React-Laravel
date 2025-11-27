@@ -6,14 +6,30 @@ use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\Patient;
 use App\Models\Appointment;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class InvoiceController extends Controller
 {
+    /**
+     * ✅ METHOD TRUNG TÂM: Lấy thông tin user từ Auth
+     */
+    private function getAuthenticatedUser()
+    {
+        $user = User::where('UserId', Auth::id())->first();
+
+        if (!$user) {
+            throw new \Exception('Không tìm thấy thông tin người dùng.');
+        }
+
+        return $user;
+    }
+
     /**
      * Kiểm tra kết nối database
      */
@@ -217,6 +233,14 @@ class InvoiceController extends Controller
         }
 
         try {
+            // ✅ LẤY THÔNG TIN USER ĐĂNG NHẬP
+            $user = $this->getAuthenticatedUser();
+            Log::info('🔄 User đăng nhập:', [
+                'user_id' => $user->UserId,
+                'email' => $user->Email,
+                'full_name' => $user->FullName
+            ]);
+
             // Validate request parameters
             $validator = Validator::make($request->all(), [
                 'search' => 'nullable|string|max:100',
@@ -329,6 +353,12 @@ class InvoiceController extends Controller
                         'status' => $statusApplied,
                         'has_payment_info' => $paymentFilterApplied,
                         'with_transaction' => $transactionFilterApplied
+                    ],
+                    // ✅ THÊM THÔNG TIN USER VÀO RESPONSE
+                    'user_info' => [
+                        'user_id' => $user->UserId,
+                        'full_name' => $user->FullName,
+                        'email' => $user->Email
                     ]
                 ]);
             }
@@ -384,6 +414,13 @@ class InvoiceController extends Controller
                     'with_transaction' => $transactionFilterApplied,
                     'limit' => $perPage,
                     'page' => $page
+                ],
+                // ✅ THÊM THÔNG TIN USER VÀO RESPONSE
+                'user_info' => [
+                    'user_id' => $user->UserId,
+                    'full_name' => $user->FullName,
+                    'email' => $user->Email,
+                    'requested_at' => now()->format('d/m/Y H:i:s')
                 ]
             ], 200);
 
@@ -411,13 +448,20 @@ class InvoiceController extends Controller
         }
 
         try {
+            // ✅ LẤY THÔNG TIN USER ĐĂNG NHẬP
+            $user = $this->getAuthenticatedUser();
+
             // Validate ID chi tiết
             if (!is_numeric($id)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'ID hóa đơn phải là số',
                     'error_code' => 'INVALID_INVOICE_ID_FORMAT',
-                    'timestamp' => now()->format('Y-m-d H:i:s')
+                    'timestamp' => now()->format('Y-m-d H:i:s'),
+                    'user_info' => [
+                        'user_id' => $user->UserId,
+                        'full_name' => $user->FullName
+                    ]
                 ], 400);
             }
 
@@ -428,7 +472,11 @@ class InvoiceController extends Controller
                     'success' => false,
                     'message' => 'ID hóa đơn phải lớn hơn 0',
                     'error_code' => 'INVALID_INVOICE_ID_RANGE',
-                    'timestamp' => now()->format('Y-m-d H:i:s')
+                    'timestamp' => now()->format('Y-m-d H:i:s'),
+                    'user_info' => [
+                        'user_id' => $user->UserId,
+                        'full_name' => $user->FullName
+                    ]
                 ], 400);
             }
 
@@ -437,7 +485,11 @@ class InvoiceController extends Controller
                     'success' => false,
                     'message' => 'ID hóa đơn quá lớn',
                     'error_code' => 'INVOICE_ID_TOO_LARGE',
-                    'timestamp' => now()->format('Y-m-d H:i:s')
+                    'timestamp' => now()->format('Y-m-d H:i:s'),
+                    'user_info' => [
+                        'user_id' => $user->UserId,
+                        'full_name' => $user->FullName
+                    ]
                 ], 400);
             }
 
@@ -475,7 +527,14 @@ class InvoiceController extends Controller
                 'success' => true,
                 'message' => 'Lấy thông tin hóa đơn thành công',
                 'data' => $formattedInvoice,
-                'warnings' => $warnings
+                'warnings' => $warnings,
+                // ✅ THÊM THÔNG TIN USER VÀO RESPONSE
+                'user_info' => [
+                    'user_id' => $user->UserId,
+                    'full_name' => $user->FullName,
+                    'email' => $user->Email,
+                    'requested_at' => now()->format('d/m/Y H:i:s')
+                ]
             ], 200);
 
         } catch (\Illuminate\Database\QueryException $e) {
@@ -492,6 +551,9 @@ class InvoiceController extends Controller
             return $this->handleSystemError($e, 'Lấy chi tiết hóa đơn ID: ' . $id);
         }
     }
+
+
+   
 
     // Tạo hóa đơn mới
     public function store(Request $request)
