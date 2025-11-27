@@ -779,7 +779,7 @@ const ReceptionistDashboard = () => {
                                       title={roomBusy ? "Phòng đang bận" : "Gọi vào khám"}
                                     >
                                       <i className="bi bi-telephone me-1"></i>
-                                      {roomBusy ? "Đang bận" : "Gọi khám"}
+                                      {roomBusy ? "Chờ Khám" : "Gọi khám"}
                                     </button>
                                   );
                                 })()}
@@ -795,7 +795,7 @@ const ReceptionistDashboard = () => {
                             {item.Status === "Đang khám" && (
                               <span className="text-primary fst-italic">
                                 <i className="bi bi-hourglass-split me-1"></i>
-                                Đang đợi bác sĩ...
+                                Bác sĩ đang khám...
                               </span>
                             )}
                             {item.Status === "Đã khám" && (
