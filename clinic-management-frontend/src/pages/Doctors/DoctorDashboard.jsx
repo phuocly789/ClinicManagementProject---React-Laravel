@@ -44,7 +44,6 @@ const DoctorDashboard = () => {
   const [roomId, setRoomId] = useState(null);
   const doctorId = 1;
 
-
   // Fetch helper
   const fetchWithAuth = useCallback(async (url, options = {}) => {
     try {
@@ -78,7 +77,6 @@ const DoctorDashboard = () => {
     const { doctor, action } = event;
 
     if (!doctor || action !== "updated") return;
-
     // Check if patient already exists
     setTodayPatients((prevPatients) => {
       const existingIndex = prevPatients.findIndex((p) => p.id === doctor.id);
@@ -137,7 +135,7 @@ const DoctorDashboard = () => {
   useEffect(() => {
     const unlockAudio = () => {
       const audio = new Audio(notificationSound);
-      audio.play().catch(() => { });
+      audio.play().catch(() => {});
       audio.pause();
       audio.currentTime = 0;
 
@@ -260,11 +258,13 @@ const DoctorDashboard = () => {
     e.preventDefault();
     if (!selectedTodayPatient) return;
     const isSave = confirmType === "save";
+
     try {
       setIsProcessing(true);
       const data = {
         appointment_id: selectedTodayPatient.id,
         patient_id: selectedTodayPatient.patient_id,
+        queue_id: selectedPatient.queue_id,
         symptoms,
         diagnosis,
         services,
@@ -327,7 +327,7 @@ const DoctorDashboard = () => {
   };
 
   const processConfirm = () =>
-    handleExaminationSubmit({ preventDefault: () => { } });
+    handleExaminationSubmit({ preventDefault: () => {} });
 
   const prevMonth = () =>
     setCurrentDate(
@@ -369,7 +369,7 @@ const DoctorDashboard = () => {
               setSelectedTodayPatient={setSelectedTodayPatient}
               todayPatients={todayPatients}
               setTodayPatients={setTodayPatients}
-              doctorInfo={doctorInfo}  // THÊM DÒNG NÀY
+              doctorInfo={doctorInfo} // THÊM DÒNG NÀY
               setToast={setToast}
             />
           )}

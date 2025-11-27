@@ -38,6 +38,10 @@ services:
       - SOLR_TIMEOUT=30
       - XDEBUG_MODE=develop,debug
       - XDEBUG_CONFIG=client_host=host.docker.internal
+      # ✅ FIX: Backend cần biết Reverb container name để broadcast
+      - REVERB_HOST=reverb
+      - REVERB_PORT=8080
+      - REVERB_SCHEME=http
     ports:
       - "8000:8000"  # Laravel API
       - "9003:9003"  # Xdebug
@@ -63,15 +67,21 @@ services:
     env_file:
       - ./clinic-management-backend/.env
     environment:
+      - REVERB_APP_ID=782515
+      - REVERB_APP_KEY=ptgbaerydosusgvb1w7q
+      - REVERB_APP_SECRET=9firu14t2mn76mw1ollh
+      - REVERB_SERVER_HOST=reverb
       - REVERB_SERVER_PORT=8080
-      - REVERB_HOST=0.0.0.0
+      - REVERB_HOST=reverb
+      - REVERB_SCHEME=http
+      - BROADCAST_DRIVER=reverb
     ports:
       - "8080:8080"  # Reverb WebSocket
     networks:
       - app-network
     depends_on:
       - backend
-    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080 --debug
 
   # ========================================
   # SCHEDULER: Laravel Cron Jobs
@@ -133,6 +143,9 @@ services:
       - VITE_REVERB_HOST=125.212.218.44
       - VITE_REVERB_PORT=8080
       - VITE_REVERB_SCHEME=http
+      - VITE_REVERB_APP_KEY=ptgbaerydosusgvb1w7q
+    env_file:
+    - ./clinic-management-frontend/.env
     command: npm run dev -- --host 0.0.0.0 --port 5173
     networks:
       - app-network

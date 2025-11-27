@@ -5,12 +5,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
-        'http://125.212.218.44:3000',
-        'http://127.0.0.1:3000',
-        'http://125.212.218.44:5173',
-        'http://127.0.0.1:5173',
-    ],
+    'allowed_origins' => ['*'],
 
     'allowed_origins_patterns' => [],
 

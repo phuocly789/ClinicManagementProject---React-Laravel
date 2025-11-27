@@ -41,50 +41,57 @@ const Register = () => {
     const birthdayDate = form.birthday ? new Date(form.birthday) : null;
 
     // Họ tên
-    if (!form.fullName) temp.fullName = "Họ tên không được để trống";
-    else if (htmlRegex.test(form.fullName))
+    const fullName = form.fullName?.trim() || "";
+    if (!fullName) temp.fullName = "Họ tên không được để trống";
+    else if (htmlRegex.test(fullName))
       temp.fullName = "Vui lòng không nhập mã HTML";
-    else if (specialCharRegex.test(form.fullName))
+    else if (specialCharRegex.test(fullName))
       temp.fullName = "Họ tên không được chứa ký tự đặc biệt";
-    else if (form.fullName.length > 255)
+    else if (fullName.length < 6)
+      temp.fullName = "Họ tên phải có ít nhất 6 ký tự";
+    else if (fullName.length > 255)
       temp.fullName = "Họ tên không được quá 255 ký tự";
 
     // Email
-    if (!form.email) temp.email = "Email không được để trống";
-    else if (htmlRegex.test(form.email))
-      temp.email = "Vui lòng không nhập mã HTML";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
+    const email = form.email?.trim() || "";
+    if (!email) temp.email = "Email không được để trống";
+    else if (htmlRegex.test(email)) temp.email = "Vui lòng không nhập mã HTML";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       temp.email = "Email không hợp lệ";
-    else if (form.email.length > 255)
-      temp.email = "Email không được quá 255 ký tự";
+    else if (email.length < 6) temp.email = "Email phải có ít nhất 6 ký tự";
+    else if (email.length > 255) temp.email = "Email không được quá 255 ký tự";
 
     // Số điện thoại
-    if (!form.phone) temp.phone = "Số điện thoại không được để trống";
-    else if (!/^0\d{9,10}$/.test(form.phone))
+    const phone = form.phone?.trim() || "";
+    if (!phone) temp.phone = "Số điện thoại không được để trống";
+    else if (!/^0\d{9,10}$/.test(phone))
       temp.phone = "Số điện thoại không hợp lệ";
-    else if (form.phone.length > 11)
+    else if (phone.length > 11)
       temp.phone = "Số điện thoại không được quá 11 số";
 
     // Username
-    if (!form.username) temp.username = "Tên đăng nhập không được để trống";
-    else if (htmlRegex.test(form.username))
+    const username = form.username?.trim() || "";
+    if (!username) temp.username = "Tên đăng nhập không được để trống";
+    else if (htmlRegex.test(username))
       temp.username = "Vui lòng không nhập mã HTML";
-    else if (form.username.length > 255)
-      temp.username = "Tên đăng nhập không được quá 255 ký tự";
-    else if (form.username < 6)
+    else if (username.length < 6)
       temp.username = "Tên đăng nhập phải có ít nhất 6 ký tự";
+    else if (username.length > 255)
+      temp.username = "Tên đăng nhập không được quá 255 ký tự";
 
     // Password
-    if (!form.password) temp.password = "Mật khẩu không được để trống";
-    else if (htmlRegex.test(form.password))
+    const password = form.password || "";
+    if (!password) temp.password = "Mật khẩu không được để trống";
+    else if (htmlRegex.test(password))
       temp.password = "Vui lòng không nhập mã HTML";
-    else if (form.password.length > 255)
+    else if (password.length > 255)
       temp.password = "Mật khẩu không được quá 255 ký tự";
 
     // Confirm Password
-    if (!form.confirmPassword)
+    const confirmPassword = form.confirmPassword || "";
+    if (!confirmPassword)
       temp.confirmPassword = "Xác nhận mật khẩu không được để trống";
-    else if (form.confirmPassword !== form.password)
+    else if (confirmPassword !== password)
       temp.confirmPassword = "Mật khẩu không khớp";
 
     // Gender
@@ -94,7 +101,7 @@ const Register = () => {
     if (!form.birthday)
       temp.birthday = "Ngày tháng năm sinh không được để trống";
     else if (birthdayDate > now)
-      temp.birthday = "Không được chọn ngày tháng năm sinh trong tương lai";
+      temp.birthday = "Không được chọn ngày sinh trong tương lai";
 
     setErrors(temp);
     return Object.keys(temp).length === 0;

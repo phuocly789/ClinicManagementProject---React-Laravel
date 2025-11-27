@@ -301,11 +301,11 @@ class QueueController extends Controller
                         'message' => 'Bệnh nhân này đã hủy hoặc hoàn thành khám.'
                     ], 400);
                 }
-
                 // C. Kiểm tra phòng bận (Có người KHÁC đang khám trong phòng)
                 $isRoomBusy = Queue::where('RoomId', $queue->RoomId)
                     ->where('Status', 'Đang khám')
                     ->where('QueueId', '!=', $queueId) // Loại trừ chính mình
+                    ->whereDate('QueueDate', '=', now('Asia/Ho_Chi_Minh'))
                     ->exists();
 
                 if ($isRoomBusy) {
@@ -333,6 +333,7 @@ class QueueController extends Controller
                     'date' => $queue->QueueDate,
                     'time' => $queue->QueueTime,
                     'name' => $patient->user->FullName,
+                    'queue_id' => $queue->QueueId,
                     'status' => $queue->Status,
                     'patient_id' => $queue->PatientId,
                     'gender' => $patient->user->Gender,

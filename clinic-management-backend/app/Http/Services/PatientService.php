@@ -213,7 +213,6 @@ class PatientService
     public function handleGetAppointments(int $current = 1, int $pageSize = 5)
     {
         $user = Auth::user();
-
         if (!$user) {
             throw new AppErrors("Không tìm thấy người dùng", 404);
         }

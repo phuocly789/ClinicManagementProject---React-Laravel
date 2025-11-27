@@ -72,20 +72,41 @@ const ReceptionistDashboard = () => {
   const [loading, setLoading] = useState(false);
 
   // Initialize WebSocket
+  // Initialize WebSocket
   useEffect(() => {
-    const echoClient = createEchoClient();
-    setEcho(echoClient);
+    let echoClient = null;
+    let mounted = true;
 
-    // Listen to receptionist channel
-    echoClient
-      .channel("receptionist")
-      .listen(".queue.status.updated", (event) => {
-        console.log("Receptionist received:", event);
-        handleReceptionistQueueUpdate(event);
-      });
+    const initWebSocket = () => {
+      if (!mounted) return;
+
+      echoClient = createEchoClient();
+      setEcho(echoClient);
+
+      // ✅ Log để debug
+      console.log("📡 Subscribing to channel: receptionist");
+
+      // Listen to receptionist channel
+      echoClient
+        .channel("receptionist")
+        .listen(".queue.status.updated", (event) => {
+          if (!mounted) return;
+          console.log("✅ Receptionist received event:", event);
+          handleReceptionistQueueUpdate(event);
+        })
+        .error((error) => {
+          console.error("❌ Channel subscription error:", error);
+        });
+    };
+
+    initWebSocket();
 
     return () => {
-      echoClient.disconnect();
+      mounted = false;
+      if (echoClient) {
+        console.log("🔌 Disconnecting WebSocket");
+        echoClient.disconnect();
+      }
     };
   }, []);
 
@@ -758,7 +779,7 @@ const ReceptionistDashboard = () => {
                                       title={roomBusy ? "Phòng đang bận" : "Gọi vào khám"}
                                     >
                                       <i className="bi bi-telephone me-1"></i>
-                                      {roomBusy ? "Đang bận" : "Gọi khám"}
+                                      {roomBusy ? "Chờ Khám" : "Gọi khám"}
                                     </button>
                                   );
                                 })()}
@@ -774,7 +795,7 @@ const ReceptionistDashboard = () => {
                             {item.Status === "Đang khám" && (
                               <span className="text-primary fst-italic">
                                 <i className="bi bi-hourglass-split me-1"></i>
-                                Đang đợi bác sĩ...
+                                Bác sĩ đang khám...
                               </span>
                             )}
                             {item.Status === "Đã khám" && (
