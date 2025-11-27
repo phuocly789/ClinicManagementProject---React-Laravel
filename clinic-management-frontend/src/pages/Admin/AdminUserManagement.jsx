@@ -907,8 +907,8 @@ const AdminUserManagement = () => {
             <InfoRow label="Vai trò" value={modal.user.Role} />
             {modal.user.Role === 'Bác sĩ' && (
               <>
-                <InfoRow label="Chuyên khoa" value={modal.user.Specialty} />
-                <InfoRow label="Số giấy phép" value={modal.user.LicenseNumber} />
+                <InfoRow label="Chuyên khoa" value={modal.user.medical_profile.Specialty} />
+                <InfoRow label="Số giấy phép" value={modal.user.medical_profile.LicenseNumber} />
               </>
             )}
             <InfoRow label="Trạng thái" value={modal.user.IsActive ? 'Hoạt động' : 'Vô hiệu hóa'} />

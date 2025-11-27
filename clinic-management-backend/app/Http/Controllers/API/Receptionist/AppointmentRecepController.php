@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API\Receptionist;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\MedicalRecord;
+use App\Models\Queue;
 use App\Models\StaffSchedule;
 use Faker\Provider\Medical;
 use Illuminate\Http\Request;
@@ -50,7 +51,7 @@ class AppointmentRecepController extends Controller
         ]);
     }
 
-   public function UpdateAppointmentStatus(Request $request, $appointmentId)
+    public function UpdateAppointmentStatus(Request $request, $appointmentId)
     {
         $request->validate([
             'Status' => 'required|string|in:Đã đặt,Đang chờ,Đang khám,Đã khám,Hủy'
@@ -136,32 +137,38 @@ class AppointmentRecepController extends Controller
             $time = $request->input('time');
             $roomId = $request->input('room_id');
             $staffId = $request->input('staff_id');
+            $totalCount = 0;
 
             // Build query
-            $query = Appointment::where('AppointmentDate', $date)
+            // 1. Count in APPOINTMENTS (chưa tiếp nhận)
+            $totalCount += Appointment::where('AppointmentDate', $date)
                 ->where('AppointmentTime', $time)
-                ->whereIn('Status', ['Đã đặt', 'Đang chờ', 'Đang khám']); // Chỉ đếm các status đang active
+                ->where('Status', 'Đã đặt')
+                ->count();
 
-            // Filter by room if provided
-            if ($roomId) {
-                $query->where('RoomId', $roomId);
-            }
 
-            // Filter by staff if provided
+            // 2. Count in QUEUE (đã tiếp nhận)
+            $queueQuery = Queue::where('QueueDate', $date)
+                ->where('QueueTime', $time)
+                ->whereIn('Queues.Status', ['Đang chờ', 'Đang khám'])
+                ->join('Appointments', 'Appointments.AppointmentId', '=', 'Queues.AppointmentId');
+
+            if ($roomId) $queueQuery->where('RoomId', $roomId);
             if ($staffId) {
-                $query->where('StaffId', $staffId);
+                $queueQuery->where('Appointments.StaffId', $staffId);
             }
 
-            $count = $query->count();
+
+            $totalCount += $queueQuery->count();
             $maxCapacity = 10; // Số lượng tối đa mỗi khung giờ
 
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'count' => $count,
+                    'count' => $totalCount,
                     'maxCapacity' => $maxCapacity,
-                    'available' => max(0, $maxCapacity - $count),
-                    'isFull' => $count >= $maxCapacity,
+                    'available' => max(0, $maxCapacity - $totalCount),
+                    'isFull' => $totalCount >= $maxCapacity,
                     'timeSlot' => $time,
                     'date' => $date
                 ]
@@ -184,36 +191,61 @@ class AppointmentRecepController extends Controller
                 'staff_id' => 'nullable|integer'
             ]);
 
-            $date = $request->input('date');
-            $times = $request->input('times');
-            $roomId = $request->input('room_id');
-            $staffId = $request->input('staff_id');
+            $date = $request->date;
+            $times = $request->times;
+            $roomId = $request->room_id;
+            $staffId = $request->staff_id;
 
             $results = [];
 
             foreach ($times as $time) {
-                $query = Appointment::where('AppointmentDate', $date)
+
+                $totalCount = 0;
+
+                // 1. Count APPOINTMENTS (Đã đặt)
+                $apptQuery = Appointment::where('AppointmentDate', $date)
                     ->where('AppointmentTime', $time)
-                    ->whereIn('Status', ['Đã đặt', 'Đang chờ', 'Đang khám']);
+                    ->where('Status', 'Đã đặt');
 
-                if ($roomId) $query->where('RoomId', $roomId);
-                if ($staffId) $query->where('StaffId', $staffId);
+                // Appointment không có RoomId → không filter room
+                if ($staffId) {
+                    $apptQuery->where('StaffId', $staffId);
+                }
 
-                $count = $query->count();
+                $totalCount += $apptQuery->count();
+
+
+                // 2. Count QUEUE (Đã tiếp nhận)
+                $queueQuery = Queue::where('QueueDate', $date)
+                    ->where('QueueTime', $time)
+                    ->whereIn('Queues.Status', ['Đang chờ', 'Đang khám'])
+                    ->join('Appointments', 'Appointments.AppointmentId', '=', 'Queues.AppointmentId');
+
+                if ($roomId) {
+                    $queueQuery->where('RoomId', $roomId);
+                }
+
+                if ($staffId) {
+                    $queueQuery->where('Appointments.StaffId', $staffId);
+                }
+
+                $totalCount += $queueQuery->count();
+
+                // Max per slot
                 $maxCapacity = 10;
 
                 $results[$time] = [
-                    'count' => $count,
+                    'count'     => $totalCount,
                     'maxCapacity' => $maxCapacity,
-                    'available' => max(0, $maxCapacity - $count),
-                    'isFull' => $count >= $maxCapacity
+                    'available'   => max(0, $maxCapacity - $totalCount),
+                    'isFull'      => $totalCount >= $maxCapacity,
                 ];
             }
 
             return response()->json([
                 'success' => true,
                 'data' => $results
-            ], 200);
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,

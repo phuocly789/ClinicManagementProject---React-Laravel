@@ -24,7 +24,7 @@ const AdminSuppliers = () => {
   const [filterParams, setFilterParams] = useState('');
   const [formErrors, setFormErrors] = useState({}); // ← ĐÃ ĐƯA RA NGOÀI
   const cache = useRef(new Map());
-
+  const [errors, setErrors] = useState({});
   const showToast = useCallback((type, message) => {
     setToast({ show: true, type, message });
     setTimeout(() => setToast({ show: false, type: 'info', message: '' }), 4000);
@@ -222,6 +222,7 @@ const AdminSuppliers = () => {
     if (!['add', 'edit'].includes(currentView)) return null;
 
     const isEditMode = currentView === 'edit';
+   
 
     const handleFormSubmit = (e) => {
       e.preventDefault();

@@ -46,7 +46,7 @@ class AdminUserController extends Controller
         $perPage = min($request->get('per_page', 10), 100);
         $page = max($request->get('page', 1), 1);
 
-        $query = User::with('roles')->orderBy('UserId', 'asc');
+        $query = User::with(['roles', 'medical_staff'])->orderBy('UserId', 'asc');
 
         // Tìm kiếm
         if (!empty($request->search)) {
@@ -80,6 +80,23 @@ class AdminUserController extends Controller
 
         try {
             $users = $query->paginate($perPage, ['*'], 'page', $page);
+
+            $users->getCollection()->transform(function ($user) {
+                // Kiểm tra user có role y tế
+                $isMedical = $user->roles->contains(function ($r) {
+                    return in_array($r->RoleName, ['Bác sĩ', 'Y tá', 'Kỹ thuật viên', 'Lễ tân', 'MedicalStaff']);
+                });
+
+                if ($isMedical && $user->medical_staff) {
+                    $user->medical_profile = [
+                        'StaffType'     => $user->medical_staff->StaffType,
+                        'Specialty'     => $user->medical_staff->Specialty,
+                        'LicenseNumber' => $user->medical_staff->LicenseNumber,
+                        'Bio'           => $user->medical_staff->Bio,
+                    ];
+                }
+                return $user;
+            });
             return response()->json($users);
         } catch (\Exception $e) {
             Log::error('Lỗi phân trang: ' . $e->getMessage());
@@ -127,7 +144,7 @@ class AdminUserController extends Controller
                     if ($value !== strip_tags($value)) {
                         $fail('Tên đăng nhập không được chứa mã HTML.');
                     }
-                    
+
                     // Kiểm tra độ dài thực tế sau khi decode
                     $decoded = html_entity_decode($value);
                     if (mb_strlen(trim($decoded)) > 50) {
@@ -141,25 +158,25 @@ class AdminUserController extends Controller
                 'max:255',
                 function ($attribute, $value, $fail) {
                     $trimmedValue = trim($value);
-                    
+
                     // Tình huống 6: Kiểm tra khoảng trắng
                     if ($trimmedValue === '') {
                         $fail('Họ tên không được để trống.');
                         return;
                     }
-                    
+
                     // Kiểm tra khoảng trắng 2 bytes (full-width space)
                     if (strpos($value, '　') !== false) {
                         $fail('Họ tên không được chứa khoảng trắng không hợp lệ.');
                         return;
                     }
-                    
+
                     // Chống XSS (Tình huống 5)
                     if ($value !== strip_tags($value)) {
                         $fail('Họ tên không được chứa mã HTML.');
                         return;
                     }
-                    
+
                     // Kiểm tra độ dài thực tế
                     $decoded = html_entity_decode(trim($value));
                     if (mb_strlen($decoded) > 255) {
@@ -201,7 +218,7 @@ class AdminUserController extends Controller
                     if (strlen($numericOnly) < 9 || strlen($numericOnly) > 15) {
                         $fail('Số điện thoại phải từ 9-15 chữ số.');
                     }
-                    
+
                     if ($value !== strip_tags($value)) {
                         $fail('Số điện thoại không được chứa mã HTML.');
                     }
@@ -218,7 +235,7 @@ class AdminUserController extends Controller
                         if ($trimmedValue === '') {
                             $fail('Địa chỉ không được chỉ chứa khoảng trắng.');
                         }
-                        
+
                         if ($value !== strip_tags($value)) {
                             $fail('Địa chỉ không được chứa mã HTML.');
                         }
@@ -283,7 +300,7 @@ class AdminUserController extends Controller
                 ->orWhere('Email', $cleanedData['Email'])
                 ->lockForUpdate()
                 ->first();
-                
+
             if ($existingUser) {
                 DB::rollBack();
                 return response()->json([
@@ -305,30 +322,29 @@ class AdminUserController extends Controller
             $user->IsActive = true;
             $user->CreatedAt = now();
             $user->MustChangePassword = true;
-            
+
             // Thêm các trường cho bác sĩ
             if ($validated['Role'] === 'Bác sĩ') {
                 $user->Specialty = $cleanedData['Specialty'];
                 $user->LicenseNumber = $cleanedData['LicenseNumber'];
             }
-            
+
             $user->save();
 
             $role = Role::where('RoleName', $validated['Role'])->firstOrFail();
             $user->roles()->attach($role->RoleId, ['AssignedAt' => now()]);
 
             DB::commit();
-            
+
             return response()->json([
-                'message' => 'Thêm người dùng thành công!', 
+                'message' => 'Thêm người dùng thành công!',
                 'user' => $user->load('roles')
             ], 201);
-            
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Lỗi tạo người dùng: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Đã có lỗi xảy ra khi tạo người dùng', 
+                'message' => 'Đã có lỗi xảy ra khi tạo người dùng',
                 'error' => 'Lỗi hệ thống'
             ], 500);
         }
@@ -387,17 +403,17 @@ class AdminUserController extends Controller
                         $fail('Họ tên không được để trống.');
                         return;
                     }
-                    
+
                     if (strpos($value, '　') !== false) {
                         $fail('Họ tên không được chứa khoảng trắng không hợp lệ.');
                         return;
                     }
-                    
+
                     if ($value !== strip_tags($value)) {
                         $fail('Họ tên không được chứa mã HTML.');
                         return;
                     }
-                    
+
                     if (mb_strlen($trimmedValue) > 255) {
                         $fail('Họ tên không được vượt quá 255 ký tự.');
                     }
@@ -424,7 +440,7 @@ class AdminUserController extends Controller
                     if (strlen($numericOnly) < 9 || strlen($numericOnly) > 15) {
                         $fail('Số điện thoại phải từ 9-15 chữ số.');
                     }
-                    
+
                     if ($value !== strip_tags($value)) {
                         $fail('Số điện thoại không được chứa mã HTML.');
                     }
@@ -440,7 +456,7 @@ class AdminUserController extends Controller
                         if ($trimmedValue === '') {
                             $fail('Địa chỉ không được chỉ chứa khoảng trắng.');
                         }
-                        
+
                         if ($value !== strip_tags($value)) {
                             $fail('Địa chỉ không được chứa mã HTML.');
                         }
@@ -458,7 +474,7 @@ class AdminUserController extends Controller
                     if ($cleanedData['Role'] === 'Bác sĩ' && empty($value)) {
                         $fail('Chuyên khoa là bắt buộc cho bác sĩ.');
                     }
-                    
+
                     if ($value !== null && $value !== strip_tags($value)) {
                         $fail('Chuyên khoa không được chứa mã HTML.');
                     }
@@ -472,7 +488,7 @@ class AdminUserController extends Controller
                     if ($cleanedData['Role'] === 'Bác sĩ' && empty($value)) {
                         $fail('Số giấy phép hành nghề là bắt buộc cho bác sĩ.');
                     }
-                    
+
                     if ($value !== null && $value !== strip_tags($value)) {
                         $fail('Số giấy phép không được chứa mã HTML.');
                     }
@@ -482,7 +498,7 @@ class AdminUserController extends Controller
 
         if ($validator->fails()) {
             return response()->json([
-                'message' => 'Dữ liệu không hợp lệ', 
+                'message' => 'Dữ liệu không hợp lệ',
                 'errors' => $validator->errors()
             ], 422);
         }
@@ -490,7 +506,7 @@ class AdminUserController extends Controller
         DB::beginTransaction();
         try {
             $validated = $validator->validated();
-            
+
             // Cập nhật thông tin cơ bản
             $updateData = [
                 'FullName' => $cleanedData['FullName'],
@@ -500,7 +516,7 @@ class AdminUserController extends Controller
                 'Gender' => $validated['Gender'],
                 'DateOfBirth' => $validated['DateOfBirth'] ?? null,
             ];
-            
+
             // Cập nhật thông tin bác sĩ nếu có
             if ($validated['Role'] === 'Bác sĩ') {
                 $updateData['Specialty'] = $cleanedData['Specialty'];
@@ -509,7 +525,7 @@ class AdminUserController extends Controller
                 $updateData['Specialty'] = null;
                 $updateData['LicenseNumber'] = null;
             }
-            
+
             $user->update($updateData);
 
             // Không cho phép thay đổi vai trò của Admin
@@ -521,7 +537,7 @@ class AdminUserController extends Controller
 
             DB::commit();
             return response()->json([
-                'message' => 'Cập nhật thành công!', 
+                'message' => 'Cập nhật thành công!',
                 'user' => $user->fresh('roles'),
                 'updated_at' => $user->fresh()->updated_at
             ]);
@@ -529,7 +545,7 @@ class AdminUserController extends Controller
             DB::rollBack();
             Log::error('Lỗi cập nhật người dùng: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Đã có lỗi xảy ra khi cập nhật người dùng', 
+                'message' => 'Đã có lỗi xảy ra khi cập nhật người dùng',
                 'error' => 'Lỗi hệ thống'
             ], 500);
         }
@@ -579,7 +595,7 @@ class AdminUserController extends Controller
             DB::rollBack();
             Log::error('Lỗi xóa người dùng: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Đã có lỗi xảy ra khi xóa người dùng', 
+                'message' => 'Đã có lỗi xảy ra khi xóa người dùng',
                 'error' => 'Lỗi hệ thống'
             ], 500);
         }
@@ -649,14 +665,14 @@ class AdminUserController extends Controller
 
         if ($validator->fails()) {
             return response()->json([
-                'message' => 'Dữ liệu không hợp lệ', 
+                'message' => 'Dữ liệu không hợp lệ',
                 'errors' => $validator->errors()
             ], 422);
         }
 
         try {
             $validated = $validator->validated();
-            
+
             // Cập nhật mật khẩu mới
             $user->PasswordHash = bcrypt($validated['password']);
             $user->MustChangePassword = true;
@@ -669,7 +685,7 @@ class AdminUserController extends Controller
         } catch (\Exception $e) {
             Log::error('Lỗi reset mật khẩu: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Đã có lỗi xảy ra khi reset mật khẩu', 
+                'message' => 'Đã có lỗi xảy ra khi reset mật khẩu',
                 'error' => 'Lỗi hệ thống'
             ], 500);
         }
