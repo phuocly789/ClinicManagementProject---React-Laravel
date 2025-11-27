@@ -30,6 +30,7 @@ const DoctorDashboard = () => {
   const [diagnosis, setDiagnosis] = useState("");
   const [services, setServices] = useState({});
   const [requestedServices, setRequestedServices] = useState({});
+  const [doctorInfo, setDoctorInfo] = useState(null);
 
   // Confirm và toast states
   const [showConfirm, setShowConfirm] = useState(false);
@@ -76,7 +77,6 @@ const DoctorDashboard = () => {
     const { doctor, action } = event;
 
     if (!doctor || action !== "updated") return;
-
     // Check if patient already exists
     setTodayPatients((prevPatients) => {
       const existingIndex = prevPatients.findIndex((p) => p.id === doctor.id);
@@ -179,6 +179,9 @@ const DoctorDashboard = () => {
           const todayData = await fetchWithAuth("/doctor/today-patients");
           console.log("DEBUG - Today patients loaded:", todayData);
           setTodayPatients(todayData.data || todayData || []);
+          if (todayData.doctor_info) {
+            setDoctorInfo(todayData.doctor_info);
+          }
           break;
         case "schedule":
           const eventsData = await fetchWithAuth(
@@ -255,11 +258,13 @@ const DoctorDashboard = () => {
     e.preventDefault();
     if (!selectedTodayPatient) return;
     const isSave = confirmType === "save";
+
     try {
       setIsProcessing(true);
       const data = {
         appointment_id: selectedTodayPatient.id,
         patient_id: selectedTodayPatient.patient_id,
+        queue_id: selectedPatient.queue_id,
         symptoms,
         diagnosis,
         services,
@@ -363,7 +368,8 @@ const DoctorDashboard = () => {
               selectedTodayPatient={selectedTodayPatient}
               setSelectedTodayPatient={setSelectedTodayPatient}
               todayPatients={todayPatients}
-              setTodayPatients={setTodayPatients} // THÊM DÒNG NÀY
+              setTodayPatients={setTodayPatients}
+              doctorInfo={doctorInfo} // THÊM DÒNG NÀY
               setToast={setToast}
             />
           )}

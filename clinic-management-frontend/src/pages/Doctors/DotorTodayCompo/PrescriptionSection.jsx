@@ -18,6 +18,7 @@ const PrescriptionSection = ({
   services,
   setToast,
   diagnoses,
+  doctorInfo,
 }) => {
   const navigate = useNavigate();
 
@@ -30,6 +31,13 @@ const PrescriptionSection = ({
     totalPrice: 0
   });
   const [suggestions, setSuggestions] = useState([]);
+
+  // STATE CHO VALIDATION
+  const [validationErrors, setValidationErrors] = useState({
+    medicine: '',
+    quantity: '',
+    dosage: ''
+  });
 
   // THÊM STATE CHO PDF PREVIEW
   const [showPDFPreview, setShowPDFPreview] = useState(false);
@@ -60,7 +68,7 @@ const PrescriptionSection = ({
     clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
     clinicAddress: 'Số 123 Đường ABC, Quận 1, TP.HCM',
     clinicPhone: '028 1234 5678',
-    doctorName: 'Hệ thống',
+    doctorName: doctorInfo?.doctor_Name || 'Hệ thống',
     customTitle: 'Toa Thuốc',
 
     // Page settings
@@ -93,12 +101,100 @@ const PrescriptionSection = ({
     }
   };
 
+  // HÀM VALIDATE FORM
+  const validateForm = () => {
+    const errors = {
+      medicine: '',
+      quantity: '',
+      dosage: ''
+    };
+
+    let isValid = true;
+
+    // Validate tên thuốc
+    if (!newRow.medicine.trim()) {
+      errors.medicine = 'Vui lòng nhập tên thuốc';
+      isValid = false;
+    } else if (newRow.medicine.trim().length < 2) {
+      errors.medicine = 'Tên thuốc phải có ít nhất 2 ký tự';
+      isValid = false;
+    }
+
+    // Validate số lượng
+    if (!newRow.quantity) {
+      errors.quantity = 'Vui lòng nhập số lượng';
+      isValid = false;
+    } else if (isNaN(newRow.quantity) || Number(newRow.quantity) <= 0) {
+      errors.quantity = 'Số lượng phải là số dương';
+      isValid = false;
+    } else if (Number(newRow.quantity) > 1000) {
+      errors.quantity = 'Số lượng không được vượt quá 1000';
+      isValid = false;
+    }
+
+    // Validate liều dùng
+    if (!newRow.dosage.trim()) {
+      errors.dosage = 'Vui lòng nhập liều dùng';
+      isValid = false;
+    } else if (newRow.dosage.trim().length < 5) {
+      errors.dosage = 'Liều dùng phải có ít nhất 5 ký tự';
+      isValid = false;
+    }
+
+    setValidationErrors(errors);
+    return isValid;
+  };
+
+  // HÀM VALIDATE FIELD RIÊNG LẺ
+  const validateField = (field, value) => {
+    const errors = { ...validationErrors };
+
+    switch (field) {
+      case 'medicine':
+        if (!value.trim()) {
+          errors.medicine = 'Vui lòng nhập tên thuốc';
+        } else if (value.trim().length < 2) {
+          errors.medicine = 'Tên thuốc phải có ít nhất 2 ký tự';
+        } else {
+          errors.medicine = '';
+        }
+        break;
+
+      case 'quantity':
+        if (!value) {
+          errors.quantity = 'Vui lòng nhập số lượng';
+        } else if (isNaN(value) || Number(value) <= 0) {
+          errors.quantity = 'Số lượng phải là số dương';
+        } else if (Number(value) > 1000) {
+          errors.quantity = 'Số lượng không được vượt quá 1000';
+        } else {
+          errors.quantity = '';
+        }
+        break;
+
+      case 'dosage':
+        if (!value.trim()) {
+          errors.dosage = 'Vui lòng nhập liều dùng';
+        } else if (value.trim().length < 5) {
+          errors.dosage = 'Liều dùng phải có ít nhất 5 ký tự';
+        } else {
+          errors.dosage = '';
+        }
+        break;
+
+      default:
+        break;
+    }
+
+    setValidationErrors(errors);
+  };
+
   // HÀM CHUYỂN DỊCH LỖI BE SANG FE
   const translateError = (error) => {
     console.error('🔴 Backend Error:', error);
-    
+
     const backendMessage = error.response?.data?.message || error.message || '';
-    
+
     // Map các lỗi phổ biến từ BE sang thông báo tiếng Việt thân thiện
     const errorMap = {
       'Patient not found': 'Không tìm thấy thông tin bệnh nhân',
@@ -147,8 +243,9 @@ const PrescriptionSection = ({
     return result;
   };
 
-  // HÀM HIỂN THỊ THÔNG BÁO THÀNH CÔNG
+  // HÀM HIỂN THỊ THÔNG BÁO THÀNH CÔNG - SỬA LẠI
   const showSuccessAlert = (message) => {
+    // ✅ CHỈ DÙNG SWAL - KHÔNG DÙNG TOAST
     Swal.fire({
       title: 'Thành công!',
       text: message,
@@ -158,11 +255,12 @@ const PrescriptionSection = ({
     });
   };
 
-  // HÀM XỬ LÝ LỖI VÀ HIỂN THỊ THÔNG BÁO
+  // HÀM XỬ LÝ LỖI VÀ HIỂN THỊ THÔNG BÁO - SỬA LẠI
   const handleError = (error, customMessage = '') => {
     const translatedError = translateError(error);
     console.error('❌ Error:', error);
-    
+
+    // ✅ CHỈ DÙNG SWAL - KHÔNG DÙNG TOAST
     Swal.fire({
       title: 'Lỗi!',
       text: customMessage || translatedError,
@@ -171,6 +269,8 @@ const PrescriptionSection = ({
       confirmButtonText: 'OK'
     });
   };
+
+
 
   // Reset form khi chuyển trạng thái
   useEffect(() => {
@@ -182,32 +282,127 @@ const PrescriptionSection = ({
         unitPrice: 0,
         totalPrice: 0
       });
+      // Reset validation errors khi hủy chỉnh sửa
+      setValidationErrors({
+        medicine: '',
+        quantity: '',
+        dosage: ''
+      });
     } else {
       setNewRow({ ...prescriptionRows[editingIndex] });
+      // Reset validation errors khi bắt đầu chỉnh sửa
+      setValidationErrors({
+        medicine: '',
+        quantity: '',
+        dosage: ''
+      });
     }
   }, [editingIndex, prescriptionRows]);
 
-  // Search gợi ý thuốc - ĐÃ THÊM XỬ LÝ LỖI
+  // Search gợi ý thuốc - ĐÃ CẬP NHẬT XỬ LÝ RESPONSE MỚI TỪ BE
   useEffect(() => {
     const delayDebounce = setTimeout(async () => {
       if (newRow.medicine.trim().length >= 2) {
         try {
           const response = await doctorService.searchMedicines(newRow.medicine);
-          
-          // XỬ LÝ CẤU TRÚC RESPONSE
+
+          console.log(" Search response:", response);
+
+          // XỬ LÝ RESPONSE MỚI TỪ BE
           let medicines = [];
-          if (Array.isArray(response)) {
-            medicines = response;
-          } else if (response && Array.isArray(response.data)) {
-            medicines = response.data;
-          } else {
-            console.warn('⚠️ Cấu trúc response không xác định:', response);
+          let message = '';
+
+          if (response && response.success === false) {
+            // Trường hợp có lỗi từ API
+            console.warn("⚠️ API returned error:", response.message);
+            setSuggestions([]);
+
+            // Hiển thị thông báo lỗi thân thiện từ BE
+            if (response.message) {
+              await Swal.fire({
+                title: 'Thông báo',
+                text: response.message,
+                icon: 'warning',
+                confirmButtonText: 'OK',
+                confirmButtonColor: '#3085d6'
+              });
+            }
+            return;
           }
-          
+
+          if (response && response.success === true) {
+            // Trường hợp thành công
+            medicines = response.data || [];
+            message = response.message || '';
+
+            // Nếu không tìm thấy thuốc, hiển thị thông báo từ BE
+            if (medicines.length === 0 && message) {
+              console.log("ℹ API message:", message);
+
+              // Hiển thị thông báo thân thiện từ BE
+              await Swal.fire({
+                title: 'Không tìm thấy thuốc',
+                html: `
+                <div style="text-align: center; padding: 10px;">
+                  <div style="font-size: 48px; color: #ffa726; margin-bottom: 15px;"></div>
+                  <p style="font-size: 16px; color: #555; margin-bottom: 10px;">
+                    ${message}
+                  </p>
+                  ${response.suggestions && response.suggestions.length > 0 ? `
+                    <div style="
+                      background: #f8f9fa;
+                      border-radius: 8px;
+                      padding: 12px;
+                      margin: 15px 0;
+                      text-align: left;
+                    ">
+                      <p style="margin: 0 0 8px 0; color: #2c5aa0; font-weight: bold;">
+                         Gợi ý tìm kiếm:
+                      </p>
+                      <ul style="margin: 0; padding-left: 20px; color: #666;">
+                        ${response.suggestions.map(suggestion =>
+                  `<li style="margin-bottom: 4px; cursor: pointer;" 
+                                onclick="document.querySelector('input[type=\\'text\\']').value='${suggestion}'; document.querySelector('input[type=\\'text\\']').focus();">
+                            ${suggestion}
+                           </li>`
+                ).join('')}
+                      </ul>
+                    </div>
+                  ` : ''}
+                  <p style="font-size: 14px; color: #888; margin: 0;">
+                    Vui lòng thử với từ khóa khác hoặc tên thuốc đầy đủ hơn.
+                  </p>
+                </div>
+              `,
+                icon: 'info',
+                confirmButtonText: 'Thử lại',
+                confirmButtonColor: '#3085d6'
+              });
+            }
+          }
+          else if (Array.isArray(response)) {
+            // Fallback: response là array trực tiếp (cho tương thích ngược)
+            medicines = response;
+          }
+          else if (response && Array.isArray(response.data)) {
+            // Fallback: response có property data là array
+            medicines = response.data;
+          }
+
           setSuggestions(medicines);
+
         } catch (err) {
-          console.error("Lỗi khi tìm thuốc:", err);
+          console.error("❌ Lỗi khi tìm thuốc:", err);
           setSuggestions([]);
+
+          // Hiển thị thông báo lỗi kết nối
+          await Swal.fire({
+            title: 'Lỗi kết nối',
+            text: 'Không thể kết nối đến hệ thống. Vui lòng thử lại sau.',
+            icon: 'error',
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#d33'
+          });
         }
       } else {
         setSuggestions([]);
@@ -216,7 +411,6 @@ const PrescriptionSection = ({
 
     return () => clearTimeout(delayDebounce);
   }, [newRow.medicine]);
-
   // HÀM CHỌN GỢI Ý - LẤY ĐẦY ĐỦ THÔNG TIN TỪ AI
   const handleSelectSuggestion = (medicine) => {
     console.log("🎯 Dữ liệu thuốc từ AI:", medicine);
@@ -235,6 +429,14 @@ const PrescriptionSection = ({
       totalPrice: newTotalPrice,
       dosage: defaultDosage
     }));
+
+    // Clear validation errors khi chọn từ suggestion
+    setValidationErrors({
+      medicine: '',
+      quantity: validationErrors.quantity,
+      dosage: ''
+    });
+
     setSuggestions([]);
 
     console.log("✅ Đã điền thông tin:", {
@@ -295,7 +497,7 @@ const PrescriptionSection = ({
         ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
         : new Date().toLocaleDateString('vi-VN'),
       appointment_time: selectedTodayPatient.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-      doctor_name: selectedTodayPatient.doctor_name || 'Bác sĩ chưa rõ',
+      doctor_name: doctorInfo?.doctor_Name || 'Bác sĩ chưa rõ',
       prescriptions: [
         {
           details: prescriptionRows.map(row => ({
@@ -489,6 +691,9 @@ const PrescriptionSection = ({
     }
 
     setNewRow(updatedRow);
+
+    // Validate field real-time
+    validateField(field, value);
   };
 
   const startEditing = (index) => {
@@ -498,24 +703,43 @@ const PrescriptionSection = ({
   const cancelEditing = () => {
     setEditingIndex(null);
     setSuggestions([]);
+    // Reset validation errors khi hủy
+    setValidationErrors({
+      medicine: '',
+      quantity: '',
+      dosage: ''
+    });
   };
 
-  // HÀM THÊM THUỐC - ĐÃ THÊM XỬ LÝ LỖI
+  // HÀM THÊM THUỐC - SỬA LẠI
   const handleAddNew = async () => {
-    if (!newRow.medicine.trim() || !newRow.quantity || !newRow.dosage.trim()) {
-      setToast({
-        show: true,
-        message: "⚠️ Vui lòng điền đầy đủ thông tin thuốc!",
-        variant: "warning",
+    // Validate form trước khi thêm
+    if (!validateForm()) {
+      // ✅ HIỂN THỊ LỖI VALIDATION BẰNG SWAL
+      await Swal.fire({
+        title: 'Thông tin không hợp lệ!',
+        html: `
+        <div class="text-center">
+          <p>Vui lòng kiểm tra lại thông tin:</p>
+          <ul>
+            ${validationErrors.medicine ? `<li>${validationErrors.medicine} !</li>` : ''}
+            ${validationErrors.quantity ? `<li>${validationErrors.quantity} !</li>` : ''}
+            ${validationErrors.dosage ? `<li>${validationErrors.dosage} !</li>` : ''}
+          </ul>
+        </div>
+      `,
+        icon: 'warning',
+        confirmButtonText: 'OK'
       });
       return;
     }
 
     if (newRow.unitPrice < 0) {
-      setToast({
-        show: true,
-        message: "⚠️ Đơn giá không được âm!",
-        variant: "warning",
+      await Swal.fire({
+        title: 'Lỗi!',
+        text: 'Đơn giá không được âm!',
+        icon: 'error',
+        confirmButtonText: 'OK'
       });
       return;
     }
@@ -551,18 +775,33 @@ const PrescriptionSection = ({
         totalPrice: 0
       });
 
-      showSuccessAlert('Thêm thuốc thành công!');
+      // Reset validation errors sau khi thêm thành công
+      setValidationErrors({
+        medicine: '',
+        quantity: '',
+        dosage: ''
+      });
+
+      // ✅ HIỂN THỊ THÀNH CÔNG BẰNG SWAL
+      await Swal.fire({
+        title: 'Thành công!',
+        text: 'Thêm thuốc thành công!',
+        icon: 'success',
+        confirmButtonText: 'OK'
+      });
     } catch (error) {
       handleError(error, 'Lỗi thêm thuốc vào đơn');
     }
   };
 
-  // HÀM CẬP NHẬT THUỐC - ĐÃ THÊM XỬ LÝ LỖI
+  // HÀM CẬP NHẬT THUỐC - ĐÃ THÊM VALIDATION ĐẦY ĐỦ
   const handleUpdate = async () => {
-    if (!newRow.medicine.trim() || !newRow.quantity || !newRow.dosage.trim()) {
+    // Validate form trước khi cập nhật
+    if (!validateForm()) {
+      // Hiển thị thông báo lỗi tổng quan
       setToast({
         show: true,
-        message: "⚠️ Vui lòng điền đầy đủ thông tin thuốc!",
+        message: "⚠️ Vui lòng điền đầy đủ và chính xác thông tin thuốc!",
         variant: "warning",
       });
       return;
@@ -635,7 +874,7 @@ const PrescriptionSection = ({
           ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
           : new Date().toLocaleDateString('vi-VN'),
         appointment_time: selectedTodayPatient.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        doctor_name: selectedTodayPatient.doctor_name || 'Bác sĩ chưa rõ',
+        doctor_name: doctorInfo?.doctor_Name || 'Bác sĩ chưa rõ',
         prescriptions: [
           {
             details: prescriptionRows.map(row => ({
@@ -718,7 +957,7 @@ const PrescriptionSection = ({
           ? new Date(selectedTodayPatient.date).toLocaleDateString('vi-VN')
           : new Date().toLocaleDateString('vi-VN'),
         appointment_time: selectedTodayPatient.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        doctor_name: selectedTodayPatient.doctor_name || 'Bác sĩ chưa rõ',
+        doctor_name: doctorInfo?.doctor_Name || 'Bác sĩ chưa rõ',
         prescriptions: [
           {
             details: prescriptionRows.map(row => ({
@@ -769,8 +1008,8 @@ const PrescriptionSection = ({
         <Card.Header className="text-start fw-bold">
           3. Kê đơn thuốc
         </Card.Header>
-        <Card.Body className="text-start">
-          <Table striped bordered hover responsive>
+        <Card.Body className="text-start" >
+          <Table striped bordered hover responsive style={{ Height: '800px' }}>
             <thead>
               <tr>
                 <th width="25%">Tên thuốc</th>
@@ -792,8 +1031,12 @@ const PrescriptionSection = ({
                             type="text"
                             value={newRow.medicine}
                             onChange={(e) => handleFieldChange('medicine', e.target.value)}
+                            isInvalid={!!validationErrors.medicine}
                             required
                           />
+                          <Form.Control.Feedback type="invalid">
+                            {validationErrors.medicine}
+                          </Form.Control.Feedback>
                           {suggestions.length > 0 && (
                             <div
                               className="suggestion-dropdown"
@@ -824,7 +1067,7 @@ const PrescriptionSection = ({
                                   onMouseLeave={(e) => e.target.style.backgroundColor = '#f8f9fa'}
                                 >
                                   <div><strong>{s.MedicineName}</strong> ({s.Unit})</div>
-                                  <div className="text-success">💰 {s.Price?.toLocaleString()}₫</div>
+                                  <div className="text-success"> {s.Price?.toLocaleString()}₫</div>
                                   <div className="text-muted small mt-1">{s.Reason}</div>
                                 </div>
                               ))}
@@ -838,16 +1081,24 @@ const PrescriptionSection = ({
                           min="1"
                           value={newRow.quantity}
                           onChange={(e) => handleFieldChange('quantity', e.target.value)}
+                          isInvalid={!!validationErrors.quantity}
                           required
                         />
+                        <Form.Control.Feedback type="invalid">
+                          {validationErrors.quantity}
+                        </Form.Control.Feedback>
                       </td>
                       <td>
                         <Form.Control
                           type="text"
                           value={newRow.dosage}
                           onChange={(e) => handleFieldChange('dosage', e.target.value)}
+                          isInvalid={!!validationErrors.dosage}
                           required
                         />
+                        <Form.Control.Feedback type="invalid">
+                          {validationErrors.dosage}
+                        </Form.Control.Feedback>
                       </td>
                       <td>
                         <Form.Control
@@ -921,7 +1172,12 @@ const PrescriptionSection = ({
                       value={newRow.medicine}
                       onChange={(e) => handleFieldChange('medicine', e.target.value)}
                       disabled={editingIndex !== null}
+                      isInvalid={!!validationErrors.medicine}
+                      required
                     />
+                    <Form.Control.Feedback type="invalid">
+                      {validationErrors.medicine}
+                    </Form.Control.Feedback>
                     {suggestions.length > 0 && editingIndex === null && (
                       <div
                         className="suggestion-dropdown"
@@ -951,9 +1207,35 @@ const PrescriptionSection = ({
                             onMouseEnter={(e) => e.target.style.backgroundColor = '#e9ecef'}
                             onMouseLeave={(e) => e.target.style.backgroundColor = '#f8f9fa'}
                           >
-                            <div><strong>{s.MedicineName}</strong> ({s.Unit})</div>
-                            <div className="text-success">💰 {s.Price?.toLocaleString()}₫</div>
-                            <div className="text-muted small mt-1">{s.Reason}</div>
+                            <div><strong>{s.MedicineName}/{s.Unit}</strong> ({s.MedicineType})</div>
+                            <div className="text-success">
+                              {(() => {
+                                const price = s.Price ? Number(s.Price) : 0;
+                                if (isNaN(price)) return 'N/A'; // Fallback nếu không parse được
+                                return price.toLocaleString('vi-VN', {
+                                  style: 'currency',
+                                  currency: 'VND',
+                                  minimumFractionDigits: 0,
+                                  maximumFractionDigits: 0
+                                });
+                              })()}
+                            </div>
+
+                            {/* THÊM HIỂN THỊ TRẠNG THÁI THUỐC */}
+                            <div className={`small mt-1 ${s.Status === 'Còn hàng' ? 'text-success' :
+                                s.Status === 'Hết hàng' ? 'text-danger' :
+                                  s.Status === 'Hết hạn' ? 'text-danger' :
+                                    s.Status === 'Sắp hết hàng' ? 'text-warning' :
+                                      'text-secondary'
+                              }`}>
+                              {s.Status === 'Còn hàng' && ' Còn hàng'}
+                              {s.Status === 'Hết hàng' && ' Hết hàng'}
+                              {s.Status === 'Hết hạn' && ' Hết hạn'}
+                              {s.Status === 'Sắp hết hàng' && ' Sắp hết hàng'}
+                              {!s.Status && ' Không xác định'}
+                            </div>
+
+                            <div className="text-muted small mt-1">{s.Description}</div>
                           </div>
                         ))}
                       </div>
@@ -968,7 +1250,12 @@ const PrescriptionSection = ({
                     value={newRow.quantity}
                     onChange={(e) => handleFieldChange('quantity', e.target.value)}
                     disabled={editingIndex !== null}
+                    isInvalid={!!validationErrors.quantity}
+                    required
                   />
+                  <Form.Control.Feedback type="invalid">
+                    {validationErrors.quantity}
+                  </Form.Control.Feedback>
                 </td>
                 <td>
                   <Form.Control
@@ -977,7 +1264,12 @@ const PrescriptionSection = ({
                     value={newRow.dosage}
                     onChange={(e) => handleFieldChange('dosage', e.target.value)}
                     disabled={editingIndex !== null}
+                    isInvalid={!!validationErrors.dosage}
+                    required
                   />
+                  <Form.Control.Feedback type="invalid">
+                    {validationErrors.dosage}
+                  </Form.Control.Feedback>
                 </td>
                 <td>
                   <Form.Control
@@ -1033,12 +1325,21 @@ const PrescriptionSection = ({
         >
           <i className="fas fa-print"></i> Xuất toa thuốc
         </Button>
+
+        {/* <Button
+          variant="outline-secondary"
+          onClick={handleModalPreview}
+          disabled={!selectedTodayPatient || prescriptionRows.length === 0}
+          className="no-print"
+        >
+          <i className="fas fa-search"></i> Xem trước nhanh
+        </Button> */}
       </div>
 
       {/* MODAL PREVIEW TOA THUỐC */}
       <Modal show={showPDFPreview} onHide={handleClosePreview} size="xl" centered>
         <Modal.Header closeButton>
-          <Modal.Title>👁️ Xem trước Toa Thuốc</Modal.Title>
+          <Modal.Title> Xem trước Toa Thuốc</Modal.Title>
         </Modal.Header>
         <Modal.Body style={{ minHeight: '500px' }}>
           <PDFPreviewEditor

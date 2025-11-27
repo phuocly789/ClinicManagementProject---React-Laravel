@@ -24,28 +24,16 @@ class ReceptionController extends Controller
     }
     public function completeReception(Request $request)
     {
+
         $request->validate([
-            // Patient data (nếu là bệnh nhân mới)
             'patient' => 'nullable|array',
             'patient.FullName' => 'required_with:patient|string|max:100',
-            'patient.Phone' => 'required_with:patient|string|max:15|unique:Users,Phone',
-            'patient.Email' => 'nullable|email|unique:Users,Email',
-            'patient.DateOfBirth' => 'nullable|date',
-            'patient.Gender' => 'nullable|string|in:Nam,Nữ',
-            'patient.Address' => 'nullable|string|max:200',
-            'patient.MedicalHistory' => 'nullable|string',
-
-            // Appointment data
-            'appointment.StaffId' => 'required|integer|exists:MedicalStaff,StaffId',
-            'appointment.RoomId' => 'required|integer|exists:Rooms,RoomId',
+            'patient.Phone' => 'required_with:patient|string|max:15',
+            'appointment.StaffId' => 'required|integer',
+            'appointment.RoomId' => 'required|integer',
             'appointment.AppointmentDate' => 'required|date',
             'appointment.AppointmentTime' => 'required|date_format:H:i',
-            'appointment.Notes' => 'nullable|string',
-            'appointment.ServiceType' => 'nullable|string',
-
-            // Loại tiếp nhận
             'receptionType' => 'required|string|in:online,direct',
-            'existingPatientId' => 'nullable|integer|exists:Patients,PatientId'
         ]);
 
         try {
@@ -53,76 +41,141 @@ class ReceptionController extends Controller
 
             $createdBy = auth()->id();
             $today = now('Asia/Ho_Chi_Minh')->toDateString();
-            $currentTime = now('Asia/Ho_Chi_Minh')->format('H:i:s');
 
-            // 1. Xử lý Patient
+            // 1: CHECK CHỖ TRỐNG & LOCK KHUNG GIỜ
+            // Đếm số lượng appointment đang active trong khung giờ này
+            // lockForUpdate() sẽ ngăn các request khác chen ngang khi đang đếm
+            $currentCount = Appointment::where('AppointmentDate', $request->appointment['AppointmentDate'])
+                ->where('AppointmentTime', $request->appointment['AppointmentTime'])
+                ->whereIn('Status', ['Đã đặt', 'Đang chờ', 'Đang khám'])
+                ->count();
+
+            if ($currentCount >= 10) {
+                throw new \Exception('Khung giờ này vừa đầy. Vui lòng chọn giờ khác.');
+            }
+
+            // 2: XỬ LÝ BỆNH NHÂN
             $patientId = $request->existingPatientId;
 
+            // Nếu chưa có ID nhưng có thông tin form -> Tạo mới hoặc tìm theo SĐT
             if (!$patientId && $request->has('patient')) {
-                // Tạo patient mới
-                $user = User::create([
-                    'Username' => $request->patient['Phone'], // Sử dụng số điện thoại làm username
-                    'PasswordHash' => bcrypt($request->patient['Phone']),
-                    'FullName' => $request->patient['FullName'],
-                    'Email' => $request->patient['Email'] ?? null,
-                    'Phone' => $request->patient['Phone'],
-                    'Gender' => $request->patient['Gender'] ?? null,
-                    'Address' => $request->patient['Address'] ?? null,
-                    'DateOfBirth' => $request->patient['DateOfBirth'] ?? null,
-                    'MustChangePassword' => true,
-                    'IsActive' => true
-                ]);
+                $phone = $request->patient['Phone'];
 
-                $patient = Patient::create([
-                    'PatientId' => $user->UserId,
-                    'MedicalHistory' => $request->patient['MedicalHistory'] ?? null
-                ]);
+                // Check xem SĐT đã tồn tại chưa để tránh tạo trùng User
+                $existingUser = User::where('Phone', $phone)->first();
 
-                $patientId = $patient->PatientId;
+                if ($existingUser) {
+                    $patientId = $existingUser->UserId;
+                    // Có thể update thông tin user tại đây nếu cần
+                } else {
+                    // Tạo User & Patient mới
+                    $user = User::create([
+                        'Username' => $phone,
+                        'PasswordHash' => bcrypt($phone),
+                        'FullName' => $request->patient['FullName'],
+                        'Phone' => $phone,
+                        'Email' => $request->patient['Email'] ?? null,
+                        'Gender' => $request->patient['Gender'] ?? null,
+                        'Address' => $request->patient['Address'] ?? null,
+                        'DateOfBirth' => $request->patient['DateOfBirth'] ?? null,
+                        'MustChangePassword' => true,
+                        'IsActive' => true
+                    ]);
+
+                    Patient::create([
+                        'PatientId' => $user->UserId,
+                        'MedicalHistory' => $request->patient['MedicalHistory'] ?? null
+                    ]);
+                    $patientId = $user->UserId;
+                }
             }
 
-            if (!$patientId) {
-                throw new \Exception('Thiếu thông tin bệnh nhân');
-            }
+            if (!$patientId) throw new \Exception('Thiếu thông tin bệnh nhân');
 
-            // 2. Xử lý Medical Record - CHỈ tạo mới nếu chưa có
-            $record = MedicalRecord::where('PatientId', $patientId)
-                ->where('Status', 'Hoạt động')
-                ->first();
-
-            if (!$record) {
-                $record = MedicalRecord::create([
-                    'PatientId' => $patientId,
-                    'RecordNumber' => 'MR-' . date('YmdHis') . '-' . $patientId, // Thêm timestamp để unique
+            // 3: XỬ LÝ HỒ SƠ BỆNH ÁN
+            $record = MedicalRecord::firstOrCreate(
+                ['PatientId' => $patientId, 'Status' => 'Hoạt động'],
+                [
+                    'RecordNumber' => 'MR-' . date('YmdHis') . '-' . $patientId,
                     'IssuedDate' => $today,
-                    'Status' => 'Hoạt động',
                     'Notes' => 'Hồ sơ được tạo khi tiếp nhận',
                     'CreatedBy' => $createdBy,
+                ]
+            );
+
+            // 4: XỬ LÝ APPOINTMENT
+            $appointment = null;
+
+            // TRƯỜNG HỢP A: TIẾP NHẬN TỪ ONLINE
+            if ($request->receptionType === 'online' && $request->has('original_appointment_id')) {
+
+                // Tìm và KHÓA dòng appointment cũ
+                $appointment = Appointment::where('AppointmentId', $request->original_appointment_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$appointment) {
+                    throw new \Exception('Lịch hẹn gốc không tồn tại.');
+                }
+
+                // CHỐT CHẶN TRÙNG LẶP: Nếu status không phải "Đã đặt" nghĩa là đã có người khác xử lý rồi
+                if ($appointment->Status !== 'Đã đặt') {
+                    throw new \Exception('Lịch hẹn này đã được nhân viên khác tiếp nhận rồi!');
+                }
+
+                // Cập nhật thông tin mới vào lịch hẹn cũ
+                $appointment->update([
+                    'StaffId' => $request->appointment['StaffId'],
+                    'RoomId' => $request->appointment['RoomId'],
+                    'RecordId' => $record->RecordId,
+                    'Notes' => $request->appointment['Notes'] ?? $appointment->Notes,
+                    'Status' => 'Đang chờ',
+                    'ServiceType' => $request->appointment['ServiceType'] ?? 'Khám bệnh'
+                ]);
+            }
+            // TRƯỜNG HỢP B: TIẾP NHẬN TRỰC TIẾP (Tạo mới)
+            else {
+                // Check duplicate: Bệnh nhân này đã có lịch active hôm nay chưa?
+                $duplicateCheck = Appointment::where('PatientId', $patientId)
+                    ->where('AppointmentDate', $today)
+                    ->whereIn('Status', ['Đã đặt', 'Đang chờ', 'Đang khám'])
+                    ->exists();
+
+                if ($duplicateCheck) {
+                    throw new \Exception('Bệnh nhân này đã có lịch hẹn/đang khám trong ngày hôm nay.');
+                }
+
+                // Tạo appointment mới
+                $appointment = Appointment::create([
+                    'PatientId' => $patientId,
+                    'StaffId' => $request->appointment['StaffId'],
+                    'RoomId' => $request->appointment['RoomId'],
+                    'RecordId' => $record->RecordId,
+                    'AppointmentDate' => $request->appointment['AppointmentDate'],
+                    'AppointmentTime' => $request->appointment['AppointmentTime'],
+                    'Status' => 'Đang chờ',
+                    'CreatedBy' => $createdBy,
+                    'Notes' => $request->appointment['Notes'] ?? null,
+                    'ServiceType' => $request->appointment['ServiceType'] ?? 'Khám bệnh'
                 ]);
             }
 
-            // 3. Tạo Appointment
-            $appointmentData = [
-                'PatientId' => $patientId,
-                'StaffId' => $request->appointment['StaffId'],
-                'RecordId' => $record->RecordId,
-                'ScheduleId' => null,
-                'AppointmentDate' => $request->appointment['AppointmentDate'],
-                'AppointmentTime' => $request->appointment['AppointmentTime'],
-                'Status' => 'Đang chờ',
-                'CreatedBy' => $createdBy,
-                'Notes' => $request->appointment['Notes'] ?? null,
-                'ServiceType' => $request->appointment['ServiceType'] ?? 'Khám bệnh'
-            ];
+            //  5: TẠO QUEUE
+            $lastTicketEntry = Queue::where('QueueDate', $today)
+                ->orderBy('TicketNumber', 'desc')
+                ->lockForUpdate()
+                ->first();
 
-            $appointment = Appointment::create($appointmentData);
+            // Nếu có phiếu cũ thì +1, chưa có (đầu ngày) thì là 1
+            $newTicketNumber = $lastTicketEntry ? $lastTicketEntry->TicketNumber + 1 : 1;
 
-            // 4. Tạo Queue
-            $lastTicket = Queue::where('QueueDate', $today)->max('TicketNumber');
-            $newTicketNumber = $lastTicket ? $lastTicket + 1 : 1;
 
-            $lastQueue = Queue::where('QueueDate', $today)->max('QueuePosition');
-            $newQueuePosition = $lastQueue ? $lastQueue + 1 : 1;
+            $lastPositionEntry = Queue::where('QueueDate', $today)
+                ->orderBy('QueuePosition', 'desc')
+                ->lockForUpdate()
+                ->first();
+
+            $newQueuePosition = $lastPositionEntry ? $lastPositionEntry->QueuePosition + 1 : 1;
 
             $queue = Queue::create([
                 'PatientId' => $patientId,
@@ -132,44 +185,32 @@ class ReceptionController extends Controller
                 'TicketNumber' => $newTicketNumber,
                 'QueuePosition' => $newQueuePosition,
                 'QueueDate' => $today,
-                'QueueTime' => $currentTime,
+                'QueueTime' => $request->appointment['AppointmentTime'],
                 'Status' => 'Đang chờ',
                 'CreatedBy' => $createdBy
             ]);
 
-            // 5. Nếu là online appointment, cập nhật status của appointment gốc
-            if ($request->receptionType === 'online' && $request->has('original_appointment_id')) {
-                $originalAppointment = Appointment::find($request->original_appointment_id);
-                if ($originalAppointment) {
-                    $originalAppointment->update(['Status' => 'Đang chờ']);
-                }
-            }
-
             DB::commit();
 
-            // Load thông tin đầy đủ để trả về
+            // Load lại info để trả về
             $patientInfo = User::find($patientId);
 
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'patient' => [
-                        'PatientId' => $patientId,
-                        'FullName' => $patientInfo->FullName,
-                        'Phone' => $patientInfo->Phone
-                    ],
-                    'appointment' => $appointment,
                     'queue' => $queue,
-                    'medicalRecord' => $record
+                    'patient' => $patientInfo,
+                    'ticketNumber' => $newTicketNumber
                 ],
-                'message' => 'Tiếp nhận bệnh nhân thành công. Số thứ tự: ' . $newTicketNumber
+                'message' => 'Tiếp nhận thành công. Số phiếu: ' . $newTicketNumber
             ], 200);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Lỗi khi tiếp nhận bệnh nhân: ' . $e->getMessage()
-            ], 500);
+                'message' => $e->getMessage(),
+                'error' => $e->getMessage()
+            ], 400);
         }
     }
     public function getNotifications(Request $request)
@@ -218,6 +259,7 @@ class ReceptionController extends Controller
                     'notification_id' => $existingNotification ? $existingNotification->NotificationId : null,
                     'notification_message' => $existingNotification ? $existingNotification->Message : null,
                     'notification_status' => $existingNotification ? $existingNotification->Status : null,
+                    'updated_at' => $existingNotification?->UpdatedAt?->toISOString(),
                 ];
             });
 
@@ -258,15 +300,13 @@ class ReceptionController extends Controller
 
         DB::beginTransaction();
         try {
-            // Kiểm tra xem đã có thông báo cho lịch hẹn này chưa
-            $existingNotification = Notification::where('AppointmentId', $request->appointment_id)->first();
-            if ($existingNotification) {
+            $exists = Notification::where('AppointmentId', $request->appointment_id)->exists();
+            if ($exists) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Đã tồn tại thông báo cho lịch hẹn này'
-                ], 400);
+                    'message' => 'Thông báo đã được tạo bởi người khác!'
+                ], 409); // 409 Conflict
             }
-
             // Lấy thông tin lịch hẹn
             $appointment = Appointment::find($request->appointment_id);
 
@@ -289,7 +329,11 @@ class ReceptionController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Tạo thông báo thành công',
-                'data' => $notification
+                'data' => [
+                    'notification_id' => $notification->NotificationId,
+                    'updated_at' => $notification->UpdatedAt?->toISOString(), // thêm dòng này
+                    // các field khác nếu cần
+                ]
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -303,7 +347,8 @@ class ReceptionController extends Controller
     public function updateNotification(Request $request, $notificationId)
     {
         $validator = Validator::make($request->all(), [
-            'message' => 'required|string|max:500'
+            'message' => 'required|string|max:500',
+            'updated_at' => 'nullable|date'
         ]);
 
         if ($validator->fails()) {
@@ -321,6 +366,13 @@ class ReceptionController extends Controller
                     'success' => false,
                     'message' => 'Thông báo không tồn tại'
                 ], 404);
+            }
+            if ($notification->UpdatedAt && $notification->UpdatedAt->gt($request->updated_at)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Thông báo đã được sửa bởi người khác!',
+                    'error_code' => 'CONFLICT'
+                ], 409);
             }
 
             $notification->update([

@@ -127,7 +127,7 @@ const AdminScheduleManagement = () => {
 
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [scheduleFormData, setScheduleFormData] = useState(initialFormState);
-
+    const [originalUpdatedAt, setOriginalUpdatedAt] = useState(null);
     const fetchRooms = useCallback(async () => {
         try {
             const response = await axiosInstance.get('/api/rooms');
@@ -249,6 +249,7 @@ const AdminScheduleManagement = () => {
         setSelectedEvent(null);
         setScheduleFormData(initialFormState);
         setFormErrors([]);
+        setOriginalUpdatedAt(null);
     };
 
     const handleEventClick = (clickInfo) => {
@@ -275,7 +276,7 @@ const AdminScheduleManagement = () => {
             if (!date) return new Date().toISOString().split('T')[0];
             return new Date(date).toISOString().split('T')[0];
         };
-
+        setOriginalUpdatedAt(extendedProps.UpdatedAt || null);
         setScheduleFormData({
             StaffId: extendedProps.StaffId || '',
             Role: extendedProps.Role || '',
@@ -352,7 +353,8 @@ const AdminScheduleManagement = () => {
                 StartTime: scheduleFormData.StartTime.length === 5 ? `${scheduleFormData.StartTime}:00` : scheduleFormData.StartTime,
                 EndTime: scheduleFormData.EndTime.length === 5 ? `${scheduleFormData.EndTime}:00` : scheduleFormData.EndTime,
                 IsAvailable: scheduleFormData.IsAvailable,
-                RoomId: scheduleFormData.RoomId
+                RoomId: scheduleFormData.RoomId,
+                UpdatedAt: originalUpdatedAt
             };
 
             console.log('Submitting data:', submitData); // Debug
@@ -371,6 +373,15 @@ const AdminScheduleManagement = () => {
             }
         } catch (error) {
             console.error('Error submitting form:', error);
+            if (error.response?.status === 409) {
+                setToast({
+                    type: 'error',
+                    message: 'Lịch này đã được sửa bởi người khác! Đang tải lại dữ liệu mới nhất...'
+                });
+                handleCloseModals();
+                await fetchData(); // bắt buộc reload để người dùng thấy thay đổi mới
+                return;
+            }
             setToast({
                 type: 'error',
                 message: error.response?.data?.message ||

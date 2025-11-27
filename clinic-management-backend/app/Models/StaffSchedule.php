@@ -30,7 +30,10 @@ class StaffSchedule extends Model
     protected $table = 'StaffSchedules';
     protected $primaryKey = 'ScheduleId';
     public $incrementing = true;
-    public $timestamps = false;
+    public $timestamps = true;
+    const CREATED_AT = 'CreatedAt';
+    const UPDATED_AT = 'UpdatedAt';
+
 
     protected $casts = [
         'ScheduleId' => 'int',

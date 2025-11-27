@@ -22,7 +22,10 @@ export default function PatientManagement() {
   const [showDetail, setShowDetail] = useState(false);
   const [appointments, setAppointments] = useState([]);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
-
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0"); // Tháng từ 0-11
+  const dd = String(today.getDate()).padStart(2, "0");
   // Fetch Api
   const [toast, setToast] = useState(null);
 
@@ -84,9 +87,19 @@ export default function PatientManagement() {
 
     // Ngày giờ không ở quá khứ
     if (formData.date && formData.time) {
-      const selectedDT = new Date(`${formData.date}T${formData.time}`);
-      if (selectedDT < new Date())
+      // Ghép date và time thành 1 đối tượng Date
+      const [hoursStr, minutesStr] = formData.time.split(":");
+      const selectedDateTime = new Date(formData.date);
+      selectedDateTime.setHours(parseInt(hoursStr, 10));
+      selectedDateTime.setMinutes(parseInt(minutesStr, 10));
+      selectedDateTime.setSeconds(0);
+      selectedDateTime.setMilliseconds(0);
+
+      const now = new Date();
+
+      if (selectedDateTime < now) {
         newErrors.date = "Không thể đặt lịch trong quá khứ";
+      }
     }
 
     // Kiểm tra trùng lịch
@@ -237,7 +250,7 @@ export default function PatientManagement() {
                     value={formData.date}
                     onChange={handleInputChange}
                     className="form-control"
-                    min={new Date().toISOString().split("T")[0]}
+                    min={`${yyyy}-${mm}-${dd}`}
                   />
                   {errors.date && (
                     <small className="text-danger">{errors.date}</small>
@@ -363,14 +376,14 @@ export default function PatientManagement() {
                   </tbody>
                 </table>
               </div>
+              {pageCount > 1 && (
+                <Pagination
+                  pageCount={pageCount}
+                  onPageChange={handlePageChange}
+                  currentPage={current}
+                />
+              )}
             </div>
-            {pageCount > 1 && (
-              <Pagination
-                pageCount={pageCount}
-                onPageChange={handlePageChange}
-                currentPage={current}
-              />
-            )}
           </div>
         </div>
       </div>

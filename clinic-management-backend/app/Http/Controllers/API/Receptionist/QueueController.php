@@ -248,75 +248,136 @@ class QueueController extends Controller
             'Status' => 'required|string|in:Đã đặt,Đang chờ,Đang khám,Đã khám,Hủy'
         ]);
 
-        $queue = Queue::find($queueId);
-        if (!$queue) {
+        try {
+            DB::beginTransaction();
+
+            // 1. Tìm và KHÓA dòng queue này lại ngay lập tức
+            $queue = Queue::where('QueueId', $queueId)->lockForUpdate()->first();
+
+            if (!$queue) {
+                return response()->json(['success' => false, 'message' => 'Hàng chờ không tồn tại.'], 404);
+            }
+
+            $appointment = Appointment::find($queue->AppointmentId);
+            if (!$appointment) {
+                return response()->json(['success' => false, 'message' => 'Lịch hẹn không tồn tại.'], 404);
+            }
+
+            $newStatus = $request->input('Status');
+            $currentStatus = $queue->Status; // Trạng thái hiện tại trong DB
+
+            // --- FIX BUG 1: TRÙNG LẶP KHI HỦY ---
+            if ($newStatus === 'Hủy') {
+                if ($currentStatus === 'Hủy') {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Lịch khám này đã được hủy bởi người khác rồi!'
+                    ], 400);
+                }
+                if ($currentStatus === 'Đang khám' || $currentStatus === 'Đã khám') {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Không thể hủy vì bệnh nhân đang/đã khám!'
+                    ], 400);
+                }
+            }
+
+            // --- FIX BUG 2: TRÙNG LẶP KHI GỌI KHÁM ---
+            if ($newStatus === 'Đang khám') {
+
+                // A. Kiểm tra xem chính bệnh nhân này có đang được khám rồi không?
+                // Nếu Tab A đã gọi rồi, Status trong DB đã là 'Đang khám'. Tab B gọi tiếp sẽ dính lỗi này.
+                if ($currentStatus === 'Đang khám') {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Bệnh nhân này đang được gọi khám rồi!'
+                    ], 400);
+                }
+
+                // B. Kiểm tra trạng thái không hợp lệ khác
+                if ($currentStatus === 'Hủy' || $currentStatus === 'Đã khám') {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Bệnh nhân này đã hủy hoặc hoàn thành khám.'
+                    ], 400);
+                }
+                // C. Kiểm tra phòng bận (Có người KHÁC đang khám trong phòng)
+                $isRoomBusy = Queue::where('RoomId', $queue->RoomId)
+                    ->where('Status', 'Đang khám')
+                    ->where('QueueId', '!=', $queueId) // Loại trừ chính mình
+                    ->whereDate('QueueDate', '=', now('Asia/Ho_Chi_Minh'))
+                    ->exists();
+
+                if ($isRoomBusy) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Phòng này đang có người khám. Vui lòng đợi!'
+                    ], 400);
+                }
+            }
+
+            // --- CẬP NHẬT DỮ LIỆU ---
+            $queue->Status = $newStatus;
+            $queue->save();
+
+            $appointment->Status = $newStatus;
+            $appointment->save();
+
+            // --- BROADCAST (Chỉ khi gọi khám thành công lần đầu tiên) ---
+            if ($request->input('Status') === "Đang khám") {
+                // Full data bác sĩ cần
+                $patient = \App\Models\Patient::with('user')->find($queue->PatientId);
+
+                $doctorData = [
+                    'id' => $queue->AppointmentId,
+                    'date' => $queue->QueueDate,
+                    'time' => $queue->QueueTime,
+                    'name' => $patient->user->FullName,
+                    'queue_id' => $queue->QueueId,
+                    'status' => $queue->Status,
+                    'patient_id' => $queue->PatientId,
+                    'gender' => $patient->user->Gender,
+                    'age' => Carbon::parse($patient->user->DateOfBirth)->age,
+                    'phone' => $patient->user->Phone,
+                    'address' => $patient->user->Address,
+                    // 'notes' => $patient->Note,
+                ];
+
+                // Payload lễ tân
+                $receptionistData = [
+                    'QueueId'       => $queue->QueueId,
+                    'PatientId'     => $queue->PatientId,
+                    'PatientName'   => $patient->name,
+                    'AppointmentId' => $queue->AppointmentId,
+                    'QueueDate'     => $queue->QueueDate,
+                    'QueueTime'     => $queue->QueueTime,
+                    'QueuePosition' => $queue->QueuePosition,
+                    'RoomId'        => $queue->RoomId,
+                    'Status'        => $queue->Status
+                ];
+
+                broadcast(new QueueStatusUpdated(
+                    doctor: $doctorData,
+                    receptionist: $receptionistData,
+                    roomId: $queue->RoomId,
+                    action: 'updated'
+                ))->toOthers();
+            }
+
+            DB::commit();
+
             return response()->json([
-                'success' => false,
-                'message' => 'Hàng chờ không tồn tại.'
-            ], 404);
+                'success' => true,
+                'data' => [
+                    'QueueId' => $queue->QueueId,
+                    'Status' => $queue->Status,
+                ],
+                'message' => 'Cập nhật trạng thái thành công.'
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
-
-        $appointment = Appointment::find($queue->AppointmentId);
-        if (!$appointment) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Lịch hẹn không tồn tại.'
-            ], 404);
-        }
-
-        $queue->Status = $request->input('Status');
-        $queue->save();
-
-        $appointment->Status = $request->input('Status');
-        $appointment->save();
-
-        if ($request->input('Status') === "Đang khám") {
-            // Full data bác sĩ cần
-            $patient = \App\Models\Patient::with('user')->find($queue->PatientId);
-
-            $doctorData = [
-                'id' => $queue->AppointmentId,
-                'date' => $queue->QueueDate,
-                'time' => $queue->QueueTime,
-                'name' => $patient->user->FullName,
-                'status' => $queue->Status,
-                'patient_id' => $queue->PatientId,
-                'gender' => $patient->user->Gender,
-                'age' => Carbon::parse($patient->user->DateOfBirth)->age,
-                'phone' => $patient->user->Phone,
-                'address' => $patient->user->Address,
-                // 'notes' => $patient->Note,
-            ];
-
-            // Payload lễ tân
-            $receptionistData = [
-                'QueueId'       => $queue->QueueId,
-                'PatientId'     => $queue->PatientId,
-                'PatientName'   => $patient->name,
-                'AppointmentId' => $queue->AppointmentId,
-                'QueueDate'     => $queue->QueueDate,
-                'QueueTime'     => $queue->QueueTime,
-                'QueuePosition' => $queue->QueuePosition,
-                'RoomId'        => $queue->RoomId,
-                'Status'        => $queue->Status
-            ];
-
-            broadcast(new QueueStatusUpdated(
-                doctor: $doctorData,
-                receptionist: $receptionistData,
-                roomId: $queue->RoomId,
-                action: 'updated'
-            ))->toOthers();
-        }
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'QueueId' => $queue->QueueId,
-                'Status' => $queue->Status,
-            ],
-            'message' => 'Cập nhật trạng thái hàng chờ thành công.'
-        ]);
     }
     //Xóa hàng chờ
     public function DeleteQueue($queueId)

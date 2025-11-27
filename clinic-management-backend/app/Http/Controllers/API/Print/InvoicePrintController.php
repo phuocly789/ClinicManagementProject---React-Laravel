@@ -112,7 +112,7 @@ class InvoicePrintController extends Controller
                     return $result;
                 }
 
-                Log::error("❌ Public file not found for {$type}: " . $publicPath);
+                Log::error("❌ Không tìm thấy file {$type} trong thư mục public: " . $publicPath);
                 return null;
             }
 
@@ -138,7 +138,7 @@ class InvoicePrintController extends Controller
                     ], $defaults);
                 }
 
-                Log::error("❌ Storage file not found for {$type}: " . $storagePath);
+                Log::error("❌ Không tìm thấy file {$type} trong storage: " . $storagePath);
                 return null;
             }
 
@@ -153,11 +153,11 @@ class InvoicePrintController extends Controller
                 ], $defaults);
             }
 
-            Log::warning("⚠️ Unhandled {$type} URL type: " . $url);
+            Log::warning("⚠️ Định dạng URL {$type} không được hỗ trợ: " . $url);
             return null;
 
         } catch (\Exception $e) {
-            Log::error("❌ Error processing {$type}: " . $e->getMessage());
+            Log::error("❌ Lỗi xử lý {$type}: " . $e->getMessage());
             return null;
         }
     }
@@ -239,7 +239,7 @@ class InvoicePrintController extends Controller
             ];
         }
 
-        Log::warning('⚠️ No valid watermark data found');
+        Log::warning('⚠️ Không tìm thấy dữ liệu watermark hợp lệ');
         return null;
     }
 
@@ -256,9 +256,9 @@ class InvoicePrintController extends Controller
             if (isset($file['temp_file']) && file_exists($file['temp_file'])) {
                 try {
                     unlink($file['temp_file']);
-                    Log::info('Cleaned up temp file: ' . $file['temp_file']);
+                    Log::info('Đã dọn dẹp file tạm: ' . $file['temp_file']);
                 } catch (\Exception $e) {
-                    Log::warning('Could not delete temp file: ' . $file['temp_file']);
+                    Log::warning('Không thể xóa file tạm: ' . $file['temp_file']);
                 }
             }
         }
@@ -271,7 +271,7 @@ class InvoicePrintController extends Controller
     {
         $tempDir = storage_path('app/temp_pdf_logos');
         if (!is_dir($tempDir)) {
-            Log::info('Temp directory does not exist: ' . $tempDir);
+            Log::info('Thư mục tạm không tồn tại: ' . $tempDir);
             return;
         }
 
@@ -290,7 +290,7 @@ class InvoicePrintController extends Controller
         }
 
         if ($deletedCount > 0) {
-            Log::info("✅ Cleaned up $deletedCount old temp files from temp_pdf_logos");
+            Log::info("✅ Đã dọn dẹp {$deletedCount} file tạm cũ từ temp_pdf_logos");
         }
     }
 
@@ -305,13 +305,25 @@ class InvoicePrintController extends Controller
         try {
             $data = $request->all();
 
-            // 🔥 VALIDATION CHO REAL-TIME SETTINGS
+            // 🔥 VALIDATION FIXED - PHÙ HỢP VỚI JSON THỰC TẾ
             $validated = $request->validate([
                 'type' => 'required|string|in:prescription,service,payment,test_result',
                 'patient_name' => 'required|string',
 
+                // 🔥 FIX: THÊM CÁC TRƯỜNG THIẾU TỪ JSON
+                'patient_age' => 'nullable|integer',
+                'patient_gender' => 'nullable|string',
+                'patient_phone' => 'nullable|string',
+                'patient_address' => 'nullable|string',
+                'lab_number' => 'nullable|string', // Thêm cho test_result
+                'department' => 'nullable|string', // Thêm cho test_result
+                'technician_name' => 'nullable|string', // Thêm cho test_result
+                'doctor_name' => 'nullable|string', // Có trong JSON
+                'appointment_date' => 'nullable|string', // Có trong JSON
+                'appointment_time' => 'nullable|string', // Có trong JSON
+
                 // 🔥 QUAN TRỌNG: VALIDATE PDF SETTINGS TỪ FE
-                'pdf_settings' => 'nullable|array',
+                'pdf_settings' => 'required|array',
                 'pdf_settings.fontFamily' => 'nullable|string',
                 'pdf_settings.fontSize' => 'nullable|string',
                 'pdf_settings.fontColor' => 'nullable|string',
@@ -353,10 +365,10 @@ class InvoicePrintController extends Controller
                 'pdf_settings.marginLeft' => 'required|string',
                 'pdf_settings.marginRight' => 'required|string',
 
-                // Các trường dữ liệu khác
+                // Các trường dữ liệu khác - FIX TÊN CHO ĐÚNG
                 'prescriptions' => 'nullable|array',
                 'services' => 'nullable|array',
-                'test_results' => 'nullable|array',
+                'test_results' => 'nullable|array', // Có trong JSON
             ]);
 
             Log::info('✅ Validation passed for real-time settings');
@@ -399,7 +411,6 @@ class InvoicePrintController extends Controller
                 'safe_css' => $safeFontCSS
             ]);
 
-
             // 🔥 XỬ LÝ LOGO & WATERMARK REAL-TIME
             $logoData = $this->processLogo($pdfSettings['logo'] ?? []);
             $watermarkData = $this->processWatermark($pdfSettings['watermark'] ?? []);
@@ -411,7 +422,7 @@ class InvoicePrintController extends Controller
                 'watermark_enabled' => $pdfSettings['watermark']['enabled'] ?? false
             ]);
 
-            // 🔥 CHUẨN BỊ DATA CHO TEMPLATE VỚI REAL-TIME SETTINGS
+            // 🔥 CHUẨN BỊ DATA CHO TEMPLATE VỚI REAL-TIME SETTINGS - FIX MAPPING
             $pdfData = [
                 // Thông tin cơ bản
                 'title' => $pdfSettings['customTitle'],
@@ -423,15 +434,15 @@ class InvoicePrintController extends Controller
                 'clinic_phone' => $pdfSettings['clinicPhone'],
                 'doctor_name' => $pdfSettings['doctorName'],
 
-                // Thông tin bệnh nhân
+                // 🔥 FIX: ÁNH XẠ ĐÚNG TÊN TRƯỜNG TỪ JSON
                 'patient_name' => $data['patient_name'],
-                'age' => $data['age'] ?? 'N/A',
-                'gender' => $data['gender'] ?? 'N/A',
-                'phone' => $data['phone'] ?? 'N/A',
-                'address' => $data['address'] ?? '',
+                'age' => $data['patient_age'] ?? $data['age'] ?? 'N/A', // Map cả 2 tên
+                'gender' => $data['patient_gender'] ?? $data['gender'] ?? 'N/A',
+                'phone' => $data['patient_phone'] ?? $data['phone'] ?? 'N/A',
+                'address' => $data['patient_address'] ?? $data['address'] ?? '',
 
-                // Thông tin hẹn
-                'medical_record_code' => $data['code'] ?? match ($data['type']) {
+                // Thông tin hẹn - FIX MAPPING
+                'medical_record_code' => $data['lab_number'] ?? $data['code'] ?? match ($data['type']) {
                     'prescription' => 'TT' . date('YmdHis'),
                     'service' => 'DV' . date('YmdHis'),
                     'payment' => 'HD' . date('YmdHis'),
@@ -441,6 +452,11 @@ class InvoicePrintController extends Controller
                 'appointment_date' => $data['appointment_date'] ?? now()->format('d/m/Y'),
                 'appointment_time' => $data['appointment_time'] ?? now()->format('H:i'),
                 'patient_code' => $data['patient_code'] ?? 'N/A',
+
+                // 🔥 THÊM CÁC TRƯỜNG MỚI CHO TEST_RESULT
+                'lab_number' => $data['lab_number'] ?? '',
+                'department' => $data['department'] ?? '',
+                'technician_name' => $data['technician_name'] ?? '',
 
                 // Thông tin y tế
                 'symptoms' => $data['symptoms'] ?? '',
@@ -458,7 +474,7 @@ class InvoicePrintController extends Controller
 
                 // Các biến dự phòng
                 'code' => $data['code'] ?? 'AUTO',
-                'date' => $data['date'] ?? now()->format('d/m/Y'),
+                'date' => $data['date'] ?? now('Asia/Ho_Chi_Minh')->format('d/m/Y'),
             ];
 
             // 🔥 XỬ LÝ DỮ LIỆU THEO TYPE VỚI REAL-TIME SETTINGS
@@ -480,9 +496,15 @@ class InvoicePrintController extends Controller
 
             } else if ($data['type'] === 'test_result') {
                 Log::info('🔬 Processing TEST_RESULT with real-time settings');
+                // 🔥 FIX: SỬ DỤNG ĐÚNG TÊN TRƯỜNG 'test_results' từ JSON
                 $pdfData['test_results'] = $this->processTestResultData($data['test_results'] ?? []);
                 $pdfData['prescriptions'] = [];
                 $pdfData['services'] = [];
+
+                Log::info('🔬 Test results data:', [
+                    'count' => count($pdfData['test_results']),
+                    'data' => $pdfData['test_results']
+                ]);
             }
 
             // 🔥 DEBUG: LOG TẤT CẢ REAL-TIME SETTINGS ĐƯỢC ÁP DỤNG
@@ -505,9 +527,19 @@ class InvoicePrintController extends Controller
                 ]
             ]);
 
+            // 🔥 LOG DATA TRƯỚC KHI TẠO PDF ĐỂ DEBUG
+            Log::info('📊 FINAL PDF DATA STRUCTURE:', [
+                'type' => $pdfData['type'],
+                'patient_name' => $pdfData['patient_name'],
+                'patient_age' => $pdfData['age'],
+                'patient_gender' => $pdfData['gender'],
+                'test_results_count' => isset($pdfData['test_results']) ? count($pdfData['test_results']) : 0,
+                'has_pdf_settings' => !empty($pdfData['pdf_settings'])
+            ]);
+
             // 🔥 KIỂM TRA TEMPLATE
             if (!view()->exists($config['template'])) {
-                throw new \Exception("Template {$config['template']} không tồn tại");
+                throw new \Exception("Không tìm thấy template {$config['template']}");
             }
 
             Log::info('🚀 Generating PDF with REAL-TIME settings...');
@@ -522,7 +554,7 @@ class InvoicePrintController extends Controller
                     'isPhpEnabled' => true,
                     'chroot' => public_path(),
                     'dpi' => 96,
-                    'fontHeightRatio' => 1.1, // Giúp hiển thị tiếng Việt tốt hơn
+                    'fontHeightRatio' => 1.1,
                     // Áp dụng margins từ real-time settings
                     'margin-top' => $pdfSettings['marginTop'] ?? '15mm',
                     'margin-bottom' => $pdfSettings['marginBottom'] ?? '15mm',
@@ -548,24 +580,24 @@ class InvoicePrintController extends Controller
                 'Content-Disposition' => 'attachment; filename="' . $config['filename'] . '"',
                 'X-Filename' => $config['filename'],
                 'X-Generated-At' => now()->toISOString(),
-                'X-Real-Time-Settings' => 'applied', // 🔥 FLAG NHẬN DIỆN REAL-TIME
+                'X-Real-Time-Settings' => 'applied',
             ]);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
-            Log::error('❌ Validation Error in real-time settings:', $e->errors());
+            Log::error('❌ Lỗi xác thực real-time settings:', $e->errors());
             return response()->json([
                 'success' => false,
-                'message' => 'Lỗi validation real-time settings',
+                'message' => 'Dữ liệu cấu hình không hợp lệ',
                 'errors' => $e->errors(),
             ], 422);
 
         } catch (\Exception $e) {
-            Log::error('❌ Error generating PDF with real-time settings: ' . $e->getMessage());
+            Log::error('❌ Lỗi tạo PDF với real-time settings: ' . $e->getMessage());
             Log::error('Stack trace: ' . $e->getTraceAsString());
 
             return response()->json([
                 'success' => false,
-                'message' => 'Lỗi khi tạo PDF với real-time settings: ' . $e->getMessage(),
+                'message' => 'Không thể tạo PDF với cấu hình hiện tại: ' . $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
             ], 500);
@@ -779,10 +811,10 @@ class InvoicePrintController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            Log::error('❌ Error in HTML preview with real-time settings: ' . $e->getMessage());
+            Log::error('❌ Lỗi xem trước HTML với real-time settings: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Lỗi: ' . $e->getMessage()
+                'message' => 'Không thể tạo xem trước: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -896,14 +928,14 @@ class InvoicePrintController extends Controller
                 ]);
 
             } else {
-                throw new \Exception('Định dạng base64 không hợp lệ');
+                throw new \Exception('Định dạng ảnh không hợp lệ');
             }
 
         } catch (\Exception $e) {
-            Log::error("Error saving {$request->type}: " . $e->getMessage());
+            Log::error("Lỗi lưu {$request->type}: " . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Lỗi khi lưu ' . $request->type . ': ' . $e->getMessage()
+                'message' => 'Không thể lưu ' . $request->type . ': ' . $e->getMessage()
             ], 500);
         }
     }
@@ -946,10 +978,10 @@ class InvoicePrintController extends Controller
             ], 404);
 
         } catch (\Exception $e) {
-            Log::error("Error getting {$type}: " . $e->getMessage());
+            Log::error("Lỗi lấy {$type}: " . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => "Lỗi khi lấy {$type}"
+                'message' => "Không thể lấy {$type}"
             ], 500);
         }
     }
@@ -987,10 +1019,10 @@ class InvoicePrintController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Error deleting logo: ' . $e->getMessage());
+            Log::error('Lỗi xóa logo: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Lỗi khi xóa logo'
+                'message' => 'Không thể xóa logo'
             ], 500);
         }
     }
