@@ -31,7 +31,8 @@ class Supplier extends Model
 	public $timestamps = false;
 
 	protected $casts = [
-		'SupplierId' => 'int'
+		'SupplierId' => 'int',
+		'version' => 'integer',
 	];
 
 	protected $fillable = [
@@ -39,7 +40,8 @@ class Supplier extends Model
 		'ContactEmail',
 		'ContactPhone',
 		'Address',
-		'Description'
+		'Description',
+		'version',
 	];
 
 	public function import_bills()

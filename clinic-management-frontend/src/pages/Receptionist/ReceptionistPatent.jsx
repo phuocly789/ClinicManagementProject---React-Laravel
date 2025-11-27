@@ -18,8 +18,28 @@ const ValidationUtils = {
     },
 
     validateName: (name) => {
+        // Chỉ cho phép chữ cái, khoảng trắng. Không cho phép số hay ký tự đặc biệt
         const nameRegex = /^[a-zA-ZÀ-ỹ\s]+$/;
-        return nameRegex.test(name) && name.length >= 2;
+        return nameRegex.test(name) && name.length >= 2 && name.length <= 50;
+    },
+
+    hasDangerousChars: (text) => {
+        if (!text) return false;
+        // Chặn các ký tự thẻ HTML < > và các từ khóa nguy hiểm
+        const dangerousRegex = /[<>`]/;
+        const scriptRegex = /javascript:|vbscript:|onload|onclick/i;
+        return dangerousRegex.test(text) || scriptRegex.test(text);
+    },
+
+    // Hàm làm sạch input (Sanitize) trước khi gửi
+    sanitizeInput: (text) => {
+        if (!text) return "";
+        return text.toString()
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
     },
 
     validateDateOfBirth: (date) => {
@@ -63,7 +83,8 @@ const ErrorMessages = {
     ROOM_REQUIRED: "Vui lòng chọn phòng khám",
     PATIENT_REQUIRED: "Vui lòng chọn hoặc tạo bệnh nhân",
     INVALID_APPOINTMENT_TIME_SLOT: "Thời gian hẹn phải là một trong các khung giờ: 7:00, 7:30, 8:00, ..., 16:30",
-    TIMESLOT_FULL: "Khung giờ này đã đầy, vui lòng chọn khung giờ khác"
+    TIMESLOT_FULL: "Khung giờ này đã đầy, vui lòng chọn khung giờ khác",
+    DANGEROUS_CHARS: "Vui lòng không nhập các ký tự đặc biệt (<, >, `) để bảo mật hệ thống"
 };
 
 const generateTimeSlots = () => {
@@ -238,7 +259,8 @@ const ReceptionistPatent = () => {
                     date: date,
                     times: times,
                     room_id: roomId,
-                    staff_id: staffId
+                    staff_id: staffId,
+                    _t: new Date().getTime() // tránh cache
                 }
             });
 
@@ -491,7 +513,6 @@ const ReceptionistPatent = () => {
 
     const initializeData = async () => {
         setLoading(true);
-        setApiError(null);
         try {
             const today = new Date().toISOString().split('T')[0];
 
@@ -511,7 +532,6 @@ const ReceptionistPatent = () => {
         } catch (error) {
             console.error("Error initializing data:", error);
             const errorMessage = error.response?.message || "Không thể tải dữ liệu khởi tạo";
-            setApiError(errorMessage);
             showToastMessage('error', errorMessage);
         } finally {
             setLoading(false);
@@ -702,6 +722,14 @@ const ReceptionistPatent = () => {
             newErrors.phone = ErrorMessages.INVALID_PHONE;
         }
 
+        // Validate XSS cho Address và MedicalHistory
+        if (ValidationUtils.hasDangerousChars(patientForm.address)) {
+            newErrors.address = ErrorMessages.DANGEROUS_CHARS;
+        }
+        if (ValidationUtils.hasDangerousChars(patientForm.medicalHistory)) {
+            newErrors.medicalHistory = ErrorMessages.DANGEROUS_CHARS;
+        }
+
         if (patientForm.email && !ValidationUtils.validateEmail(patientForm.email)) {
             newErrors.email = ErrorMessages.INVALID_EMAIL;
         }
@@ -715,6 +743,10 @@ const ReceptionistPatent = () => {
 
     const validateAppointmentForm = async () => {
         const newErrors = {};
+        //Validate XSS cho Notes
+        if (ValidationUtils.hasDangerousChars(appointmentForm.notes)) {
+            newErrors.notes = ErrorMessages.DANGEROUS_CHARS;
+        }
 
         if (!appointmentForm.staffId) {
             newErrors.staffId = ErrorMessages.DOCTOR_REQUIRED;
@@ -746,9 +778,9 @@ const ReceptionistPatent = () => {
 
             // Nếu chọn ngày hôm nay, kiểm tra giờ không được ở quá khứ
             const today = new Date().toISOString().split('T')[0];
-            if (appointmentForm.appointmentDate === today && appointmentDateTime < now) {
-                newErrors.appointmentTime = "Giờ khám không được ở quá khứ";
-            }
+            // if (appointmentForm.appointmentDate === today && appointmentDateTime < now) {
+            //     newErrors.appointmentTime = "Giờ khám không được ở quá khứ";
+            // }
             // Kiểm tra capacity thông qua API
             try {
                 const availability = await checkTimeSlotAvailability(
@@ -796,7 +828,6 @@ const ReceptionistPatent = () => {
         setSelectedPatientOption(null);
         setShowPatientForm(false);
         setErrors({});
-        setApiError(null);
 
         setAppointmentForm({
             patientId: "",
@@ -865,21 +896,28 @@ const ReceptionistPatent = () => {
     };
 
     const handleCreateAll = async () => {
+        if (loading) return;
+
         if (!(await validateAll())) {
             return;
         }
 
         setLoading(true);
-        setApiError(null);
 
         try {
+            // Sanitize dữ liệu trước khi gửi đi
+            const safeNotes = ValidationUtils.sanitizeInput(appointmentForm.notes || "");
+            const safeAddress = ValidationUtils.sanitizeInput(patientForm.address || "");
+            const safeHistory = ValidationUtils.sanitizeInput(patientForm.medicalHistory || "");
+            const safeFullName = ValidationUtils.sanitizeInput(patientForm.fullName || "");
+
             const receptionData = {
                 appointment: {
                     StaffId: parseInt(appointmentForm.staffId),
                     RoomId: parseInt(appointmentForm.roomId),
                     AppointmentDate: appointmentForm.appointmentDate,
                     AppointmentTime: appointmentForm.appointmentTime,
-                    Notes: appointmentForm.notes || "",
+                    Notes: safeNotes,
                     ServiceType: appointmentForm.serviceType
                 },
                 receptionType: activeTab,
@@ -889,13 +927,13 @@ const ReceptionistPatent = () => {
             // Thêm bệnh nhân mới nếu cần
             if (showPatientForm && !selectedPatient) {
                 receptionData.patient = {
-                    FullName: patientForm.fullName,
+                    FullName: safeFullName,
                     Phone: patientForm.phone,
                     Email: patientForm.email,
                     DateOfBirth: patientForm.dateOfBirth,
                     Gender: patientForm.gender,
-                    Address: patientForm.address,
-                    MedicalHistory: patientForm.medicalHistory
+                    Address: safeAddress,
+                    MedicalHistory: safeHistory
                 };
             }
 
@@ -910,6 +948,20 @@ const ReceptionistPatent = () => {
 
             if (result && result.success === true) {
                 showToastMessage('success', `Đã tiếp nhận thành công! Số thứ tự: ${result.data.queue?.TicketNumber || 'N/A'}`);
+
+                // Cập nhật ngay lập tức UI local để giảm số chỗ trống của khung giờ vừa đặt (Optional UX improvement)
+                setAvailableTimeSlots(prev => prev.map(slot => {
+                    if (slot.time === appointmentForm.appointmentTime) {
+                        const newAvailable = Math.max(0, slot.available - 1);
+                        return {
+                            ...slot,
+                            available: newAvailable,
+                            isFull: newAvailable === 0
+                        };
+                    }
+                    return slot;
+                }));
+
                 resetAllForms();
                 if (activeTab === 'online') {
                     const appointmentsResponse = await api.getOnlineAppointments("Đã đặt");
@@ -921,7 +973,6 @@ const ReceptionistPatent = () => {
         } catch (error) {
             console.error("Error creating reception:", error);
             const errorMessage = error.message || "Có lỗi xảy ra khi tiếp nhận bệnh nhân!";
-            setApiError(errorMessage);
             showToastMessage('error', errorMessage);
         } finally {
             setLoading(false);
@@ -1070,7 +1121,7 @@ const ReceptionistPatent = () => {
                                     <div className="col-6">
                                         <label className="form-label small">Số điện thoại *</label>
                                         <input
-                                            type="text"
+                                            type="number"
                                             className={`form-control form-control-sm ${errors.phone ? 'is-invalid' : ''}`}
                                             value={patientForm.phone}
                                             onChange={(e) => {
@@ -1132,23 +1183,25 @@ const ReceptionistPatent = () => {
                                         <label className="form-label small">Địa chỉ</label>
                                         <input
                                             type="text"
-                                            className="form-control form-control-sm"
+                                            className={`form-control form-control-sm ${errors.address ? 'is-invalid' : ''}`}
                                             value={patientForm.address}
                                             onChange={(e) => setPatientForm({ ...patientForm, address: e.target.value })}
                                             placeholder="Nhập địa chỉ"
                                         />
+                                        {renderInputError('address')}
                                     </div>
 
                                     {/* Medical History */}
                                     <div className="col-12">
                                         <label className="form-label small">Tiền sử bệnh</label>
                                         <textarea
-                                            className="form-control form-control-sm"
+                                                className={`form-control form-control-sm ${errors.medicalHistory ? 'is-invalid' : ''}`}
                                             rows="2"
                                             value={patientForm.medicalHistory}
                                             onChange={(e) => setPatientForm({ ...patientForm, medicalHistory: e.target.value })}
                                             placeholder="Nhập tiền sử bệnh nếu có..."
                                         />
+                                            {renderInputError('medicalHistory')}
                                     </div>
                                 </div>
                             </div>
@@ -1292,12 +1345,13 @@ const ReceptionistPatent = () => {
                             <div className="col-12">
                                 <label className="form-label small">Ghi chú</label>
                                 <textarea
-                                    className="form-control form-control-sm"
+                                    className={`form-control form-control-sm ${errors.notes ? 'is-invalid' : ''}`}
                                     rows="2"
                                     value={appointmentForm.notes}
                                     onChange={(e) => setAppointmentForm({ ...appointmentForm, notes: e.target.value })}
                                     placeholder="Ghi chú về tình trạng bệnh nhân..."
                                 />
+                                {renderInputError('notes')}
                             </div>
                         </div>
                     </div>
@@ -1356,7 +1410,7 @@ const ReceptionistPatent = () => {
         return matchesSearch && matchesStatus;
     });
 
-  
+
 
     return (
         <>

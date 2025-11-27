@@ -1,6 +1,8 @@
 // PDFEditorPage.jsx - COMPLETE VERSION WITH ALL FEATURES
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Container, Row, Col, Card, Button, Form, Spinner, Alert, Modal, Tab, Tabs } from 'react-bootstrap';
+import Swal from 'sweetalert2';
+import CustomToast from '../../../Components/CustomToast/CustomToast'; // Adjust path as needed
 import { printPdfService } from '../../../services/printPdfService';
 
 // Utility functions
@@ -8,13 +10,10 @@ const numberToVietnameseWords = (num) => {
   const ones = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
   const tens = ['', 'mười', 'hai mươi', 'ba mươi', 'bốn mươi', 'năm mươi', 'sáu mươi', 'bảy mươi', 'tám mươi', 'chín mươi'];
   const units = ['', 'nghìn', 'triệu', 'tỷ'];
-
   if (num === 0) return 'Không đồng';
-
   let result = '';
   let unitIndex = 0;
   let numStr = Math.floor(num).toString();
-
   while (numStr.length > 0) {
     let group = parseInt(numStr.slice(-3)) || 0;
     numStr = numStr.slice(0, -3);
@@ -23,7 +22,6 @@ const numberToVietnameseWords = (num) => {
       let hundred = Math.floor(group / 100);
       let ten = Math.floor((group % 100) / 10);
       let one = group % 10;
-
       if (hundred > 0) {
         str += ones[hundred] + ' trăm';
       }
@@ -41,17 +39,12 @@ const numberToVietnameseWords = (num) => {
     }
     unitIndex++;
   }
-
   return result.charAt(0).toUpperCase() + result.slice(1) + ' đồng';
 };
-
 const formatNumber = (n) => {
   return Number(n || 0).toLocaleString('vi-VN');
 };
-
 const PDFEditorPage = () => {
-
-
   // State chính
   const [type, setType] = useState('prescription');
   const [formData, setFormData] = useState({
@@ -75,39 +68,36 @@ const PDFEditorPage = () => {
     orderId: 'ORD789',
     cashier: 'Nhân viên thu ngân'
   });
-
   const [prescriptionRows, setPrescriptionRows] = useState([
     { id: 1, name: 'Paracetamol 500mg', quantity: 2, dosage: 'Uống 1 viên khi sốt', unitPrice: 5000, totalPrice: 10000 }
   ]);
-
   const [serviceRows, setServiceRows] = useState([
     { id: 1, name: 'Khám bệnh', quantity: 1, unitPrice: 100000, totalPrice: 100000 },
     { id: 2, name: 'Xét nghiệm máu', quantity: 1, unitPrice: 150000, totalPrice: 150000 }
   ]);
-
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [isSavingLogo, setIsSavingLogo] = useState(false);
-
+  // THÊM STATE CHO CUSTOM TOAST
+  const [toast, setToastState] = useState({
+    show: false,
+    type: 'success',
+    message: ''
+  });
   const fixAssetUrl = (url) => {
     if (!url) return '';
-
     // Nếu là base64, giữ nguyên
     if (url.startsWith('data:image')) return url;
-
-    // Nếu là absolute URL, giữ nguyên  
+    // Nếu là absolute URL, giữ nguyên
     if (url.startsWith('http')) return url;
-
     // Nếu là relative path, thêm origin
     if (url.startsWith('/')) {
       return `${window.location.origin}${url}`;
     }
-
     // Fallback: coi như filename trong temp_logo
     return `${window.location.origin}/temp_logo/${url}`;
   };
-
   // Cài đặt PDF
   const [pdfSettings, setPdfSettings] = useState({
     clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
@@ -119,7 +109,6 @@ const PDFEditorPage = () => {
     doctorName: 'Trần Thị B',
     doctorDegree: 'Bác sĩ Chuyên khoa II',
     doctorSpecialty: 'Nội tổng quát',
-
     // Logo settings
     logo: {
       enabled: false,
@@ -131,7 +120,6 @@ const PDFEditorPage = () => {
       marginTop: '0px',
       marginBottom: '10px'
     },
-
     // Watermark settings
     watermark: {
       enabled: false,
@@ -144,7 +132,6 @@ const PDFEditorPage = () => {
       color: '#cccccc',
       rotation: -45
     },
-
     // Font settings
     fontFamily: 'Times New Roman',
     fontSize: '14px',
@@ -152,14 +139,12 @@ const PDFEditorPage = () => {
     fontWeight: '400',
     lineHeight: 1.5,
     fontColor: '#000000',
-
     // Color settings
     primaryColor: '#2c5aa0',
     secondaryColor: '#f8f9fa',
     backgroundColor: '#ffffff',
     borderColor: '#333333',
     headerBgColor: '#f0f0f0',
-
     // Layout settings
     marginTop: '15mm',
     marginBottom: '15mm',
@@ -167,7 +152,6 @@ const PDFEditorPage = () => {
     marginRight: '20mm',
     pageOrientation: 'portrait',
     pageSize: 'A4',
-
     // Content settings
     customTitle: 'TOA THUỐC',
     showClinicLogo: false,
@@ -175,34 +159,27 @@ const PDFEditorPage = () => {
     showPatientQRCode: false,
     footerText: 'Cảm ơn quý khách đã sử dụng dịch vụ của chúng tôi',
     disclaimer: 'Thuốc kê trong toa cần được sử dụng theo đúng hướng dẫn của bác sĩ',
-
     // Security settings
     encryptPDF: false,
     passwordProtect: false,
     allowPrinting: true,
     allowCopying: true,
-
     // Display settings
     showHeader: true,
     showFooter: true,
     headerTemplate: '',
     footerTemplate: '',
-
     // Technical settings
     compressionLevel: 'medium',
     imageQuality: 92,
     pdfVersion: '1.7'
   });
-
   // State cho HTML template
   const [pdfHTML, setPdfHTML] = useState('');
-
   // 🔥 HÀM TẠO HTML VỚI REAL-TIME DATA - ĐẶT Ở NGOÀI
   const createEnhancedHTML = (htmlTemplate) => {
     if (!htmlTemplate) return '';
-
     let enhancedHTML = htmlTemplate;
-
     try {
       // 🔄 REAL-TIME UPDATES: Thay thế các biến dynamic trong HTML
       const replacements = {
@@ -213,30 +190,25 @@ const PDFEditorPage = () => {
         '{{pdf_settings\\.clinicPhone}}': pdfSettings.clinicPhone || '',
         '{{pdf_settings\\.doctorName}}': pdfSettings.doctorName || 'Bác sĩ điều trị',
         '{{pdf_settings\\.clinicTax}}': pdfSettings.clinicTax || '',
-
         // Patient data
         '{{patient_name}}': formData.patientName || '',
         '{{age}}': formData.patientAge || '',
         '{{gender}}': formData.patientGender || '',
         '{{phone}}': formData.patientPhone || '',
         '{{address}}': formData.patientAddress || '',
-
         // Medical data
         '{{symptoms}}': formData.symptoms || '',
         '{{diagnosis}}': formData.diagnosis || '',
         '{{instructions}}': formData.instructions || '',
-
         // Code and date
         '{{code}}': formData.code || '',
         '{{invoice_code}}': formData.invoiceCode || '',
         '{{date}}': formData.date || new Date().toISOString().split('T')[0],
-
         // Payment info
         '{{payment_method}}': formData.paymentMethod === 'cash' ? 'Tiền mặt' :
           formData.paymentMethod === 'momo' ? 'MoMo' :
             formData.paymentMethod === 'napas' ? 'Thẻ napas' : 'Tiền mặt',
         '{{payment_status}}': 'Đã thanh toán',
-
         // 🔥 THÊM CÁC BIẾN BLADE TRONG CSS VÀ HTML - SỬA LẠI REGEX
         // CSS Variables - SỬ DỤNG REGEX ĐƠN GIẢN HƠN
         '\\{\\{ \\$pdf_settings\\[\\\'fontFamily\\\'\\] \\?\\? \\\'Times New Roman\\\' \\}\\}': pdfSettings.fontFamily || 'Times New Roman',
@@ -249,18 +221,15 @@ const PDFEditorPage = () => {
         '\\{\\{ \\$pdf_settings\\[\\\'backgroundColor\\\'\\] \\?\\? \\\'#ffffff\\\' \\}\\}': pdfSettings.backgroundColor || '#ffffff',
         '\\{\\{ \\$pdf_settings\\[\\\'headerBgColor\\\'\\] \\?\\? \\\'transparent\\\' \\}\\}': pdfSettings.headerBgColor || 'transparent',
         '\\{\\{ \\$pdf_settings\\[\\\'primaryColor\\\'\\] \\?\\? \\\'#2c5aa0\\\' \\}\\}': pdfSettings.primaryColor || '#2c5aa0',
-
         // Watermark variables - SỬA LẠI CÁC BIẾN NÀY
         '\\{\\{ isset\\(\\$watermark_data\\[\\\'rotation\\\'\\]\\) \\? \\$watermark_data\\[\\\'rotation\\\'\\] : -45 \\}\\}': pdfSettings.watermark.rotation || -45,
         '\\{\\{ isset\\(\\$watermark_data\\[\\\'fontSize\\\'\\]\\) \\? \\$watermark_data\\[\\\'fontSize\\\'\\] : 50 \\}\\}': pdfSettings.watermark.fontSize || 50,
         '\\{\\{ isset\\(\\$watermark_data\\[\\\'color\\\'\\]\\) \\? \\$watermark_data\\[\\\'color\\\'\\] : \\\'rgba\\(0, 0, 0, 0\\.08\\)\\\' \\}\\}': pdfSettings.watermark.color || 'rgba(0, 0, 0, 0.08)',
         '\\{\\{ isset\\(\\$watermark_data\\[\\\'opacity\\\'\\]\\) \\? \\$watermark_data\\[\\\'opacity\\\'\\] : 0\\.8 \\}\\}': pdfSettings.watermark.opacity || 0.8,
-
         // Logo variables
         '\\{\\{ isset\\(\\$logo_data\\[\\\'width\\\'\\]\\) \\? \\$logo_data\\[\\\'width\\\'\\] : \\\'60px\\\' \\}\\}': pdfSettings.logo.width || '60px',
         '\\{\\{ isset\\(\\$logo_data\\[\\\'height\\\'\\]\\) \\? \\$logo_data\\[\\\'height\\\'\\] : \\\'60px\\\' \\}\\}': pdfSettings.logo.height || '60px',
         '\\{\\{ isset\\(\\$logo_data\\[\\\'opacity\\\'\\]\\) \\? \\$logo_data\\[\\\'opacity\\\'\\] : 0\\.8 \\}\\}': pdfSettings.logo.opacity || 0.8,
-
         // Other template variables
         '\\{\\{ \\$title \\?\\? \\\'TOA THUỐC\\\' \\}\\}': pdfSettings.customTitle || 'TOA THUỐC',
         '\\{\\{ \\$clinic_name \\?\\? \\\'Phòng Khám Đa Khoa VitaCare\\\' \\}\\}': pdfSettings.clinicName || 'Phòng Khám Đa Khoa VitaCare',
@@ -272,13 +241,11 @@ const PDFEditorPage = () => {
         '\\{\\{ \\$doctor_name \\?\\? \\\'Bác sĩ chưa rõ\\\' \\}\\}': formData.doctor || 'Bác sĩ chưa rõ',
         '\\{\\{ \\$pdf_settings\\[\\\'customNote\\\'\\] \\}\\}': pdfSettings.customNote || 'Tuân thủ đúng liều lượng và thời gian sử dụng thuốc. Tái khám theo lịch hẹn của bác sĩ.'
       };
-
       // Thực hiện tất cả replacements
       Object.entries(replacements).forEach(([pattern, value]) => {
         const regex = new RegExp(pattern, 'g');
         enhancedHTML = enhancedHTML.replace(regex, value);
       });
-
       // 🔥 THÊM PHẦN XỬ LÝ ĐẶC BIỆT CHO WATERMARK VÀ FONT
       // Xử lý watermark - THÊM STYLE TRỰC TIẾP
       if (pdfSettings.watermark.enabled) {
@@ -294,13 +261,11 @@ const PDFEditorPage = () => {
           }
         </style>
       `;
-
         // Thêm style vào head
         if (enhancedHTML.includes('</head>')) {
           enhancedHTML = enhancedHTML.replace('</head>', watermarkStyle + '</head>');
         }
       }
-
       // 🔥 THÊM DYNAMIC STYLES OVERRIDE - ĐÈ LÊN CSS CŨ
       const dynamicStylesOverride = `
       <style>
@@ -314,26 +279,26 @@ const PDFEditorPage = () => {
           font-style: ${pdfSettings.fontStyle || 'normal'} !important;
           font-weight: ${pdfSettings.fontWeight || 'normal'} !important;
         }
-        
+     
         .header h2 {
           color: ${pdfSettings.primaryColor || '#2c5aa0'} !important;
           font-weight: ${pdfSettings.fontWeight || 'bold'} !important;
           font-style: ${pdfSettings.fontStyle || 'normal'} !important;
         }
-        
+     
         .section-title {
           background-color: ${pdfSettings.primaryColor || '#2c5aa0'} !important;
           color: white !important;
           font-style: ${pdfSettings.fontStyle || 'normal'} !important;
           font-weight: ${pdfSettings.fontWeight || 'bold'} !important;
         }
-        
+     
         .title h3 {
           color: ${pdfSettings.primaryColor || '#2c5aa0'} !important;
           font-weight: ${pdfSettings.fontWeight || 'bold'} !important;
           font-style: ${pdfSettings.fontStyle || 'normal'} !important;
         }
-        
+     
         .header p,
         .info p,
         table,
@@ -352,35 +317,32 @@ const PDFEditorPage = () => {
           color: ${pdfSettings.fontColor || '#000000'} !important;
           line-height: ${pdfSettings.lineHeight || 1.3} !important;
         }
-        
+     
         table th {
           background-color: ${pdfSettings.headerBgColor || '#f0f0f0'} !important;
           border-color: ${pdfSettings.borderColor || '#333333'} !important;
         }
-        
+     
         table td {
           border-color: ${pdfSettings.borderColor || '#333333'} !important;
         }
-        
+     
         .page {
           border-color: ${pdfSettings.borderColor || '#333333'} !important;
           background-color: ${pdfSettings.backgroundColor || '#ffffff'} !important;
         }
       </style>
     `;
-
       // Chèn override styles vào CUỐI CÙNG của head
       if (enhancedHTML.includes('</head>')) {
         enhancedHTML = enhancedHTML.replace('</head>', dynamicStylesOverride + '</head>');
       }
-
       // 🔥 XỬ LÝ CÁC BLADE DIRECTIVES ĐẶC BIỆT
       // Xử lý @if @endif cho watermark
       if (pdfSettings.watermark.enabled) {
         const watermarkHTML = pdfSettings.watermark.url ?
           `<img src="${pdfSettings.watermark.url}" class="watermark-image" style="width: ${pdfSettings.watermark.width || '200px'}; height: ${pdfSettings.watermark.height || '200px'}; opacity: ${pdfSettings.watermark.opacity || 0.1};" alt="Watermark">` :
           `<div class="watermark-text" style="opacity: ${pdfSettings.watermark.opacity || 0.1}; color: ${pdfSettings.watermark.color || '#cccccc'}; font-size: ${pdfSettings.watermark.fontSize || 48}px; transform: translate(-50%, -50%) rotate(${pdfSettings.watermark.rotation || -45}deg);">${pdfSettings.watermark.text || 'MẪU BẢN QUYỀN'}</div>`;
-
         enhancedHTML = enhancedHTML.replace(
           /<!-- WATERMARK -->[\s\S]*?<!-- HEADER -->/,
           `<!-- WATERMARK -->\n${watermarkHTML}\n\n<!-- HEADER -->`
@@ -391,7 +353,6 @@ const PDFEditorPage = () => {
           '<!-- WATERMARK -->\n\n<!-- HEADER -->'
         );
       }
-
       // Xử lý @if @endif cho logo
       if (pdfSettings.logo.enabled && pdfSettings.logo.url) {
         enhancedHTML = enhancedHTML.replace(
@@ -399,21 +360,17 @@ const PDFEditorPage = () => {
             `<div class="logo-section">\n<img src="${pdfSettings.logo.url}" class="logo-img" alt="Clinic Logo" style="width: ${pdfSettings.logo.width || '60px'}; height: ${pdfSettings.logo.height || '60px'}; opacity: ${pdfSettings.logo.opacity || 0.8};">\n</div>`
         );
       }
-
       console.log('✅ Template processed with settings:', {
         fontFamily: pdfSettings.fontFamily,
         fontSize: pdfSettings.fontSize,
         watermarkOpacity: pdfSettings.watermark.opacity,
         watermarkFontSize: pdfSettings.watermark.fontSize
       });
-
     } catch (error) {
-      console.error('❌ Error in createEnhancedHTML:', error);
+      console.error('  Error in createEnhancedHTML:', error);
     }
-
     return enhancedHTML;
   };
-
   // 🔥 REAL-TIME UPDATES: Tự động cập nhật HTML khi data thay đổi
   useEffect(() => {
     if (pdfHTML) {
@@ -460,13 +417,11 @@ const PDFEditorPage = () => {
     JSON.stringify(serviceRows),
     JSON.stringify(prescriptionRows)
   ]);
-
   // Load data từ sessionStorage và localStorage
   useEffect(() => {
     const loadData = async () => {
       try {
         console.log('🎯 === PDFEditorPage LOAD DATA START ===');
-
         // Lấy tất cả data từ storage
         const savedData = sessionStorage.getItem('pdfPreviewData');
         const savedRows = sessionStorage.getItem('prescriptionRows');
@@ -475,13 +430,10 @@ const PDFEditorPage = () => {
         const editorSource = sessionStorage.getItem('editorSource');
         const pdfHTMLTemplate = sessionStorage.getItem('pdfHTMLTemplate');
         const pdfEditorDataRaw = sessionStorage.getItem('pdfEditorData');
-
         // ✅ LẤY STATE TỪ NAVIGATION
         const navigationState = window.history.state;
         const locationState = navigationState?.usr;
-
         console.log('📍 Navigation State:', locationState);
-
         // 1. ƯU TIÊN: XỬ LÝ DỮ LIỆU TỪ NAVIGATION STATE TRƯỚC
         if (locationState?.source === 'services') {
           console.log('🚨 PROCESSING NAVIGATION STATE FROM SERVICES');
@@ -507,7 +459,6 @@ const PDFEditorPage = () => {
           try {
             const settings = JSON.parse(savedSettings);
             console.log('⚙️ Loading saved PDF settings');
-
             const defaultSettings = {
               fontSize: '14px',
               fontStyle: 'normal',
@@ -546,13 +497,11 @@ const PDFEditorPage = () => {
               marginLeft: '10mm',
               primaryColor: '#2c5aa0'
             };
-
             setPdfSettings(prev => ({ ...defaultSettings, ...settings }));
           } catch (e) {
             console.error('Error parsing PDF settings:', e);
           }
         }
-
         // 3. XỬ LÝ PRESCRIPTION ROWS
         if (savedRows) {
           try {
@@ -562,7 +511,6 @@ const PDFEditorPage = () => {
             console.error('Error parsing prescription rows:', e);
           }
         }
-
         // 4. XỬ LÝ THEO EDITOR SOURCE TỪ SESSIONSTORAGE
         if (editorSource === 'services') {
           console.log('🔧 Processing SERVICES from sessionStorage');
@@ -584,13 +532,11 @@ const PDFEditorPage = () => {
           console.log('🔍 No specific editor source, using default data');
           setType('prescription');
         }
-
         // 5. XỬ LÝ SELECTED PATIENT (nếu có)
         if (selectedPatient) {
           try {
             const patientData = JSON.parse(selectedPatient);
             console.log('👤 Loading selected patient data:', patientData);
-
             setFormData(prev => ({
               ...prev,
               patientName: patientData.name || patientData.FullName || '',
@@ -605,13 +551,11 @@ const PDFEditorPage = () => {
             console.error('Error parsing selected patient:', e);
           }
         }
-
         // 6. XỬ LÝ SAVED DATA (fallback)
         if (savedData) {
           try {
             const parsedData = JSON.parse(savedData);
             console.log('📋 Loading saved preview data');
-
             setFormData(prev => ({
               ...prev,
               diagnosis: parsedData.diagnoses?.[0]?.Diagnosis || parsedData.diagnosis || '',
@@ -623,34 +567,29 @@ const PDFEditorPage = () => {
             console.error('Error parsing saved data:', e);
           }
         }
-
         console.log('🎯 === PDFEditorPage LOAD DATA COMPLETED ===');
-
       } catch (err) {
-        console.error('❌ Error loading data:', err);
+        console.error('  Error loading data:', err);
         setError('Lỗi khi tải dữ liệu: ' + err.message);
       }
     };
-
     // 🔥 HÀM XỬ LÝ NAVIGATION STATE
     const handleNavigationState = async (state) => {
       console.log('🎯 Handling Navigation State:', {
         source: state.source,
         hasPdfData: !!state.pdfData,
-        hasServices: !!state.pdfData?.services,  // ✅ SỬA: state.pdfData.services
+        hasServices: !!state.pdfData?.services, // ✅ SỬA: state.pdfData.services
         hasPatientInfo: !!state.patientInfo,
-        servicesCount: state.pdfData?.services?.length || 0,  // ✅ SỬA
-        servicesArray: state.pdfData?.services || 'no services',  // ✅ SỬA
+        servicesCount: state.pdfData?.services?.length || 0, // ✅ SỬA
+        servicesArray: state.pdfData?.services || 'no services', // ✅ SỬA
         prescriptionsCount: state.pdfData?.prescriptions?.length || 0,
         // 🔥 THÊM DEBUG CHI TIẾT
         pdfData: state.pdfData ? state.pdfData : 'no pdfData',
         servicesArray: state.pdfData?.services || 'no services',
         prescriptionsArray: state.pdfData?.prescriptions || 'no prescriptions',
       });
-
       if (state.source === 'services') {
         console.log('🚀 PROCESSING SERVICES FROM NAVIGATION STATE');
-
         // ✅ CẬP NHẬT FORM DATA TRỰC TIẾP TỪ STATE.pdfData
         const updatedFormData = {
           patientName: state.patientInfo?.name || state.pdfData?.patient_name || 'Nguyễn Thị Lan',
@@ -668,13 +607,10 @@ const PDFEditorPage = () => {
           paymentMethod: state.patientInfo?.payment_method || 'cash',
           paymentStatus: 'paid',
         };
-
         setFormData(prev => ({ ...prev, ...updatedFormData }));
-
         // ✅ CẬP NHẬT SERVICE ROWS TRỰC TIẾP TỪ state.pdfData.services
         if (state.pdfData?.services && state.pdfData.services.length > 0) {
           console.log('🔄 Setting service rows from navigation state:', state.pdfData.services);
-
           const services = state.pdfData.services.map((service, index) => ({
             id: index + 1,
             name: service.ServiceName || service.name || `Dịch vụ ${index + 1}`,
@@ -683,7 +619,6 @@ const PDFEditorPage = () => {
             totalPrice: (parseInt(service.Quantity) || 1) * (parseFloat(service.Price) || 0),
             dosage: ''
           }));
-
           setServiceRows(services);
         } else {
           console.warn('⚠️ No services in navigation state, using default');
@@ -691,7 +626,6 @@ const PDFEditorPage = () => {
             { id: 1, name: 'Khám bệnh', quantity: 1, unitPrice: 100000, totalPrice: 100000, dosage: '' }
           ]);
         }
-
         // ✅ CẬP NHẬT PDF SETTINGS TỪ STATE.pdfData
         if (state.pdfData?.pdf_settings) {
           console.log('🎨 Updating PDF settings from navigation state');
@@ -710,17 +644,13 @@ const PDFEditorPage = () => {
             clinicPhone: '024.3574.7788'
           }));
         }
-
         // ✅ SET TYPE CUỐI CÙNG
         setType('service');
-
         console.log('✅ Navigation state from SERVICES processed successfully');
       }
       // 🔥 THÊM PHẦN NÀY: XỬ LÝ PRESCRIPTION TỪ NAVIGATION STATE
       else if (state.source === 'prescription') {
         console.log('💊 PROCESSING PRESCRIPTION FROM NAVIGATION STATE');
-
-
         // ✅ CẬP NHẬT FORM DATA TRỰC TIẾP TỪ STATE
         const updatedFormData = {
           patientName: state.patientInfo?.name || state.pdfData?.patient_name || 'Nguyễn Văn A',
@@ -735,13 +665,10 @@ const PDFEditorPage = () => {
           diagnosis: state.pdfData?.diagnosis || state.pdfData?.originalData?.diagnosis || '',
           instructions: state.pdfData?.instructions || 'Uống thuốc theo chỉ dẫn. Tái khám nếu cần.'
         };
-
         setFormData(prev => ({ ...prev, ...updatedFormData }));
-
         // ✅ CẬP NHẬT PRESCRIPTION ROWS TRỰC TIẾP TỪ STATE
         if (state.pdfData?.prescriptions && state.pdfData.prescriptions.length > 0) {
           console.log('🔄 Setting prescription rows from navigation state:', state.pdfData.prescriptions);
-
           const prescriptionRows = state.pdfData.prescriptions.flatMap(prescription =>
             prescription.details.map(detail => ({
               id: Date.now() + Math.random(),
@@ -752,14 +679,12 @@ const PDFEditorPage = () => {
               totalPrice: (detail.quantity || 1) * (detail.unitPrice || 0)
             }))
           );
-
           setPrescriptionRows(prescriptionRows);
           console.log('✅ Prescription rows set:', prescriptionRows);
         }
         // ✅ HOẶC XỬ LÝ TỪ originalData.prescriptionRows
         else if (state.pdfData?.originalData?.prescriptionRows && state.pdfData.originalData.prescriptionRows.length > 0) {
           console.log('🔄 Setting prescription rows from originalData:', state.pdfData.originalData.prescriptionRows);
-
           const prescriptionRows = state.pdfData.originalData.prescriptionRows.map((row, index) => ({
             id: Date.now() + index,
             name: row.medicine || 'Thuốc',
@@ -768,7 +693,6 @@ const PDFEditorPage = () => {
             unitPrice: row.unitPrice || 0,
             totalPrice: row.totalPrice || (row.quantity || 1) * (row.unitPrice || 0)
           }));
-
           setPrescriptionRows(prescriptionRows);
           console.log('✅ Prescription rows set from originalData:', prescriptionRows);
         } else {
@@ -777,7 +701,6 @@ const PDFEditorPage = () => {
             { id: 1, name: 'Paracetamol 500mg', quantity: 2, dosage: 'Uống 1 viên khi sốt', unitPrice: 5000, totalPrice: 10000 }
           ]);
         }
-
         // ✅ CẬP NHẬT PDF SETTINGS TỪ STATE
         if (state.pdfData?.pdf_settings) {
           console.log('🎨 Updating PDF settings from navigation state');
@@ -801,15 +724,12 @@ const PDFEditorPage = () => {
           console.log('🎨 Setting HTML template from navigation state');
           setPdfHTML(state.htmlTemplate);
         }
-
         // ✅ SET TYPE CUỐI CÙNG
         setType('prescription');
-
         console.log('✅ Navigation state from PRESCRIPTION processed successfully');
       }
       else if (state.source === 'technician') {
         console.log('🔬 PROCESSING TECHNICIAN FROM NAVIGATION STATE');
-
         // ✅ CẬP NHẬT FORM DATA
         const updatedFormData = {
           patientName: state.pdfData?.patient_name || 'Bệnh nhân',
@@ -818,19 +738,18 @@ const PDFEditorPage = () => {
           patientPhone: state.pdfData?.patient_phone || '',
           patientAddress: state.pdfData?.patient_address || '',
           code: state.pdfData?.lab_number || `XN_${Date.now()}`,
+          patient_code: state.pdfData?.patient_code||'',
           date: state.pdfData?.date || new Date().toISOString().split('T')[0],
           doctor: state.pdfData?.doctor_name || 'Kỹ thuật viên Xét nghiệm',
+          technician_name: state.pdfData?.technician_name || 'Kỹ thuật viên Xét nghiệm',
           symptoms: state.pdfData?.symptoms || '',
           diagnosis: state.pdfData?.diagnosis || '',
           instructions: state.pdfData?.instructions || 'Kết quả có giá trị tham khảo'
         };
-
         setFormData(prev => ({ ...prev, ...updatedFormData }));
-
         // ✅ CẬP NHẬT SERVICE ROWS TỪ TEST RESULTS
         if (state.pdfData?.test_results && state.pdfData.test_results.length > 0) {
           console.log('🔄 Setting service rows from technician test results');
-
           const serviceRows = state.pdfData.test_results.map((test, index) => ({
             id: index + 1,
             name: test.test_name || 'Xét nghiệm',
@@ -843,7 +762,6 @@ const PDFEditorPage = () => {
             method: test.method || 'OTSH.B-02(1)',
             isNormal: test.is_normal || true
           }));
-
           setServiceRows(serviceRows);
         } else {
           console.warn('⚠️ No test results in navigation state, using default');
@@ -862,7 +780,6 @@ const PDFEditorPage = () => {
             }
           ]);
         }
-
         // ✅ CẬP NHẬT PDF SETTINGS
         if (state.pdfData?.pdf_settings) {
           console.log('🎨 Updating PDF settings from navigation state');
@@ -872,14 +789,12 @@ const PDFEditorPage = () => {
             customTitle: state.pdfData.pdf_settings.customTitle || 'PHIẾU KẾT QUẢ XÉT NGHIỆM'
           }));
         }
-
         // ✅ SET TYPE - SỬA THÀNH test_result
         setType('test_result');
         setPdfSettings(prev => ({
           ...prev,
           customTitle: 'Phiếu KQ Xét Nghiệm'
         }));
-
         console.log('✅ Navigation state from TECHNICIAN processed successfully');
       } else if (state.source === 'invoice') {
         console.log('💰 PROCESSING INVOICE FROM NAVIGATION STATE');
@@ -918,13 +833,10 @@ const PDFEditorPage = () => {
           tax: state.pdfData?.tax || 0,
           total_amount: state.pdfData?.total_amount || 0
         };
-
         setFormData(prev => ({ ...prev, ...updatedFormData }));
-
         // ✅ CẬP NHẬT SERVICE ROWS TRỰC TIẾP TỪ STATE - GIỐNG CÁC SOURCE KHÁC
         if (state.pdfData?.services && state.pdfData.services.length > 0) {
           console.log('🔄 Setting service rows from invoice navigation state:', state.pdfData.services);
-
           const services = state.pdfData.services.map((service, index) => ({
             id: index + 1,
             name: service.ServiceName || service.name || `Dịch vụ ${index + 1}`,
@@ -933,7 +845,6 @@ const PDFEditorPage = () => {
             totalPrice: (parseInt(service.Quantity) || 1) * (parseFloat(service.Price) || 0),
             dosage: ''
           }));
-
           setServiceRows(services);
         } else {
           console.warn('⚠️ No services in invoice navigation state, using default');
@@ -941,11 +852,9 @@ const PDFEditorPage = () => {
             { id: 1, name: 'Khám bệnh', quantity: 1, unitPrice: 100000, totalPrice: 100000, dosage: '' }
           ]);
         }
-
         // ✅ CẬP NHẬT PRESCRIPTION ROWS TỪ INVOICE DATA
         if (state.pdfData?.prescriptions && state.pdfData.prescriptions.length > 0) {
           console.log('💊 Setting prescription rows from invoice:', state.pdfData.prescriptions);
-
           const prescriptionRows = state.pdfData.prescriptions.map((prescription, index) => ({
             id: index + 1,
             name: prescription.MedicineName || 'Thuốc',
@@ -954,10 +863,8 @@ const PDFEditorPage = () => {
             unitPrice: parseFloat(prescription.Price) || 0,
             totalPrice: (parseInt(prescription.Quantity) || 1) * (parseFloat(prescription.Price) || 0)
           }));
-
           setPrescriptionRows(prescriptionRows);
         }
-
         // ✅ CẬP NHẬT PDF SETTINGS TỪ STATE - GIỐNG CÁC SOURCE KHÁC
         if (state.pdfData?.pdf_settings) {
           console.log('🎨 Updating PDF settings from invoice navigation state');
@@ -976,30 +883,24 @@ const PDFEditorPage = () => {
             clinicPhone: '028 1234 5678'
           }));
         }
-
         // ✅ CẬP NHẬT HTML TEMPLATE TỪ STATE - GIỐNG CÁC SOURCE KHÁC
         if (state.htmlTemplate) {
           console.log('🎨 Setting HTML template from invoice navigation state');
           setPdfHTML(state.htmlTemplate);
         }
-
         // ✅ SET TYPE CUỐI CÙNG - GIỐNG CÁC SOURCE KHÁC
         setType('payment');
-
         console.log('✅ Navigation state from INVOICE processed successfully');
       }
     };
-
     // 🔥 HÀM XỬ LÝ SERVICES DATA TỪ SESSIONSTORAGE
     const handleServicesData = async (pdfEditorDataRaw, pdfHTMLTemplate) => {
       if (!pdfEditorDataRaw) {
-        console.error('❌ No pdfEditorData found for services');
+        console.error('  No pdfEditorData found for services');
         return;
       }
-
       try {
         const serviceData = JSON.parse(pdfEditorDataRaw);
-
         // CẬP NHẬT FORM DATA
         const updatedFormData = {
           patientName: serviceData.patient_name || '',
@@ -1017,13 +918,10 @@ const PDFEditorPage = () => {
           paymentMethod: serviceData.payment_method || 'cash',
           paymentStatus: 'paid'
         };
-
         setFormData(prev => ({ ...prev, ...updatedFormData }));
-
         // CẬP NHẬT SERVICE ROWS
         if (serviceData.services && serviceData.services.length > 0) {
           console.log('🔄 Setting service rows from sessionStorage:', serviceData.services);
-
           const services = serviceData.services.map((service, index) => ({
             id: index + 1,
             name: service.ServiceName || service.name || `Dịch vụ ${index + 1}`,
@@ -1032,7 +930,6 @@ const PDFEditorPage = () => {
             totalPrice: (parseInt(service.Quantity) || 1) * (parseFloat(service.Price) || parseFloat(service.UnitPrice) || parseFloat(service.SubTotal) || 0),
             dosage: ''
           }));
-
           setServiceRows(services);
         } else {
           console.warn('⚠️ No services found in sessionStorage, using default');
@@ -1040,7 +937,6 @@ const PDFEditorPage = () => {
             { id: 1, name: 'Khám bệnh', quantity: 1, unitPrice: 100000, totalPrice: 100000, dosage: '' }
           ]);
         }
-
         // CẬP NHẬT PDF SETTINGS
         if (serviceData.pdf_settings) {
           console.log('🎨 Updating PDF settings from sessionStorage');
@@ -1050,20 +946,16 @@ const PDFEditorPage = () => {
             customTitle: serviceData.pdf_settings.customTitle || 'PHIẾU CHỈ ĐỊNH DỊCH VỤ'
           }));
         }
-
         // XỬ LÝ HTML TEMPLATE
         if (pdfHTMLTemplate) {
           console.log('🎨 Setting HTML template from sessionStorage');
           setPdfHTML(pdfHTMLTemplate);
         }
-
         // SET TYPE
         setType('service');
-
         console.log('✅ SERVICES data from sessionStorage loaded successfully');
-
       } catch (error) {
-        console.error('❌ Error processing services data from sessionStorage:', error);
+        console.error('  Error processing services data from sessionStorage:', error);
       }
       console.log('💊 PRESCRIPTION DATA ANALYSIS:', {
         hasPrescriptions: !!state.pdfData?.prescriptions,
@@ -1078,14 +970,11 @@ const PDFEditorPage = () => {
         }
       });
     };
-
     // 🔥 HÀM XỬ LÝ INVOICE DATA
     const handleInvoiceData = async (pdfEditorDataRaw) => {
       if (!pdfEditorDataRaw) return;
-
       try {
         const invoiceData = JSON.parse(pdfEditorDataRaw);
-
         setFormData(prev => ({
           ...prev,
           patientName: invoiceData.patient_name || '',
@@ -1099,7 +988,6 @@ const PDFEditorPage = () => {
           doctor: invoiceData.doctor_name || 'Hệ thống',
           transactionId: invoiceData.transaction_id || 'N/A',
         }));
-
         if (invoiceData.services && invoiceData.services.length > 0) {
           const services = invoiceData.services.map((service, index) => ({
             id: index + 1,
@@ -1111,28 +999,22 @@ const PDFEditorPage = () => {
           }));
           setServiceRows(services);
         }
-
         setType('payment');
         setPdfSettings(prev => ({
           ...prev,
           customTitle: 'HÓA ĐƠN THANH TOÁN'
         }));
-
       } catch (error) {
-        console.error('❌ Error processing invoice data:', error);
+        console.error('  Error processing invoice data:', error);
       }
     };
-
     // 🔥 HÀM XỬ LÝ PRESCRIPTION DATA
     const handlePrescriptionData = async (pdfEditorDataRaw, pdfHTMLTemplate) => {
       if (!pdfEditorDataRaw) return;
-
       try {
         const prescriptionData = JSON.parse(pdfEditorDataRaw);
-
         // Xử lý prescription data
         setType('prescription');
-
         if (prescriptionData.prescriptions) {
           const prescriptionRows = prescriptionData.prescriptions.flatMap(prescription =>
             prescription.prescription_details.map(detail => ({
@@ -1146,23 +1028,19 @@ const PDFEditorPage = () => {
           );
           setPrescriptionRows(prescriptionRows);
         }
-
       } catch (error) {
-        console.error('❌ Error processing prescription data:', error);
+        console.error('  Error processing prescription data:', error);
       }
     };
-
     // 🔥 THÊM VÀO PDFEditorPage - XỬ LÝ DỮ LIỆU TỪ TECHNICIAN
     const handleTechnicianData = async (pdfEditorDataRaw, pdfHTMLTemplate) => {
       if (!pdfEditorDataRaw) {
-        console.error('❌ No pdfEditorData found for technician');
+        console.error('  No pdfEditorData found for technician');
         return;
       }
-
       try {
         const technicianData = JSON.parse(pdfEditorDataRaw);
         console.log('🔬 PROCESSING TECHNICIAN DATA:', technicianData);
-
         // ✅ CẬP NHẬT FORM DATA TỪ TECHNICIAN
         const updatedFormData = {
           patientName: technicianData.patient_name || '',
@@ -1173,17 +1051,15 @@ const PDFEditorPage = () => {
           code: technicianData.lab_number || `XN_${Date.now()}`,
           date: technicianData.date || new Date().toISOString().split('T')[0],
           doctor: technicianData.doctor_name || 'Kỹ thuật viên Xét nghiệm',
+          technician_name: technicianData.technician_name || 'Kỹ thuật viên Xét nghiệm',
           symptoms: technicianData.symptoms || '',
           diagnosis: technicianData.diagnosis || '',
           instructions: technicianData.instructions || 'Kết quả có giá trị tham khảo. Vui lòng liên hệ bác sĩ để được tư vấn.'
         };
-
         setFormData(prev => ({ ...prev, ...updatedFormData }));
-
         // ✅ CẬP NHẬT SERVICE ROWS TỪ TEST RESULTS
         if (technicianData.test_results && technicianData.test_results.length > 0) {
           console.log('🔄 Setting service rows from technician test results:', technicianData.test_results);
-
           const serviceRows = technicianData.test_results.map((test, index) => ({
             id: index + 1,
             name: test.test_name || 'Xét nghiệm',
@@ -1196,7 +1072,6 @@ const PDFEditorPage = () => {
             method: test.method || 'OTSH.B-02(1)',
             isNormal: test.is_normal || true
           }));
-
           setServiceRows(serviceRows);
         } else {
           console.warn('⚠️ No test results found, using default');
@@ -1215,7 +1090,6 @@ const PDFEditorPage = () => {
             }
           ]);
         }
-
         // ✅ CẬP NHẬT PDF SETTINGS
         if (technicianData.pdf_settings) {
           console.log('🎨 Updating PDF settings from technician data');
@@ -1234,29 +1108,23 @@ const PDFEditorPage = () => {
             clinicPhone: '024.3574.7788'
           }));
         }
-
         // ✅ XỬ LÝ HTML TEMPLATE
         if (pdfHTMLTemplate) {
           console.log('🎨 Setting HTML template from technician');
           setPdfHTML(pdfHTMLTemplate);
         }
-
         // ✅ SET TYPE - SỬA THÀNH test_result
         setType('test_result');
-
         console.log('✅ TECHNICIAN data processed successfully');
-
       } catch (error) {
-        console.error('❌ Error processing technician data:', error);
+        console.error('  Error processing technician data:', error);
         setError('Lỗi xử lý dữ liệu từ kỹ thuật viên: ' + error.message);
       }
     };
-
     loadData();
   }, []);
   // Thêm vào component PDFEditorPage, sau các useState
   const [debugInfo, setDebugInfo] = useState({});
-
   // Debug effect - thêm vào useEffect hoặc tạo useEffect mới
   useEffect(() => {
     const currentDebugInfo = {
@@ -1279,12 +1147,9 @@ const PDFEditorPage = () => {
       },
       finalPreviewMode: pdfHTML ? 'HTML_TEMPLATE' : 'REACT_COMPONENT'
     };
-
     console.log('🎯 CURRENT PREVIEW MODE:', currentDebugInfo);
     setDebugInfo(currentDebugInfo);
   }, [type, pdfHTML]);
-
-
   // 🔥 REAL-TIME HTML PREVIEW - KHÔNG CÓ NÚT
   const renderHTMLPreview = () => {
     if (!pdfHTML) {
@@ -1299,7 +1164,6 @@ const PDFEditorPage = () => {
         </div>
       );
     }
-
     return (
       <div
         dangerouslySetInnerHTML={{ __html: pdfHTML }}
@@ -1311,7 +1175,6 @@ const PDFEditorPage = () => {
       />
     );
   };
-
   // Render preview theo template HTML (fallback)
   const renderPreviewContent = () => {
     // 🔥 SỬA: Tạo hàm lấy rows cho payment (kết hợp cả services và prescriptions)
@@ -1332,22 +1195,15 @@ const PDFEditorPage = () => {
       }
       return getCurrentRows(); // Giữ nguyên cho các type khác
     };
-
-
     const previewLogoUrl = fixAssetUrl(pdfSettings.logo.url);
     const previewWatermarkUrl = fixAssetUrl(pdfSettings.watermark.url);
-
     console.log('🔍 PREVIEW LOGO DEBUG:', {
       original: pdfSettings.logo.url,
       fixed: previewLogoUrl,
       enabled: pdfSettings.logo.enabled
     });
-
-
-
     // ... phần còn lại của renderPreviewContent ...
     const currentRows = getPaymentRows();
-
     // 🔥 SỬA: Tính tổng tiền cho payment (cả services và prescriptions)
     const calculateTotalAmount = () => {
       if (type === 'payment') {
@@ -1357,12 +1213,10 @@ const PDFEditorPage = () => {
       }
       return getCurrentRows().reduce((sum, row) => sum + (row.totalPrice || 0), 0);
     };
-
     const totalAmount = calculateTotalAmount();
     const discountAmount = (totalAmount * (formData.discount || 0)) / 100;
     const taxAmount = (totalAmount * (formData.tax || 0)) / 100;
     const finalAmount = totalAmount - discountAmount + taxAmount;
-
     // 🔥 PHẦN RIÊNG CHO test_result
     if (type === 'test_result') {
       return (
@@ -1398,7 +1252,6 @@ const PDFEditorPage = () => {
               )}
             </div>
           )}
-
           {/* Header với Logo - DÙNG CHUNG */}
           <div className="header" style={{
             textAlign: 'center',
@@ -1427,7 +1280,6 @@ const PDFEditorPage = () => {
                 />
               </div>
             )}
-
             <h2 style={{
               margin: 0,
               fontSize: '16px',
@@ -1444,7 +1296,6 @@ const PDFEditorPage = () => {
               Điện thoại: {pdfSettings.clinicPhone}
             </p>
           </div>
-
           {/* Title - DÙNG CHUNG */}
           <div className="title" style={{
             textAlign: 'center',
@@ -1458,7 +1309,6 @@ const PDFEditorPage = () => {
               {pdfSettings.customTitle}
             </h3>
           </div>
-
           {/* Patient Info - DÙNG CHUNG NHƯNG TÙY CHỈNH NỘI DUNG */}
           <div className="info" style={{
             display: 'table',
@@ -1503,7 +1353,6 @@ const PDFEditorPage = () => {
               </div>
             </div>
           </div>
-
           {/* 🔥 BẢNG KẾT QUẢ XÉT NGHIỆM - RIÊNG CHO test_result */}
           {currentRows.length > 0 ? (
             <table style={{
@@ -1553,7 +1402,6 @@ const PDFEditorPage = () => {
               <strong>KẾT QUẢ XÉT NGHIỆM:</strong> Chưa có kết quả xét nghiệm
             </div>
           )}
-
           {/* Note Section - RIÊNG CHO test_result */}
           <div className="note" style={{
             fontStyle: 'italic',
@@ -1565,7 +1413,6 @@ const PDFEditorPage = () => {
               <strong>Ghi chú:</strong> Kết quả chỉ có giá trị khi phiếu còn nguyên vẹn và có chữ ký xác nhận.
             </p>
           </div>
-
           {/* Footer - DÙNG CHUNG NHƯNG TÙY CHỈNH NỘI DUNG */}
           <div className="footer" style={{
             marginTop: '30px'
@@ -1583,7 +1430,7 @@ const PDFEditorPage = () => {
                 <p style={{ margin: 0, fontSize: '11px', color: pdfSettings.fontColor }}><strong>Kỹ thuật viên</strong></p>
                 <p style={{ margin: 0, fontSize: '11px', color: pdfSettings.fontColor }}>(Ký và ghi rõ họ tên)</p>
                 <p style={{ marginTop: '10px', fontWeight: 'bold', fontSize: '11px', color: pdfSettings.fontColor }}>
-                  Nguyễn Văn Kỹ Thuật
+                  {formData.technician_name}
                 </p>
               </div>
               <div className="footer-column" style={{
@@ -1592,14 +1439,12 @@ const PDFEditorPage = () => {
                 textAlign: 'center',
                 verticalAlign: 'top'
               }}>
-
               </div>
             </div>
           </div>
         </>
       );
     }
-
     // 🔥 PHẦN RIÊNG CHO PAYMENT - HIỂN THỊ GIỐNG TEMPLATE
     if (type === 'payment') {
       return (
@@ -1635,7 +1480,6 @@ const PDFEditorPage = () => {
               )}
             </div>
           )}
-
           {/* Header với Logo */}
           <div className="header" style={{
             borderBottom: `1.5px solid ${pdfSettings.borderColor || '#000'}`,
@@ -1675,7 +1519,6 @@ const PDFEditorPage = () => {
                   />
                 )}
               </div>
-
               {/* Header Content */}
               <div className="header-content" style={{
                 flex: 1,
@@ -1716,7 +1559,6 @@ const PDFEditorPage = () => {
                   Điện thoại: {pdfSettings.clinicPhone}
                 </p>
               </div>
-
               {/* Header Placeholder */}
               <div className="header-placeholder" style={{
                 width: '80px',
@@ -1725,7 +1567,6 @@ const PDFEditorPage = () => {
               }}></div>
             </div>
           </div>
-
           {/* Title */}
           <div className="title" style={{
             textAlign: 'center',
@@ -1740,7 +1581,6 @@ const PDFEditorPage = () => {
               {pdfSettings.customTitle}
             </h3>
           </div>
-
           {/* Patient Info - Table layout */}
           <div className="info" style={{
             display: 'table',
@@ -1793,7 +1633,6 @@ const PDFEditorPage = () => {
               </div>
             </div>
           </div>
-
           {/* Section Title cho Dịch vụ */}
           {serviceRows.length > 0 && (
             <>
@@ -1809,7 +1648,6 @@ const PDFEditorPage = () => {
               }}>
                 DỊCH VỤ
               </div>
-
               <table style={{
                 width: '100%',
                 borderCollapse: 'collapse',
@@ -1896,7 +1734,6 @@ const PDFEditorPage = () => {
               </table>
             </>
           )}
-
           {/* Section Title cho Thuốc */}
           {prescriptionRows.length > 0 && (
             <>
@@ -1912,7 +1749,6 @@ const PDFEditorPage = () => {
               }}>
                 ĐƠN THUỐC
               </div>
-
               <table style={{
                 width: '100%',
                 borderCollapse: 'collapse',
@@ -2011,7 +1847,6 @@ const PDFEditorPage = () => {
               </table>
             </>
           )}
-
           {/* Tổng tiền và chi tiết thanh toán */}
           {/* Tổng kết thanh toán - HIỂN THỊ NHƯ TEMPLATE */}
           {(serviceRows.length > 0 || prescriptionRows.length > 0) && (
@@ -2029,7 +1864,6 @@ const PDFEditorPage = () => {
               }}>
                 THÔNG TIN THANH TOÁN
               </div>
-
               {/* Thông tin thanh toán - HIỂN THỊ NHƯ TEMPLATE */}
               <div style={{
                 background: '#f8f9fa',
@@ -2048,33 +1882,28 @@ const PDFEditorPage = () => {
                     <strong>Tổng tiền thuốc:</strong> {formatNumber(prescriptionRows.reduce((sum, row) => sum + (row.totalPrice || 0), 0))} VNĐ
                   </div>
                 )}
-
                 {/* Tổng tiền dịch vụ */}
                 {serviceRows.length > 0 && (
                   <div style={{ marginBottom: '8px' }}>
                     <strong>Tổng tiền dịch vụ:</strong> {formatNumber(serviceRows.reduce((sum, row) => sum + (row.totalPrice || 0), 0))} VNĐ
                   </div>
                 )}
-
                 {/* Tổng cộng */}
                 <div style={{ marginBottom: '8px' }}>
                   <strong>Tổng cộng:</strong> {formatNumber(totalAmount)} VNĐ
                 </div>
-
                 {/* Giảm giá */}
                 {formData.discount > 0 && (
                   <div style={{ marginBottom: '8px', color: '#d9534f' }}>
                     <strong>Giảm giá ({formData.discount}%):</strong> -{formatNumber(discountAmount)} VNĐ
                   </div>
                 )}
-
                 {/* Thuế */}
                 {formData.tax > 0 && (
                   <div style={{ marginBottom: '8px', color: '#0275d8' }}>
                     <strong>Thuế ({formData.tax}%):</strong> +{formatNumber(taxAmount)} VNĐ
                   </div>
                 )}
-
                 {/* Thành tiền */}
                 <div style={{
                   marginBottom: '12px',
@@ -2086,7 +1915,6 @@ const PDFEditorPage = () => {
                 }}>
                   <strong>THÀNH TIỀN:</strong> {formatNumber(finalAmount)} VNĐ
                 </div>
-
                 {/* Thông tin thanh toán bổ sung */}
                 <div style={{
                   borderTop: '1px dashed #ccc',
@@ -2101,15 +1929,12 @@ const PDFEditorPage = () => {
                             formData.paymentMethod === 'card' ? 'Thẻ tín dụng' : 'Tiền mặt'
                     }
                   </div>
-
                   <div style={{ marginBottom: '5px' }}>
                     <strong>Trạng thái:</strong> <span style={{ color: '#28a745', fontWeight: 'bold' }}>Đã thanh toán</span>
                   </div>
-
                   <div style={{ marginBottom: '5px' }}>
                     <strong>Ngày thanh toán:</strong> {new Date(formData.date).toLocaleDateString('vi-VN')}
                   </div>
-
                   {formData.transactionId && (
                     <div style={{ marginBottom: '5px' }}>
                       <strong>Mã giao dịch:</strong> {formData.transactionId}
@@ -2119,7 +1944,6 @@ const PDFEditorPage = () => {
               </div>
             </>
           )}
-
           {/* Note Section */}
           <div className="note" style={{
             fontStyle: 'italic',
@@ -2132,7 +1956,6 @@ const PDFEditorPage = () => {
               <strong>Ghi chú:</strong> Hóa đơn này có giá trị thanh toán một lần. Vui lòng giữ lại hóa đơn để đối chiếu khi cần thiết.
             </p>
           </div>
-
           {/* Footer */}
           <div className="footer" style={{ marginTop: '25px' }}>
             <div className="footer-content" style={{ display: 'table', width: '100%' }}>
@@ -2142,7 +1965,6 @@ const PDFEditorPage = () => {
                 textAlign: 'center',
                 verticalAlign: 'top'
               }}>
-
                 <p style={{ margin: 0, fontSize: '12px !important' }}>
                   <strong>Bệnh nhân/Khách hàng</strong>
                 </p>
@@ -2192,7 +2014,6 @@ const PDFEditorPage = () => {
         </>
       );
     }
-
     // 🔥 PHẦN CÒN LẠI CHO CÁC TYPE KHÁC (PRESCRIPTION, SERVICE, PAYMENT)
     return (
       <>
@@ -2227,7 +2048,6 @@ const PDFEditorPage = () => {
             )}
           </div>
         )}
-
         {/* Header với Logo */}
         <div className="header" style={{
           textAlign: 'center',
@@ -2256,7 +2076,6 @@ const PDFEditorPage = () => {
               />
             </div>
           )}
-
           <h2 style={{
             margin: 0,
             fontSize: '16px',
@@ -2273,7 +2092,6 @@ const PDFEditorPage = () => {
             Điện thoại: {pdfSettings.clinicPhone}
           </p>
         </div>
-
         {/* Title */}
         <div className="title" style={{
           textAlign: 'center',
@@ -2287,7 +2105,6 @@ const PDFEditorPage = () => {
             {pdfSettings.customTitle}
           </h3>
         </div>
-
         {/* Patient Info - Table layout */}
         <div className="info" style={{
           display: 'table',
@@ -2332,7 +2149,6 @@ const PDFEditorPage = () => {
             </div>
           </div>
         </div>
-
         {/* Medical Information - CHO SERVICE VÀ PRESCRIPTION */}
         {(type === 'prescription' || type === 'service') && (formData.symptoms || formData.diagnosis) && (
           <div className="diagnosis-section" style={{
@@ -2366,7 +2182,6 @@ const PDFEditorPage = () => {
             </div>
           </div>
         )}
-
         {/* 🔥 SỬA: Table - HIỂN THỊ CẢ SERVICES VÀ PRESCRIPTIONS CHO PAYMENT */}
         {currentRows.length > 0 ? (
           <table style={{
@@ -2467,7 +2282,7 @@ const PDFEditorPage = () => {
                   <td style={{ border: `1px solid ${pdfSettings.borderColor || '#333'}`, padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
                     {formatNumber(totalAmount)} {type !== 'prescription' && 'VNĐ'}
                   </td>
-                 
+
                 </tr>
               )}
             </tfoot>
@@ -2486,7 +2301,6 @@ const PDFEditorPage = () => {
             </strong> Không có {type === 'prescription' ? 'đơn thuốc' : 'dịch vụ'} nào được {type === 'prescription' ? 'kê' : 'chỉ định'}
           </div>
         )}
-
         {/* Total in words */}
         {(currentRows.length > 0 && (type === 'payment' ? finalAmount : totalAmount) > 0) && (
           <div className="real-money" style={{
@@ -2501,7 +2315,6 @@ const PDFEditorPage = () => {
             </p>
           </div>
         )}
-
         {/* Payment Info Section - CHỈ CHO PAYMENT */}
         {type === 'payment' && (
           <div className="payment-info" style={{
@@ -2519,7 +2332,6 @@ const PDFEditorPage = () => {
             }}>
               THÔNG TIN THANH TOÁN
             </div>
-
             <div className="payment-row" style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -2530,7 +2342,6 @@ const PDFEditorPage = () => {
                 {formatNumber(totalAmount)} VNĐ
               </span>
             </div>
-
             {formData.discount > 0 && (
               <div className="payment-row" style={{
                 display: 'flex',
@@ -2543,7 +2354,6 @@ const PDFEditorPage = () => {
                 </span>
               </div>
             )}
-
             <div className="payment-row" style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -2556,7 +2366,6 @@ const PDFEditorPage = () => {
                 {formatNumber(finalAmount)} VNĐ
               </span>
             </div>
-
             <div className="payment-row" style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -2569,7 +2378,6 @@ const PDFEditorPage = () => {
                     formData.paymentMethod === 'napas' ? 'Thẻ Napas' : 'Tiền mặt'}
               </span>
             </div>
-
             <div className="payment-row" style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -2580,7 +2388,6 @@ const PDFEditorPage = () => {
                 Đã thanh toán
               </span>
             </div>
-
             <div className="payment-row" style={{
               display: 'flex',
               justifyContent: 'space-between'
@@ -2592,7 +2399,6 @@ const PDFEditorPage = () => {
             </div>
           </div>
         )}
-
         {/* Kết quả xét nghiệm chi tiết - CHO TECHNICIAN */}
         {(type === 'service' && serviceRows.some(row => row.dosage)) && (
           <div className="test-results-section" style={{
@@ -2611,7 +2417,6 @@ const PDFEditorPage = () => {
               <i className="fas fa-vial me-2"></i>
               KẾT QUẢ XÉT NGHIỆM CHI TIẾT
             </h6>
-
             {serviceRows.map((row, index) => (
               row.dosage && (
                 <div key={index} style={{
@@ -2632,7 +2437,6 @@ const PDFEditorPage = () => {
             ))}
           </div>
         )}
-
         {/* Note Section - CHO SERVICE VÀ PAYMENT */}
         {(type === 'service' || type === 'payment') && (
           <div className="note" style={{
@@ -2649,7 +2453,6 @@ const PDFEditorPage = () => {
             </p>
           </div>
         )}
-
         {/* Footer */}
         <div className="footer" style={{
           marginTop: '30px'
@@ -2708,21 +2511,151 @@ const PDFEditorPage = () => {
       </>
     );
   };
+  // HÀM HIỂN THỊ TOAST - THÊM MỚI
+  const showToast = useCallback((type, message) => {
+    setToastState({
+      show: true,
+      type,
+      message
+    });
+  }, []);
+  // HÀM ĐÓNG TOAST - THÊM MỚI
+  const closeToast = useCallback(() => {
+    setToastState({
+      show: false,
+      type: 'success',
+      message: ''
+    });
+  }, []);
+  // HÀM HIỂN THỊ CONFIRMATION VỚI SWEETALERT2 - FIX: DÙNG useCallback
+  const showConfirmation = useCallback(async (options) => {
+    const result = await Swal.fire({
+      title: options.title || 'Xác nhận hành động',
+      text: options.message || 'Bạn có chắc muốn thực hiện hành động này?',
+      icon: options.icon || 'question',
+      showCancelButton: true,
+      confirmButtonColor: options.confirmColor || '#3085d6',
+      cancelButtonColor: options.cancelColor || '#d33',
+      confirmButtonText: options.confirmText || 'Xác nhận',
+      cancelButtonText: options.cancelText || 'Hủy',
+      showLoaderOnConfirm: options.showLoader || false,
+      preConfirm: options.preConfirm || undefined,
+      allowOutsideClick: () => !Swal.isLoading()
+    });
+    return result;
+  }, []);
+  // HÀM HIỂN THỊ THÔNG BÁO THÀNH CÔNG - FIX: DÙNG useCallback
+  const showSuccessAlert = useCallback((message) => {
+    Swal.fire({
+      title: 'Thành công!',
+      text: message,
+      icon: 'success',
+      confirmButtonColor: '#3085d6',
+      confirmButtonText: 'OK'
+    });
+  }, []);
+  // HÀM XỬ LÝ LỖI VÀ HIỂN THỊ THÔNG BÁO - FIX: DÙNG useCallback
+  const handleError = useCallback((error, customMessage = '') => {
+    console.error('❌ Error:', error);
+
+    // Xác định message lỗi
+    let errorMessage = customMessage;
+
+    if (!errorMessage) {
+      // 🔥 ƯU TIÊN 1: Lấy message từ error.message (service đã xử lý)
+      if (error.message) {
+        errorMessage = error.message;
+      }
+      // 🔥 ƯU TIÊN 2: Lấy message từ response.data.message của BE Laravel
+      else if (error.response && error.response.data && error.response.data.message) {
+        errorMessage = error.response.data.message;
+      }
+      // 🔥 ƯU TIÊN 3: Lấy message từ response.data (trường hợp BE trả về trực tiếp)
+      else if (error.response && error.response.data) {
+        const responseData = error.response.data;
+
+        if (typeof responseData === 'string') {
+          errorMessage = responseData;
+        } else if (responseData.error) {
+          errorMessage = responseData.error;
+        } else if (responseData.errors && typeof responseData.errors === 'object') {
+          // Xử lý validation errors từ Laravel
+          const firstError = Object.values(responseData.errors)[0];
+          errorMessage = Array.isArray(firstError) ? firstError[0] : firstError;
+        }
+      }
+      // 🔥 ƯU TIÊN 4: Xử lý các HTTP status code phổ biến
+      else if (error.response && error.response.status) {
+        const status = error.response.status;
+        const statusMessages = {
+          400: 'Yêu cầu không hợp lệ',
+          401: 'Bạn cần đăng nhập để thực hiện hành động này',
+          403: 'Bạn không có quyền thực hiện hành động này',
+          404: 'Không tìm thấy dữ liệu',
+          405: 'Phương thức không được hỗ trợ',
+          408: 'Yêu cầu quá thời gian chờ',
+          413: 'Dữ liệu quá lớn',
+          422: 'Dữ liệu gửi lên không hợp lệ',
+          429: 'Quá nhiều yêu cầu, vui lòng thử lại sau',
+          500: 'Lỗi máy chủ nội bộ',
+          502: 'Lỗi cổng kết nối',
+          503: 'Dịch vụ tạm thời không khả dụng',
+          504: 'Hết thời gian chờ phản hồi từ máy chủ'
+        };
+
+        errorMessage = statusMessages[status] || `Lỗi ${status}: ${error.message || 'Đã xảy ra lỗi'}`;
+      }
+      // 🔥 Mặc định
+      else {
+        errorMessage = 'Đã xảy ra lỗi không xác định. Vui lòng thử lại sau.';
+      }
+    }
+
+    // 🔥 XỬ LÝ TRƯỜNG HỢP ĐẶC BIỆT: 404 cho logo - HIỆN THÔNG BÁO TIẾNG VIỆT
+    if (error.response && error.response.status === 404) {
+      if (error.config?.url?.includes('/logo')) {
+        showToast('info', 'ℹ️ Không tìm thấy logo trên server');
+        return;
+      }
+      showToast('info', 'ℹ️ Không tìm thấy dữ liệu');
+      return;
+    }
+
+    // 🔥 XỬ LÝ TRƯỜNG HỢP VALIDATION ERRORS TỪ LARAVEL
+    if (error.response && error.response.status === 422 && error.response.data?.errors) {
+      const errors = error.response.data.errors;
+      const firstError = Object.values(errors)[0];
+      const validationMessage = Array.isArray(firstError) ? firstError[0] : firstError;
+
+      showToast('error', `❌ ${validationMessage}`);
+      return;
+    }
+
+    // 🔥 XỬ LÝ CÁC LỖI TỪ SERVICE (đã được service xử lý thành message tiếng Việt)
+    if (errorMessage.includes('Không thể kết nối đến server') ||
+      errorMessage.includes('Không tìm thấy API') ||
+      errorMessage.includes('Lỗi server') ||
+      errorMessage.includes('Server trả về dữ liệu không phải PDF')) {
+      showToast('error', errorMessage);
+      return;
+    }
+
+    // LUÔN SỬ DỤNG CUSTOM TOAST CHO LỖI
+    showToast('error', errorMessage);
+  }, [showToast]);
 
   // Xử lý upload logo
   const handleLogoUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
-        alert('❌ Vui lòng chọn file hình ảnh!');
+        showToast('error', '  Vui lòng chọn file hình ảnh!');
         return;
       }
-
       if (file.size > 2 * 1024 * 1024) {
-        alert('❌ Kích thước file không được vượt quá 2MB!');
+        showToast('error', '  Kích thước file không được vượt quá 2MB!');
         return;
       }
-
       const reader = new FileReader();
       reader.onload = (e) => {
         const logoUrl = e.target.result;
@@ -2734,27 +2667,24 @@ const PDFEditorPage = () => {
             enabled: true
           }
         }));
-        alert('✅ Đã upload logo thành công!');
+        showToast('success', '✅ Đã upload logo thành công!');
       };
       reader.readAsDataURL(file);
     }
     event.target.value = '';
   };
-
   // Xử lý upload watermark image
   const handleWatermarkImageUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
-        alert('❌ Vui lòng chọn file hình ảnh!');
+        showToast('error', '  Vui lòng chọn file hình ảnh!');
         return;
       }
-
       if (file.size > 2 * 1024 * 1024) {
-        alert('❌ Kích thước file không được vượt quá 2MB!');
+        showToast('error', '  Kích thước file không được vượt quá 2MB!');
         return;
       }
-
       const reader = new FileReader();
       reader.onload = (e) => {
         const imageUrl = e.target.result;
@@ -2766,53 +2696,68 @@ const PDFEditorPage = () => {
             enabled: true
           }
         }));
-        alert('✅ Đã upload ảnh watermark thành công!');
+        showToast('success', '✅ Đã upload ảnh watermark thành công!');
       };
       reader.readAsDataURL(file);
     }
     event.target.value = '';
   };
-
   // Xóa logo
   const handleRemoveLogo = () => {
-    if (window.confirm('Bạn có chắc muốn xóa logo?')) {
-      setPdfSettings(prev => ({
-        ...prev,
-        logo: {
-          ...prev.logo,
-          url: '',
-          enabled: false
-        }
-      }));
-      alert('✅ Đã xóa logo!');
-    }
+    showConfirmation({
+      title: 'Xác nhận xóa logo',
+      text: 'Bạn có chắc muốn xóa logo?',
+      icon: 'warning',
+      confirmText: 'Xóa',
+      cancelText: 'Hủy',
+      confirmColor: '#d33'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        setPdfSettings(prev => ({
+          ...prev,
+          logo: {
+            ...prev.logo,
+            url: '',
+            enabled: false
+          }
+        }));
+        showToast('success', '✅ Đã xóa logo!');
+      }
+    });
   };
-
   // Xóa watermark image
   const handleRemoveWatermarkImage = () => {
-    if (window.confirm('Bạn có chắc muốn xóa ảnh watermark?')) {
-      setPdfSettings(prev => ({
-        ...prev,
-        watermark: {
-          ...prev.watermark,
-          url: '',
-          enabled: false
-        }
-      }));
-      alert('✅ Đã xóa ảnh watermark!');
-    }
+    showConfirmation({
+      title: 'Xác nhận xóa ảnh watermark',
+      text: 'Bạn có chắc muốn xóa ảnh watermark?',
+      icon: 'warning',
+      confirmText: 'Xóa',
+      cancelText: 'Hủy',
+      confirmColor: '#d33'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        setPdfSettings(prev => ({
+          ...prev,
+          watermark: {
+            ...prev.watermark,
+            url: '',
+            enabled: false
+          }
+        }));
+        showToast('success', '✅ Đã xóa ảnh watermark!');
+      }
+    });
   };
-
   // Hàm lưu logo lên server
   const handleSaveLogoToServer = async () => {
     if (!pdfSettings.logo.url) {
-      alert('❌ Không có logo để lưu!');
+      showToast('error', '  Không có logo để lưu!');
       return;
     }
 
     // Kiểm tra nếu đã là URL từ server thì không cần lưu lại
     if (pdfSettings.logo.url.includes('/storage/logos/')) {
-      alert('ℹ️ Logo đã được lưu trên server!');
+      showToast('info', '  Logo đã được lưu trên server!');
       return;
     }
 
@@ -2828,8 +2773,7 @@ const PDFEditorPage = () => {
 
       // 🔥 XỬ LÝ KẾT QUẢ - CHỈ CẦN RESULT TỒN TẠI LÀ THÀNH CÔNG
       if (result) {
-        alert('✅ Logo đã được lưu thành công!');
-
+        showToast('success', '✅ Logo đã được lưu thành công!');
         // Cập nhật URL logo - sử dụng URL từ result hoặc URL mặc định
         const logoUrl = result.url || `/storage/logos/clinic_1.png`;
         setPdfSettings(prev => ({
@@ -2839,14 +2783,13 @@ const PDFEditorPage = () => {
             url: logoUrl
           }
         }));
-
         console.log('✅ Logo URL updated to:', logoUrl);
       } else {
         throw new Error('Lưu logo thất bại - không có response');
       }
     } catch (err) {
-      console.error('Error saving logo:', err);
-      alert('❌ Lỗi khi lưu logo: ' + err.message);
+      // 🔥 SỬA: DÙNG handleError THAY VÌ showToast TRỰC TIẾP
+      handleError(err, '  Lỗi khi lưu logo');
     } finally {
       setIsSavingLogo(false);
     }
@@ -2856,11 +2799,10 @@ const PDFEditorPage = () => {
   const handleLoadSavedLogo = async () => {
     try {
       const result = await printPdfService.getLogo(1);
-
       console.log('🔄 Logo load result:', result);
 
-      // 🔥 XỬ LÝ KẾT QUẢ - CHỈ CẦN CÓ URL LÀ THÀNH CÔNG
-      if (result && result.url) {
+      // 🔥 XỬ LÝ KẾT QUẢ TỪ SERVICE
+      if (result && result.success === true && result.url) {
         setPdfSettings(prev => ({
           ...prev,
           logo: {
@@ -2869,31 +2811,45 @@ const PDFEditorPage = () => {
             enabled: true
           }
         }));
-        alert('✅ Đã tải logo từ server!');
-      } else {
-        alert('ℹ️ ' + (result?.message || 'Không tìm thấy logo trên server'));
+        showToast('success', '✅ Đã tải logo từ server!');
+      }
+      else if (result && result.success === false) {
+        // 🔥 SERVICE ĐÃ TRẢ VỀ {success: false, message: "Không tìm thấy logo"}
+        showToast('info', `ℹ️ 'Không tìm thấy logo trên server'}`);
+      }
+      else {
+        // 🔥 TRƯỜNG HỢP KHÁC
+        showToast('info', 'ℹ️ Không tìm thấy logo trên server');
       }
     } catch (err) {
-      console.error('Error loading logo:', err);
-      alert('❌ Lỗi khi tải logo: ' + err.message);
+      // 🔥 SERVICE ĐÃ XỬ LÝ LỖI VÀ TRẢ VỀ Error VỚI MESSAGE TIẾNG VIỆT
+      console.error('❌ Error in handleLoadSavedLogo:', err);
+      handleError(err, '❌ Lỗi khi tải logo');
     }
   };
 
   // Hàm xóa logo khỏi server
-  // 🔥 CẬP NHẬT HÀM XÓA LOGO
   const handleDeleteLogoFromServer = async () => {
-    if (!window.confirm('Bạn có chắc muốn xóa logo khỏi server?')) {
+    const result = await showConfirmation({
+      title: 'Xác nhận xóa logo khỏi server',
+      text: 'Bạn có chắc muốn xóa logo khỏi server?',
+      icon: 'warning',
+      confirmText: 'Xóa',
+      cancelText: 'Hủy',
+      confirmColor: '#d33'
+    });
+
+    if (!result.isConfirmed) {
       return;
     }
 
     try {
-      const result = await printPdfService.deleteLogo(1);
-
-      console.log('🔄 Logo delete result:', result);
+      const deleteResult = await printPdfService.deleteLogo(1);
+      console.log('🔄 Logo delete result:', deleteResult);
 
       // 🔥 XỬ LÝ KẾT QUẢ - CHỈ CẦN RESULT TỒN TẠI LÀ THÀNH CÔNG
-      if (result) {
-        alert('✅ Đã xóa logo khỏi server!');
+      if (deleteResult) {
+        showToast('success', '✅ Đã xóa logo khỏi server!');
         setPdfSettings(prev => ({
           ...prev,
           logo: {
@@ -2906,11 +2862,10 @@ const PDFEditorPage = () => {
         throw new Error('Xóa logo thất bại - không có response');
       }
     } catch (err) {
-      console.error('Error deleting logo:', err);
-      alert('❌ Lỗi khi xóa logo: ' + err.message);
+      // 🔥 SỬA: DÙNG handleError THAY VÌ showToast TRỰC TIẾP
+      handleError(err, '  Lỗi khi xóa logo');
     }
   };
-
   // Xử lý thay đổi form
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -2918,11 +2873,9 @@ const PDFEditorPage = () => {
       [field]: value
     }));
   };
-
   // Cập nhật hàm handleTypeChange
   const handleTypeChange = (newType) => {
     setType(newType);
-
     let newTitle = '';
     switch (newType) {
       case 'prescription':
@@ -2940,13 +2893,11 @@ const PDFEditorPage = () => {
       default:
         newTitle = 'TOA THUỐC';
     }
-
     setPdfSettings(prev => ({
       ...prev,
       customTitle: newTitle
     }));
   };
-
   // Xử lý hàng trong bảng
   const addRow = () => {
     const newRow = {
@@ -2957,7 +2908,6 @@ const PDFEditorPage = () => {
       unitPrice: 0,
       totalPrice: 0
     };
-
     if (type === 'prescription') {
       setPrescriptionRows(prev => [...prev, newRow]);
     } else {
@@ -2966,7 +2916,6 @@ const PDFEditorPage = () => {
       setServiceRows(prev => [...prev, serviceRow]);
     }
   };
-
   const removeRow = (id) => {
     if (type === 'prescription') {
       setPrescriptionRows(prev => prev.filter(row => row.id !== id));
@@ -2974,30 +2923,24 @@ const PDFEditorPage = () => {
       setServiceRows(prev => prev.filter(row => row.id !== id));
     }
   };
-
   const updateRow = (id, field, value) => {
     const updateFunction = type === 'prescription' ? setPrescriptionRows : setServiceRows;
     const rows = type === 'prescription' ? prescriptionRows : serviceRows;
-
     updateFunction(prev => prev.map(row => {
       if (row.id === id) {
         const updatedRow = { ...row, [field]: value };
-
         if (field === 'quantity' || field === 'unitPrice') {
           const quantity = field === 'quantity' ? value : row.quantity;
           const unitPrice = field === 'unitPrice' ? value : row.unitPrice;
           updatedRow.totalPrice = (parseFloat(quantity) || 0) * (parseFloat(unitPrice) || 0);
         }
-
         return updatedRow;
       }
       return row;
     }));
   };
-
   // Tính tổng tiền
   const getCurrentRows = () => type === 'prescription' ? prescriptionRows : serviceRows;
-
   // Handle settings changes
   const handleSettingsChange = (category, field, value) => {
     if (category === 'watermark') {
@@ -3014,24 +2957,39 @@ const PDFEditorPage = () => {
       setPdfSettings(prev => ({ ...prev, [field]: value }));
     }
   };
-
-  // Save settings
-  const handleSaveSettings = () => {
-    localStorage.setItem('pdfSettings', JSON.stringify(pdfSettings));
-    setShowSettings(false);
-    alert('✅ Đã lưu cài đặt PDF!');
-  };
-
-  // Reset settings
-  const handleResetSettings = () => {
-    if (window.confirm('Bạn có chắc muốn reset về cài đặt mặc định?')) {
+  // Save settings - THAY ĐỔI SỬ DỤNG CONFIRM VÀ TOAST
+  const handleSaveSettings = useCallback(async () => {
+    const result = await showConfirmation({
+      title: 'Lưu cài đặt PDF',
+      text: 'Bạn có chắc muốn lưu cài đặt PDF này?',
+      icon: 'question',
+      confirmText: 'Lưu',
+      cancelText: 'Hủy',
+      confirmColor: '#3085d6'
+    });
+    if (result.isConfirmed) {
+      localStorage.setItem('pdfSettings', JSON.stringify(pdfSettings));
+      setShowSettings(false);
+      showToast('success', '✅ Đã lưu cài đặt PDF!');
+    }
+  }, [pdfSettings, showConfirmation, showToast]);
+  // Reset settings - THAY ĐỔI SỬ DỤNG CONFIRM VÀ TOAST
+  const handleResetSettings = useCallback(async () => {
+    const result = await showConfirmation({
+      title: 'Reset cài đặt',
+      text: 'Bạn có chắc muốn reset về cài đặt mặc định? Thay đổi sẽ bị mất.',
+      icon: 'warning',
+      confirmText: 'Reset',
+      cancelText: 'Hủy',
+      confirmColor: '#d33'
+    });
+    if (result.isConfirmed) {
       const defaultSettings = {
         clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
         clinicAddress: 'Số 53 Võ Văn Ngân, TP. Thủ Đức, TP.HCM',
         clinicPhone: '024.3574.7788',
         clinicTax: 'MST: 0100688738',
         doctorName: 'Trần Thị B',
-
         // Font settings mặc định
         fontSize: '14px',
         fontStyle: 'normal',
@@ -3041,7 +2999,6 @@ const PDFEditorPage = () => {
         borderColor: '#333333',
         headerBgColor: '#f0f0f0',
         lineHeight: 1.5,
-
         logo: {
           enabled: false,
           url: '',
@@ -3052,7 +3009,6 @@ const PDFEditorPage = () => {
           marginTop: '0px',
           marginBottom: '10px'
         },
-
         watermark: {
           enabled: false,
           text: 'MẪU BẢN QUYỀN',
@@ -3064,7 +3020,6 @@ const PDFEditorPage = () => {
           color: '#cccccc',
           rotation: -45
         },
-
         fontFamily: 'Times New Roman',
         customTitle: 'TOA THUỐC',
         showDoctorSignature: true,
@@ -3073,25 +3028,34 @@ const PDFEditorPage = () => {
         primaryColor: '#2c5aa0'
       };
       setPdfSettings(defaultSettings);
-      alert('✅ Đã reset cài đặt về mặc định!');
+      showToast('success', '✅ Đã reset cài đặt về mặc định!');
     }
-  };
+  }, [showConfirmation, showToast]);
+  // Download PDF - THÊM CONFIRM VÀ TOAST
+  const handleDownloadPDF = useCallback(async () => {
+    const result = await showConfirmation({
+      title: 'Tải PDF',
+      text: 'Bạn có chắc muốn tải PDF này? Quá trình có thể mất vài giây.',
+      icon: 'question',
+      confirmText: 'Tải ngay',
+      cancelText: 'Hủy',
+      confirmColor: '#3085d6'
+    });
 
-  // Download PDF
-  const handleDownloadPDF = async () => {
+    if (!result.isConfirmed) return;
+
     setIsLoading(true);
     setError(null);
 
     try {
       let printData = {};
-
       // CHUẨN BỊ PDF SETTINGS THEO ĐÚNG FORMAT BE MONG ĐỢI
       const preparedPdfSettings = {
         ...pdfSettings,
         // ĐẢM BẢO LOGO CÓ ĐỦ CÁC FIELD BE CẦN
         logo: {
           enabled: pdfSettings.logo.enabled,
-          url: fixAssetUrl(pdfSettings.logo.url),  // 🔥 DÙNG HÀM FIX
+          url: fixAssetUrl(pdfSettings.logo.url), // 🔥 DÙNG HÀM FIX
           enabled: pdfSettings.logo.enabled && !!pdfSettings.logo.url,
           width: pdfSettings.logo.width,
           height: pdfSettings.logo.height,
@@ -3104,7 +3068,7 @@ const PDFEditorPage = () => {
         watermark: {
           enabled: pdfSettings.watermark.enabled,
           text: pdfSettings.watermark.text,
-          url: fixAssetUrl(pdfSettings.watermark.url),  // 🔥 DÙNG HÀM FIX
+          url: fixAssetUrl(pdfSettings.watermark.url), // 🔥 DÙNG HÀM FIX
           enabled: pdfSettings.watermark.enabled && !!pdfSettings.watermark.url,
           width: pdfSettings.watermark.width,
           height: pdfSettings.watermark.height,
@@ -3193,7 +3157,9 @@ const PDFEditorPage = () => {
           // 🔥 THÊM CÁC TRƯỜNG BẮT BUỘC
           appointment_date: formData.date || currentDate,
           appointment_time: currentTime,
+          patient_code: formData.patient_code,
           doctor_name: formData.doctor || 'Kỹ thuật viên Xét nghiệm',
+          technician_name: formData.technician_name || 'Kỹ thuật viên Xét nghiệm',
           test_results: serviceRows.map(row => ({
             test_name: row.name,
             result: row.dosage || '',
@@ -3228,28 +3194,70 @@ const PDFEditorPage = () => {
       }
 
       console.log('📤 Sending data to BE:', printData);
-
       const result = await printPdfService.printPDF(printData);
 
-      alert(`✅ Xuất ${type === 'prescription' ? 'toa thuốc' : type === 'service' ? 'phiếu dịch vụ' : type === 'payment' ? 'hóa đơn' : type === 'test_result' ? 'phiếu kết quả xét nghiệm' : ''} thành công! File: ${result.fileName}`);
+      // 🔥 XỬ LÝ KẾT QUẢ THÀNH CÔNG
+      if (result && result.fileName) {
+        showToast('success', `✅ Xuất ${type === 'prescription' ? 'toa thuốc' : type === 'service' ? 'phiếu dịch vụ' : type === 'payment' ? 'hóa đơn' : type === 'test_result' ? 'phiếu kết quả xét nghiệm' : ''} thành công! File: ${result.fileName}`);
+      } else {
+        // Nếu BE trả về nhưng không có fileName, coi như có vấn đề
+        throw new Error('Không nhận được thông tin file từ server');
+      }
+
     } catch (err) {
       console.error('Error downloading PDF:', err);
-      setError('❌ Lỗi khi xuất PDF: ' + err.message);
+      // 🔥 SỬA: LUÔN DÙNG handleError ĐỂ HIỂN THỊ CUSTOM TOAST
+      handleError(err, '  Lỗi khi xuất PDF thiếu thông tin. Vui lòng điền đầy đủ.');
     } finally {
       setIsLoading(false);
     }
-  };
-
+  }, [type, formData, prescriptionRows, serviceRows, pdfSettings, showConfirmation, showToast, handleError]);
   // In trực tiếp
   const handlePrint = () => {
     window.print();
   };
-
-  // Quay lại
-  const handleBack = () => {
+  // Quay lại - THÊM CONFIRM VÀ TOAST
+  const handleBack = useCallback(async () => {
+    // Kiểm tra có thay đổi không lưu
+    const hasChanges = JSON.stringify(formData) !== JSON.stringify({
+      patientName: 'Nguyễn Văn A',
+      patientAge: '35',
+      patientGender: 'Nam',
+      patientAddress: '123 Nguyễn Trãi, Quận 5, TP.HCM',
+      patientPhone: '0909123456',
+      code: 'TT0123',
+      date: new Date().toISOString().split('T')[0],
+      doctor: 'Trần Thị B',
+      symptoms: 'Ho, sốt nhẹ',
+      diagnosis: 'Viêm họng cấp',
+      instructions: 'Uống thuốc theo chỉ dẫn. Tái khám nếu cần.',
+      invoiceCode: 'HD001',
+      paymentMethod: '',
+      paymentStatus: 'paid',
+      discount: 0,
+      tax: 10,
+      transactionId: 'TX123456',
+      orderId: 'ORD789',
+      cashier: 'Nhân viên thu ngân'
+    }) || prescriptionRows.length !== 1 || serviceRows.length !== 2 || JSON.stringify(pdfSettings) !== JSON.stringify({
+      // Default settings comparison - simplified for demo
+      clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
+      // ... other defaults
+    });
+    if (hasChanges) {
+      const result = await showConfirmation({
+        title: 'Quay lại',
+        text: 'Bạn có thay đổi chưa lưu. Bạn có chắc muốn quay lại? Thay đổi sẽ bị mất.',
+        icon: 'warning',
+        confirmText: 'Quay lại',
+        cancelText: 'Ở lại',
+        confirmColor: '#d33'
+      });
+      if (!result.isConfirmed) return;
+    }
     window.history.back();
-  };
-
+    showToast('info', 'Đã quay lại trang trước');
+  }, [formData, prescriptionRows, serviceRows, pdfSettings, showConfirmation, showToast]);
   // Export settings
   const handleExportSettings = () => {
     const dataStr = JSON.stringify(pdfSettings, null, 2);
@@ -3262,9 +3270,8 @@ const PDFEditorPage = () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    alert('✅ Đã xuất cài đặt PDF!');
+    showToast('success', '✅ Đã xuất cài đặt PDF!');
   };
-
   // Import settings
   const handleImportSettings = (event) => {
     const file = event.target.files[0];
@@ -3274,21 +3281,41 @@ const PDFEditorPage = () => {
         try {
           const settings = JSON.parse(e.target.result);
           setPdfSettings(settings);
-          alert('✅ Đã nhập cài đặt PDF thành công!');
+          showToast('success', '✅ Đã nhập cài đặt PDF thành công!');
         } catch (err) {
-          alert('❌ File không hợp lệ!');
+          showToast('error', '  File không hợp lệ!');
         }
       };
       reader.readAsText(file);
     }
     event.target.value = '';
   };
-
+  // Hủy modal settings - THÊM CONFIRM VÀ TOAST
+  const handleCancelSettings = useCallback(async () => {
+    const hasChanges = JSON.stringify(pdfSettings) !== JSON.stringify({
+      // Default settings comparison - simplified
+      clinicName: 'PHÒNG KHÁM ĐA KHOA XYZ',
+      // ... other defaults
+    });
+    if (hasChanges) {
+      const result = await showConfirmation({
+        title: 'Hủy thay đổi',
+        text: 'Bạn có thay đổi chưa lưu. Bạn có chắc muốn hủy? Thay đổi sẽ bị mất.',
+        icon: 'warning',
+        confirmText: 'Hủy',
+        cancelText: 'Ở lại',
+        confirmColor: '#d33'
+      });
+      if (!result.isConfirmed) return;
+    }
+    setShowSettings(false);
+    showToast('info', 'Đã hủy thay đổi cài đặt');
+  }, [pdfSettings, showConfirmation, showToast]);
   if (error) {
     return (
       <Container fluid className="d-flex justify-content-center align-items-center min-vh-100">
         <Alert variant="danger" className="text-center">
-          <h4>❌ Lỗi</h4>
+          <h4>  Lỗi</h4>
           <p>{error}</p>
           <Button variant="primary" onClick={handleBack}>
             Quay lại
@@ -3297,12 +3324,10 @@ const PDFEditorPage = () => {
       </Container>
     );
   }
-
   const totalAmount = getCurrentRows().reduce((sum, row) => sum + (row.totalPrice || 0), 0);
   const discountAmount = (totalAmount * (formData.discount || 0)) / 100;
   const taxAmount = (totalAmount * (formData.tax || 0)) / 100;
   const finalAmount = totalAmount - discountAmount + taxAmount;
-
   return (
     <div className="app" style={{
       display: 'flex',
@@ -3332,7 +3357,6 @@ const PDFEditorPage = () => {
             <i class="fa-solid fa-gear"></i> Cài đặt PDF
           </Button>
         </div>
-
         <Form.Group className="mb-3">
           <Form.Label>Loại</Form.Label>
           <Form.Select
@@ -3345,7 +3369,6 @@ const PDFEditorPage = () => {
             <option value="test_result">KẾT QUẢ XÉT NGHIỆM</option>
           </Form.Select>
         </Form.Group>
-
         <Form.Group className="mb-3">
           <Form.Label>Họ tên bệnh nhân</Form.Label>
           <Form.Control
@@ -3354,7 +3377,6 @@ const PDFEditorPage = () => {
             onChange={(e) => handleInputChange('patientName', e.target.value)}
           />
         </Form.Group>
-
         <div className="row g-2 mb-3">
           <div className="col-6">
             <Form.Label>Tuổi</Form.Label>
@@ -3376,7 +3398,6 @@ const PDFEditorPage = () => {
             </Form.Select>
           </div>
         </div>
-
         <Form.Group className="mb-3">
           <Form.Label>Địa chỉ</Form.Label>
           <Form.Control
@@ -3385,7 +3406,6 @@ const PDFEditorPage = () => {
             onChange={(e) => handleInputChange('patientAddress', e.target.value)}
           />
         </Form.Group>
-
         <Form.Group className="mb-3">
           <Form.Label>Điện thoại</Form.Label>
           <Form.Control
@@ -3394,7 +3414,6 @@ const PDFEditorPage = () => {
             onChange={(e) => handleInputChange('patientPhone', e.target.value)}
           />
         </Form.Group>
-
         <div className="row g-2 mb-3">
           <div className="col-6">
             <Form.Label>Mã {type === 'payment' ? 'hóa đơn' : 'phiếu/toa'}</Form.Label>
@@ -3413,7 +3432,6 @@ const PDFEditorPage = () => {
             />
           </div>
         </div>
-
         <Form.Group className="mb-3">
           <Form.Label>{type === 'payment' ? 'Thu ngân' : 'Bác sĩ'}</Form.Label>
           <Form.Control
@@ -3422,7 +3440,6 @@ const PDFEditorPage = () => {
             onChange={(e) => handleInputChange('doctor', e.target.value)}
           />
         </Form.Group>
-
         {/* Các trường đặc biệt cho hóa đơn */}
         {type === 'payment' && (
           <>
@@ -3473,7 +3490,6 @@ const PDFEditorPage = () => {
             </div>
           </>
         )}
-
         {/* Triệu chứng và chẩn đoán - Ẩn với hóa đơn */}
         {(type === 'prescription' || type === 'service') && (
           <>
@@ -3486,7 +3502,6 @@ const PDFEditorPage = () => {
                 onChange={(e) => handleInputChange('symptoms', e.target.value)}
               />
             </Form.Group>
-
             <Form.Group className="mb-3">
               <Form.Label>Chẩn đoán</Form.Label>
               <Form.Control
@@ -3496,7 +3511,6 @@ const PDFEditorPage = () => {
                 onChange={(e) => handleInputChange('diagnosis', e.target.value)}
               />
             </Form.Group>
-
             {type === 'prescription' && (
               <Form.Group className="mb-3">
                 <Form.Label>Hướng dẫn</Form.Label>
@@ -3511,13 +3525,11 @@ const PDFEditorPage = () => {
             )}
           </>
         )}
-
         <h5>
           {type === 'prescription' ? 'Danh sách thuốc' :
             type === 'service' ? 'Danh sách dịch vụ' :
               'Danh sách dịch vụ & thuốc'}
         </h5>
-
         <table className="table-edit" style={{
           width: '100%',
           borderCollapse: 'collapse',
@@ -3604,7 +3616,6 @@ const PDFEditorPage = () => {
             ))}
           </tbody>
         </table>
-
         {/* Hiển thị tổng tiền cho hóa đơn */}
         {type === 'payment' && (
           <div className="mt-3 p-3 bg-light rounded">
@@ -3624,7 +3635,6 @@ const PDFEditorPage = () => {
             </div>
           </div>
         )}
-
         <div className="d-flex gap-2 mt-3 flex-wrap">
           <Button variant="outline-primary" onClick={addRow}>
             <i class="fas fa-plus"></i>
@@ -3637,13 +3647,11 @@ const PDFEditorPage = () => {
             <i class="fas fa-download"></i>
             {isLoading ? <Spinner animation="border" size="sm" /> : ' Tải PDF'}
           </Button>
-
           <Button variant="outline-dark" onClick={handleBack}>
             <i class="fas fa-reply"></i> Quay lại
           </Button>
         </div>
       </div>
-
       {/* Right Column - Preview */}
       <div className="preview-wrap" style={{ flex: 1 }}>
         <div className="page" style={{
@@ -3670,14 +3678,12 @@ const PDFEditorPage = () => {
             position: 'relative',
             zIndex: 1
           }}>
-
             {renderPreviewContent()}
           </div>
         </div>
       </div>
-
       {/* Settings Modal - HOÀN CHỈNH VỚI TẤT CẢ TÍNH NĂNG */}
-      <Modal show={showSettings} onHide={() => setShowSettings(false)} size="xl" scrollable>
+      <Modal show={showSettings} onHide={handleCancelSettings} size="xl" scrollable>
         <Modal.Header closeButton>
           <Modal.Title><i class="fas fa-cogs"></i> Cài đặt PDF Nâng cao</Modal.Title>
         </Modal.Header>
@@ -3722,7 +3728,6 @@ const PDFEditorPage = () => {
                     </div>
                   </div>
                 </div>
-
                 <div className="col-12">
                   <h6 className="fw-bold">Thông tin bác sĩ</h6>
                   <div className="row g-2">
@@ -3745,7 +3750,6 @@ const PDFEditorPage = () => {
                     </div>
                   </div>
                 </div>
-
                 <div className="col-12">
                   <Form.Label>Tiêu đề</Form.Label>
                   <Form.Control
@@ -3756,7 +3760,6 @@ const PDFEditorPage = () => {
                 </div>
               </div>
             </Tab>
-
             <Tab eventKey="logo" title={<><i class="fas fa-image me-2"></i>Logo</>} >
               <div className="row g-3">
                 <div className="col-12">
@@ -3767,7 +3770,6 @@ const PDFEditorPage = () => {
                     onChange={(e) => handleSettingsChange('logo', 'enabled', e.target.checked)}
                   />
                 </div>
-
                 <div className="col-12">
                   <Form.Label>Upload Logo</Form.Label>
                   <div className="d-flex gap-2 align-items-center mb-2">
@@ -3788,7 +3790,6 @@ const PDFEditorPage = () => {
                       </Button>
                     )}
                   </div>
-
                   {/* CÁC NÚT QUẢN LÝ LOGO SERVER */}
                   <div className="d-flex gap-2 flex-wrap mb-3">
                     {pdfSettings.logo.url && !pdfSettings.logo.url.includes('/storage/logos/') && (
@@ -3818,12 +3819,10 @@ const PDFEditorPage = () => {
                       <i class="fas fa-trash"></i> Xóa Logo khỏi Server
                     </Button>
                   </div>
-
                   <Form.Text className="text-muted">
                     Chọn file ảnh (JPG, PNG, SVG) - Tối đa 2MB
                   </Form.Text>
                 </div>
-
                 {pdfSettings.logo.url && (
                   <div className="col-12">
                     <Form.Label>Preview Logo:</Form.Label>
@@ -3845,7 +3844,6 @@ const PDFEditorPage = () => {
                     </div>
                   </div>
                 )}
-
                 <div className="col-6">
                   <Form.Label>Vị trí logo</Form.Label>
                   <Form.Select
@@ -3858,7 +3856,6 @@ const PDFEditorPage = () => {
                     <option value="right">Bên phải</option>
                   </Form.Select>
                 </div>
-
                 <div className="col-6">
                   <Form.Label>Độ trong suốt</Form.Label>
                   <Form.Range
@@ -3871,7 +3868,6 @@ const PDFEditorPage = () => {
                   />
                   <small>{pdfSettings.logo.opacity}</small>
                 </div>
-
                 <div className="col-6">
                   <Form.Label>Chiều rộng</Form.Label>
                   <Form.Control
@@ -3882,7 +3878,6 @@ const PDFEditorPage = () => {
                     disabled={!pdfSettings.logo.enabled}
                   />
                 </div>
-
                 <div className="col-6">
                   <Form.Label>Chiều cao</Form.Label>
                   <Form.Control
@@ -3895,7 +3890,6 @@ const PDFEditorPage = () => {
                 </div>
               </div>
             </Tab>
-
             <Tab eventKey="watermark" title={<><i class="fas fa-tint"></i> Watermark
             </>}>
               <div className="row g-3">
@@ -3907,7 +3901,6 @@ const PDFEditorPage = () => {
                     onChange={(e) => handleSettingsChange('watermark', 'enabled', e.target.checked)}
                   />
                 </div>
-
                 <div className="col-12">
                   <Form.Label>Nội dung watermark (text)</Form.Label>
                   <Form.Control
@@ -3917,7 +3910,6 @@ const PDFEditorPage = () => {
                     disabled={!pdfSettings.watermark.enabled}
                   />
                 </div>
-
                 <div className="col-12">
                   <Form.Label>Upload Ảnh Watermark (thay thế text)</Form.Label>
                   <div className="d-flex gap-2 align-items-center mb-2">
@@ -3942,7 +3934,6 @@ const PDFEditorPage = () => {
                     Nếu upload ảnh, watermark text sẽ bị thay thế bằng ảnh
                   </Form.Text>
                 </div>
-
                 {pdfSettings.watermark.url && (
                   <div className="col-12">
                     <Form.Label>Preview Watermark:</Form.Label>
@@ -3960,7 +3951,6 @@ const PDFEditorPage = () => {
                     </div>
                   </div>
                 )}
-
                 {/* KÍCH CỠ ẢNH WATERMARK */}
                 <div className="col-6">
                   <Form.Label>Chiều rộng ảnh</Form.Label>
@@ -3973,7 +3963,6 @@ const PDFEditorPage = () => {
                   />
                   <Form.Text>VD: 200px, 50%, 300px</Form.Text>
                 </div>
-
                 <div className="col-6">
                   <Form.Label>Chiều cao ảnh</Form.Label>
                   <Form.Control
@@ -3985,7 +3974,6 @@ const PDFEditorPage = () => {
                   />
                   <Form.Text>VD: 200px, 50%, 300px</Form.Text>
                 </div>
-
                 <div className="col-6">
                   <Form.Label>Độ trong suốt</Form.Label>
                   <Form.Range
@@ -3998,7 +3986,6 @@ const PDFEditorPage = () => {
                   />
                   <small>{pdfSettings.watermark.opacity}</small>
                 </div>
-
                 <div className="col-6">
                   <Form.Label>Góc xoay</Form.Label>
                   <Form.Control
@@ -4010,7 +3997,6 @@ const PDFEditorPage = () => {
                     disabled={!pdfSettings.watermark.enabled}
                   />
                 </div>
-
                 <div className="col-6">
                   <Form.Label>Màu sắc (cho text)</Form.Label>
                   <Form.Control
@@ -4021,7 +4007,6 @@ const PDFEditorPage = () => {
                   />
                   <Form.Text>Chỉ áp dụng cho watermark text</Form.Text>
                 </div>
-
                 <div className="col-6">
                   <Form.Label>Font size (cho text)</Form.Label>
                   <Form.Control
@@ -4036,7 +4021,6 @@ const PDFEditorPage = () => {
                 </div>
               </div>
             </Tab>
-
             <Tab eventKey="font" title={<><i class="fas fa-palette"></i> Font & Màu sắc</>}>
               <div className="row g-3">
                 <div className="col-6">
@@ -4054,7 +4038,6 @@ const PDFEditorPage = () => {
                     <option value="DejaVu Sans">DejaVu Sans</option>
                   </Form.Select>
                 </div>
-
                 {/* FONT STYLE */}
                 <div className="col-6">
                   <Form.Label>Font style</Form.Label>
@@ -4067,7 +4050,6 @@ const PDFEditorPage = () => {
                     <option value="oblique">Oblique</option>
                   </Form.Select>
                 </div>
-
                 {/* FONT SIZE */}
                 <div className="col-6">
                   <Form.Label>Font size</Form.Label>
@@ -4085,7 +4067,6 @@ const PDFEditorPage = () => {
                     <option value="18px">18px - Tiêu đề lớn</option>
                   </Form.Select>
                 </div>
-
                 {/* FONT WEIGHT */}
                 <div className="col-6">
                   <Form.Label>Độ đậm</Form.Label>
@@ -4101,7 +4082,6 @@ const PDFEditorPage = () => {
                     <option value="800">Extra Bold (800)</option>
                   </Form.Select>
                 </div>
-
                 {/* LINE HEIGHT */}
                 <div className="col-6">
                   <Form.Label>Khoảng cách dòng</Form.Label>
@@ -4114,7 +4094,6 @@ const PDFEditorPage = () => {
                   />
                   <small>Hiện tại: {pdfSettings.lineHeight}</small>
                 </div>
-
                 <div className="col-6">
                   <Form.Label>Màu chính</Form.Label>
                   <Form.Control
@@ -4123,7 +4102,6 @@ const PDFEditorPage = () => {
                     onChange={(e) => handleSettingsChange('general', 'primaryColor', e.target.value)}
                   />
                 </div>
-
                 {/* MÀU CHỮ */}
                 <div className="col-6">
                   <Form.Label>Màu chữ</Form.Label>
@@ -4133,7 +4111,6 @@ const PDFEditorPage = () => {
                     onChange={(e) => handleSettingsChange('general', 'fontColor', e.target.value)}
                   />
                 </div>
-
                 {/* MÀU NỀN */}
                 <div className="col-6">
                   <Form.Label>Màu nền</Form.Label>
@@ -4143,7 +4120,6 @@ const PDFEditorPage = () => {
                     onChange={(e) => handleSettingsChange('general', 'backgroundColor', e.target.value)}
                   />
                 </div>
-
                 {/* MÀU BORDER */}
                 <div className="col-6">
                   <Form.Label>Màu viền</Form.Label>
@@ -4153,7 +4129,6 @@ const PDFEditorPage = () => {
                     onChange={(e) => handleSettingsChange('general', 'borderColor', e.target.value)}
                   />
                 </div>
-
                 {/* MÀU HEADER */}
                 <div className="col-6">
                   <Form.Label>Màu header</Form.Label>
@@ -4165,7 +4140,6 @@ const PDFEditorPage = () => {
                 </div>
               </div>
             </Tab>
-
             <Tab eventKey="layout" title={<><i class="fas fa-drafting-compass"></i> Layout</>}>
               <div className="row g-3">
                 <div className="col-6">
@@ -4233,7 +4207,7 @@ const PDFEditorPage = () => {
               </Button>
             </div>
             <div>
-              <Button variant="secondary" onClick={() => setShowSettings(false)}>
+              <Button variant="secondary" onClick={handleCancelSettings}>
                 <i class="fas fa-window-close"></i> Hủy
               </Button>
               <Button variant="primary" onClick={handleSaveSettings} className="ms-2">
@@ -4243,8 +4217,15 @@ const PDFEditorPage = () => {
           </div>
         </Modal.Footer>
       </Modal>
+      {/* THÊM CUSTOM TOAST COMPONENT */}
+      {toast.show && (
+        <CustomToast
+          type={toast.type}
+          message={toast.message}
+          onClose={closeToast}
+        />
+      )}
     </div >
   );
 };
-
 export default PDFEditorPage;
