@@ -38,6 +38,10 @@ use App\Http\Controllers\API\RevenueForecastController;
 use App\Http\Controllers\API\Technician\TestResultsController;
 use App\Http\Controllers\TestWebSocketController;
 use App\Http\Controllers\API\SearchController;
+Route::get('/services/search', [SearchController::class, 'searchServices']);
+Route::get('/users/search', [SearchController::class, 'searchUsers']);
+Route::get('/search', [SearchController::class, 'search']);
+
 
 Route::get('/user', [UserController::class, 'index']);
 Route::get('/ping', [UserController::class, 'ping']);
@@ -317,9 +321,7 @@ Route::prefix('payments')->group(function () {
 Route::middleware(['auth:api'])->get('/doctor/room-info', [AppointmentsController::class, 'getRoomInfo']);
 
 //  SEARCH ROUTES 
-Route::get('/services/search', [SearchController::class, 'searchServices']);
-Route::get('/users/search', [SearchController::class, 'searchUsers']);
-Route::get('/search', [SearchController::class, 'search']);
+
 
 // Các route gọn hơn (có thể dùng thay thế hoặc song song)
 Route::prefix('search')->group(function () {
